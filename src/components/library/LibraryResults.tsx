@@ -8,7 +8,7 @@ import { useSavedCollections } from '@/hooks/useSavedCollections';
 import { AbortedError, loadItems } from '@/lib/api/load';
 import type { LibraryItem } from '@/lib/api/normalize';
 import { PAGE_SIZE, type CategoryConfig } from '@/lib/config/categories';
-import { currentSvgString, editorFromGlobals } from '@/lib/render/editor';
+import { editorFromGlobals, exportSvgFor } from '@/lib/render/editor';
 import { CompareModal } from './CompareModal';
 import { DetailModal } from './DetailModal';
 import { FiltersPanel } from './FiltersPanel';
@@ -24,6 +24,7 @@ import { useToast } from './Toast';
 import { LibraryToolbar } from './LibraryToolbar';
 import { LibraryTopHeader } from './LibraryTopHeader';
 import type { SidebarTab } from './LibrarySidebar';
+import { useRequireLogin } from './useRequireLogin';
 
 /**
  * Everything on the library page that depends on the query string.
@@ -61,6 +62,7 @@ export function LibraryResults({ config, sidebarTab, onSelectTab, panelOpen, onC
   const [saveModalItemId, setSaveModalItemId] = useState<string | null>(null);
   const [localFolderOpen, setLocalFolderOpen] = useState(false);
   const toast = useToast();
+  const requireLogin = useRequireLogin();
 
   const globals = useMemo(
     () => ({ size: display.size, stroke: display.stroke, color: display.color }),
@@ -86,6 +88,15 @@ export function LibraryResults({ config, sidebarTab, onSelectTab, panelOpen, onC
   useEffect(() => {
     const requestId = ++requestIdRef.current;
     let cancelled = false;
+
+    // Reset to the loading state so the stale item cards don't linger while
+    // the new query is in flight — otherwise clicks on old cards can fire
+    // handlers bound to items that are about to be replaced, and the click
+    // hits the wrong card after search.
+    setResults({ status: 'loading' });
+    // Any pending selection was tied to the previous result set — clear it
+    // so the multi-actions strip doesn't shift the grid down mid-search.
+    setSelectedIds(new Set());
 
     loadItems({
       category: config.slug,
@@ -174,9 +185,22 @@ export function LibraryResults({ config, sidebarTab, onSelectTab, panelOpen, onC
 
   const handleCopy = useCallback(
     async (item: LibraryItem) => {
+      // Copy is gated behind sign-in the same way motvin-icons.js:3268 was —
+      // anonymous visitors open the login modal instead.
+      if (!requireLogin()) return;
       // Card copy uses the grid's current settings, so what lands on the
-      // clipboard matches what's on screen.
-      const svg = currentSvgString(item, editorFromGlobals(item, globals), config.slug);
+      // clipboard matches what's on screen. `exportSvgFor` fetches an
+      // imageUrl-only illustration first so the clipboard gets real SVG
+      // markup instead of an <img> tag — port of illustrations.js:2038.
+      const svg = await exportSvgFor(
+        item,
+        editorFromGlobals(item, globals),
+        config.slug,
+      );
+      if (!svg) {
+        toast.show('Copy failed — no SVG source for this item');
+        return;
+      }
       try {
         await navigator.clipboard.writeText(svg);
         toast.show('SVG copied');
@@ -184,7 +208,7 @@ export function LibraryResults({ config, sidebarTab, onSelectTab, panelOpen, onC
         toast.show('Copy failed — clipboard unavailable');
       }
     },
-    [globals, toast],
+    [globals, toast, requireLogin, config.slug],
   );
 
   // Reference (`:52488`) opens the collection-picker modal on every save

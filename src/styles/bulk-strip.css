@@ -25,7 +25,11 @@ body.mi-sidebar-collapsed .mi-rp-heading { display: none !important; }
 body.mi-sidebar-collapsed .mi-rp-navigation { display: flex; }
 
 .mi-main-top-wrapper.mi-has-bulk-actions { gap: 16px; }
-.mi-bulk-actions-container { display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; width: 100%; gap: 16px; padding: 12px 0 4px; flex-shrink: 0; }
+/* position:relative + z-index keep the strip above the icon grid — the
+   `mi-bulk-actions-enter` transform below already forces a stacking context,
+   but without an explicit z-index cards' `.mi-card-actions` (z:2) paint on
+   top of the dropdown menus. */
+.mi-bulk-actions-container { position: relative; z-index: 20; display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; width: 100%; gap: 16px; padding: 12px 0 4px; flex-shrink: 0; }
 .mi-bulk-actions-container:not([hidden]) { animation: mi-bulk-actions-enter 180ms ease-out both; will-change: opacity, transform; }
 .mi-bulk-actions-container.is-leaving { animation: mi-bulk-actions-exit 160ms ease-in both; pointer-events: none; }
 .mi-bulk-summary, .mi-bulk-summary-content, .mi-bulk-controls, .mi-bulk-split-button { display: flex; align-items: center; }

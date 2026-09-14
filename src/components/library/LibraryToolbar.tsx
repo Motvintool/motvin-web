@@ -27,6 +27,29 @@ const RECOLOR_SWATCHES = [
 ];
 
 /**
+ * Human-readable names for common recolor swatches — reference
+ * (motvin-icons.js:2843-2860) shows the name when it exists, the raw hex
+ * otherwise. Keeps the pill readable ("Red" over "#DC2626").
+ */
+const COLOR_NAMES: Record<string, string> = {
+  '#000000': 'Black',
+  '#0F1116': 'Ink',
+  '#0F172A': 'Slate',
+  '#111827': 'Charcoal',
+  '#1F2937': 'Steel',
+  '#374151': 'Graphite',
+  '#0EA5E9': 'Sky',
+  '#2563EB': 'Blue',
+  '#5C4AE4': 'Accent',
+  '#7C3AED': 'Violet',
+  '#16A34A': 'Green',
+  '#DC2626': 'Red',
+  '#D97706': 'Amber',
+  '#6B7280': 'Grey',
+  '#FFFFFF': 'White',
+};
+
+/**
  * Below this width the pill leaves the input ~190px wide, which truncates the
  * full-count placeholder — so it falls back to a short label.
  */
@@ -350,15 +373,26 @@ export function LibraryToolbar({
             aria-label="Recolor"
             onClick={() => setRecolorOpen((open) => !open)}
           >
+            {/* Match reference (motvin-icons.js:2872-2879): swap the wheel
+                image for a colored circle SVG when a colour is applied,
+                instead of overlaying an inline background on the wheel img
+                (which showed the wheel graphic through the colour). */}
             <img
-              src="/ASSET/Icons/icon-color-wheel.svg"
+              src={
+                recolorActive
+                  ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+                      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="${color}"/><circle cx="12" cy="12" r="10" fill="none" stroke="rgba(0,0,0,0.12)" stroke-width="1"/></svg>`,
+                    )}`
+                  : '/ASSET/Icons/icon-color-wheel.svg'
+              }
               className="mi-color-wheel"
               id="recolor-wheel"
               alt=""
-              style={recolorActive ? { background: color, borderRadius: '50%' } : undefined}
             />
             <span className="mi-recolor-label" id="recolor-label">
-              {recolorActive ? color.toUpperCase() : 'Recolor'}
+              {recolorActive
+                ? COLOR_NAMES[color.toUpperCase()] || color.toUpperCase()
+                : 'Recolor'}
             </span>
             <button
               className="mi-recolor-reset-inline"
@@ -369,6 +403,7 @@ export function LibraryToolbar({
                 e.stopPropagation();
                 setHexDraft('');
                 onColorReset();
+                setRecolorOpen(false);
               }}
             >
               <svg

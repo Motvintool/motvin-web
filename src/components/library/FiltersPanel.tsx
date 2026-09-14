@@ -409,17 +409,26 @@ export function FiltersPanel({
 
       <div className="mi-rp-divider" />
 
-      <PanelSlider
-        id="stroke"
-        label="Stroke Width"
-        value={stroke}
-        {...STROKE_RANGE}
-        presets={STROKE_PRESETS}
-        presetAttr="data-panel-stroke"
-        onChange={onStrokeChange}
-      />
+      {/* Stroke Width is icons-only and further gated to the Outline style —
+          the only style with a stroke to adjust. Solid and Bold are fill
+          artwork, 3D keeps its own colours, Duotone/Thin are fixed upstream
+          weights, and logos/illustrations don't use strokes at all. Hide
+          the slider until the visitor explicitly filters to Outline. */}
+      {config.slug === 'icons' && styles.includes('outline') && (
+        <>
+          <PanelSlider
+            id="stroke"
+            label="Stroke Width"
+            value={stroke}
+            {...STROKE_RANGE}
+            presets={STROKE_PRESETS}
+            presetAttr="data-panel-stroke"
+            onChange={onStrokeChange}
+          />
 
-      <div className="mi-rp-divider" id="rp-stroke-divider" />
+          <div className="mi-rp-divider" id="rp-stroke-divider" />
+        </>
+      )}
 
       {/* License */}
       <div className="mi-rp-section">

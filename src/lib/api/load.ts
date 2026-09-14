@@ -1,6 +1,6 @@
 import { PAGE_SIZE, type Category } from '@/lib/config/categories';
 import { getApiClient } from './client';
-import { normalizeItems, type LibraryItem } from './normalize';
+import { HIDDEN_SOURCES, normalizeItems, type LibraryItem } from './normalize';
 
 /**
  * Fetches one page of results for the current filters — the port of
@@ -85,7 +85,22 @@ export async function loadItems(params: LoadParams): Promise<LoadResult> {
       throw error;
     }
 
-    const total = result.total || 0;
+    // The API's total counts every collection it indexed, including the ones
+    // we hide (see HIDDEN_SOURCES in normalize.ts). Deduct those from the
+    // total shown to the visitor so the "All" tab count and the pagination
+    // match the number of items the grid actually renders.
+    const rawTotal = result.total || 0;
+    const hiddenTotal =
+      hasFilters && sources.length > 0
+        ? 0
+        : (collections ?? []).reduce(
+            (sum, c) =>
+              HIDDEN_SOURCES.has(String(c.id ?? '').toLowerCase())
+                ? sum + (c.total ?? 0)
+                : sum,
+            0,
+          );
+    const total = Math.max(0, rawTotal - hiddenTotal);
 
     // An empty result for an unfiltered, unsearched browse means the index
     // isn't ready yet, not that the library is empty.

@@ -59,6 +59,13 @@ const DEFAULT_STYLE = 'solid';
 const DEFAULT_VIEWBOX = '0 0 24 24';
 const UNKNOWN = 'Unknown';
 
+/**
+ * Sources dropped from every result set — they ship raster-only assets that
+ * aren't usable as SVG (bulk copy embeds a wrapper `<image href>` at best,
+ * which isn't what visitors expect from an illustration library).
+ */
+export const HIDDEN_SOURCES = new Set(['ira']);
+
 export function normalizeItems(
   raw: RawItem[],
   category: Category,
@@ -72,20 +79,33 @@ export function normalizeItems(
   // downstream has to defend against undefined.
   return raw
     .filter((item): item is RawItem => Boolean(item) && typeof item === 'object')
+    .filter((item) => {
+      const src = item.source || item.collection || '';
+      return !HIDDEN_SOURCES.has(String(src).toLowerCase());
+    })
     .map((item, index) => {
       const source = item.source || item.collection || category;
       const collection = byId.get(source);
       const style = item.style || DEFAULT_STYLE;
 
+      // The logos API returns bare names as `id` (three sources all send
+      // `id: "apple"` for their apple mark). Same-`id` items collide as
+      // React keys and share selection state — clicking one flips all
+      // three. Always prefix the raw id with its source so every card has
+      // a unique, source-scoped id.
+      const rawId = item.id || `${style}_${item.name || index}`;
+      const uniqueId = String(rawId).startsWith(`${source}_`)
+        ? String(rawId)
+        : `${source}_${rawId}`;
       return {
         ...item,
-        id: item.id || `${source}_${style}_${item.name || index}`,
+        id: uniqueId,
         name: item.name,
         source,
         sourceName:
           collection?.name || item.sourceName || item.collectionName || source,
         sourceItemId: `${source}:${style}:${item.name}`,
-        uid: item.uid || item.id || `${source}_${style}_${item.name || index}`,
+        uid: item.uid || uniqueId,
         svg: item.svg || '',
         tags: item.tags ?? [],
         style,

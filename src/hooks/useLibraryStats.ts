@@ -44,6 +44,13 @@ const EMPTY_COUNTS = {
   category: {},
 } as const;
 
+/**
+ * Collections dropped everywhere — sidebar counts, filter chips, source
+ * pickers, and the raw stats payload. Kept in sync with `HIDDEN_SOURCES` in
+ * lib/api/normalize.ts, which drops the same sources from the items feed.
+ */
+const HIDDEN_SOURCES = new Set(['ira']);
+
 export function useLibraryStats(category: Category): LibraryStats {
   const [result, setResult] = useState<LibraryStats>({
     stats: null,
@@ -60,11 +67,22 @@ export function useLibraryStats(category: Category): LibraryStats {
       .getStats()
       .then((stats) => {
         if (cancelled) return;
-        const collections = [...(stats.collections ?? [])];
+        const collections = (stats.collections ?? []).filter(
+          (c) => !HIDDEN_SOURCES.has(String(c.id ?? '').toLowerCase()),
+        );
+        const hiddenTotal = (stats.collections ?? []).reduce(
+          (sum, c) =>
+            HIDDEN_SOURCES.has(String(c.id ?? '').toLowerCase())
+              ? sum + (c.total ?? 0)
+              : sum,
+          0,
+        );
         setResult({
-          stats,
+          stats: { ...stats, collections },
           collections,
-          total: totalItems(stats),
+          // Deduct the hidden collections' items so the total in the header
+          // matches what the grid actually shows.
+          total: totalItems(stats) - hiddenTotal,
           counts: {
             // The source facet counts by collection, which /stats reports on
             // each collection rather than in a byX map.
