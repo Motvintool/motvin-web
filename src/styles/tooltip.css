@@ -1,0 +1,185 @@
+.motvin-tooltip {
+  position: fixed;
+  z-index: 5000;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateZ(0);
+  transition:
+    opacity 0.12s ease,
+    visibility 0.12s ease;
+  max-width: 280px;
+}
+.motvin-tooltip.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+.motvin-tooltip-card {
+  position: relative;
+  border-radius: 8px;
+  padding: 8px;
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+.motvin-tooltip-text {
+  display: block;
+  width: 100%;
+}
+.motvin-tooltip-primary,
+.motvin-tooltip-secondary {
+  display: block;
+}
+.motvin-tooltip-secondary[hidden] {
+  display: none;
+}
+.motvin-tooltip[data-size="small"] {
+  max-width: 100px;
+}
+.motvin-tooltip[data-size="small"] .motvin-tooltip-card {
+  width: 100px;
+}
+.motvin-tooltip[data-size="medium"] {
+  max-width: 200px;
+}
+.motvin-tooltip[data-size="medium"] .motvin-tooltip-card {
+  width: 200px;
+}
+.motvin-tooltip[data-size="large"] {
+  max-width: 280px;
+}
+.motvin-tooltip[data-size="large"] .motvin-tooltip-card {
+  width: 280px;
+}
+.motvin-tooltip[data-variant="profile-badge-signin"],
+.motvin-tooltip[data-variant="profile-badge-signout"] {
+  max-width: none;
+}
+.motvin-tooltip[data-variant="profile-badge-signin"] .motvin-tooltip-card,
+.motvin-tooltip[data-variant="profile-badge-signout"] .motvin-tooltip-card {
+  width: max-content;
+  max-width: none;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+.motvin-tooltip[data-variant="profile-badge-signin"] .motvin-tooltip-text,
+.motvin-tooltip[data-variant="profile-badge-signin"] .motvin-tooltip-primary,
+.motvin-tooltip[data-variant="profile-badge-signout"] .motvin-tooltip-text,
+.motvin-tooltip[data-variant="profile-badge-signout"] .motvin-tooltip-primary {
+  width: auto;
+  white-space: nowrap;
+}
+.motvin-tooltip[data-variant="toolbar-fit"] {
+  max-width: 180px;
+}
+.motvin-tooltip[data-variant="toolbar-fit"] .motvin-tooltip-card {
+  width: max-content;
+  max-width: 180px;
+  padding: 8px 10px;
+}
+.motvin-tooltip[data-variant="toolbar-fit"] .motvin-tooltip-text {
+  width: auto;
+  text-align: center;
+}
+.motvin-tooltip[data-variant="toolbar-shortcut"] {
+  max-width: 104px;
+}
+.motvin-tooltip[data-variant="toolbar-shortcut"] .motvin-tooltip-card {
+  width: max-content;
+  min-width: 76px;
+  padding: 6px 6px 5px;
+}
+.motvin-tooltip[data-variant="toolbar-shortcut"] .motvin-tooltip-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+  text-align: center;
+}
+.motvin-tooltip[data-variant="toolbar-shortcut"] .motvin-tooltip-primary {
+  line-height: 16px;
+}
+.motvin-tooltip[data-variant="toolbar-shortcut"] .motvin-tooltip-secondary {
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: #ffffff24;
+  color: #fff;
+  line-height: 16px;
+}
+.motvin-tooltip[data-color="black"] .motvin-tooltip-card {
+  background: #171717;
+  color: #fff;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+.motvin-tooltip[data-color="white"] .motvin-tooltip-card {
+  background: #fff;
+  color: #000;
+  border: 1px solid #e9e9e9;
+  box-shadow: 0 1px 4px #00000029;
+}
+.motvin-tooltip-arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  transform: rotate(45deg);
+}
+.motvin-tooltip[data-color="black"] .motvin-tooltip-arrow {
+  background: #171717;
+}
+.motvin-tooltip[data-color="white"] .motvin-tooltip-arrow {
+  background: #fff;
+  border: 1px solid #e9e9e9;
+  box-shadow: 0 1px 4px #00000029;
+}
+.motvin-tooltip[data-variant="palette-add"] {
+  max-width: 132px;
+}
+.motvin-tooltip[data-variant="palette-add"] .motvin-tooltip-card {
+  width: max-content;
+  min-width: 132px;
+  padding: 8px 6px;
+  border-radius: 8px;
+}
+.motvin-tooltip[data-variant="palette-add"] .motvin-tooltip-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.motvin-tooltip[data-variant="palette-add"] .motvin-tooltip-primary {
+  font-weight: 500;
+  line-height: 16px;
+}
+.motvin-tooltip[data-variant="palette-add"] .motvin-tooltip-secondary {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #ffffff24;
+  color: #fff;
+  line-height: 16px;
+}
+.motvin-tooltip[data-variant="palette-color-change"] .motvin-tooltip-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-radius: 8px;
+}
+.motvin-tooltip[data-variant="palette-color-change"] .motvin-tooltip-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
+}
+.motvin-tooltip[data-variant="palette-color-change"] .motvin-tooltip-primary {
+  width: 100%;
+  text-align: center;
+}

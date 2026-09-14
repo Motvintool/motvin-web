@@ -1,0 +1,304 @@
+/*
+  theme.css — Scalable theme layer.
+
+  How it works:
+  - :root (and [data-theme="dark"]) = Dark theme (default, already in design system)
+  - [data-theme="light"] = Light theme tokens
+  - @media prefers-color-scheme handled by JS for System mode
+
+  Usage rules:
+  - Every page/component only uses CSS variables from this file + global.css.
+  - Adding a new page or component automatically inherits active theme.
+  - To add a new token: add it under ALL three sections (dark, light, system).
+
+  Applied via: <html data-theme="dark|light"> or no attribute (dark default).
+*/
+
+/* ─── Dark theme (default) ────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --surface-page:                         #2e2e2e;
+  --surface-topheader-sidebg:             #383838;
+  --surface-topheader-sidebgactive-2:     #4a5878;
+  --surface-topheader-sidebghover-3:      #424242;
+  --surface-tag:                          rgba(255, 255, 255, 0.06);
+  --surface-designsystemtabhover:         #3b3a58;
+  --surface-primarybuttonbg:              #008FF0;
+  --surface-search:                       #383838;
+  --surface-border:                       #464646;
+  --surface-suggestion-panel:             #2e2e2e;
+  --surface-suggestion-border:            #343434;
+  --surface-suggestion-hover:             rgba(255, 255, 255, 0.06);
+  --surface-menuitem-hover:               #008ff0;
+  --surface-suggestion-thumb-border:      #464646;
+  --surface-color-dropdownbg:             #1e1e1e;
+  --surface-color-dropdownbgborder:       #3d3d3d;
+  --surface-color-tag:                    rgba(255, 255, 255, 0.06);
+  --surface-color-card:                   #2e2e2e;
+  --surface-color-cardalt:                #383838;
+  --surface-color-input:                  #383838;
+  --surface-color-inputborder:            #464646;
+  --surface-color-inputhover:             #424242;
+  --surface-color-tooltip:                #1e1e1e;
+  --surface-color-sidebar:                #2e2e2e;
+  --surface-color-topbar:                 #2e2e2e;
+  --surface-borderhover:                  #747474;
+
+  --text-color-text:                      #ffffff;
+  --text-color-subtext:                   #b9b9b9;
+  --text-color-muted:                     #787878;
+  --text-color-textlink:                  #008FF0;
+  --text-color-label:                     #c0c0c0;
+  --text-color-placeholder:               #6b6b6b;
+  --text-color-inverted:                  #111111;
+
+  --icon-color-icon:                      #ffffff;
+  --icon-color-muted:                     #9c9c9c;
+
+  --effect-popover-shadow:                0 8px 10px rgba(0, 0, 0, 0.2), 3px 0 20px rgba(0, 0, 0, 0.12);
+  --effect-card-shadow:                   0 2px 8px rgba(0, 0, 0, 0.24);
+
+  --primary-default:                      #008FF0;
+  --primary-hover:                        #1a91ee;
+  --primary-subtle:                       rgba(43, 159, 244, 0.1);
+
+  --netural-other-2:                      #ff99e0;
+  --netural-other-3:                      #7d2ada;
+
+  --skeleton-base:                        rgba(255, 255, 255, 0.07);
+  --skeleton-shimmer:                     rgba(255, 255, 255, 0.04);
+  --skeleton-border:                      #464646;
+  --skeleton-card-bg:                     #3a3a3a;
+
+  --theme-icon-filter:                    none;
+}
+
+/* ─── Light theme ──────────────────────────────────────── */
+[data-theme="light"] {
+  --surface-page:                         #f5f5f5;
+  --surface-topheader-sidebg:             #ebebeb;
+  --surface-topheader-sidebgactive-2:     #dce8f8;
+  --surface-topheader-sidebghover-3:      #e4e4e4;
+  --surface-tag:                          rgba(0, 0, 0, 0.05);
+  --surface-designsystemtabhover:         #dce8f8;
+  --surface-primarybuttonbg:              #008FF0;
+  --surface-search:                       #ebebeb;
+  --surface-border:                       #DDDDDD;
+  --surface-suggestion-panel:             #f5f5f5;
+  --surface-suggestion-border:            #DDDDDD;
+  --surface-suggestion-hover:             rgba(0, 0, 0, 0.04);
+  --surface-menuitem-hover:               #008ff0;
+  --surface-suggestion-thumb-border:      #DDDDDD;
+  --surface-color-dropdownbg:             #1e1e1e;
+  --surface-color-dropdownbgborder:       #3d3d3d;
+  --surface-color-tag:                    rgba(0, 0, 0, 0.05);
+  --surface-color-card:                   #ffffff;
+  --surface-color-cardalt:                #f0f0f0;
+  --surface-color-input:                  #ffffff;
+  --surface-color-inputborder:            #DDDDDD;
+  --surface-color-inputhover:             #e4e4e4;
+  --surface-color-tooltip:                #ffffff;
+  --surface-color-sidebar:                #f5f5f5;
+  --surface-color-topbar:                 #f5f5f5;
+  --surface-borderhover:                  #9a9a9a;
+
+  --text-color-text:                      #111111;
+  --text-color-subtext:                   #555555;
+  --text-color-muted:                     #888888;
+  --text-color-textlink:                  #008FF0;
+  --text-color-label:                     #444444;
+  --text-color-placeholder:               #aaaaaa;
+  --text-color-inverted:                  #ffffff;
+
+  --icon-color-icon:                      #111111;
+  --icon-color-muted:                     #666666;
+
+  --effect-popover-shadow:                0 8px 24px rgba(0, 0, 0, 0.10), 3px 0 12px rgba(0, 0, 0, 0.06);
+  --effect-card-shadow:                   0 2px 8px rgba(0, 0, 0, 0.08);
+
+  --primary-default:                      #008FF0;
+  --primary-hover:                        #1a91ee;
+  --primary-subtle:                       rgba(43, 159, 244, 0.12);
+
+  --netural-other-2:                      #e966c6;
+  --netural-other-3:                      #6b1dc2;
+
+  --skeleton-base:                        rgba(0, 0, 0, 0.06);
+  --skeleton-shimmer:                     rgba(0, 0, 0, 0.02);
+  --skeleton-border:                      #DDDDDD;
+  --skeleton-card-bg:                     #e8e8e8;
+
+  --theme-icon-filter:                    invert(1);
+}
+
+/* ─── Icon inversion for light theme ───────────────────── */
+/*
+  SVG icons using white strokes/fills need to be inverted in light mode.
+  Components should use .theme-icon on <img> tags that have white-based icons.
+*/
+[data-theme="light"] .theme-icon {
+  filter: invert(1);
+}
+
+[data-theme="light"] .theme-icon-no-invert {
+  filter: none;
+}
+
+/* Keep profile-left dropdown chevron dark on light surfaces */
+[data-theme="light"] .sidebar-profile-chevron img {
+  filter: brightness(0) saturate(100%);
+}
+
+/* Keep dropdown menus dark in light mode */
+[data-theme="light"] .sidebar-profile-menu,
+[data-theme="light"] .sidebar-theme-submenu,
+[data-theme="light"] .detail-more-menu,
+[data-theme="light"] .free-paid-dropdown-panel,
+[data-theme="light"] .all-templates-dropdown-panel,
+[data-theme="light"] .posts-featured-dropdown-panel,
+[data-theme="light"] .posts-all-dropdown-panel,
+[data-theme="light"] .search-suggestions-panel {
+  background: #1e1e1e;
+  border-color: #3d3d3d;
+  box-shadow: 0 8px 10px rgba(0, 0, 0, 0.3), 3px 0 20px rgba(0, 0, 0, 0.12);
+  color: #ffffff;
+}
+
+[data-theme="light"] .sidebar-notification-panel {
+  background: #2e2e2e;
+  border-top-color: #3d3d3d;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  box-shadow: 0 8px 10px rgba(0, 0, 0, 0.3), 3px 0 20px rgba(0, 0, 0, 0.12);
+  color: #ffffff;
+}
+
+[data-theme="light"] .sidebar-profile-menu-name,
+[data-theme="light"] .sidebar-profile-menu-email,
+[data-theme="light"] .sidebar-profile-menu-item,
+[data-theme="light"] .sidebar-profile-menu-icon,
+[data-theme="light"] .sidebar-profile-menu-tag,
+[data-theme="light"] .sidebar-theme-trigger-chevron,
+[data-theme="light"] .sidebar-theme-option,
+[data-theme="light"] .sidebar-theme-option-icon,
+[data-theme="light"] .detail-more-menu-item,
+[data-theme="light"] .detail-more-menu-icon,
+[data-theme="light"] .search-suggestions-section-title,
+[data-theme="light"] .search-suggestion,
+[data-theme="light"] .search-suggestion-title,
+[data-theme="light"] .search-suggestion-price {
+  color: #ffffff;
+}
+
+[data-theme="light"] .sidebar-profile-menu-item:hover,
+[data-theme="light"] .sidebar-profile-menu-item:focus-visible,
+[data-theme="light"] .sidebar-theme-option:hover,
+[data-theme="light"] .sidebar-theme-option:focus-visible,
+[data-theme="light"] .detail-more-menu-item:hover,
+[data-theme="light"] .detail-more-menu-item:focus-visible {
+  background: var(--surface-menuitem-hover, #008ff0);
+}
+
+[data-theme="light"] .free-paid-dropdown-option:hover,
+[data-theme="light"] .free-paid-dropdown-option:focus-visible,
+[data-theme="light"] .all-templates-dropdown-option:hover,
+[data-theme="light"] .all-templates-dropdown-option:focus-visible,
+[data-theme="light"] .posts-featured-dropdown-option:hover,
+[data-theme="light"] .posts-featured-dropdown-option:focus-visible,
+[data-theme="light"] .posts-all-dropdown-option:hover,
+[data-theme="light"] .posts-all-dropdown-option:focus-visible {
+  background: var(--surface-menuitem-hover, #008ff0);
+}
+
+[data-theme="light"] .search-suggestion:hover,
+[data-theme="light"] .search-suggestion.is-active {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="light"] .detail-more-menu-item:hover,
+[data-theme="light"] .detail-more-menu-item:focus-visible,
+[data-theme="light"] .sidebar-theme-option:hover .sidebar-theme-option-icon,
+[data-theme="light"] .sidebar-theme-option:focus-visible .sidebar-theme-option-icon {
+  color: #ffffff;
+}
+
+[data-theme="light"] .search-suggestion-meta,
+[data-theme="light"] .search-suggestions-empty {
+  color: #b9b9b9;
+}
+
+/* Keep top-pane hover card visuals identical to dark theme in light mode */
+[data-theme="light"] .tab-hover-card-inner {
+  background: #2c2c2c;
+  border-color: rgba(76, 76, 76, 0.8);
+  box-shadow: 0 6px 8px rgba(0, 0, 0, 0.16), 4px 0 25px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .tab-hover-title,
+[data-theme="light"] .tab-hover-price {
+  color: #ffffff;
+}
+
+[data-theme="light"] .tab-hover-subtitle {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Keep top-pane mobile submenu text dark in light mode */
+[data-theme="light"] .top-pane-mobile-community-subrow,
+[data-theme="light"] .top-pane-mobile-community-subrow .top-pane-mobile-community-label,
+[data-theme="light"] .top-pane-mobile-community-subrow:hover,
+[data-theme="light"] .top-pane-mobile-community-subrow:focus-visible {
+  color: #121212 !important;
+}
+
+/* ─── Skeleton shimmer for light theme ─────────────────── */
+[data-theme="light"] .main-shell-skeleton-block {
+  background: var(--skeleton-card-bg);
+  border-color: var(--skeleton-border);
+}
+
+[data-theme="light"] .main-shell-skeleton-block::after {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.06) 45%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+/* ─── Light overrides for detail skeletons ─────────────── */
+[data-theme="light"] .detail-skel {
+  background: var(--skeleton-card-bg);
+}
+
+/* ─── Smooth theme transition ─────────────────────────── */
+*,
+*::before,
+*::after {
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+/* Disable transitions on elements that should never animate (images, icons) */
+img,
+svg,
+canvas,
+video,
+.no-theme-transition {
+  transition: none !important;
+}
+
+/* Keep menuitem hover/focus instantaneous (no fade animation). */
+.sidebar-profile-menu-item,
+.sidebar-theme-option,
+.detail-more-menu-item,
+.free-paid-dropdown-option,
+.all-templates-dropdown-option,
+.posts-featured-dropdown-option,
+.posts-all-dropdown-option {
+  transition: none !important;
+}

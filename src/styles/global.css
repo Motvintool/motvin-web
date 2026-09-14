@@ -1,0 +1,485 @@
+/* global.css: Common and sharable design tokens used across pages/components.
+   Theme tokens (Light/Dark/System) now live in CSS/theme.css.
+   Tokens defined here are non-theme-specific (layout, animation, utilities).
+*/
+
+.main-shell-loading {
+  position: relative;
+}
+
+.main-shell-fade-in {
+  animation: mainShellFadeIn 400ms ease forwards;
+}
+
+@keyframes mainShellFadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.main-shell-fade-out {
+  animation: mainShellFadeOut 200ms ease forwards;
+}
+
+@keyframes mainShellFadeOut {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.main-shell-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  padding: 24px clamp(16px, 3vw, 48px) 40px;
+  background: var(--surface-page);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  pointer-events: all;
+}
+
+.main-shell-skeleton-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.main-shell-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.main-shell-skeleton-grid--posts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.main-shell-skeleton-grid--about-tools {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.main-shell-skeleton-grid--filter {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.main-shell-skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.main-shell-skeleton-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.main-shell-skeleton-about-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.main-shell-skeleton-about-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.main-shell-skeleton-about-photo {
+  min-height: 220px;
+  border-radius: 18px;
+}
+
+.main-shell-skeleton-block {
+  position: relative;
+  display: block;
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  background: #3a3a3a;
+  overflow: hidden;
+}
+
+.main-shell-skeleton-block::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.05) 45%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: mainShellSkeletonShimmer 1.2s ease-in-out infinite;
+}
+
+.main-shell-skeleton-chip {
+  width: 90px;
+  height: 26px;
+  border-radius: 999px;
+}
+
+.main-shell-skeleton-chip--lg {
+  width: 130px;
+}
+
+.main-shell-skeleton-hero {
+  width: 100%;
+  height: 155px;
+  border-radius: 16px;
+}
+
+.main-shell-skeleton-card {
+  height: 188px;
+  border-radius: 12px;
+}
+
+.main-shell-skeleton-card--post {
+  height: 170px;
+}
+
+.main-shell-skeleton-card--tool {
+  height: 146px;
+}
+
+.main-shell-skeleton-line {
+  width: 100%;
+  height: 20px;
+  border-radius: 10px;
+}
+
+.main-shell-skeleton-line--lg {
+  width: 68%;
+}
+
+.main-shell-skeleton-hero--filter {
+  height: 118px;
+}
+
+.main-shell-skeleton--about-me {
+  gap: 14px;
+}
+
+.main-shell-skeleton--about-me .main-shell-skeleton-line {
+  height: 16px;
+}
+
+.main-shell-skeleton--filter-template .main-shell-skeleton-lines {
+  margin-top: 4px;
+}
+
+@keyframes mainShellSkeletonShimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (max-width: 980px) {
+  .main-shell-skeleton-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .main-shell-skeleton-grid--filter {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .main-shell-skeleton-about-intro {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .main-shell-skeleton {
+    padding: 16px;
+  }
+
+  .main-shell-skeleton-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .main-shell-skeleton-grid--posts,
+  .main-shell-skeleton-grid--about-tools,
+  .main-shell-skeleton-grid--filter {
+    grid-template-columns: 1fr;
+  }
+
+  .main-shell-skeleton-hero {
+    height: 124px;
+  }
+
+  .main-shell-skeleton-card {
+    height: 140px;
+  }
+
+  .main-shell-skeleton-about-photo {
+    min-height: 150px;
+  }
+
+  .main-shell-skeleton-header-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main-shell-skeleton-block::after {
+    animation: none;
+  }
+}
+
+
+
+.main-shell-product-card-skeleton {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  background: var(--surface-page);
+  overflow: hidden;
+}
+
+.main-shell-product-card-skeleton-media,
+.main-shell-product-card-skeleton-line {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: #3a3a3a;
+}
+
+.main-shell-product-card-skeleton-media::after,
+.main-shell-product-card-skeleton-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.05) 45%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: mainShellSkeletonShimmer 1.2s ease-in-out infinite;
+}
+
+.main-shell-product-card-skeleton-media {
+  width: 100%;
+  aspect-ratio: 264 / 159;
+}
+
+.main-shell-product-card-skeleton-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.main-shell-product-card-skeleton-line {
+  border-radius: 999px;
+  height: 12px;
+}
+
+.main-shell-product-card-skeleton-line--title {
+  width: 72%;
+}
+
+.main-shell-product-card-skeleton-line--meta {
+  width: 48%;
+  height: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main-shell-product-card-skeleton-media::after,
+  .main-shell-product-card-skeleton-line::after {
+    animation: none;
+  }
+}
+
+/* Light theme skeleton overrides (effective here because global.css loads after theme.css). */
+[data-theme="light"] .main-shell-skeleton-block,
+[data-theme="light"] .main-shell-product-card-skeleton-media,
+[data-theme="light"] .main-shell-product-card-skeleton-line {
+  background: var(--skeleton-card-bg);
+  border-color: var(--skeleton-border);
+}
+
+[data-theme="light"] .main-shell-skeleton-block::after,
+[data-theme="light"] .main-shell-product-card-skeleton-media::after,
+[data-theme="light"] .main-shell-product-card-skeleton-line::after {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.03) 45%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+/* ─── Sidebar skeleton loader ──────────────────────────────── */
+
+.sidebar-skeleton {
+  pointer-events: none;
+  gap: 4px;
+}
+
+.sidebar-skel-block {
+  position: relative;
+  display: block;
+  background: #3a3a3a;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.sidebar-skel-block::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.05) 45%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: mainShellSkeletonShimmer 1.2s ease-in-out infinite;
+}
+
+.sidebar-skel-profile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 0px 8px;
+  height: 45px;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.sidebar-skel-profile-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+}
+
+.sidebar-skel-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+}
+
+.sidebar-skel-name {
+  width: 80px;
+  height: 14px;
+  border-radius: 4px;
+}
+
+.sidebar-skel-notif {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  margin-right: 4px;
+}
+
+.sidebar-skel-search {
+  padding: 6px 12px 2px;
+}
+
+.sidebar-skel-search-bar {
+  width: 100%;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.sidebar-skel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0 10px 0;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.sidebar-skel-section:last-child {
+  border-bottom: none;
+}
+
+.sidebar-skel-section-title {
+  width: 60px;
+  height: 12px;
+  border-radius: 4px;
+  margin: 12px 16px 4px 16px;
+}
+
+.sidebar-skel-nav-item {
+  background: transparent !important;
+}
+
+.sidebar-skel-nav-item::after {
+  display: none !important;
+}
+
+.sidebar-skel-nav-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.sidebar-skel-nav-text {
+  width: 90px;
+  height: 12px;
+  border-radius: 4px;
+}
+
+.sidebar-skel-nav-badge {
+  width: 24px;
+  height: 16px;
+  border-radius: 8px;
+}
+
+.sidebar-skel-whatsapp {
+  padding: 16px;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.sidebar-skel-whatsapp-card {
+  width: 100%;
+  height: 88px;
+  border-radius: 12px;
+}
+
+.sidebar-skel-starred-toggle {
+  width: 56px;
+  height: 10px;
+  border-radius: 999px;
+  margin: 8px 16px 4px 16px;
+}
+
+
+
+/* ─── Light theme skeleton overrides (sidebar + top pane) ──── */
+
+[data-theme="light"] .sidebar-skel-block {
+  background: var(--skeleton-card-bg);
+}
+
+[data-theme="light"] .sidebar-skel-block::after {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.03) 45%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-skel-block::after {
+    animation: none;
+  }
+}
+
+/* Keep profile menu overlays above all app components globally. */
+.sidebar-profile-menu {
+  z-index: 2147483646 !important;
+}
+
+.sidebar-theme-submenu {
+  z-index: 2147483647 !important;
+}

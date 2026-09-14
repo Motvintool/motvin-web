@@ -1,0 +1,93 @@
+/*
+ * Multi Actions Strip styles — extracted from
+ * motvin-ui/COMPONENT/Multi Actions Strip.js (the string was injected as a
+ * <style> tag by ensureStyles()). Kept verbatim so the port renders exactly
+ * as the legacy site does; also covers the sidebar collapse toggle and the
+ * right-panel navigation.
+ */
+
+.mi-bulk-actions-container[hidden] { display: none; }
+.mi-sidebar-collapse-toggle { position: fixed; z-index: 30; top: 50%; left: calc(var(--left-sidebar-w) + 9px); display: grid; place-items: center; width: 16px; height: 40px; padding: 0; background: transparent; border: 0; cursor: pointer; transform: translateY(-50%); transition: left 160ms ease; }
+.mi-sidebar-collapse-toggle:hover img { filter: brightness(0.682); }
+.mi-sidebar-collapse-toggle img { display: block; width: 7px; height: 24px; transition: filter 160ms ease; }
+body.mi-sidebar-collapsed .mi-app-shell { grid-template-columns: minmax(0, 1fr) var(--right-panel-w); }
+body.mi-sidebar-collapsed.is-panel-floating .mi-app-shell { grid-template-columns: minmax(0, 1fr) 0px; }
+body.mi-sidebar-collapsed .mi-left-sidebar { display: none; }
+body.mi-sidebar-collapsed .mi-sidebar-collapse-toggle { left: 9px; transform: translateY(-50%) scaleX(-1); }
+@media (max-width: 1300px) { .mi-sidebar-collapse-toggle { display: none; } }
+
+.mi-rp-navigation { display: none; align-items: center; gap: 0; padding: 4px; background: rgba(64, 64, 64, 0.08); border-radius: 999px; }
+.mi-rp-navigation button { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 7.5px 12px; color: #878787; background: transparent; border: 0; border-radius: 999px; font: 400 15px/20px var(--font-outfit), sans-serif; letter-spacing: 0.2px; cursor: pointer; }
+.mi-rp-navigation button.is-active { padding: 6px 6px 6px 12px; color: #141414; background: #fff; box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04); font-weight: 500; }
+.mi-rp-navigation-count { display: none; align-items: center; justify-content: center; width: 23px; height: 23px; color: #000; background: rgba(0, 0, 0, 0.12); border-radius: 999px; font: 500 14px/normal var(--font-outfit), sans-serif; }
+.mi-rp-navigation button.is-active .mi-rp-navigation-count { display: flex; }
+body.mi-sidebar-collapsed .mi-rp-heading { display: none !important; }
+body.mi-sidebar-collapsed .mi-rp-navigation { display: flex; }
+
+.mi-main-top-wrapper.mi-has-bulk-actions { gap: 16px; }
+.mi-bulk-actions-container { display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; width: 100%; gap: 16px; padding: 12px 0 4px; flex-shrink: 0; }
+.mi-bulk-actions-container:not([hidden]) { animation: mi-bulk-actions-enter 180ms ease-out both; will-change: opacity, transform; }
+.mi-bulk-actions-container.is-leaving { animation: mi-bulk-actions-exit 160ms ease-in both; pointer-events: none; }
+.mi-bulk-summary, .mi-bulk-summary-content, .mi-bulk-controls, .mi-bulk-split-button { display: flex; align-items: center; }
+.mi-bulk-summary { height: 48px; }
+.mi-bulk-check { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 54px; height: 48px; padding: 14px 17px; background: rgba(29, 29, 29, 0.08); border: 0; border-radius: 100px 0 0 100px; cursor: pointer; transition: background 120ms ease, transform 120ms ease; }
+.mi-bulk-check:hover { background: rgba(29, 29, 29, 0.14); }
+.mi-bulk-check:active { background: rgba(29, 29, 29, 0.2); transform: scale(0.97); }
+.mi-bulk-check img { width: 20px; height: 20px; }
+.mi-bulk-partial { width: 12px; height: 2px; background: #1d1d1d; border-radius: 2px; }
+.mi-bulk-summary-content { box-sizing: border-box; height: 48px; gap: 32px; padding: 14px 20px 14px 14px; background: white; border: 2px solid rgba(29, 29, 29, 0.08); border-left: 0; border-radius: 0 100px 100px 0; font-family: var(--font-outfit), sans-serif; font-size: 16px; line-height: 18px; white-space: nowrap; }
+.mi-bulk-summary-content strong { font-weight: 600; color: #000; }
+.mi-bulk-summary-content img { width: 1px; height: 16px; }
+.mi-bulk-summary-content span { display: flex; gap: 4px; color: #2c2e36; }
+.mi-bulk-summary-content b { color: rgba(0, 0, 0, 0.9); font-size: 16px; }
+.mi-bulk-summary-content em { color: #1d1d1d; font-style: normal; font-weight: 500; }
+.mi-bulk-controls { gap: 8px; }
+.mi-bulk-copy-group { position: relative; z-index: 1000; }
+.mi-bulk-split-button { height: 48px; padding: 0; border: 0; border-radius: 100px; overflow: hidden; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 500; cursor: pointer; }
+.mi-bulk-split-button span, .mi-bulk-split-button img { box-sizing: border-box; height: 48px; }
+.mi-bulk-split-button span { display: flex; align-items: center; padding: 0 22px 0 26px; }
+.mi-bulk-split-button img { width: 42px; padding: 16px 14px 16px 12px; border-left: 1px solid rgba(255, 255, 255, 0.3); }
+.mi-bulk-copy { background: #1da25a; color: white; }
+.mi-bulk-copy-main, .mi-bulk-copy-toggle { height: 48px; color: inherit; background: transparent; border: 0; cursor: pointer; font: inherit; transition: background 160ms ease; }
+.mi-bulk-copy-main { padding: 0 22px 0 26px; }
+.mi-bulk-copy-main:hover { background: #168a4a; }
+.mi-bulk-copy-main:active { background: #11723d; }
+.mi-bulk-copy-toggle { display: grid; place-items: center; width: 42px; padding: 0; border-left: 1px solid rgba(255, 255, 255, 0.3); }
+.mi-bulk-copy-toggle:hover { background: #168a4a; }
+.mi-bulk-copy-toggle:active { background: #11723d; }
+.mi-bulk-copy-toggle img { display: block; width: 16px; height: 16px; padding: 0; border: 0; }
+/* Legacy set position:fixed and then positioned the menu with JS on each open.
+   The React port keeps state in one place; absolute positioning under the split
+   button lets the menu track the button through resizes without JS. Anchored
+   right so the menu opens under the chevron half, matching legacy visuals.
+   Transitions are disabled here — React re-renders the split button on toolbar
+   state changes, which restarts the base .mi-category-menu transition and
+   leaves the menu stuck at opacity 0. Instant show/hide is fine for a menu. */
+.mi-category-menu.mi-bulk-copy-menu { position: absolute; top: calc(100% + 8px); right: 0; left: auto; z-index: 10000; width: auto; min-width: 160px; transition: none; }
+.mi-category-menu.mi-bulk-copy-menu.is-open { opacity: 1; transform: none; pointer-events: auto; }
+.mi-category-menu.mi-bulk-copy-menu:not(.is-open) { opacity: 0; pointer-events: none; }
+.mi-bulk-download-group { position: relative; z-index: 1000; }
+.mi-bulk-download { background: #e5e5e5; color: #000; }
+.mi-bulk-download-main, .mi-bulk-download-toggle { height: 48px; color: inherit; background: transparent; border: 0; cursor: pointer; font: inherit; transition: background 160ms ease; }
+.mi-bulk-download-main { padding: 0 22px 0 26px; }
+.mi-bulk-download-main:hover, .mi-bulk-download-toggle:hover { background: #d4d4d4; }
+.mi-bulk-download-main:active, .mi-bulk-download-toggle:active { background: #c9c9c9; }
+.mi-bulk-download-toggle { display: grid; place-items: center; width: 42px; padding: 0; border-left: 1px solid #d5d5d5; }
+.mi-bulk-download-toggle img { display: block; width: 16px; height: 16px; padding: 0; border: 0; }
+.mi-category-menu.mi-bulk-download-menu { position: absolute; top: calc(100% + 8px); right: 0; left: auto; z-index: 10000; width: auto; min-width: 140px; transition: none; }
+.mi-category-menu.mi-bulk-download-menu.is-open { opacity: 1; transform: none; pointer-events: auto; }
+.mi-category-menu.mi-bulk-download-menu:not(.is-open) { opacity: 0; pointer-events: none; }
+.mi-bulk-more-group { position: relative; z-index: 1000; }
+.mi-bulk-more { display: grid; place-items: center; box-sizing: border-box; width: 48px; height: 48px; padding: 12px; background: white; border: 1.5px solid rgba(0, 0, 0, 0.08); border-radius: 50%; cursor: pointer; transition: background 160ms ease; }
+.mi-bulk-more:hover, .mi-bulk-more[aria-expanded="true"] { background: rgba(0, 0, 0, 0.04); }
+.mi-bulk-more img { width: 20px; height: 20px; }
+.mi-category-menu.mi-bulk-more-menu { position: absolute; top: calc(100% + 8px); right: 0; left: auto; z-index: 10000; width: 200px; transition: none; }
+.mi-category-menu.mi-bulk-more-menu.is-open { opacity: 1; transform: none; pointer-events: auto; }
+.mi-category-menu.mi-bulk-more-menu:not(.is-open) { opacity: 0; pointer-events: none; }
+.mi-bulk-more-menu [data-bulk-more-action="clear"] { color: #ff3737; }
+.mi-bulk-more-menu [data-bulk-more-action="clear"]:hover { background: #ffe8e8; }
+
+@keyframes mi-bulk-actions-enter { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes mi-bulk-actions-exit { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .mi-bulk-actions-container:not([hidden]), .mi-bulk-actions-container.is-leaving { animation: none; } }
+@media (max-width: 860px) { .mi-bulk-actions-container { align-items: flex-start; flex-direction: column; } .mi-bulk-summary-content { gap: 12px; } }
