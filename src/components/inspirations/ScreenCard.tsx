@@ -8,7 +8,7 @@ import type { App, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { CollectionMenu } from './CollectionMenu';
 import { LayersIcon, SparklesIcon } from './Icons';
-import { Screenshot } from './MockScreen';
+import { Screenshot } from './Screenshot';
 import { SaveButton } from './SaveButton';
 
 /**

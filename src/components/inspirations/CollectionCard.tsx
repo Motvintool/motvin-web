@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { Collection, Screen } from '@/lib/inspirations/types';
 import { FolderIcon, PencilIcon, TrashIcon } from './Icons';
-import { Screenshot } from './MockScreen';
+import { Screenshot } from './Screenshot';
 import { useLibrary } from './useLibrary';
 
 /**

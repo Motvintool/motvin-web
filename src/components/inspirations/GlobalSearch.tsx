@@ -2,9 +2,8 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import type { SearchSuggestion } from '@/lib/inspirations/search';
+import { suggestQueries, type SearchSuggestion } from '@/lib/inspirations/search';
 import { CloseIcon, SearchIcon } from './Icons';
 
 /**
@@ -54,7 +53,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     if (!open) return;
     let cancelled = false;
     const t = window.setTimeout(() => {
-      inspirationsApi.suggest(value).then((s) => {
+      suggestQueries(value).then((s: SearchSuggestion[]) => {
         if (!cancelled) {
           setSuggestions(s);
           setActive(-1);

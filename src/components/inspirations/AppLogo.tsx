@@ -1,16 +1,20 @@
+import { inspirationsApi } from '@/lib/inspirations/api';
 import type { App } from '@/lib/inspirations/types';
 
 /**
- * App mark. Renders the real logo when the record has one, otherwise a
- * solid brand-coloured tile with the app's initials. Sized by the parent
- * through `size`.
+ * App mark.
+ *
+ * Shows the logo stored in `data/inspirations/logos` when the app has one.
+ * Otherwise it falls back to the app's initials on a neutral tile — a plain
+ * label, not an invented brand colour.
  */
 export function AppLogo({ app, size = 20, className = '' }: { app: App; size?: number; className?: string }) {
-  const { logo } = app;
-  if (logo.src) {
+  const src = inspirationsApi.mediaUrl(app.logo);
+
+  if (src) {
     return (
       <img
-        src={logo.src}
+        src={src}
         alt=""
         width={size}
         height={size}
@@ -20,19 +24,22 @@ export function AppLogo({ app, size = 20, className = '' }: { app: App; size?: n
       />
     );
   }
+
+  const initials = app.name
+    .split(/\s+/)
+    .map((word) => word[0])
+    .filter(Boolean)
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
   return (
     <span
-      className={`ins-app-logo ins-app-logo--glyph ${className}`}
-      style={{
-        width: size,
-        height: size,
-        background: logo.bg,
-        color: logo.fg,
-        fontSize: Math.max(8, Math.round(size * 0.42)),
-      }}
+      className={`ins-app-logo ins-app-logo--initials ${className}`}
+      style={{ width: size, height: size, fontSize: Math.max(8, Math.round(size * 0.4)) }}
       aria-hidden
     >
-      {logo.glyph}
+      {initials}
     </span>
   );
 }

@@ -1,28 +1,26 @@
 'use client';
 
 import { Suspense } from 'react';
-import { inspirationsApi } from '@/lib/inspirations/api';
 import { ContentTabs } from '../ContentTabs';
 import { FilteredGallery } from '../FilteredGallery';
 import { PageHeading } from '../PageHeading';
-import { useAsync } from '../useAsync';
+import { useMeta } from '../useMeta';
 import { VisualSearchEntry } from '../VisualSearchEntry';
 
 /**
- * /inspirations — Explore. Title, content-type tabs, filters, then the
- * gallery within the first viewport. Visual search sits at the end so it
- * never competes with the screens.
+ * /inspirations — Explore. Title, content-type tabs, filters, then the gallery
+ * within the first viewport.
  */
 export function ExploreView() {
-  const { data: counts } = useAsync(() => inspirationsApi.getCounts(), 'counts');
+  const meta = useMeta();
   return (
     <>
       <PageHeading title="Explore" />
-      <ContentTabs counts={counts} active="explore" />
+      <ContentTabs counts={meta.counts} active="explore" />
       <Suspense fallback={null}>
         <FilteredGallery />
       </Suspense>
-      <VisualSearchEntry />
+      {meta.counts.screens > 0 && <VisualSearchEntry />}
     </>
   );
 }

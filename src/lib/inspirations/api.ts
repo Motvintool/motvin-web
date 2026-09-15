@@ -1,206 +1,239 @@
-import { analyzeScreen, extractScreen, similarScreens, type UiAnalysis, type UiExtraction } from './analysis';
-import {
-  APPS,
-  APP_BY_ID,
-  APP_BY_SLUG,
-  FLOWS,
-  FLOW_BY_ID,
-  PATTERNS,
-  PATTERN_BY_SLUG,
-  SCREENS,
-  SCREEN_BY_ID,
-} from './data/build';
-import { matchesFilters, type ScreenFilters } from './filters';
-import { searchCatalogue, suggestQueries, type SearchResults, type SearchSuggestion } from './search';
-import type { App, ElementKind, Flow, LibraryCounts, Pattern, Screen } from './types';
+import type { ScreenFilters } from './filters';
+import type {
+  App,
+  ElementKind,
+  Flow,
+  LibraryMeta,
+  Pattern,
+  Screen,
+  UiAnalysis,
+} from './types';
 
 /**
- * Data service for the Inspirations UI.
+ * Client for the Inspirations API in motvin-backend.
  *
- * Every function is async and returns plain data, so components never touch
- * the catalogue directly. Replacing the in-memory implementation with
- * `fetch('/api/inspirations/…')` — backed by Postgres for metadata, object
- * storage for screenshots and pgvector for similarity — changes this file
- * only. The small artificial latency keeps skeleton states honest in dev.
+ * Everything the UI shows is fetched from there — `data/inspirations` on the
+ * server is the single source of truth. When the store is empty the API
+ * answers with empty lists and the UI says so; nothing is invented to fill
+ * the gap.
+ *
+ * Mirrors the caching and de-duplication of `lib/api/client.ts` so two
+ * components asking for the same URL share one request.
  */
 
-const LATENCY_MS = 120;
+const TTL = {
+  meta: 5 * 60 * 1000,
+  list: 60 * 1000,
+  item: 5 * 60 * 1000,
+  search: 60 * 1000,
+} as const;
 
-function later<T>(value: T, ms = LATENCY_MS): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), ms));
+function baseUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (configured) return `${configured.replace(/\/+$/, '')}/api/inspirations`;
+  if (typeof window !== 'undefined') {
+    const { hostname } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:3000/api/inspirations';
+    }
+  }
+  return 'https://api.motvin.com/api/inspirations';
+}
+
+type CacheEntry = { data: unknown; timestamp: number };
+
+const cache = new Map<string, CacheEntry>();
+const pending = new Map<string, Promise<unknown>>();
+
+async function request<T>(path: string, ttl: number, fallback: T): Promise<T> {
+  const url = `${baseUrl()}${path}`;
+
+  const cached = cache.get(url);
+  if (cached && Date.now() - cached.timestamp < ttl) return cached.data as T;
+
+  const inFlight = pending.get(url);
+  if (inFlight) return inFlight as Promise<T>;
+
+  const promise = (async () => {
+    try {
+      const res = await fetch(url);
+      if (res.status === 404) return fallback;
+      if (!res.ok) throw new Error(`Inspirations API error: ${res.status}`);
+      const envelope = (await res.json()) as { success: boolean; data: T; error?: string };
+      if (!envelope.success) throw new Error(envelope.error || 'Request failed');
+      cache.set(url, { data: envelope.data, timestamp: Date.now() });
+      return envelope.data;
+    } finally {
+      pending.delete(url);
+    }
+  })();
+
+  pending.set(url, promise);
+  return promise;
+}
+
+function listParam(name: string, values: string[] | undefined, params: URLSearchParams) {
+  if (values?.length) params.set(name, values.join(','));
 }
 
 export type Page<T> = {
   items: T[];
   total: number;
-  nextCursor: number | null;
+  limit: number;
+  offset: number;
+  nextOffset: number | null;
+};
+
+const EMPTY_PAGE: Page<never> = { items: [], total: 0, limit: 30, offset: 0, nextOffset: null };
+
+export const EMPTY_META: LibraryMeta = {
+  counts: { apps: 0, screens: 0, 'ui-elements': 0, flows: 0, patterns: 0 },
+  taxonomy: { platforms: [], screenTypes: [], industries: [], styles: [], elements: [] },
+  generatedAt: '',
+};
+
+export type ScreenSort = 'newest' | 'oldest' | 'app' | 'curated';
+
+export type SearchResults = {
+  intent: {
+    raw: string;
+    terms: string[];
+    industries: string[];
+    screenTypes: string[];
+    platforms: string[];
+    styles: string[];
+    free: string[];
+  };
+  apps: App[];
+  screens: Screen[];
+  flows: Flow[];
+  patterns: Pattern[];
+  total: number;
+  screenTotal: number;
+};
+
+const EMPTY_SEARCH: SearchResults = {
+  intent: { raw: '', terms: [], industries: [], screenTypes: [], platforms: [], styles: [], free: [] },
+  apps: [],
+  screens: [],
+  flows: [],
+  patterns: [],
+  total: 0,
+  screenTotal: 0,
 };
 
 export const PAGE_SIZE = 30;
 
-function paginate<T>(all: readonly T[], cursor = 0, size = PAGE_SIZE): Page<T> {
-  const items = all.slice(cursor, cursor + size);
-  const next = cursor + size;
-  return { items, total: all.length, nextCursor: next < all.length ? next : null };
-}
-
-export type ScreenSort = 'newest' | 'oldest' | 'app';
-
-function sortScreens(list: Screen[], sort: ScreenSort): Screen[] {
-  const out = [...list];
-  if (sort === 'newest') out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  if (sort === 'oldest') out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  if (sort === 'app') out.sort((a, b) => a.appId.localeCompare(b.appId) || a.createdAt.localeCompare(b.createdAt));
-  return out;
-}
-
-/** Interleaves apps so consecutive cards rarely share a source — reads as curated. */
-function shuffleCurated(list: Screen[]): Screen[] {
-  const byApp = new Map<string, Screen[]>();
-  for (const s of list) {
-    const bucket = byApp.get(s.appId) ?? [];
-    bucket.push(s);
-    byApp.set(s.appId, bucket);
-  }
-  const buckets = Array.from(byApp.values());
-  const out: Screen[] = [];
-  let remaining = list.length;
-  let i = 0;
-  while (remaining > 0) {
-    const bucket = buckets[i % buckets.length];
-    if (bucket.length) {
-      out.push(bucket.shift()!);
-      remaining--;
-    }
-    i++;
-  }
-  return out;
-}
-
 export const inspirationsApi = {
-  async getCounts(): Promise<LibraryCounts> {
-    const elementKinds = new Set<ElementKind>();
-    SCREENS.forEach((s) => s.elements.forEach((e) => elementKinds.add(e)));
-    return later(
-      {
-        apps: APPS.length,
-        screens: SCREENS.length,
-        'ui-elements': SCREENS.reduce((n, s) => n + s.elements.length, 0),
-        flows: FLOWS.length,
-        patterns: PATTERNS.length,
-      },
-      0,
-    );
+  /** Counts and the taxonomy actually present in the store. */
+  getMeta(): Promise<LibraryMeta> {
+    return request('/meta', TTL.meta, EMPTY_META);
   },
 
-  async listScreens(filters: ScreenFilters, cursor = 0, sort: ScreenSort | 'curated' = 'curated'): Promise<Page<Screen>> {
-    let list = SCREENS.filter((s) => matchesFilters(s, filters));
-    if (filters.query) {
-      const ids = new Set(searchCatalogue(filters.query).screens.map((s) => s.id));
-      list = list.filter((s) => ids.has(s.id));
+  listScreens(
+    filters: ScreenFilters,
+    offset = 0,
+    sort: ScreenSort = 'curated',
+    extra: { app?: string; element?: string } = {},
+  ): Promise<Page<Screen>> {
+    const params = new URLSearchParams();
+    listParam('platform', filters.platforms, params);
+    listParam('type', filters.screenTypes, params);
+    listParam('industry', filters.industries, params);
+    listParam('style', filters.styles, params);
+    if (filters.query) params.set('q', filters.query);
+    if (extra.app) params.set('app', extra.app);
+    if (extra.element) params.set('element', extra.element);
+    params.set('sort', sort);
+    params.set('limit', String(PAGE_SIZE));
+    params.set('offset', String(offset));
+    return request(`/screens?${params}`, TTL.list, EMPTY_PAGE as Page<Screen>);
+  },
+
+  listApps(industry?: string): Promise<App[]> {
+    return request(industry ? `/apps?industry=${industry}` : '/apps', TTL.list, []);
+  },
+
+  getApp(slug: string): Promise<{ app: App; screens: Screen[]; flows: Flow[]; patterns: Pattern[] } | null> {
+    return request(`/app/${encodeURIComponent(slug)}`, TTL.item, null);
+  },
+
+  getScreen(id: string): Promise<{ screen: Screen; app: App | null; flows: Flow[]; patterns: Pattern[] } | null> {
+    return request(`/screen/${encodeURIComponent(id)}`, TTL.item, null);
+  },
+
+  /** Metadata neighbours. The response states its basis so the UI can label it. */
+  similar(id: string, limit = 12): Promise<{ basis: string; items: Screen[] }> {
+    return request(`/screen/${encodeURIComponent(id)}/similar?limit=${limit}`, TTL.item, {
+      basis: 'metadata',
+      items: [],
+    });
+  },
+
+  /**
+   * Stored analysis for a screen. `analyzed: false` means no analyzer has run
+   * on it yet — the panel says that rather than showing guesses.
+   */
+  async analyze(id: string): Promise<{ analyzed: boolean; analysis: UiAnalysis | null }> {
+    const url = `${baseUrl()}/screen/${encodeURIComponent(id)}/analysis`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return { analyzed: false, analysis: null };
+      const envelope = (await res.json()) as { success: boolean; data: UiAnalysis | null; analyzed: boolean };
+      return { analyzed: Boolean(envelope.analyzed), analysis: envelope.data ?? null };
+    } catch {
+      return { analyzed: false, analysis: null };
     }
-    const ordered = sort === 'curated' ? shuffleCurated(sortScreens(list, 'newest')) : sortScreens(list, sort);
-    return later(paginate(ordered, cursor));
   },
 
-  async listApps(industry?: App['industry']): Promise<App[]> {
-    const list = industry ? APPS.filter((a) => a.industry === industry) : [...APPS];
-    return later(list.sort((a, b) => b.screenCount - a.screenCount));
+  listFlows(category?: string): Promise<Flow[]> {
+    return request(category ? `/flows?category=${category}` : '/flows', TTL.list, []);
   },
 
-  async getApp(slug: string): Promise<App | null> {
-    return later(APP_BY_SLUG.get(slug) ?? null, 0);
+  getFlow(id: string): Promise<{ flow: Flow; screens: Screen[]; app: App | null } | null> {
+    return request(`/flow/${encodeURIComponent(id)}`, TTL.item, null);
   },
 
-  async getAppScreens(appId: string): Promise<Screen[]> {
-    return later(SCREENS.filter((s) => s.appId === appId));
+  listPatterns(category?: string): Promise<Pattern[]> {
+    return request(category ? `/patterns?category=${encodeURIComponent(category)}` : '/patterns', TTL.list, []);
   },
 
-  async getAppFlows(appId: string): Promise<Flow[]> {
-    return later(FLOWS.filter((f) => f.appId === appId));
+  getPattern(slug: string): Promise<{ pattern: Pattern; screens: Screen[] } | null> {
+    return request(`/pattern/${encodeURIComponent(slug)}`, TTL.item, null);
   },
 
-  async getScreen(id: string): Promise<Screen | null> {
-    return later(SCREEN_BY_ID.get(id) ?? null, 0);
+  listElements(): Promise<{ kind: ElementKind; count: number }[]> {
+    return request('/elements', TTL.list, []);
   },
 
+  search(query: string): Promise<SearchResults> {
+    if (!query.trim()) return Promise.resolve(EMPTY_SEARCH);
+    return request(`/search?q=${encodeURIComponent(query)}`, TTL.search, EMPTY_SEARCH);
+  },
+
+  /** Screens resolved by id, for saved items and collections. */
   async getScreens(ids: string[]): Promise<Screen[]> {
-    return later(ids.map((id) => SCREEN_BY_ID.get(id)).filter((s): s is Screen => Boolean(s)));
+    const found = await Promise.all(ids.map((id) => inspirationsApi.getScreen(id).catch(() => null)));
+    return found.filter((r): r is { screen: Screen; app: App | null; flows: Flow[]; patterns: Pattern[] } => Boolean(r)).map((r) => r.screen);
   },
 
-  async getScreenFlows(screenId: string): Promise<Flow[]> {
-    return later(FLOWS.filter((f) => f.screenIds.includes(screenId)));
+  /** Download URL for a screen. The backend refuses it for view-only material. */
+  downloadUrl(screen: Screen): string {
+    const base = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, '') ?? '';
+    return `${base}${screen.url}?download=1`;
   },
 
-  async getScreenPatterns(screenId: string): Promise<Pattern[]> {
-    return later(PATTERNS.filter((p) => p.screenIds.includes(screenId)));
-  },
-
-  async listFlows(category?: Flow['category']): Promise<Flow[]> {
-    return later(category ? FLOWS.filter((f) => f.category === category) : [...FLOWS]);
-  },
-
-  async getFlow(id: string): Promise<Flow | null> {
-    return later(FLOW_BY_ID.get(id) ?? null, 0);
-  },
-
-  async listPatterns(): Promise<Pattern[]> {
-    return later([...PATTERNS]);
-  },
-
-  async getPattern(slug: string): Promise<Pattern | null> {
-    return later(PATTERN_BY_SLUG.get(slug) ?? null, 0);
-  },
-
-  async listElementKinds(): Promise<{ kind: ElementKind; count: number; screenIds: string[] }[]> {
-    const map = new Map<ElementKind, string[]>();
-    for (const s of SCREENS) {
-      for (const e of s.elements) {
-        const arr = map.get(e) ?? [];
-        arr.push(s.id);
-        map.set(e, arr);
-      }
+  /** Resolves a manifest-relative API path to an absolute URL. */
+  mediaUrl(path: string | null): string | null {
+    if (!path) return null;
+    if (/^https?:\/\//.test(path)) return path;
+    const base = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, '');
+    if (base) return `${base}${path}`;
+    if (typeof window !== 'undefined') {
+      const { hostname } = window.location;
+      if (hostname === 'localhost' || hostname === '127.0.0.1') return `http://localhost:3000${path}`;
     }
-    return later(
-      Array.from(map.entries())
-        .map(([kind, screenIds]) => ({ kind, count: screenIds.length, screenIds }))
-        .sort((a, b) => b.count - a.count),
-    );
-  },
-
-  async search(query: string): Promise<SearchResults> {
-    return later(searchCatalogue(query), 180);
-  },
-
-  async suggest(query: string): Promise<SearchSuggestion[]> {
-    return later(suggestQueries(query), 0);
-  },
-
-  async similar(screenId: string, limit = 12): Promise<Screen[]> {
-    const screen = SCREEN_BY_ID.get(screenId);
-    return later(screen ? similarScreens(screen, limit) : []);
-  },
-
-  async analyze(screenId: string): Promise<UiAnalysis | null> {
-    const screen = SCREEN_BY_ID.get(screenId);
-    return later(screen ? analyzeScreen(screen) : null, 650);
-  },
-
-  async extract(screenId: string): Promise<UiExtraction | null> {
-    const screen = SCREEN_BY_ID.get(screenId);
-    return later(screen ? extractScreen(screen) : null, 800);
-  },
-
-  /** Visual search entry point — accepts a file today, returns lookalikes. */
-  async visualSearch(file: File): Promise<Screen[]> {
-    // Until image embeddings exist, seed the result from the file name so the
-    // flow is exercisable end to end.
-    const guess = searchCatalogue(file.name.replace(/[-_.]/g, ' ')).screens;
-    return later(guess.length ? guess.slice(0, 24) : shuffleCurated([...SCREENS]).slice(0, 24), 900);
-  },
-
-  appFor(screen: Screen): App | undefined {
-    return APP_BY_ID.get(screen.appId);
+    return `https://api.motvin.com${path}`;
   },
 };
 

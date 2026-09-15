@@ -1,12 +1,14 @@
 import Link from 'next/link';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { Pattern, Screen } from '@/lib/inspirations/types';
-import { Screenshot } from './MockScreen';
+import { Screenshot } from './Screenshot';
 
 /**
- * Pattern tile: four example screens in a tight 2×2, then name + count.
+ * Pattern tile: up to four example screens in a tight 2x2, then name and the
+ * number of stored screens that show the pattern. The thumbnails are optional;
+ * the count always comes from the pattern's own screen ids.
  */
-export function PatternCard({ pattern, screens }: { pattern: Pattern; screens: Screen[] }) {
+export function PatternCard({ pattern, screens = [] }: { pattern: Pattern; screens?: Screen[] }) {
   const examples = screens.slice(0, 4);
   return (
     <Link href={INSPIRATIONS_ROUTES.pattern(pattern)} className="ins-pattern-card">
@@ -22,7 +24,8 @@ export function PatternCard({ pattern, screens }: { pattern: Pattern; screens: S
       <div className="ins-pattern-meta">
         <p className="ins-pattern-name">{pattern.name}</p>
         <p className="ins-pattern-sub">
-          {pattern.category} · {pattern.screenIds.length} examples
+          {pattern.category} · {pattern.screenIds.length}{' '}
+          {pattern.screenIds.length === 1 ? 'example' : 'examples'}
         </p>
       </div>
     </Link>

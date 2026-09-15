@@ -1,20 +1,19 @@
 'use client';
 
 import { Suspense } from 'react';
-import { inspirationsApi } from '@/lib/inspirations/api';
 import { formatCount } from '@/lib/inspirations/taxonomy';
 import { ContentTabs } from '../ContentTabs';
 import { FilteredGallery } from '../FilteredGallery';
 import { PageHeading } from '../PageHeading';
-import { useAsync } from '../useAsync';
+import { useMeta } from '../useMeta';
 
 /** /inspirations/screens — the full gallery with filters. */
 export function ScreensView() {
-  const { data: counts } = useAsync(() => inspirationsApi.getCounts(), 'counts');
+  const meta = useMeta();
   return (
     <>
-      <PageHeading title="Screens" count={counts ? formatCount(counts.screens) : undefined} />
-      <ContentTabs counts={counts} active="screens" />
+      <PageHeading title="Screens" count={meta.counts.screens ? formatCount(meta.counts.screens) : undefined} />
+      <ContentTabs counts={meta.counts} active="screens" />
       <Suspense fallback={null}>
         <FilteredGallery />
       </Suspense>

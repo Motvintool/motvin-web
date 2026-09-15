@@ -2,11 +2,9 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
-import { APP_BY_ID, SCREENS, SCREEN_BY_ID } from '@/lib/inspirations/data/build';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import { TRENDING_QUERIES } from '@/lib/inspirations/search';
 import { INDUSTRY_LABEL, PLATFORM_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from '@/lib/inspirations/taxonomy';
-import type { Screen } from '@/lib/inspirations/types';
+import type { Industry, Platform, ScreenType, Style } from '@/lib/inspirations/types';
 import { AppCard } from '../AppCard';
 import { EmptyState } from '../EmptyState';
 import { FlowCard } from '../FlowCard';
@@ -15,9 +13,12 @@ import { PageHeading } from '../PageHeading';
 import { PatternCard } from '../PatternCard';
 import { ScreenGrid } from '../ScreenGrid';
 import { ScreenGridSkeleton } from '../Skeletons';
+import { useApps } from '../useApps';
 import { useAsync } from '../useAsync';
+import { useMeta } from '../useMeta';
 
 type ResultTab = 'all' | 'apps' | 'screens' | 'flows' | 'patterns';
+
 const TABS: { id: ResultTab; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'apps', label: 'Apps' },
@@ -31,6 +32,9 @@ export function SearchView() {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const meta = useMeta();
+  const apps = useApps();
+
   const query = params.get('q')?.trim() ?? '';
   const rawTab = params.get('type');
   const tab: ResultTab = TABS.some((t) => t.id === rawTab) ? (rawTab as ResultTab) : 'all';
@@ -45,16 +49,29 @@ export function SearchView() {
   };
 
   if (!query) {
+    // Starting points come from what the store holds, so nothing here promises
+    // content that is not in the library.
+    const starters = [
+      ...meta.taxonomy.screenTypes.slice(0, 4).map((t) => SCREEN_TYPE_LABEL[t as ScreenType] ?? t),
+      ...meta.taxonomy.industries.slice(0, 4).map((i) => INDUSTRY_LABEL[i as Industry] ?? i),
+    ];
     return (
       <>
-        <PageHeading title="Search" description="Describe what you're looking for — an industry, a screen type, a platform, a style." />
-        <div className="ins-trending">
-          {TRENDING_QUERIES.map((q) => (
-            <a key={q} href={INSPIRATIONS_ROUTES.searchFor(q)} className="ins-chip">
-              <SearchIcon size={12} /> {q}
-            </a>
-          ))}
-        </div>
+        <PageHeading
+          title="Search"
+          description="Describe what you're looking for — an industry, a screen type, a platform, a style."
+        />
+        {starters.length > 0 ? (
+          <div className="ins-trending">
+            {starters.map((s) => (
+              <a key={s} href={INSPIRATIONS_ROUTES.searchFor(s)} className="ins-chip">
+                <SearchIcon size={12} /> {s}
+              </a>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="The library is empty" description="There is nothing to search yet." />
+        )}
       </>
     );
   }
@@ -62,31 +79,54 @@ export function SearchView() {
   const intent = data?.intent;
   const understood = intent
     ? [
-        ...intent.industries.map((i) => INDUSTRY_LABEL[i]),
-        ...intent.screenTypes.map((t) => SCREEN_TYPE_LABEL[t]),
-        ...intent.platforms.map((p) => PLATFORM_LABEL[p]),
-        ...intent.styles.map((s) => STYLE_LABEL[s]),
+        ...intent.industries.map((i) => INDUSTRY_LABEL[i as Industry] ?? i),
+        ...intent.screenTypes.map((t) => SCREEN_TYPE_LABEL[t as ScreenType] ?? t),
+        ...intent.platforms.map((p) => PLATFORM_LABEL[p as Platform] ?? p),
+        ...intent.styles.map((s) => STYLE_LABEL[s as Style] ?? s),
       ]
     : [];
 
-  const countFor = (t: ResultTab) =>
-    !data ? undefined : t === 'all' ? data.total : t === 'apps' ? data.apps.length : t === 'screens' ? data.screens.length : t === 'flows' ? data.flows.length : data.patterns.length;
+  const countFor = (t: ResultTab) => {
+    if (!data) return undefined;
+    if (t === 'all') return data.total;
+    if (t === 'apps') return data.apps.length;
+    if (t === 'screens') return data.screenTotal ?? data.screens.length;
+    if (t === 'flows') return data.flows.length;
+    return data.patterns.length;
+  };
 
   return (
     <>
       <PageHeading
-        title={<>Results for <span className="ins-title-query">“{query}”</span></>}
+        title={
+          <>
+            Results for <span className="ins-title-query">“{query}”</span>
+          </>
+        }
         description={
           understood.length > 0 ? (
             <span className="ins-understood">
-              Understood as {understood.map((u) => <span key={u} className="ins-tag">{u}</span>)}
+              Understood as{' '}
+              {understood.map((u) => (
+                <span key={u} className="ins-tag">
+                  {u}
+                </span>
+              ))}
             </span>
           ) : undefined
         }
       />
+
       <div className="ins-tabbar" role="tablist" aria-label="Result type">
         {TABS.map((t) => (
-          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={`ins-tab ${tab === t.id ? 'is-active' : ''}`} onClick={() => setTab(t.id)}>
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`ins-tab ${tab === t.id ? 'is-active' : ''}`}
+            onClick={() => setTab(t.id)}
+          >
             {t.label}
             {countFor(t.id) !== undefined && <span className="ins-tab-count">{countFor(t.id)}</span>}
           </button>
@@ -98,7 +138,7 @@ export function SearchView() {
       ) : data.total === 0 ? (
         <EmptyState
           title="Nothing matched that search"
-          description="Try a broader phrase like “fintech dashboard” or “mobile onboarding”."
+          description="Try a broader phrase, or browse everything in the library."
           action={{ label: 'Browse everything', href: INSPIRATIONS_ROUTES.explore }}
         />
       ) : (
@@ -108,38 +148,46 @@ export function SearchView() {
               {tab === 'all' && <SectionHead title="Apps" count={data.apps.length} onMore={() => setTab('apps')} />}
               <div className="ins-app-grid">
                 {(tab === 'all' ? data.apps.slice(0, 4) : data.apps).map((app) => (
-                  <AppCard key={app.id} app={app} preview={SCREENS.filter((s) => s.appId === app.id).slice(0, 3)} />
+                  <AppCard key={app.id} app={app} />
                 ))}
               </div>
             </section>
           )}
+
           {(tab === 'all' || tab === 'screens') && data.screens.length > 0 && (
             <section className="ins-result-section">
-              {tab === 'all' && <SectionHead title="Screens" count={data.screens.length} onMore={() => setTab('screens')} />}
+              {tab === 'all' && (
+                <SectionHead title="Screens" count={data.screenTotal ?? data.screens.length} onMore={() => setTab('screens')} />
+              )}
               <ScreenGrid screens={tab === 'all' ? data.screens.slice(0, 15) : data.screens} />
             </section>
           )}
+
           {(tab === 'all' || tab === 'flows') && data.flows.length > 0 && (
             <section className="ins-result-section">
               {tab === 'all' && <SectionHead title="Flows" count={data.flows.length} onMore={() => setTab('flows')} />}
               <div className="ins-flow-grid">
                 {(tab === 'all' ? data.flows.slice(0, 3) : data.flows).map((flow) => (
-                  <FlowCard key={flow.id} flow={flow} app={APP_BY_ID.get(flow.appId)} screens={flow.screenIds.map((id) => SCREEN_BY_ID.get(id)).filter((s): s is Screen => Boolean(s))} />
+                  <FlowCard key={flow.id} flow={flow} app={apps.get(flow.appId)} />
                 ))}
               </div>
             </section>
           )}
+
           {(tab === 'all' || tab === 'patterns') && data.patterns.length > 0 && (
             <section className="ins-result-section">
               {tab === 'all' && <SectionHead title="Patterns" count={data.patterns.length} onMore={() => setTab('patterns')} />}
               <div className="ins-pattern-grid-wrap">
                 {(tab === 'all' ? data.patterns.slice(0, 4) : data.patterns).map((p) => (
-                  <PatternCard key={p.id} pattern={p} screens={p.screenIds.map((id) => SCREEN_BY_ID.get(id)).filter((s): s is Screen => Boolean(s))} />
+                  <PatternCard key={p.id} pattern={p} />
                 ))}
               </div>
             </section>
           )}
-          {tab !== 'all' && countFor(tab) === 0 && <EmptyState title={`No ${tab} matched`} action={{ label: 'See all results', onClick: () => setTab('all') }} />}
+
+          {tab !== 'all' && countFor(tab) === 0 && (
+            <EmptyState title={`No ${tab} matched`} action={{ label: 'See all results', onClick: () => setTab('all') }} />
+          )}
         </div>
       )}
     </>
@@ -152,7 +200,9 @@ function SectionHead({ title, count, onMore }: { title: string; count: number; o
       <h2 className="ins-section-title">
         {title} <span className="ins-title-count">{count}</span>
       </h2>
-      <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm" onClick={onMore}>See all</button>
+      <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm" onClick={onMore}>
+        See all
+      </button>
     </div>
   );
 }

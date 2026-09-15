@@ -1,6 +1,5 @@
 import type {
   ContentKind,
-  ElementKind,
   FlowCategory,
   Industry,
   PatternCategory,
@@ -9,7 +8,12 @@ import type {
   Style,
 } from './types';
 
-/** Human labels for every enum the filters and cards display. */
+/**
+ * Display labels for the taxonomy. The values themselves come from the store
+ * (the manifest reports which platforms, screen types, industries, styles and
+ * element kinds are actually present); this module only decides how each one
+ * is written in the interface.
+ */
 
 export const PLATFORM_LABEL: Record<Platform, string> = {
   web: 'Web',
@@ -57,18 +61,26 @@ export const STYLE_LABEL: Record<Style, string> = {
   experimental: 'Experimental',
 };
 
-export const ELEMENT_LABEL: Record<ElementKind, string> = {
+/**
+ * Element kinds are open-ended: a sidecar file may record a kind this table
+ * has never seen, and it should still read properly in the UI.
+ */
+export const ELEMENT_LABEL: Record<string, string> = {
   button: 'Button',
   input: 'Input',
   search: 'Search',
   card: 'Card',
   navigation: 'Navigation',
+  sidebar: 'Sidebar',
   'bottom-nav': 'Bottom Navigation',
   tabs: 'Tabs',
   table: 'Table',
   chart: 'Chart',
+  'kpi-card': 'KPI Card',
+  'progress-ring': 'Progress Ring',
   form: 'Form',
   modal: 'Modal',
+  'bottom-sheet': 'Bottom Sheet',
   toggle: 'Toggle',
   avatar: 'Avatar',
   badge: 'Badge',
@@ -77,9 +89,20 @@ export const ELEMENT_LABEL: Record<ElementKind, string> = {
   list: 'List',
   chip: 'Chip',
   stepper: 'Stepper',
+  'date-picker': 'Date Picker',
+  'filter-panel': 'Filter Panel',
   'empty-state': 'Empty State',
+  'success-state': 'Success State',
   notification: 'Notification',
 };
+
+/** Label for any element kind, including ones not in the table above. */
+export function elementLabel(kind: string): string {
+  return (
+    ELEMENT_LABEL[kind] ??
+    kind.split('-').map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ')
+  );
+}
 
 export const FLOW_CATEGORY_LABEL: Record<FlowCategory, string> = {
   onboarding: 'Onboarding',
@@ -115,18 +138,6 @@ export const CONTENT_KINDS: { kind: ContentKind; label: string; href: string }[]
   { kind: 'ui-elements', label: 'UI Elements', href: '/inspirations/ui-elements' },
   { kind: 'flows', label: 'Flows', href: '/inspirations/flows' },
   { kind: 'patterns', label: 'Patterns', href: '/inspirations/patterns' },
-];
-
-/** The quick industry chips shown on the explore page, in display order. */
-export const QUICK_INDUSTRIES: Industry[] = [
-  'saas',
-  'fintech',
-  'ai',
-  'ecommerce',
-  'productivity',
-  'healthcare',
-  'travel',
-  'finance',
 ];
 
 /** Compact "116K" style counts — never dominant, always readable. */

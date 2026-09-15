@@ -1,35 +1,29 @@
 'use client';
 
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { inspirationsApi } from '@/lib/inspirations/api';
-import type { Aspect, Screen } from '@/lib/inspirations/types';
+import type { App, Screen } from '@/lib/inspirations/types';
 import { ScreenCard } from './ScreenCard';
 import { ScreenGridSkeleton } from './Skeletons';
+import { useApps } from './useApps';
 import { useColumnCount } from './useColumnCount';
 
 /**
- * Masonry gallery. Cards are placed into the currently shortest column using
- * their known aspect ratio, so layout is exact on first paint (no measuring)
- * and the visual order stays roughly left→right, top→bottom.
+ * Masonry gallery.
+ *
+ * Cards are placed into the currently shortest column using each screenshot's
+ * real width and height from the manifest, so the layout is exact on first
+ * paint — no measuring pass, no reflow when images arrive.
  *
  * Infinite loading: a sentinel below the grid calls `onLoadMore` when it
  * scrolls into view. Cards use `content-visibility: auto` (CSS) so off-screen
- * mocks cost nothing to keep mounted.
+ * rows cost nothing to keep mounted.
  */
-
-const ASPECT_HEIGHT: Record<Aspect, number> = {
-  '9:16': 16 / 9,
-  '3:4': 4 / 3,
-  '4:5': 5 / 4,
-  '1:1': 1,
-  '16:10': 10 / 16,
-  '16:9': 9 / 16,
-};
 
 const META_HEIGHT = 0.28; // metadata block, in column-width units
 
 export function ScreenGrid({
   screens,
+  apps: appsOverride,
   loading = false,
   hasMore = false,
   onLoadMore,
@@ -38,6 +32,8 @@ export function ScreenGrid({
   preset = 'gallery',
 }: {
   screens: Screen[];
+  /** Overrides the shared app lookup; omit and the grid fetches it itself. */
+  apps?: Map<string, App>;
   loading?: boolean;
   hasMore?: boolean;
   onLoadMore?: () => void;
@@ -46,15 +42,23 @@ export function ScreenGrid({
   preset?: 'gallery' | 'wide';
 }) {
   const columns = useColumnCount(preset);
+  const fetchedApps = useApps();
+  const apps = appsOverride ?? fetchedApps;
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   const placed = useMemo(() => {
-    const cols: { items: { screen: Screen; index: number }[]; height: number }[] = Array.from({ length: columns }, () => ({ items: [], height: 0 }));
+    const cols: { items: { screen: Screen; index: number }[]; height: number }[] = Array.from(
+      { length: columns },
+      () => ({ items: [], height: 0 }),
+    );
     screens.forEach((screen, index) => {
       let target = 0;
-      for (let i = 1; i < cols.length; i++) if (cols[i].height < cols[target].height - 0.001) target = i;
+      for (let i = 1; i < cols.length; i++) {
+        if (cols[i].height < cols[target].height - 0.001) target = i;
+      }
       cols[target].items.push({ screen, index });
-      cols[target].height += ASPECT_HEIGHT[screen.aspect] + META_HEIGHT;
+      const ratio = screen.width && screen.height ? screen.height / screen.width : 0.75;
+      cols[target].height += ratio + META_HEIGHT;
     });
     return cols;
   }, [screens, columns]);
@@ -88,7 +92,12 @@ export function ScreenGrid({
           <div className="ins-grid-col" key={ci}>
             {col.items.map(({ screen, index }) => (
               <div role="listitem" key={screen.id}>
-                <ScreenCard screen={screen} app={inspirationsApi.appFor(screen)} showApp={showApp} index={index} />
+                <ScreenCard
+                  screen={screen}
+                  app={apps.get(screen.appId)}
+                  showApp={showApp}
+                  index={index}
+                />
               </div>
             ))}
           </div>

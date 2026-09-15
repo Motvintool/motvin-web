@@ -3,7 +3,7 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { App, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
-import { Screenshot } from './MockScreen';
+import { Screenshot } from './Screenshot';
 
 /**
  * App tile: logo, name, category, platforms, counts — plus a three-up strip
@@ -31,8 +31,12 @@ export function AppCard({ app, preview = [] }: { app: App; preview?: Screen[] })
         </div>
       </div>
       <p className="ins-app-card-counts">
-        <span>{app.screenCount} screens</span>
-        <span>{app.flowCount} flows</span>
+        <span>
+          {app.screenCount} {app.screenCount === 1 ? 'screen' : 'screens'}
+        </span>
+        <span>
+          {app.flowCount} {app.flowCount === 1 ? 'flow' : 'flows'}
+        </span>
       </p>
     </Link>
   );

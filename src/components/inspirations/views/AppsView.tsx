@@ -2,49 +2,81 @@
 
 import { useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
-import { SCREENS } from '@/lib/inspirations/data/build';
-import { INDUSTRY_LABEL, QUICK_INDUSTRIES } from '@/lib/inspirations/taxonomy';
-import { INDUSTRIES, type Industry } from '@/lib/inspirations/types';
+import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
+import type { Industry } from '@/lib/inspirations/types';
 import { AppCard } from '../AppCard';
 import { ContentTabs } from '../ContentTabs';
 import { EmptyState } from '../EmptyState';
+import { FolderIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
 import { CardRowSkeleton } from '../Skeletons';
 import { useAsync } from '../useAsync';
 import { useExploreFilters } from '../useExploreFilters';
+import { useMeta } from '../useMeta';
 
-/** /inspirations/apps — every app as a collection of screens. */
+/** /inspirations/apps — every app that has screens in the store. */
 export function AppsView() {
   const params = useSearchParams();
   const { update } = useExploreFilters();
-  const raw = params.get('industry');
-  const industry = INDUSTRIES.includes(raw as Industry) ? (raw as Industry) : undefined;
+  const meta = useMeta();
 
-  const { data: counts } = useAsync(() => inspirationsApi.getCounts(), 'counts');
-  const { data: apps, loading } = useAsync(() => inspirationsApi.listApps(industry), `apps:${industry ?? 'all'}`);
+  const industries = meta.taxonomy.industries as Industry[];
+  const raw = params.get('industry');
+  const industry = industries.includes(raw as Industry) ? (raw as Industry) : undefined;
+
+  const { data: apps, loading } = useAsync(
+    () => inspirationsApi.listApps(industry),
+    `apps:${industry ?? 'all'}`,
+  );
 
   return (
     <>
-      <PageHeading title="Apps" count={counts ? String(counts.apps) : undefined} />
-      <ContentTabs counts={counts} active="apps" />
-      <div className="ins-filterbar">
-        <div className="ins-chips" role="group" aria-label="Industry">
-          <button type="button" className={`ins-chip ${!industry ? 'is-active' : ''}`} aria-pressed={!industry} onClick={() => update({ industries: [] })}>All</button>
-          {QUICK_INDUSTRIES.map((i) => (
-            <button key={i} type="button" className={`ins-chip ${industry === i ? 'is-active' : ''}`} aria-pressed={industry === i} onClick={() => update({ industries: industry === i ? [] : [i] })}>
-              {INDUSTRY_LABEL[i]}
+      <PageHeading title="Apps" count={meta.counts.apps ? String(meta.counts.apps) : undefined} />
+      <ContentTabs counts={meta.counts} active="apps" />
+
+      {industries.length > 0 && (
+        <div className="ins-filterbar">
+          <div className="ins-chips" role="group" aria-label="Industry">
+            <button
+              type="button"
+              className={`ins-chip ${!industry ? 'is-active' : ''}`}
+              aria-pressed={!industry}
+              onClick={() => update({ industries: [] })}
+            >
+              All
             </button>
-          ))}
+            {industries.map((i) => (
+              <button
+                key={i}
+                type="button"
+                className={`ins-chip ${industry === i ? 'is-active' : ''}`}
+                aria-pressed={industry === i}
+                onClick={() => update({ industries: industry === i ? [] : [i] })}
+              >
+                {INDUSTRY_LABEL[i] ?? i}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
-      {loading || !apps ? (
-        <CardRowSkeleton count={12} />
-      ) : apps.length === 0 ? (
-        <EmptyState title="No apps in this industry yet" action={{ label: 'Show all apps', onClick: () => update({ industries: [] }) }} />
+      )}
+
+      {loading ? (
+        <CardRowSkeleton count={8} />
+      ) : !apps || apps.length === 0 ? (
+        <EmptyState
+          icon={<FolderIcon size={22} />}
+          title={industry ? 'No apps in this industry yet' : 'No apps in the library yet'}
+          description={
+            industry
+              ? undefined
+              : 'Apps appear here once their screens are added to the store and approved for publishing.'
+          }
+          action={industry ? { label: 'Show all apps', onClick: () => update({ industries: [] }) } : undefined}
+        />
       ) : (
         <div className="ins-app-grid">
           {apps.map((app) => (
-            <AppCard key={app.id} app={app} preview={SCREENS.filter((s) => s.appId === app.id).slice(0, 3)} />
+            <AppCard key={app.id} app={app} />
           ))}
         </div>
       )}

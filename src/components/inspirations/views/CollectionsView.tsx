@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { SCREEN_BY_ID } from '@/lib/inspirations/data/build';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { Screen } from '@/lib/inspirations/types';
 import { CollectionCard } from '../CollectionCard';
@@ -9,14 +8,20 @@ import { EmptyState } from '../EmptyState';
 import { FolderIcon, PlusIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
 import { useLibrary } from '../useLibrary';
+import { useScreensByIds } from '../useScreensByIds';
 
 const STARTERS = ['My Inspiration', 'Dashboard Ideas', 'Checkout References', 'AI Products', 'Mobile Navigation'];
 
-/** /inspirations/collections — the user's visual boards. */
+/** /inspirations/collections — the visitor's own boards, stored in this browser. */
 export function CollectionsView() {
   const { collections, createCollection } = useLibrary();
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
+
+  const coverIds = collections.flatMap((c) =>
+    c.items.filter((i) => i.type === 'screen').slice(0, 4).map((i) => i.id),
+  );
+  const { screens } = useScreensByIds(coverIds);
 
   const onCreate = (e: FormEvent) => {
     e.preventDefault();
@@ -34,9 +39,21 @@ export function CollectionsView() {
         actions={
           creating ? (
             <form className="ins-inline-form" onSubmit={onCreate}>
-              <input className="ins-input" placeholder="Collection name" value={name} onChange={(e) => setName(e.target.value)} autoFocus aria-label="New collection name" maxLength={48} />
-              <button type="submit" className="ins-btn ins-btn--primary">Create</button>
-              <button type="button" className="ins-btn ins-btn--ghost" onClick={() => setCreating(false)}>Cancel</button>
+              <input
+                className="ins-input"
+                placeholder="Collection name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+                aria-label="New collection name"
+                maxLength={48}
+              />
+              <button type="submit" className="ins-btn ins-btn--primary">
+                Create
+              </button>
+              <button type="button" className="ins-btn ins-btn--ghost" onClick={() => setCreating(false)}>
+                Cancel
+              </button>
             </form>
           ) : (
             <button type="button" className="ins-btn ins-btn--primary" onClick={() => setCreating(true)}>
@@ -71,7 +88,11 @@ export function CollectionsView() {
             <CollectionCard
               key={c.id}
               collection={c}
-              covers={c.items.filter((i) => i.type === 'screen').map((i) => SCREEN_BY_ID.get(i.id)).filter((s): s is Screen => Boolean(s))}
+              covers={c.items
+                .filter((i) => i.type === 'screen')
+                .map((i) => screens.get(i.id))
+                .filter((s): s is Screen => Boolean(s))
+                .slice(0, 4)}
             />
           ))}
         </div>
