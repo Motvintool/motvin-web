@@ -114,6 +114,28 @@ export const FLOW_CATEGORY_LABEL: Record<FlowCategory, string> = {
   discovery: 'Discovery',
 };
 
+/**
+ * How a screenshot came to be in the library. This is the one field the
+ * licensing gate requires, so it is shown on the screen page rather than kept
+ * to the admin form.
+ */
+export const PERMISSION_LABEL: Record<string, string> = {
+  'owner-granted': 'Published with permission',
+  'open-source': 'Open-source app',
+  'public-domain': 'Public domain',
+  'own-work': 'Our own product',
+  'fair-use-reference': 'Editorial reference',
+};
+
+/** Shorter wording for the admin form, where the context is already clear. */
+export const PERMISSION_LABEL_SHORT: Record<string, string> = {
+  'owner-granted': 'Owner gave permission',
+  'open-source': 'Open-source app',
+  'public-domain': 'Public domain',
+  'own-work': 'Our own product or capture',
+  'fair-use-reference': 'Editorial reference',
+};
+
 export const PATTERN_CATEGORIES: PatternCategory[] = [
   'Navigation',
   'Search',

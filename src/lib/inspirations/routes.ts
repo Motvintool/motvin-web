@@ -11,6 +11,7 @@ export const INSPIRATIONS_ROUTES = {
   search: '/inspirations/search',
   collections: '/inspirations/collections',
   saved: '/inspirations/saved',
+  admin: '/inspirations/admin',
   app: (app: Pick<App, 'slug'>) => `/inspirations/app/${app.slug}`,
   screen: (screen: Pick<Screen, 'id'>) => `/inspirations/screen/${screen.id}`,
   flow: (flow: Pick<Flow, 'id'>) => `/inspirations/flow/${flow.id}`,

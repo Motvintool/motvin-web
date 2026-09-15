@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { useAuthModal } from '@/components/shared/AuthModal';
+import { isAdminEmail } from '@/lib/inspirations/admin';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { applyTheme, getStoredTheme, storeTheme, type ThemePreference } from '@/lib/theme';
-import { BookmarkIcon, FolderIcon } from './Icons';
+import { BookmarkIcon, FolderIcon, UploadIcon } from './Icons';
 
 /**
  * Avatar chip + dropdown for the Inspirations header. Reuses the site-wide
@@ -20,6 +21,9 @@ export function ProfileMenu() {
   const [theme, setTheme] = useState<ThemePreference>('dark');
   const rootRef = useRef<HTMLDivElement>(null);
   const signedIn = Boolean(user && !user.isAnonymous);
+  // Presentation only. The admin API verifies the signed-in account itself,
+  // so revealing this link would not grant anyone access.
+  const showAdmin = signedIn && isAdminEmail(user?.email);
 
   useEffect(() => {
     if (!open) return;
@@ -81,6 +85,21 @@ export function ProfileMenu() {
             <FolderIcon size={14} />
             <span>Collections</span>
           </Link>
+          {showAdmin && (
+            <>
+              <div className="ins-popover-divider" />
+              <Link
+                href={INSPIRATIONS_ROUTES.admin}
+                className="ins-popover-item ins-popover-item--admin"
+                role="menuitem"
+                onClick={() => setOpen(false)}
+              >
+                <UploadIcon size={14} />
+                <span>Admin</span>
+                <span className="ins-popover-item-tag">Upload</span>
+              </Link>
+            </>
+          )}
           <div className="ins-popover-divider" />
           <p className="ins-popover-title">Theme</p>
           <div className="ins-theme-row" role="radiogroup" aria-label="Theme">

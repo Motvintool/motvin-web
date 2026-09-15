@@ -5,7 +5,13 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import { INDUSTRY_LABEL, PLATFORM_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from '@/lib/inspirations/taxonomy';
+import {
+  INDUSTRY_LABEL,
+  PERMISSION_LABEL,
+  PLATFORM_LABEL,
+  SCREEN_TYPE_LABEL,
+  STYLE_LABEL,
+} from '@/lib/inspirations/taxonomy';
 import type { App, DetectedComponent, Flow, Pattern, Screen } from '@/lib/inspirations/types';
 import { AnalysisPanel } from './AnalysisPanel';
 import { AppLogo } from './AppLogo';
@@ -277,18 +283,29 @@ export function ScreenViewer({
           {/* Provenance is part of the record, not a footnote: it says where a
               screenshot came from and what may be done with it. */}
           <dl className="ins-info-list ins-info-list--source">
-            <div className="ins-info-row">
-              <dt>Licence</dt>
-              <dd>
-                {screen.source.licenseUrl ? (
-                  <a className="ins-link" href={screen.source.licenseUrl} target="_blank" rel="noopener noreferrer">
-                    {screen.source.license || 'See licence'}
-                  </a>
-                ) : (
-                  screen.source.license || 'Not recorded'
-                )}
-              </dd>
-            </div>
+            {/* The basis is the field the gate requires, so it leads. A licence
+                string is optional, and its row is left out rather than
+                reporting "Not recorded" next to a basis that is recorded. */}
+            {screen.source.permission && (
+              <div className="ins-info-row">
+                <dt>Basis</dt>
+                <dd>{PERMISSION_LABEL[screen.source.permission] ?? screen.source.permission}</dd>
+              </div>
+            )}
+            {(screen.source.license || !screen.source.permission) && (
+              <div className="ins-info-row">
+                <dt>Licence</dt>
+                <dd>
+                  {screen.source.licenseUrl ? (
+                    <a className="ins-link" href={screen.source.licenseUrl} target="_blank" rel="noopener noreferrer">
+                      {screen.source.license || 'See licence'}
+                    </a>
+                  ) : (
+                    screen.source.license || 'Not recorded'
+                  )}
+                </dd>
+              </div>
+            )}
             {screen.source.attribution && (
               <div className="ins-info-row">
                 <dt>Credit</dt>

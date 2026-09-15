@@ -2601,6 +2601,443 @@ body {
 }
 
 /* =========================================================
+   ADMIN
+   ========================================================= */
+
+.ins-admin-status {
+  padding: 40px 0;
+  text-align: center;
+}
+
+.ins-admin-signed-in {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--ins-sub);
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius);
+  background: var(--ins-card);
+}
+
+.ins-admin-summary {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--ins-sub);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius);
+  background: var(--ins-card-alt);
+}
+
+.ins-admin-summary strong {
+  color: var(--ins-text);
+  font-size: 14px;
+}
+
+.ins-admin-held {
+  color: #b45309;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ins-admin-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius);
+  background: var(--ins-card);
+  font-size: 13px;
+}
+
+.ins-admin-banner.is-error {
+  border-color: #e5484d;
+  color: #e5484d;
+}
+
+.ins-admin-note {
+  font-size: 12.5px;
+  color: var(--ins-sub);
+  padding: 8px 12px;
+  border-radius: var(--ins-radius);
+  background: var(--surface-tag);
+}
+
+.ins-admin-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #16a34a;
+  font-size: 12.5px;
+}
+
+.ins-admin-err {
+  color: #e5484d;
+  font-size: 12.5px;
+}
+
+.ins-admin-warn {
+  color: #b45309;
+  font-size: 12.5px;
+}
+
+.ins-admin-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ins-admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius-lg);
+  background: var(--ins-card);
+}
+
+.ins-admin-form-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.ins-admin-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.ins-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1 1 180px;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.ins-field--wide {
+  flex: 2 1 320px;
+}
+
+.ins-field-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ins-muted);
+}
+
+.ins-field-hint {
+  font-size: 11.5px;
+  color: var(--ins-muted);
+}
+
+.ins-textarea {
+  height: auto;
+  padding: 8px 10px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.ins-checkline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--ins-sub);
+  height: 32px;
+}
+
+.ins-admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Upload queue */
+.ins-admin-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ins-admin-queue-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius);
+  background: var(--ins-card);
+}
+
+.ins-admin-queue-row.is-done {
+  border-color: #16a34a;
+}
+
+.ins-admin-queue-row.is-failed {
+  border-color: #e5484d;
+}
+
+.ins-admin-queue-fields {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.ins-admin-queue-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  max-width: 260px;
+  text-align: right;
+}
+
+.ins-admin-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--ins-border);
+  background: var(--ins-card-alt);
+  flex: none;
+}
+
+.ins-admin-thumb--none {
+  display: block;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--surface-tag),
+    var(--surface-tag) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+
+.ins-admin-logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: 9px;
+  border: 1px solid var(--ins-border);
+  background: var(--ins-card-alt);
+  flex: none;
+}
+
+.ins-admin-logo--none {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ins-muted);
+}
+
+/* Record lists */
+.ins-admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ins-admin-item {
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius);
+  background: var(--ins-card);
+  overflow: hidden;
+}
+
+.ins-admin-item.is-held {
+  border-left: 3px solid #b45309;
+}
+
+.ins-admin-item.is-published {
+  border-left: 3px solid #16a34a;
+}
+
+.ins-admin-item-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.ins-admin-item-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.ins-admin-item-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.ins-admin-item-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ins-muted);
+}
+
+.ins-admin-item-sub {
+  font-size: 12.5px;
+  color: var(--ins-muted);
+}
+
+.ins-admin-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.ins-admin-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 12px;
+  border-top: 1px solid var(--ins-border);
+  background: var(--surface-page);
+}
+
+/* Flow builder */
+.ins-admin-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ins-admin-step-pool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ins-admin-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ins-admin-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ins-admin-step-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius);
+  background: var(--surface-page);
+  font-size: 13px;
+}
+
+.ins-admin-step-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Inline "add an app" form on the Upload tab, so an empty library is not a
+   dead end. */
+.ins-admin-inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px dashed var(--ins-border-strong);
+  border-radius: var(--ins-radius-lg);
+  background: var(--ins-card);
+}
+
+.ins-linkbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ins-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 0;
+}
+
+.ins-linkbtn:hover {
+  color: var(--ins-text);
+}
+
+.ins-dropzone .ins-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Admin entry in the profile menu */
+.ins-popover-item--admin {
+  font-weight: 600;
+}
+
+.ins-popover-item-tag {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ins-accent);
+  background: var(--ins-accent-subtle);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+@media (max-width: 759px) {
+  .ins-admin-queue-row,
+  .ins-admin-item-head {
+    flex-wrap: wrap;
+  }
+
+  .ins-admin-queue-status {
+    max-width: none;
+    width: 100%;
+    justify-content: flex-start;
+    text-align: left;
+  }
+}
+
+/* =========================================================
    RESPONSIVE
    ========================================================= */
 
