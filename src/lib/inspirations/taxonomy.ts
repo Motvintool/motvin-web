@@ -1,6 +1,5 @@
 import type {
   ContentKind,
-  FlowCategory,
   Industry,
   PatternCategory,
   Platform,
@@ -104,7 +103,7 @@ export function elementLabel(kind: string): string {
   );
 }
 
-export const FLOW_CATEGORY_LABEL: Record<FlowCategory, string> = {
+export const FLOW_CATEGORY_LABEL: Record<string, string> = {
   onboarding: 'Onboarding',
   checkout: 'Checkout',
   authentication: 'Authentication',
@@ -135,6 +134,14 @@ export const PERMISSION_LABEL_SHORT: Record<string, string> = {
   'own-work': 'Our own product or capture',
   'fair-use-reference': 'Editorial reference',
 };
+
+/** Label for any category, including ones typed in by hand. */
+export function flowCategoryLabel(category: string): string {
+  return (
+    FLOW_CATEGORY_LABEL[category] ??
+    category.split(/[-_\s]+/).map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ')
+  );
+}
 
 export const PATTERN_CATEGORIES: PatternCategory[] = [
   'Navigation',

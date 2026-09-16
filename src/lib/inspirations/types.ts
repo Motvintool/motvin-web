@@ -111,14 +111,18 @@ export type Screen = {
   source: ScreenSource;
 };
 
-export type FlowCategory =
-  | 'onboarding'
-  | 'checkout'
-  | 'authentication'
-  | 'search'
-  | 'settings'
-  | 'creation'
-  | 'discovery';
+/** The suggested categories. Free text is allowed, so this is not a closed set. */
+export const FLOW_CATEGORY_PRESETS = [
+  'onboarding',
+  'checkout',
+  'authentication',
+  'search',
+  'settings',
+  'creation',
+  'discovery',
+] as const;
+
+export type FlowCategory = string;
 
 export type Flow = {
   id: string;
@@ -187,6 +191,7 @@ export type LibraryMeta = {
     industries: Industry[];
     styles: Style[];
     elements: ElementKind[];
+    flowCategories: string[];
   };
   generatedAt: string;
 };

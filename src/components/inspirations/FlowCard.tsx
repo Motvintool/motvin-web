@@ -1,26 +1,45 @@
+'use client';
+
 import Link from 'next/link';
-import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import { FLOW_CATEGORY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
+import { useSearchParams } from 'next/navigation';
+import { FLOW_PARAM } from './FlowPreview';
+import { flowCategoryLabel, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { App, Flow, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
-import { ChevronRightIcon } from './Icons';
+import { ChevronRightIcon, PlayIcon } from './Icons';
 import { Screenshot } from './Screenshot';
 
 /**
  * Flow tile: the ordered screens as a horizontal strip with step numbers, then
- * app and flow name. Clicking anywhere opens the flow viewer.
+ * app and flow name.
+ *
+ * Clicking opens the preview overlay by adding `?flow=<id>` to the current URL,
+ * so the gallery and its filters stay put underneath and Back closes the
+ * preview rather than unwinding the browse.
  *
  * `screens` is optional — some callers list flows without having fetched each
  * one's screens. The step count always comes from the flow's own screen ids,
  * so the label stays right whether or not the strip is filled.
  */
 export function FlowCard({ flow, screens = [], app }: { flow: Flow; screens?: Screen[]; app?: App }) {
+  const params = useSearchParams();
   const mobile = flow.platform !== 'web';
   const visible = mobile ? 4 : 3;
   const steps = flow.screenIds.length;
 
+  const href = (() => {
+    const sp = new URLSearchParams(params.toString());
+    sp.set(FLOW_PARAM, flow.id);
+    return `?${sp.toString()}`;
+  })();
+
   return (
-    <Link href={INSPIRATIONS_ROUTES.flow(flow)} className={`ins-flow-card ${mobile ? 'is-mobile' : ''}`}>
+    <Link
+      href={href}
+      scroll={false}
+      className={`ins-flow-card ${mobile ? 'is-mobile' : ''}`}
+      aria-label={`Preview the ${flow.name} flow${app ? ` from ${app.name}` : ''}, ${steps} steps`}
+    >
       {screens.length > 0 && (
         <div className="ins-flow-strip" aria-hidden>
           {screens.slice(0, visible).map((s, i) => (
@@ -38,6 +57,11 @@ export function FlowCard({ flow, screens = [], app }: { flow: Flow; screens?: Sc
         </div>
       )}
 
+      <span className="ins-flow-play" aria-hidden>
+        <PlayIcon size={14} />
+        Preview flow
+      </span>
+
       <div className="ins-flow-meta">
         {app && <AppLogo app={app} size={18} />}
         <div className="ins-flow-text">
@@ -45,7 +69,7 @@ export function FlowCard({ flow, screens = [], app }: { flow: Flow; screens?: Sc
             {app?.name} <span className="ins-flow-sep">·</span> {flow.name}
           </p>
           <p className="ins-flow-sub">
-            {FLOW_CATEGORY_LABEL[flow.category] ?? flow.category} · {PLATFORM_LABEL[flow.platform] ?? flow.platform} ·{' '}
+            {flowCategoryLabel(flow.category)} · {PLATFORM_LABEL[flow.platform] ?? flow.platform} ·{' '}
             {steps} {steps === 1 ? 'screen' : 'screens'}
           </p>
         </div>

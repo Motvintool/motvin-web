@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, type ReactNode } from 'react';
+import { FlowPreview } from './FlowPreview';
 import { Header } from './Header';
 import { ToastProvider } from './Toast';
 
@@ -17,6 +18,10 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
           <Header />
         </Suspense>
         <main className={`ins-main ${wide ? 'ins-main--wide' : ''}`}>{children}</main>
+        {/* Reads ?flow= and renders over whatever page is showing. */}
+        <Suspense fallback={null}>
+          <FlowPreview />
+        </Suspense>
       </div>
     </ToastProvider>
   );

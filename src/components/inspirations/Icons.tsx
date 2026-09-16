@@ -101,6 +101,9 @@ export const CommandIcon = (p: IconProps) => (
 export const ImageIcon = (p: IconProps) => (
   <svg {...base(p)}><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="8.5" cy="10" r="1.5" /><path d="m21 15-5-5-9 9" /></svg>
 );
+export const PlayIcon = (p: IconProps) => (
+  <svg {...base(p)} fill="currentColor" stroke="none"><path d="M8 5.5v13l11-6.5z" /></svg>
+);
 export const PencilIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M4 20h4l10-10-4-4L4 16z" /><path d="m13 7 4 4" /></svg>
 );

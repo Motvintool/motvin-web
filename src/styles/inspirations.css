@@ -47,18 +47,55 @@ body {
 
 .ins-root *,
 .ins-root *::before,
-.ins-root *::after {
+.ins-root *::after,
+.ins-portal,
+.ins-portal *,
+.ins-portal *::before,
+.ins-portal *::after {
   box-sizing: border-box;
 }
 
+/*
+  Carries the design tokens and typography to anything rendered outside the
+  app shell. The tokens themselves come from :root in theme.css, so only the
+  local ones and the type need restating here.
+*/
+.ins-portal {
+  --ins-gap: 16px;
+  --ins-radius: 8px;
+  --ins-radius-lg: 12px;
+  --ins-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --ins-fast: 160ms;
+  --ins-border: var(--surface-border);
+  --ins-border-strong: var(--surface-borderhover);
+  --ins-card: var(--surface-color-card);
+  --ins-card-alt: var(--surface-color-cardalt);
+  --ins-text: var(--text-color-text);
+  --ins-sub: var(--text-color-subtext);
+  --ins-muted: var(--text-color-muted);
+  --ins-accent: var(--primary-default);
+  --ins-accent-subtle: var(--primary-subtle);
+  --ins-focus: 0 0 0 2px var(--surface-page), 0 0 0 4px var(--primary-default);
+
+  color: var(--ins-text);
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 /* Element resets are wrapped in :where() so they carry zero specificity and
-   never outrank a component class such as .ins-chip or .ins-btn. */
-:where(.ins-root) a {
+   never outrank a component class such as .ins-chip or .ins-btn.
+   `.ins-portal` is listed alongside `.ins-root` because overlays render into
+   <body> through a portal, outside the app shell, and would otherwise lose
+   every one of these. */
+:where(.ins-root, .ins-portal) a {
   color: inherit;
   text-decoration: none;
 }
 
-:where(.ins-root) button {
+:where(.ins-root, .ins-portal) button {
   font: inherit;
   color: inherit;
   background: none;
@@ -67,32 +104,32 @@ body {
   cursor: pointer;
 }
 
-:where(.ins-root) input,
-:where(.ins-root) select {
+:where(.ins-root, .ins-portal) input,
+:where(.ins-root, .ins-portal) select {
   font: inherit;
   color: inherit;
 }
 
-:where(.ins-root) :focus-visible {
+:where(.ins-root, .ins-portal) :focus-visible {
   outline: none;
   box-shadow: var(--ins-focus);
   border-radius: 6px;
 }
 
-:where(.ins-root) p,
-:where(.ins-root) h1,
-:where(.ins-root) h2,
-:where(.ins-root) h3,
-:where(.ins-root) ul,
-:where(.ins-root) ol,
-:where(.ins-root) dl,
-:where(.ins-root) dd,
-:where(.ins-root) figure {
+:where(.ins-root, .ins-portal) p,
+:where(.ins-root, .ins-portal) h1,
+:where(.ins-root, .ins-portal) h2,
+:where(.ins-root, .ins-portal) h3,
+:where(.ins-root, .ins-portal) ul,
+:where(.ins-root, .ins-portal) ol,
+:where(.ins-root, .ins-portal) dl,
+:where(.ins-root, .ins-portal) dd,
+:where(.ins-root, .ins-portal) figure {
   margin: 0;
 }
 
-:where(.ins-root) ul,
-:where(.ins-root) ol {
+:where(.ins-root, .ins-portal) ul,
+:where(.ins-root, .ins-portal) ol {
   padding: 0;
   list-style: none;
 }
@@ -3006,6 +3043,183 @@ body {
   cursor: not-allowed;
 }
 
+/* ── Flow builder ───────────────────────────────────────── */
+
+/* The order being built, as a filmstrip. */
+.ins-flowbuild-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px;
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius);
+  background: var(--surface-page);
+  margin-bottom: 10px;
+}
+
+.ins-flowbuild-step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 120px;
+  flex: none;
+}
+
+.ins-flowbuild-num {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ins-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ins-flowbuild-shot,
+.ins-flowbuild-tile-shot {
+  position: relative;
+  display: block;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--ins-border);
+  background: var(--ins-card-alt);
+  aspect-ratio: 3 / 4;
+}
+
+.ins-flowbuild-shot img,
+.ins-flowbuild-tile-shot img,
+.ins-flowbuild-mini-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+
+.ins-flowbuild-noshot {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--surface-tag),
+    var(--surface-tag) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+
+.ins-flowbuild-name,
+.ins-flowbuild-tile-name {
+  font-size: 11.5px;
+  color: var(--ins-sub);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ins-flowbuild-controls {
+  display: flex;
+  gap: 2px;
+}
+
+.ins-flowbuild-controls .ins-iconbtn {
+  width: 24px;
+  height: 22px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* The pool of screens available to add. */
+.ins-flowbuild-pool {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.ins-flowbuild-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px;
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius);
+  background: var(--ins-card);
+  text-align: left;
+  transition: border-color var(--ins-fast) var(--ins-ease);
+}
+
+.ins-flowbuild-tile:hover {
+  border-color: var(--ins-border-strong);
+}
+
+.ins-flowbuild-tile.is-selected {
+  border-color: var(--ins-accent);
+  background: var(--ins-accent-subtle);
+}
+
+.ins-flowbuild-badge {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--ins-accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* Screens the gate is holding back, listed with the reason instead of hidden. */
+.ins-flowbuild-held {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--ins-border-strong);
+  border-radius: var(--ins-radius);
+}
+
+.ins-flowbuild-heldlist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 12.5px;
+}
+
+.ins-flowbuild-heldlist li {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.ins-flowbuild-heldname {
+  color: var(--ins-sub);
+}
+
+/* Thumbnail row on each saved flow in the admin list. */
+.ins-flowbuild-mini {
+  display: flex;
+  gap: 3px;
+  flex: none;
+}
+
+.ins-flowbuild-mini-shot {
+  display: block;
+  width: 30px;
+  height: 40px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--ins-border);
+  background: var(--ins-card-alt);
+}
+
+.ins-flow-hint {
+  font-size: 12.5px;
+  text-align: center;
+  padding-top: 14px;
+}
+
 /* Admin entry in the profile menu */
 .ins-popover-item--admin {
   font-weight: 600;
@@ -3034,6 +3248,331 @@ body {
     width: 100%;
     justify-content: flex-start;
     text-align: left;
+  }
+}
+
+/* =========================================================
+   FLOW PREVIEW OVERLAY
+   ========================================================= */
+
+.ins-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(12px, 3vw, 32px);
+}
+
+.ins-preview-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 9, 12, 0.72);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: insFade 140ms var(--ins-ease);
+}
+
+@keyframes insFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.ins-preview-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, 100%);
+  max-height: 100%;
+  background: var(--surface-page);
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius-lg);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  animation: insPreviewIn 180ms var(--ins-ease);
+}
+
+@keyframes insPreviewIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+
+.ins-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--ins-border);
+  flex: none;
+}
+
+.ins-preview-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ins-preview-title {
+  font-family: var(--font-outfit), var(--font-inter), sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ins-preview-sub {
+  font-size: 12.5px;
+  color: var(--ins-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ins-preview-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.ins-preview-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+}
+
+/* Stage: the current step, with the controls either side of it. */
+.ins-preview-stage {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px 8px;
+  background: var(--ins-card-alt);
+  flex: 1;
+  min-height: 0;
+}
+
+.ins-preview-figure {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  height: 100%;
+}
+
+/* The stage takes whatever the header, caption and filmstrip leave, so a tall
+   phone screenshot is shown as large as the window allows instead of being
+   pinned to an arbitrary fraction of it. */
+.ins-preview-shot {
+  --ins-preview-max: calc(100vh - 340px);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--ins-border);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.25);
+  max-height: var(--ins-preview-max);
+  display: flex;
+}
+
+.ins-preview-shot :is(img, .ins-shot-missing) {
+  max-height: var(--ins-preview-max);
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.ins-preview-stage.is-mobile .ins-preview-shot {
+  border-radius: 20px;
+}
+
+.ins-preview-nav {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--ins-border);
+  background: var(--ins-card);
+  color: var(--ins-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color var(--ins-fast) var(--ins-ease), opacity var(--ins-fast) var(--ins-ease);
+}
+
+.ins-preview-nav:hover:not(:disabled) {
+  border-color: var(--ins-border-strong);
+}
+
+.ins-preview-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.ins-preview-caption {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--ins-card-alt);
+  font-size: 13px;
+  flex: none;
+}
+
+.ins-preview-step {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ins-preview-name {
+  color: var(--ins-sub);
+}
+
+/* Filmstrip: the journey at a glance. */
+.ins-preview-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px 14px;
+  border-top: 1px solid var(--ins-border);
+  background: var(--surface-page);
+  flex: none;
+  scrollbar-width: thin;
+}
+
+/* A pale screenshot on a pale strip has no edge of its own, so every tile
+   carries a border and only the colour changes when it is the current step. */
+.ins-preview-thumb {
+  position: relative;
+  display: block;
+  width: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid var(--ins-border);
+  background: var(--ins-card-alt);
+  transition: border-color var(--ins-fast) var(--ins-ease), opacity var(--ins-fast) var(--ins-ease);
+  opacity: 0.65;
+}
+
+.ins-preview-thumb:hover {
+  opacity: 1;
+}
+
+.ins-preview-thumb.is-active {
+  border-color: var(--ins-accent);
+  opacity: 1;
+}
+
+.ins-preview-thumb-shot {
+  display: block;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+}
+
+.ins-preview-thumb-shot :is(img, .ins-shot-missing) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  aspect-ratio: auto !important;
+}
+
+.ins-preview-thumb-num {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(8, 9, 12, 0.72);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.ins-preview-hint {
+  padding: 0 14px 12px;
+  font-size: 12px;
+  color: var(--ins-muted);
+  text-align: center;
+  background: var(--surface-page);
+  flex: none;
+}
+
+/* The play affordance on a flow card, so it reads as "opens a preview". */
+.ins-flow-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ins-sub);
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--surface-tag);
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity var(--ins-fast) var(--ins-ease), transform var(--ins-fast) var(--ins-ease);
+}
+
+.ins-flow-card:hover .ins-flow-play,
+.ins-flow-card:focus-visible .ins-flow-play {
+  opacity: 1;
+  transform: none;
+}
+
+@media (max-width: 759px) {
+  .ins-preview {
+    padding: 0;
+  }
+
+  .ins-preview-dialog {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    border: 0;
+  }
+
+  .ins-preview-head {
+    flex-wrap: wrap;
+  }
+
+  /* On a phone the side buttons eat the picture; the filmstrip and swipe do
+     the stepping instead. */
+  .ins-preview-stage {
+    grid-template-columns: 1fr;
+  }
+
+  .ins-preview-nav {
+    display: none;
+  }
+
+  .ins-preview-shot {
+    --ins-preview-max: calc(100vh - 300px);
+  }
+
+  .ins-flow-play {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-preview-backdrop,
+  .ins-preview-dialog {
+    animation: none;
   }
 }
 

@@ -88,7 +88,7 @@ const EMPTY_PAGE: Page<never> = { items: [], total: 0, limit: 30, offset: 0, nex
 
 export const EMPTY_META: LibraryMeta = {
   counts: { apps: 0, screens: 0, 'ui-elements': 0, flows: 0, patterns: 0 },
-  taxonomy: { platforms: [], screenTypes: [], industries: [], styles: [], elements: [] },
+  taxonomy: { platforms: [], screenTypes: [], industries: [], styles: [], elements: [], flowCategories: [] },
   generatedAt: '',
 };
 

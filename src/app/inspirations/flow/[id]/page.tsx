@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
 import { FlowViewer } from '@/components/inspirations/FlowViewer';
 import { inspirationsApi } from '@/lib/inspirations/api';
 
@@ -16,5 +17,9 @@ export default async function FlowDetailPage({ params }: PageProps<'/inspiration
   const { id } = await params;
   const data = await inspirationsApi.getFlow(id).catch(() => null);
   if (!data) notFound();
-  return <FlowViewer flow={data.flow} screens={data.screens} app={data.app ?? undefined} />;
+  return (
+    <Suspense fallback={null}>
+      <FlowViewer flow={data.flow} screens={data.screens} app={data.app ?? undefined} />
+    </Suspense>
+  );
 }
