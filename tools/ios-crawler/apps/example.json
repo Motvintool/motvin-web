@@ -1,0 +1,25 @@
+{
+  "appId": "example-app",
+  "name": "Example App",
+  "bundleId": "com.example.app",
+
+  "//appPath": "Path to a simulator .app build. Omit if the app is already installed on the simulator. App Store .ipa files will not work — they are device-only binaries.",
+  "appPath": "../builds/ExampleApp.app",
+
+  "//industry": "Must be one of: saas, fintech, healthcare, ecommerce, education, travel, productivity, ai, social, finance",
+  "industry": "ecommerce",
+  "website": "https://example.com",
+  "tagline": "One line about the product.",
+
+  "//authorization": "Required. This is the record of why these screens may be captured, and it is copied into sources.json. A crawl will not start without it.",
+  "authorization": {
+    "//permission": "One of: owner-granted, open-source, public-domain, own-work, fair-use-reference",
+    "permission": "own-work",
+    "authorizedBy": "Surendar V — product owner",
+    "grantedAt": "2026-09-16",
+    "note": "Internal build of our own app, captured for the Motvin design library.",
+    "license": "",
+    "licenseUrl": "",
+    "attribution": "Example Inc."
+  }
+}

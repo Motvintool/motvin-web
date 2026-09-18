@@ -15,7 +15,7 @@ import { CloseIcon, PlusIcon, TrashIcon } from '../Icons';
  *
  *   - The platform starts on whichever one this app actually has screens for,
  *     instead of defaulting to web and showing an empty picker.
- *   - Screens the licensing gate is holding back are still listed, greyed out
+ *   - Screens the builder could not publish are still listed, greyed out
  *     with the reason, rather than silently missing. "Where did my screens go"
  *     is a worse failure than "here they are, and here is why you cannot use
  *     them yet".

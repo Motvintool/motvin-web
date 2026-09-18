@@ -6,12 +6,17 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { elementLabel, INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { App, ElementKind, Flow, Pattern, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from '../AppLogo';
+import { AppMenu } from '../AppMenu';
+import { AppRating } from '../AppRating';
 import { CollectionMenu } from '../CollectionMenu';
 import { EmptyState } from '../EmptyState';
 import { FlowCard } from '../FlowCard';
-import { ArrowLeftIcon, ExternalIcon } from '../Icons';
+import { FlowsBrowser } from '../FlowsBrowser';
+import { ArrowLeftIcon } from '../Icons';
 import { PatternCard } from '../PatternCard';
+
 import { SaveButton } from '../SaveButton';
+
 import { ScreenGrid } from '../ScreenGrid';
 
 type AppTab = 'overview' | 'screens' | 'flows' | 'ui-elements' | 'patterns';
@@ -59,35 +64,68 @@ export function AppDetailView({
         </Link>
       </div>
 
-      <header className="ins-app-head">
-        <AppLogo app={app} size={56} />
-        <div className="ins-app-head-text">
-          <h1 className="ins-detail-title">{app.name}</h1>
-          <p className="ins-detail-sub">
-            {INDUSTRY_LABEL[app.industry] ?? app.industry} ·{' '}
-            {app.platforms.map((p) => PLATFORM_LABEL[p] ?? p).join(' · ')} · {app.screenCount}{' '}
-            {app.screenCount === 1 ? 'screen' : 'screens'} · {app.flowCount}{' '}
-            {app.flowCount === 1 ? 'flow' : 'flows'}
-          </p>
-          {app.tagline && <p className="ins-app-tagline">{app.tagline}</p>}
-          {app.license && (
-            <p className="ins-app-license">
-              Screens shown under {app.license} · credit {app.attribution}
-            </p>
+      {/*
+        Masthead, read top to bottom: mark, then what the product is, then the
+        facts about it, then what you can do with it. Stacking rather than
+        packing everything onto one line is what gives a detail page a sense of
+        arrival — this is a destination, not another row in a list.
+      */}
+      <header className="ins-masthead">
+        <div className="ins-masthead-main">
+        <AppLogo app={app} size={96} className="ins-masthead-logo" />
+
+        <h1 className="ins-masthead-title">
+          {app.name}
+          {app.tagline && (
+            <>
+              <span className="ins-masthead-dash"> — </span>
+              <span className="ins-masthead-tagline">{app.tagline}</span>
+            </>
           )}
+        </h1>
+
+        {app.license && (
+          <p className="ins-masthead-note">
+            Screens shown under {app.license} · credit {app.attribution}
+          </p>
+        )}
+
+        {/* Label above value, in columns. A run of "a · b · c" hides which
+            fact is which; labelling them makes the page scannable. */}
+        <dl className="ins-masthead-facts">
+          <div className="ins-fact">
+            <dt>Platform</dt>
+            <dd>{app.platforms.map((p) => PLATFORM_LABEL[p] ?? p).join(', ')}</dd>
+          </div>
+
+          <div className="ins-fact">
+            <dt>Category</dt>
+            <dd>{INDUSTRY_LABEL[app.industry] ?? app.industry}</dd>
+          </div>
+
+          {/* Last, and live from Firestore. The rating itself is public — every
+              visitor sees what everyone else scored an app, signed in or not —
+              so AppRating decides for itself, after the real data has loaded,
+              whether there is anything to show. Only the ability to add a
+              rating is gated on being signed in.
+
+              Screen and flow counts used to sit here too; they are already in
+              the tab row above and in "Showing N", so repeating them made the
+              same number appear three times on one screen. */}
+          <AppRating appId={app.id} appName={app.name} seed={app.rating} seedCount={app.ratingCount} />
+        </dl>
         </div>
-        <div className="ins-detail-actions">
+
+        <div className="ins-masthead-actions">
           <SaveButton type="app" id={app.id} variant="button" />
           <CollectionMenu type="app" id={app.id} variant="button" />
-          {app.website && (
-            <a href={app.website} className="ins-btn" target="_blank" rel="noopener noreferrer">
-              <ExternalIcon size={15} /> Visit website
-            </a>
-          )}
+          {/* Website moved into the menu — three named buttons plus an overflow
+              reads better than four competing for the same row. */}
+          <AppMenu app={app} screens={screens} />
         </div>
       </header>
 
-      <div className="ins-tabbar" role="tablist" aria-label="App content">
+      <div className="ins-tabbar ins-tabbar--counted" role="tablist" aria-label="App content">
         {TABS.map((t) => {
           const count =
             t.id === 'screens'
@@ -113,6 +151,19 @@ export function AppDetailView({
             </button>
           );
         })}
+
+        {/* Right-aligned so the tab row carries both the navigation and the
+            size of what you are looking at. */}
+        <p className="ins-tabbar-showing">
+          Showing{' '}
+          {tab === 'flows'
+            ? `${flows.length} ${flows.length === 1 ? 'flow' : 'flows'}`
+            : tab === 'patterns'
+              ? `${patterns.length} ${patterns.length === 1 ? 'pattern' : 'patterns'}`
+              : tab === 'ui-elements'
+                ? `${elementCounts.size} ${elementCounts.size === 1 ? 'element' : 'elements'}`
+                : `${screens.length} ${screens.length === 1 ? 'screen' : 'screens'}`}
+        </p>
       </div>
 
       {(tab === 'overview' || tab === 'screens') && (
@@ -154,16 +205,16 @@ export function AppDetailView({
           {flows.length === 0 ? (
             <EmptyState title="No flows stored for this app yet" />
           ) : (
-            <div className="ins-flow-grid">
-              {flows.map((f) => (
-                <FlowCard
-                  key={f.id}
-                  flow={f}
-                  app={app}
-                  screens={f.screenIds.map((id) => screenById.get(id)).filter((s): s is Screen => Boolean(s))}
-                />
-              ))}
-            </div>
+            // Inside one product the categories are what you navigate by, so
+            // this view groups them in a list rather than listing them flat as
+            // the all-flows page does.
+            <FlowsBrowser
+              entries={flows.map((f) => ({
+                flow: f,
+                screens: f.screenIds.map((id) => screenById.get(id)).filter((s): s is Screen => Boolean(s)),
+              }))}
+              apps={new Map([[app.id, app]])}
+            />
           )}
         </section>
       )}

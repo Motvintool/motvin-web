@@ -9,31 +9,114 @@
   styling here reserves their aspect ratio and rounds their corners.
 */
 
+/*
+  ── Inspirations design language ──────────────────────────────────────────
+
+  Four rules, and everything below is an application of them.
+
+  1. The work is the only colour. A reference library is looked at, not read:
+     the screenshots carry every saturated pixel on the page and the chrome
+     stays neutral so nothing competes with them. There is one accent, used
+     for selection and focus, and nowhere else.
+
+  2. Hairlines at rest, shadow on intent. A grid of bordered cards stays calm
+     at any density; a grid of floating cards is noise. Elevation is reserved
+     for hover, so lifting means something.
+
+  3. One spacing scale, 4px based. Ad-hoc padding is what makes a UI feel
+     assembled rather than designed — every gap below is a step on this scale.
+
+  4. Type carries hierarchy, weight carries emphasis. Four sizes do the whole
+     interface. Headings tighten their tracking as they grow, because large
+     type set at body tracking reads loose.
+*/
+
 .ins-root {
   --ins-max: 1600px;
-  --ins-gutter: clamp(16px, 2.4vw, 40px);
-  --ins-gap: 16px;
-  --ins-radius: 8px;
-  --ins-radius-lg: 12px;
-  --ins-header-h: 56px;
+  --ins-gutter: clamp(20px, 3vw, 56px);
+  --ins-gap: 24px;
+  --ins-header-h: 68px;
+
+  /* Spacing — 4px base. Steps, not arbitrary values. */
+  --ins-space-1: 4px;
+  --ins-space-2: 8px;
+  --ins-space-3: 12px;
+  --ins-space-4: 16px;
+  --ins-space-5: 24px;
+  --ins-space-6: 32px;
+  --ins-space-7: 48px;
+
+  /* Type. Body, meta and micro are all 16px now — nothing in Inspirations
+     renders smaller than the base size. Display, title and section stay
+     larger so headings still read as headings; that hierarchy comes from
+     size-above-16 and weight, not from shrinking everything else below it. */
+  --ins-type-display: 28px;
+  --ins-type-title: 20px;
+  --ins-type-section: 16px;
+  --ins-type-body: 16px;
+  --ins-type-meta: 16px;
+  --ins-type-micro: 16px;
+  --ins-tracking-display: -0.022em;
+  --ins-tracking-title: -0.015em;
+
+  /* Elevation — hover only. Two layers so the lift reads at any card size. */
+  --ins-shadow-hover: 0 8px 24px -10px rgba(0, 0, 0, 0.35), 0 2px 6px -2px rgba(0, 0, 0, 0.18);
+
+  /* Motion — one curve. Fast for state, slow for anything that moves. */
   --ins-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
   --ins-fast: 160ms;
-  --ins-border: var(--surface-border);
-  --ins-border-strong: var(--surface-borderhover);
-  --ins-card: var(--surface-color-card);
-  --ins-card-alt: var(--surface-color-cardalt);
-  --ins-text: var(--text-color-text);
-  --ins-sub: var(--text-color-subtext);
-  --ins-muted: var(--text-color-muted);
+  --ins-slow: 260ms;
+  /*
+    Inspirations sets its own surfaces instead of inheriting the site theme.
+
+    A gallery of screenshots is a gallery: the work needs a neutral wall behind
+    it, and a dark one tints every light screenshot it surrounds while making
+    dark ones vanish into the page. White is the only background that shows a
+    UI as its designer drew it. This is the same call /updates makes, for the
+    same reason — some pages have a fixed look regardless of preference.
+
+    Hairlines are deliberately near-invisible. At gallery density the borders
+    exist to separate, not to be seen; anything heavier reads as a table.
+  */
+  --ins-page: #ffffff;
+  --ins-border: #ecedef;
+  --ins-border-strong: #d6d8dd;
+  --ins-card: #ffffff;
+  --ins-card-alt: #f6f7f9;
+  --ins-text: #0b0c0e;
+  --ins-sub: #5b5f6a;
+  --ins-muted: #8a8f9a;
+  /* Text on a --ins-text surface. Always white now that --ins-text is fixed
+     near-black; inheriting the site token gave dark-on-dark in dark theme. */
+  --ins-on-accent: #ffffff;
+  --ins-placeholder: #9aa0ab;
+  /* Fills that the site theme flips between light and dark overlays. Pinned
+     to their light values, or a white-on-white tag disappears. */
+  --ins-input: #f1f2f4;
+  --ins-tag: rgba(0, 0, 0, 0.05);
+  --ins-hover: rgba(0, 0, 0, 0.04);
   --ins-accent: var(--primary-default);
   --ins-accent-subtle: var(--primary-subtle);
-  --ins-focus: 0 0 0 2px var(--surface-page), 0 0 0 4px var(--primary-default);
+  --ins-focus: 0 0 0 2px var(--ins-page), 0 0 0 4px var(--primary-default);
+
+  /* Softer than the site default: large radii on small cards read modern,
+     but only if the whole surface agrees. */
+  --ins-radius: 10px;
+  --ins-radius-lg: 14px;
+  /* Controls only. Cards keep --ins-radius-lg: a pill radius on a card crops
+     the corners off the screenshot, which is the one thing that must stay
+     intact here. */
+  --ins-radius-pill: 100px;
 
   min-height: 100vh;
-  background: var(--surface-page);
+  background: var(--ins-page);
+  color-scheme: light;
   color: var(--ins-text);
-  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  font-size: 14px;
+  /* Outfit is the default everywhere now, not just headings — --font-inter
+     stays in the stack as the fallback for weights or characters Outfit
+     doesn't cover. */
+  font-family: var(--font-outfit), var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 16px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -61,25 +144,63 @@ body {
   local ones and the type need restating here.
 */
 .ins-portal {
-  --ins-gap: 16px;
-  --ins-radius: 8px;
-  --ins-radius-lg: 12px;
+  --ins-gap: 24px;
+  --ins-radius: 10px;
+  --ins-radius-lg: 14px;
+  /* Controls only. Cards keep --ins-radius-lg: a pill radius on a card crops
+     the corners off the screenshot, which is the one thing that must stay
+     intact here. */
+  --ins-radius-pill: 100px;
+
+  --ins-space-1: 4px;
+  --ins-space-2: 8px;
+  --ins-space-3: 12px;
+  --ins-space-4: 16px;
+  --ins-space-5: 24px;
+  --ins-space-6: 32px;
+  --ins-space-7: 48px;
+
+  --ins-type-display: 28px;
+  --ins-type-title: 20px;
+  --ins-type-section: 16px;
+  --ins-type-body: 16px;
+  --ins-type-meta: 16px;
+  --ins-type-micro: 16px;
+  --ins-tracking-display: -0.022em;
+  --ins-tracking-title: -0.015em;
+
+  --ins-shadow-hover: 0 8px 24px -10px rgba(0, 0, 0, 0.35), 0 2px 6px -2px rgba(0, 0, 0, 0.18);
+
   --ins-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
   --ins-fast: 160ms;
-  --ins-border: var(--surface-border);
-  --ins-border-strong: var(--surface-borderhover);
-  --ins-card: var(--surface-color-card);
-  --ins-card-alt: var(--surface-color-cardalt);
-  --ins-text: var(--text-color-text);
-  --ins-sub: var(--text-color-subtext);
-  --ins-muted: var(--text-color-muted);
+  --ins-slow: 260ms;
+  /* Overlays render outside .ins-root, so they restate the same surfaces —
+     a dark preview sheet over a white gallery is jarring. */
+  --ins-page: #ffffff;
+  --ins-border: #ecedef;
+  --ins-border-strong: #d6d8dd;
+  --ins-card: #ffffff;
+  --ins-card-alt: #f6f7f9;
+  --ins-text: #0b0c0e;
+  --ins-sub: #5b5f6a;
+  --ins-muted: #8a8f9a;
+  /* Text on a --ins-text surface. Always white now that --ins-text is fixed
+     near-black; inheriting the site token gave dark-on-dark in dark theme. */
+  --ins-on-accent: #ffffff;
+  --ins-placeholder: #9aa0ab;
+  /* Fills that the site theme flips between light and dark overlays. Pinned
+     to their light values, or a white-on-white tag disappears. */
+  --ins-input: #f1f2f4;
+  --ins-tag: rgba(0, 0, 0, 0.05);
+  --ins-hover: rgba(0, 0, 0, 0.04);
   --ins-accent: var(--primary-default);
   --ins-accent-subtle: var(--primary-subtle);
-  --ins-focus: 0 0 0 2px var(--surface-page), 0 0 0 4px var(--primary-default);
+  --ins-focus: 0 0 0 2px var(--ins-page), 0 0 0 4px var(--primary-default);
 
+  color-scheme: light;
   color: var(--ins-text);
-  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  font-size: 14px;
+  font-family: var(--font-outfit), var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 16px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -163,73 +284,102 @@ body {
   top: 0;
   z-index: 40;
   height: var(--ins-header-h);
-  background: color-mix(in srgb, var(--surface-page) 88%, transparent);
+  background: color-mix(in srgb, var(--ins-page) 88%, transparent);
   backdrop-filter: saturate(140%) blur(10px);
   -webkit-backdrop-filter: saturate(140%) blur(10px);
   border-bottom: 1px solid var(--ins-border);
 }
 
 .ins-header--placeholder {
-  background: var(--surface-page);
+  background: var(--ins-page);
 }
 
 .ins-header-inner {
   height: 100%;
-  max-width: var(--ins-max);
-  margin: 0 auto;
-  padding: 0 var(--ins-gutter);
+  width: 100%;
+  padding: 0 80px;
   display: grid;
   grid-template-columns: 1fr minmax(0, 520px) 1fr;
   align-items: center;
   gap: 16px;
 }
 
-.ins-header-left,
+.ins-header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
 .ins-header-right {
   display: flex;
   align-items: center;
   gap: 4px;
-  min-width: 0;
-}
-
-.ins-header-right {
   justify-content: flex-end;
+  /* No min-width: 0 here on purpose. This slot holds fixed labels (Saved,
+     Collections) rather than variable text that needs to truncate, so there is
+     nothing to gain from opting out of the grid's default auto-minimum sizing
+     — and opting out is exactly what let the platform nav overflow into the
+     search bar once its 16px labels grew wider than this column's old,
+     narrower fair share. Leaving the default in place lets the grid shrink the
+     search column instead, which is what actually prevents the overlap. */
 }
 
-.ins-wordmark {
+.ins-brand-logo {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 4px;
-  margin-right: 12px;
-  border-radius: 6px;
+  flex: none;
 }
 
-.ins-wordmark-img {
-  height: 16px;
-  width: auto;
+.ins-brand-logo-img {
   display: block;
+  width: 40px;
+  height: 40px;
 }
 
-.ins-wordmark-tag {
-  font-family: var(--font-outfit), var(--font-inter), sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  color: var(--ins-sub);
-  padding: 2px 7px;
-  border: 1px solid var(--ins-border);
-  border-radius: 999px;
-  line-height: 1.3;
-}
-
+/* Figma "Container (Discover Web apps | Mobbin)" (node 974:11951): no fill or
+   left inset of its own — the active pill sits flush against the left edge,
+   so its own rounding (and background) reads as the shape's left corner. The
+   hairline border only runs along the top, right and bottom — there is no
+   left border — which is what makes it look like it fades in rather than
+   wrapping the whole shape. */
 .ins-platform-nav {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 2px;
+  padding: 7px 7px 7px 0;
+  border: 1px solid var(--ins-border);
+  border-left: none;
+  border-radius: 0 9999px 9999px 0;
 }
 
-.ins-platform-link,
+.ins-platform-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 16px;
+  border-radius: 9999px;
+  font-size: 16px;
+  line-height: 20px;
+  letter-spacing: 0.2px;
+  font-weight: 400;
+  color: #878787;
+  white-space: nowrap;
+  transition: background var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease);
+}
+
+.ins-platform-link:hover {
+  color: #141414;
+}
+
+.ins-platform-link.is-active {
+  background: #000;
+  color: #fff;
+  font-weight: 500;
+}
+
+.ins-platform-link.is-active:hover {
+  color: #fff;
+}
+
 .ins-header-link {
   display: inline-flex;
   align-items: center;
@@ -237,23 +387,17 @@ body {
   height: 32px;
   padding: 0 10px;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--ins-sub);
   transition: background var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease);
   white-space: nowrap;
 }
 
-.ins-platform-link:hover,
-.ins-header-link:hover {
-  color: var(--ins-text);
-  background: var(--surface-tag);
-}
-
-.ins-platform-link.is-active,
+.ins-header-link:hover,
 .ins-header-link.is-active {
   color: var(--ins-text);
-  background: var(--surface-tag);
+  background: var(--ins-tag);
 }
 
 .ins-header-center {
@@ -268,7 +412,7 @@ body {
 .ins-header-mobile-search {
   padding: 8px var(--ins-gutter) 12px;
   border-bottom: 1px solid var(--ins-border);
-  background: var(--surface-page);
+  background: var(--ins-page);
 }
 
 /* Avatar */
@@ -304,7 +448,7 @@ body {
 }
 
 .ins-avatar-initial {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -327,7 +471,7 @@ body {
   right: 0;
   bottom: 0;
   width: min(320px, 88vw);
-  background: var(--surface-page);
+  background: var(--ins-page);
   border-left: 1px solid var(--ins-border);
   display: flex;
   flex-direction: column;
@@ -360,7 +504,7 @@ body {
 }
 
 .ins-drawer-label {
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -372,12 +516,12 @@ body {
   display: block;
   padding: 9px 10px;
   border-radius: 6px;
-  font-size: 15px;
+  font-size: 16px;
   color: var(--ins-text);
 }
 
 .ins-drawer-link:hover {
-  background: var(--surface-tag);
+  background: var(--ins-tag);
 }
 
 /* =========================================================
@@ -392,12 +536,12 @@ body {
 .ins-search-form {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 38px;
-  padding: 0 10px 0 12px;
-  background: var(--surface-search);
+  gap: 10px;
+  height: 46px;
+  padding: 0 14px 0 18px;
+  background: var(--ins-input);
   border: 1px solid var(--ins-border);
-  border-radius: 8px;
+  border-radius: var(--ins-radius-pill);
   transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease), box-shadow var(--ins-fast) var(--ins-ease);
 }
 
@@ -423,7 +567,7 @@ body {
   height: 100%;
   border: 0;
   background: transparent;
-  font-size: 14px;
+  font-size: 16px;
   outline: none;
   color: var(--ins-text);
   -webkit-appearance: none;
@@ -431,7 +575,7 @@ body {
 }
 
 .ins-search-input::placeholder {
-  color: var(--text-color-placeholder);
+  color: var(--ins-placeholder);
 }
 
 .ins-search-input::-webkit-search-cancel-button {
@@ -453,7 +597,7 @@ body {
 }
 
 .ins-search-clear:hover {
-  background: var(--surface-tag);
+  background: var(--ins-tag);
   color: var(--ins-text);
 }
 
@@ -462,13 +606,13 @@ body {
   align-items: center;
   gap: 1px;
   font-family: var(--font-inter), sans-serif;
-  font-size: 11px;
+  font-size: 16px;
   color: var(--ins-muted);
   border: 1px solid var(--ins-border);
   border-radius: 5px;
   padding: 1px 5px;
   line-height: 1.4;
-  background: var(--surface-page);
+  background: var(--ins-page);
 }
 
 .ins-search-menu {
@@ -487,7 +631,7 @@ body {
 }
 
 .ins-search-menu-head {
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -503,12 +647,12 @@ body {
   padding: 8px 10px;
   border-radius: 6px;
   text-align: left;
-  font-size: 13.5px;
+  font-size: 16px;
 }
 
 .ins-search-item.is-active,
 .ins-search-item:hover {
-  background: var(--surface-suggestion-hover);
+  background: var(--ins-hover);
 }
 
 .ins-search-item-icon {
@@ -525,7 +669,7 @@ body {
 }
 
 .ins-search-item-hint {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--ins-muted);
   white-space: nowrap;
 }
@@ -535,9 +679,8 @@ body {
    ========================================================= */
 
 .ins-main {
-  max-width: var(--ins-max);
-  margin: 0 auto;
-  padding: 20px var(--ins-gutter) 80px;
+  width: 100%;
+  padding: 20px 80px 80px;
 }
 
 .ins-pagehead {
@@ -545,7 +688,9 @@ body {
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 14px;
+  /* The page opens on a wall of screenshots; giving the title room to breathe
+     is what stops the grid reading as the first thing on the page. */
+  margin-bottom: 24px;
 }
 
 .ins-pagehead-text {
@@ -560,18 +705,20 @@ body {
 }
 
 .ins-eyebrow {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--ins-muted);
   margin-bottom: 4px;
 }
 
+/* Rule 4: the page title is the one piece of display type, and it tightens
+   its tracking to earn the extra size. */
 .ins-title {
   font-family: var(--font-outfit), var(--font-inter), sans-serif;
-  font-size: 22px;
+  font-size: var(--ins-type-display);
   font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
+  letter-spacing: var(--ins-tracking-display);
+  line-height: 1.15;
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -580,7 +727,7 @@ body {
 
 .ins-title-count {
   font-family: var(--font-inter), sans-serif;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--ins-muted);
 }
@@ -591,8 +738,10 @@ body {
 }
 
 .ins-desc {
-  font-size: 13.5px;
+  font-size: var(--ins-type-body);
   color: var(--ins-sub);
+  margin-top: var(--ins-space-2);
+  max-width: 62ch;
   margin-top: 4px;
   max-width: 62ch;
 }
@@ -613,11 +762,12 @@ body {
 
 .ins-section-title {
   font-family: var(--font-outfit), var(--font-inter), sans-serif;
-  font-size: 16px;
+  font-size: var(--ins-type-section);
   font-weight: 600;
+  letter-spacing: var(--ins-tracking-title);
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--ins-space-2);
 }
 
 .ins-tabpanel > .ins-section-title:first-child {
@@ -644,13 +794,23 @@ body {
 }
 
 /* Content-type tabs */
+/* Ported from .mi-sort-bar's tab row (src/styles/library.css, /icons) rather
+   than the boxed, pill-shaped tabs this used before: flat text over a shared
+   baseline, separated by space instead of a background, with a full-width
+   underline and a weight shift for the active one. .ins-tabbar carries this
+   same look wherever it is reused (the app-detail page's own tab row), so
+   Inspirations has one tab system rather than two. */
 .ins-tabs,
 .ins-tabbar {
   display: flex;
   align-items: center;
-  gap: 2px;
-  border-bottom: 1px solid var(--ins-border);
-  margin-bottom: 14px;
+  gap: 28px;
+  /* .mi-sort-bar needs no margin of its own — Compare and the density toggle
+     share its row, so the grid below is the next thing regardless. Here the
+     tab row is standalone, so it keeps a bottom margin sized like the other
+     section gaps in this file rather than sitting flush against whatever
+     follows (a filter row on Explore, a tab panel on the app-detail page). */
+  margin-bottom: var(--ins-space-5);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -665,15 +825,29 @@ body {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  height: 38px;
-  padding: 0 10px;
-  font-size: 13.5px;
-  font-weight: 500;
+  padding: 10px 0;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
   color: var(--ins-sub);
   white-space: nowrap;
-  border-radius: 6px 6px 0 0;
-  transition: color var(--ins-fast) var(--ins-ease);
+  border-radius: 0;
+  transition: color var(--ins-fast) var(--ins-ease), font-weight var(--ins-fast) var(--ins-ease);
+}
+
+/* Every tab reserves its underline space, active or not — .mi-sort-tab does
+   the same via a transparent ::after — so the row's height and the text's
+   baseline never shift when a tab activates. */
+.ins-tab::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: transparent;
 }
 
 .ins-tab:hover {
@@ -682,46 +856,69 @@ body {
 
 .ins-tab.is-active {
   color: var(--ins-text);
+  font-weight: 500;
 }
 
 .ins-tab.is-active::after {
-  content: '';
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: -1px;
-  height: 2px;
   background: var(--ins-text);
-  border-radius: 2px;
 }
 
 .ins-tab-count {
-  font-size: 11.5px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--ins-muted);
   padding: 1px 5px;
   border-radius: 999px;
-  background: var(--surface-tag);
+  background: var(--ins-tag);
+}
+
+/* .mi-sort-tab-count only ever appears filled and black-on-white, on the one
+   tab that is selected. Every count here stays visible at rest — Inspirations
+   uses these to say how much is in each section, which is worth knowing
+   before you click — but the active tab's count picks up that same filled
+   treatment, which is the only place the reference component's badge is ever
+   actually seen. */
+.ins-tab.is-active .ins-tab-count {
+  padding: 6px 8px;
+  line-height: 12px;
+  color: var(--ins-on-accent);
+  background: var(--ins-text);
 }
 
 /* Filter bar + chips */
+/* Sticky, because the filters are how you narrow a long scroll and having to
+   scroll back up to reach them is what makes a gallery tiring. The blur keeps
+   the screenshots reading through it rather than being cut off by a bar. */
 .ins-filterbar {
+  position: sticky;
+  top: var(--ins-header-h, 56px);
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 28px;
+  padding: 10px 0;
   min-height: 34px;
+  background: color-mix(in srgb, var(--ins-page) 88%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
-.ins-filterbar-right {
+/* FilterBar's root now — the screen count and Filters trigger, riding the
+   right edge of .ins-tabs the same way .ins-tabbar-showing rides the
+   app-detail page's tab row. Was .ins-filterbar-right, back when it sat in its
+   own standalone row under a chip list that no longer exists. */
+.ins-tabs-right {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: none;
+  margin-left: auto;
+  padding-left: var(--ins-space-4);
 }
 
 .ins-filterbar-count {
-  font-size: 12.5px;
+  font-size: 16px;
   color: var(--ins-muted);
   white-space: nowrap;
 }
@@ -741,13 +938,13 @@ body {
 .ins-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--ins-radius-pill);
   border: 1px solid var(--ins-border);
   background: transparent;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--ins-sub);
   white-space: nowrap;
@@ -763,21 +960,21 @@ body {
 .ins-chip.is-active {
   background: var(--ins-text);
   border-color: var(--ins-text);
-  color: var(--text-color-inverted);
+  color: var(--ins-on-accent);
 }
 
 .ins-chip--sm {
   height: 26px;
   padding: 0 10px;
-  font-size: 12.5px;
+  font-size: 16px;
 }
 
 .ins-chip--link:hover {
-  background: var(--surface-tag);
+  background: var(--ins-tag);
 }
 
 .ins-chip-count {
-  font-size: 11px;
+  font-size: 16px;
   color: inherit;
   opacity: 0.6;
 }
@@ -792,7 +989,7 @@ body {
   border-radius: 999px;
   background: var(--ins-accent);
   color: #fff;
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1;
 }
@@ -817,7 +1014,7 @@ body {
 }
 
 .ins-filter-legend {
-  font-size: 11.5px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -840,14 +1037,14 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 12px;
-  border-radius: var(--ins-radius);
+  gap: var(--ins-space-2);
+  height: 44px;
+  padding: 0 22px;
+  border-radius: var(--ins-radius-pill);
   border: 1px solid var(--ins-border);
   background: var(--ins-card);
   color: var(--ins-text);
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 500;
   white-space: nowrap;
   transition: background var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease);
@@ -863,14 +1060,14 @@ body {
 }
 
 .ins-btn.is-active {
-  background: var(--surface-tag);
+  background: var(--ins-tag);
   border-color: var(--ins-border-strong);
 }
 
 .ins-btn--primary {
   background: var(--ins-text);
   border-color: var(--ins-text);
-  color: var(--text-color-inverted);
+  color: var(--ins-on-accent);
 }
 
 .ins-btn--primary:hover {
@@ -888,15 +1085,17 @@ body {
 }
 
 .ins-btn--ghost:hover {
-  background: var(--surface-tag);
+  background: var(--ins-tag);
   color: var(--ins-text);
   border-color: transparent;
 }
 
+/* Matches .ins-chip: the two sit side by side in the filter bar, and a 2px
+   height difference between neighbours reads as a mistake. */
 .ins-btn--sm {
-  height: 30px;
-  padding: 0 10px;
-  font-size: 12.5px;
+  height: 36px;
+  padding: 0 14px;
+  font-size: 16px;
 }
 
 .ins-btn--block {
@@ -909,9 +1108,9 @@ body {
 }
 
 .ins-iconbtn {
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--ins-radius-pill);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -939,7 +1138,7 @@ body {
 }
 
 .ins-iconbtn--plain:hover {
-  background: var(--surface-tag);
+  background: var(--ins-tag);
   color: var(--ins-text);
   border-color: transparent;
 }
@@ -955,9 +1154,9 @@ body {
   padding: 0 10px;
   border: 1px solid var(--ins-border);
   border-radius: 7px;
-  background: var(--surface-color-input);
+  background: var(--ins-card);
   color: var(--ins-text);
-  font-size: 13px;
+  font-size: 16px;
   min-width: 0;
   width: 100%;
 }
@@ -988,7 +1187,7 @@ body {
   border: 1px solid var(--ins-border);
   border-radius: var(--ins-radius);
   background: var(--ins-card);
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .ins-select-label {
@@ -1048,7 +1247,7 @@ body {
 }
 
 .ins-popover-title {
-  font-size: 11.5px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1057,7 +1256,7 @@ body {
 }
 
 .ins-popover-empty {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--ins-muted);
   padding: 4px 10px 8px;
 }
@@ -1074,13 +1273,13 @@ body {
   gap: 9px;
   padding: 8px 10px;
   border-radius: 6px;
-  font-size: 13.5px;
+  font-size: 16px;
   text-align: left;
   color: var(--ins-text);
 }
 
 .ins-popover-item:hover {
-  background: var(--surface-suggestion-hover);
+  background: var(--ins-hover);
 }
 
 .ins-popover-item-label {
@@ -1092,7 +1291,7 @@ body {
 }
 
 .ins-popover-item-count {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--ins-muted);
 }
 
@@ -1132,11 +1331,11 @@ body {
 
 .ins-profile-name {
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 16px;
 }
 
 .ins-profile-email {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--ins-muted);
 }
 
@@ -1153,8 +1352,8 @@ body {
   height: 22px;
   padding: 0 8px;
   border-radius: 5px;
-  background: var(--surface-tag);
-  font-size: 12px;
+  background: var(--ins-tag);
+  font-size: 16px;
   color: var(--ins-sub);
   transition: color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease);
 }
@@ -1168,18 +1367,22 @@ body {
    SCREEN GRID + CARDS
    ========================================================= */
 
+/* Always four columns, each capped at 380px (see .ins-card-shot) — but
+   minmax(0, 380px) lets them shrink together below that cap on viewports too
+   narrow for 4*380px plus gaps, instead of overflowing the page. Where there
+   is room to spare, justify-content spreads the four columns across the full
+   row rather than leaving them bunched at the left with dead space on the
+   right now that .ins-main fills the viewport. */
 .ins-grid {
   display: grid;
-  grid-template-columns: repeat(var(--ins-cols, 5), minmax(0, 1fr));
-  gap: var(--ins-gap);
+  grid-template-columns: repeat(4, minmax(0, 380px));
+  justify-content: space-between;
+  row-gap: 42px;
+  column-gap: 16px;
   align-items: start;
-}
-
-.ins-grid-col {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ins-gap);
-  min-width: 0;
+  /* Closing space. Without it the last row butts against the bottom of the
+     window and the gallery reads as cut off rather than finished. */
+  padding-bottom: var(--ins-space-7);
 }
 
 .ins-grid-sentinel {
@@ -1205,22 +1408,41 @@ body {
 
 .ins-card {
   content-visibility: auto;
-  contain-intrinsic-size: auto 320px;
+  contain-intrinsic-size: 380px 590px;
 }
 
+/* Figma "List Item" (node 973:77728): a 380x532 frame with the screenshot
+   inset on a tinted mat — 85/86px sides, 39/40px top/bottom at 380px wide.
+   Sized in percent + aspect-ratio rather than fixed px so the same
+   proportions hold when the grid column shrinks below 380px (narrow
+   viewports, see .ins-grid) instead of overflowing it. .ins-card-inset crops
+   the screenshot to fill via object-fit: cover regardless of its own ratio. */
 .ins-card-shot {
   position: relative;
-  border-radius: var(--ins-radius-lg);
-  border: 1px solid var(--ins-border);
+  width: 100%;
+  aspect-ratio: 380 / 532;
+  padding: 10.26% 22.63% 10.53% 22.37%;
+  border-radius: 28px;
   overflow: hidden;
-  background: var(--ins-card);
-  transition: border-color var(--ins-fast) var(--ins-ease), transform 200ms var(--ins-ease), box-shadow 200ms var(--ins-ease);
+  background: rgba(64, 64, 64, 0.06);
 }
 
-.ins-card:hover .ins-card-shot {
-  border-color: var(--ins-border-strong);
-  transform: translateY(-2px);
-  box-shadow: var(--effect-card-shadow);
+/* Wraps the screenshot at the frame's fixed inset size (209x453), so the
+   hover actions anchor to the image's edges rather than floating in the mat. */
+.ins-card-inset {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 24px;
+  overflow: hidden;
+}
+
+.ins-card-inset .ins-shot-img,
+.ins-card-inset .ins-shot-missing {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  object-fit: cover;
 }
 
 .ins-card-link {
@@ -1229,17 +1451,40 @@ body {
 
 .ins-card-link:focus-visible {
   box-shadow: inset 0 0 0 2px var(--ins-accent);
-  border-radius: var(--ins-radius-lg);
+  border-radius: 24px;
 }
 
+/* Only rendered when the screen's own capturedAt says it's genuinely recent —
+   see ScreenCard.tsx. There is no "Updated" counterpart: nothing in the store
+   distinguishes a re-capture from a first one, and a badge with no real signal
+   behind it is worse than no badge. */
+.ins-card-badge {
+  position: absolute;
+  top: var(--ins-space-4);
+  left: var(--ins-space-4);
+  z-index: 1;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: 0.2px;
+  color: #fff;
+  background: rgba(115, 115, 115, 0.56);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: 8px;
+}
+
+/* Inset matches the screenshot's own radius so the buttons sit inside the
+   rounded corner rather than crowding it. */
 .ins-card-actions {
   position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
+  left: var(--ins-space-3);
+  right: var(--ins-space-3);
+  bottom: var(--ins-space-3);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ins-space-2);
   opacity: 0;
   transform: translateY(4px);
   transition: opacity var(--ins-fast) var(--ins-ease), transform var(--ins-fast) var(--ins-ease);
@@ -1260,25 +1505,32 @@ body {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
+/* Figma's "Section": a 40px mark beside a two-line text column (app name,
+   then tagline), clear of the screenshot above it. */
 .ins-card-meta {
-  padding: 9px 2px 0;
+  padding: var(--ins-space-3) var(--ins-space-1) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--ins-space-2);
+}
+
+.ins-card-logo {
+  border-radius: 12px;
+}
+
+.ins-card-meta-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  min-width: 0;
+  flex: 1;
 }
 
 .ins-card-app {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ins-text);
-  width: fit-content;
-  max-width: 100%;
-}
-
-.ins-card-app span {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 22px;
+  letter-spacing: 0.2px;
+  color: #141414;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1288,8 +1540,24 @@ body {
   color: var(--ins-accent);
 }
 
+.ins-card-tagline {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 20px;
+  letter-spacing: 0.2px;
+  color: #707070;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Fallback caption when the app row is hidden (e.g. on the app's own detail
+   page, where every card already belongs to the same app) — the screen still
+   needs its own label. */
 .ins-card-name {
-  font-size: 13px;
+  font-size: var(--ins-type-meta);
+  line-height: 1.35;
   color: var(--ins-sub);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1301,7 +1569,7 @@ body {
 }
 
 .ins-card-sub {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--ins-muted);
 }
 
@@ -1326,17 +1594,41 @@ body {
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1;
-  background: var(--surface-tag);
+  background: var(--ins-tag);
   color: var(--ins-sub);
   border: 1px solid var(--ins-border);
 }
 
-/* Real screenshot image */
+/* Real screenshot image. Its own radius now, rather than inheriting the
+   card's — .ins-card-shot's padding means the image no longer touches the
+   card's own rounded corners, so it needs a corner of its own. */
 .ins-shot-img {
   display: block;
   width: 100%;
   height: auto;
   object-fit: cover;
+  border-radius: var(--ins-radius);
+  /* Held at zero until the file decodes; .is-loaded is set from onLoad. The
+     frame beneath shows through as a tinted placeholder in the meantime. */
+  opacity: 0;
+  transition: opacity var(--ins-slow) var(--ins-ease);
+}
+
+.ins-shot-img.is-loaded {
+  opacity: 1;
+}
+
+/* An empty box reads as broken; a tinted one reads as loading. Flow strips are
+   the one place still using a flush, unpadded frame, so they keep their own
+   background instead of inheriting .ins-card-shot's. */
+.ins-flowrow-shot {
+  background: var(--ins-card-alt);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-shot-img {
+    transition: none;
+  }
 }
 
 /* Screenshot frame when the stored file cannot be loaded. Deliberately plain:
@@ -1346,14 +1638,15 @@ body {
   align-items: center;
   justify-content: center;
   width: 100%;
-  background: var(--ins-card-alt);
+  min-height: 120px;
+  background: var(--ins-card);
   border: 1px dashed var(--ins-border);
-  border-radius: inherit;
+  border-radius: var(--ins-radius);
   color: var(--ins-muted);
 }
 
 .ins-shot-missing-text {
-  font-size: 12px;
+  font-size: 16px;
 }
 
 /* =========================================================
@@ -1374,13 +1667,13 @@ body {
   border: 1px solid var(--ins-border);
   border-radius: var(--ins-radius-lg);
   background: var(--ins-card);
-  transition: border-color var(--ins-fast) var(--ins-ease), transform 200ms var(--ins-ease), box-shadow 200ms var(--ins-ease);
+  transition: border-color var(--ins-fast) var(--ins-ease), transform var(--ins-slow) var(--ins-ease), box-shadow var(--ins-slow) var(--ins-ease);
 }
 
 .ins-app-card:hover {
   border-color: var(--ins-border-strong);
-  transform: translateY(-2px);
-  box-shadow: var(--effect-card-shadow);
+  transform: translateY(-3px);
+  box-shadow: var(--ins-shadow-hover);
 }
 
 .ins-app-card-strip {
@@ -1418,21 +1711,21 @@ body {
 
 .ins-app-card-name {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .ins-app-card-sub {
-  font-size: 12.5px;
+  font-size: 16px;
   color: var(--ins-muted);
 }
 
 .ins-app-card-counts {
   display: flex;
   gap: 12px;
-  font-size: 12px;
+  font-size: 16px;
   color: var(--ins-sub);
   padding-top: 10px;
   border-top: 1px solid var(--ins-border);
@@ -1442,7 +1735,355 @@ body {
   gap: 10px;
 }
 
-/* Flow cards */
+/* ─── Flow list (all flows) ──────────────────────────────────────────────
+   Across apps there is nothing sensible to group by, so each journey leads
+   with the app it came from and then shows its screens in walk order. */
+
+.ins-flowlist {
+  display: flex;
+  flex-direction: column;
+  /* Each block is a whole journey, so the separation between them has to be
+     bigger than the gap between screens inside one. */
+  gap: var(--ins-space-7);
+  padding-bottom: var(--ins-space-7);
+}
+
+.ins-flowblock-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.ins-flowblock-logo {
+  flex: 0 0 auto;
+  border-radius: var(--ins-radius);
+}
+
+.ins-flowblock-titles {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ins-flowblock-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.ins-flowblock-app {
+  color: var(--ins-text);
+  text-decoration: none;
+}
+
+.ins-flowblock-app:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The app is the context and the journey is the subject, so the separator
+   recedes and the flow name carries the weight. */
+.ins-flowblock-slash {
+  color: var(--ins-muted);
+  font-weight: 400;
+}
+
+.ins-flowblock-flow {
+  color: var(--ins-text);
+  text-decoration: none;
+}
+
+.ins-flowblock-flow:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ins-flowblock-count {
+  margin: 2px 0 0;
+  font-size: 16px;
+  color: var(--ins-muted);
+}
+
+.ins-flowblock-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 720px) {
+  .ins-flowblock-head {
+    flex-wrap: wrap;
+  }
+
+  .ins-flowblock-actions {
+    order: 3;
+    width: 100%;
+  }
+}
+
+/* ─── Flows browser ──────────────────────────────────────────────────────
+   A list of journeys down the left, the journeys themselves to the right.
+   Each one is laid out as the strip of screens you would actually walk, so
+   the sequence is what you read rather than a tile. */
+
+.ins-flows-layout {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.ins-flows-nav {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ins-flows-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ins-flows-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--ins-muted);
+  pointer-events: none;
+}
+
+.ins-flows-search-input {
+  width: 100%;
+  padding: 8px 10px 8px 30px;
+  font: inherit;
+  font-size: 16px;
+  color: var(--ins-text);
+  background: var(--ins-card);
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius-lg);
+}
+
+.ins-flows-search-input:focus-visible {
+  outline: 2px solid var(--ins-accent);
+  outline-offset: 1px;
+}
+
+.ins-flows-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ins-flows-group-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ins-text);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.ins-flows-chevron {
+  color: var(--ins-muted);
+  transition: transform 0.15s ease;
+}
+
+.ins-flows-chevron.is-collapsed {
+  transform: rotate(-90deg);
+}
+
+.ins-flows-items {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 6px;
+  padding: 0 0 0 10px;
+  list-style: none;
+}
+
+.ins-flows-item {
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 16px;
+  color: var(--ins-sub);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--ins-radius);
+  cursor: pointer;
+}
+
+.ins-flows-item:hover {
+  color: var(--ins-text);
+  background: var(--ins-card-alt);
+}
+
+.ins-flows-item.is-active {
+  color: var(--ins-text);
+  font-weight: 600;
+  background: var(--ins-card-alt);
+}
+
+.ins-flows-nav-empty {
+  padding: 4px;
+  font-size: 16px;
+}
+
+.ins-flows-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  min-width: 0;
+}
+
+.ins-flowrow {
+  scroll-margin-top: 16px;
+}
+
+.ins-flowrow.is-active .ins-flowrow-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The screens run off the right edge on purpose: a journey is long, and
+   showing it cut off is what tells you it scrolls. */
+.ins-flowrow-strip {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  scroll-snap-type: x proximity;
+}
+
+/* Height is fixed and width follows, rather than the other way round: a row
+   has to stay scannable, and it keeps a portrait phone and a landscape web
+   capture sitting on the same baseline. */
+.ins-flowrow-shot {
+  position: relative;
+  flex: 0 0 auto;
+  height: 380px;
+  overflow: hidden;
+  background: var(--ins-card);
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius-lg);
+  scroll-snap-align: start;
+}
+
+.ins-flowrow-shot .ins-shot-img,
+.ins-flowrow-shot .ins-shot-missing {
+  display: block;
+  width: auto;
+  height: 100%;
+  object-fit: contain;
+}
+
+.ins-flowrow-step {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: grid;
+  place-items: center;
+  /* Sized for the 16px numeral now inside it — the badge was a tight 20px
+     circle built around 11px text, which the global font-size sweep would
+     otherwise have left visually cramped for two-digit steps (10, 11, …). */
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--ins-text);
+  background: var(--ins-card);
+  border: 1px solid var(--ins-border);
+  border-radius: 999px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.ins-flowrow-strip:hover .ins-flowrow-step {
+  opacity: 1;
+}
+
+.ins-flowrow-missing {
+  padding: 24px 0;
+  font-size: 16px;
+}
+
+.ins-flowrow-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.ins-flowrow-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.ins-flowrow-play {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--ins-text);
+  background: var(--ins-card);
+  border: 1px solid var(--ins-border);
+  border-radius: 999px;
+}
+
+.ins-flowrow-title:hover .ins-flowrow-play {
+  background: var(--ins-card-alt);
+}
+
+.ins-flowrow-name {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ins-text);
+}
+
+.ins-flowrow-sub {
+  display: block;
+  font-size: 16px;
+  color: var(--ins-muted);
+}
+
+@media (max-width: 880px) {
+  .ins-flows-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .ins-flows-nav {
+    position: static;
+    max-height: none;
+  }
+
+  .ins-flowrow-shot {
+    height: 300px;
+  }
+}
+
+/* Flow cards — still used on app and pattern pages. */
 .ins-flow-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1457,13 +2098,13 @@ body {
   border: 1px solid var(--ins-border);
   border-radius: var(--ins-radius-lg);
   background: var(--ins-card);
-  transition: border-color var(--ins-fast) var(--ins-ease), transform 200ms var(--ins-ease), box-shadow 200ms var(--ins-ease);
+  transition: border-color var(--ins-fast) var(--ins-ease), transform var(--ins-slow) var(--ins-ease), box-shadow var(--ins-slow) var(--ins-ease);
 }
 
 .ins-flow-card:hover {
   border-color: var(--ins-border-strong);
-  transform: translateY(-2px);
-  box-shadow: var(--effect-card-shadow);
+  transform: translateY(-3px);
+  box-shadow: var(--ins-shadow-hover);
 }
 
 .ins-flow-strip {
@@ -1472,7 +2113,7 @@ body {
   gap: 6px;
   padding: 10px;
   border-radius: 8px;
-  background: var(--surface-tag);
+  background: var(--ins-tag);
   overflow: hidden;
 }
 
@@ -1490,7 +2131,7 @@ body {
   top: 6px;
   left: 6px;
   z-index: 1;
-  font-size: 10px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--ins-text);
   background: color-mix(in srgb, var(--ins-card) 88%, transparent);
@@ -1526,7 +2167,7 @@ body {
 }
 
 .ins-flow-more {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--ins-muted);
   padding: 0 4px;
@@ -1544,7 +2185,7 @@ body {
 }
 
 .ins-flow-name {
-  font-size: 13.5px;
+  font-size: 16px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1557,7 +2198,7 @@ body {
 }
 
 .ins-flow-sub {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--ins-muted);
 }
 
@@ -1576,13 +2217,13 @@ body {
   border: 1px solid var(--ins-border);
   border-radius: var(--ins-radius-lg);
   background: var(--ins-card);
-  transition: border-color var(--ins-fast) var(--ins-ease), transform 200ms var(--ins-ease), box-shadow 200ms var(--ins-ease);
+  transition: border-color var(--ins-fast) var(--ins-ease), transform var(--ins-slow) var(--ins-ease), box-shadow var(--ins-slow) var(--ins-ease);
 }
 
 .ins-pattern-card:hover {
   border-color: var(--ins-border-strong);
-  transform: translateY(-2px);
-  box-shadow: var(--effect-card-shadow);
+  transform: translateY(-3px);
+  box-shadow: var(--ins-shadow-hover);
 }
 
 .ins-pattern-grid {
@@ -1597,7 +2238,7 @@ body {
   overflow: hidden;
   border: 1px solid var(--ins-border);
   position: relative;
-  background: var(--surface-tag);
+  background: var(--ins-tag);
 }
 
 .ins-pattern-thumb .ins-shot-img,
@@ -1615,17 +2256,17 @@ body {
 }
 
 .ins-pattern-name {
-  font-size: 13.5px;
+  font-size: 16px;
   font-weight: 600;
 }
 
 .ins-pattern-sub {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--ins-muted);
 }
 
 .ins-examples-count {
-  font-size: 12.5px;
+  font-size: 16px;
   margin: -4px 0 12px;
 }
 
@@ -1690,14 +2331,14 @@ body {
 
 .ins-collection-name {
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 16px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .ins-collection-sub {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--ins-muted);
 }
 
@@ -1756,7 +2397,7 @@ body {
 }
 
 .ins-element-count {
-  font-size: 12.5px;
+  font-size: 16px;
   color: var(--ins-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1781,7 +2422,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--ins-sub);
   padding: 4px 6px 4px 2px;
   border-radius: 6px;
@@ -1810,9 +2451,330 @@ body {
 }
 
 .ins-app-tagline {
-  font-size: 13.5px;
+  font-size: 16px;
   color: var(--ins-sub);
   margin-top: 6px;
+}
+
+/* ─── App masthead ───────────────────────────────────────────────────────
+   The detail page's opening. Stacked rather than packed into a row: mark,
+   what the product is, the facts, then the actions. The vertical rhythm is
+   what makes this read as a destination instead of a wider list row. */
+
+/* Two columns: the app's identity on the left, the actions on the right.
+   The left side is one wrapped element rather than four loose grid children,
+   so `align-items: center` centres the buttons against the whole block —
+   whatever it contains, a bare name or a name plus tagline plus a licence
+   note. (Spanning rows with `grid-row: 1 / -1` does not work here: -1 refers
+   to the explicit grid, and these rows are all implicit.) */
+.ins-masthead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--ins-space-6);
+  align-items: center;
+  margin-bottom: var(--ins-space-6);
+}
+
+.ins-masthead-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.ins-masthead-logo {
+  border-radius: 22%;
+  margin-bottom: var(--ins-space-5);
+}
+
+.ins-masthead-title {
+  margin: 0;
+  font-family: var(--font-outfit), var(--font-inter), sans-serif;
+  /* Scales with the viewport: at 96px the mark is large enough that a fixed
+     28px title beside it looks timid. */
+  font-size: clamp(30px, 3.6vw, 46px);
+  font-weight: 600;
+  letter-spacing: var(--ins-tracking-display);
+  line-height: 1.1;
+  max-width: 20ch;
+}
+
+/* The tagline is part of the title but not the name, so it is set in the same
+   size and lighter — the eye reads the product first, the description second. */
+.ins-masthead-dash,
+.ins-masthead-tagline {
+  color: var(--ins-sub);
+  font-weight: 500;
+}
+
+.ins-masthead-note {
+  margin: var(--ins-space-4) 0 0;
+  font-size: var(--ins-type-meta);
+  color: var(--ins-sub);
+}
+
+.ins-masthead-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ins-space-7);
+  margin: var(--ins-space-6) 0 0;
+}
+
+.ins-fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ins-space-1);
+}
+
+/* Larger than the default meta scale: these four facts are the page's summary
+   and sit alone beside a 96px mark, so token-sized text reads as a caption. */
+.ins-masthead-facts .ins-fact dt {
+  font-size: 16px;
+}
+
+.ins-masthead-facts .ins-fact dd,
+.ins-masthead-facts .ins-rating-value,
+.ins-masthead-facts .ins-rating-none {
+  font-size: 16px;
+}
+
+.ins-fact dt {
+  font-size: var(--ins-type-meta);
+  color: var(--ins-muted);
+}
+
+.ins-fact dd {
+  display: flex;
+  align-items: center;
+  gap: var(--ins-space-2);
+  margin: 0;
+  font-size: var(--ins-type-body);
+  font-weight: 500;
+  color: var(--ins-text);
+}
+
+/* Two copies of the same five stars, the filled set clipped to the rating's
+   width — which is how a fractional score like 4.89 shows as a part-filled
+   fifth star rather than being rounded to a whole one. */
+.ins-stars {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  color: var(--ins-text);
+  flex: none;
+}
+
+.ins-stars-track,
+.ins-stars-fill {
+  display: flex;
+  gap: 2px;
+}
+
+/* The stars must not shrink. The fill layer is a flex container narrowed to
+   the rating's width, and flex children shrink to fit by default — which
+   squashed all five stars into the available space instead of letting
+   overflow clip them, so the filled row never lined up with the outlines
+   underneath. Holding their size is what makes the clip work. */
+.ins-stars-track > svg,
+.ins-stars-fill > svg {
+  flex: none;
+}
+
+.ins-stars-fill {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.ins-rating-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.ins-rating {
+  display: flex;
+  align-items: center;
+  gap: var(--ins-space-3);
+  flex-wrap: wrap;
+}
+
+.ins-rating-score {
+  display: flex;
+  align-items: center;
+  gap: var(--ins-space-2);
+}
+
+.ins-rating-none {
+  font-size: var(--ins-type-meta);
+  font-weight: 400;
+  color: var(--ins-muted);
+}
+
+/* Your own stars, set apart from the average by a rule so the two readings
+   are not mistaken for one control. */
+.ins-rating-mine {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding-left: var(--ins-space-3);
+  border-left: 1px solid var(--ins-border);
+}
+
+.ins-rating-star {
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  background: none;
+  border-radius: var(--ins-radius);
+  color: var(--ins-border-strong);
+  cursor: pointer;
+  transition: color var(--ins-fast) var(--ins-ease), transform var(--ins-fast) var(--ins-ease);
+}
+
+.ins-rating-star.is-on {
+  color: #f5a623;
+}
+
+.ins-rating-star:hover:not(:disabled) {
+  transform: scale(1.15);
+}
+
+.ins-rating-star:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.ins-rating-hint {
+  margin-left: var(--ins-space-1);
+  font-size: var(--ins-type-micro);
+  font-weight: 400;
+  color: var(--ins-muted);
+}
+
+.ins-masthead-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ins-space-3);
+}
+
+/* The overflow button is square, so it needs its height set explicitly to sit
+   on the same baseline as the pill buttons beside it. */
+.ins-masthead-actions .ins-iconbtn {
+  width: 44px;
+  height: 44px;
+}
+
+/* ─── Rate / overflow menu ───────────────────────────────────────────────
+   Both anchor a .ins-popover, which is absolutely positioned, so each needs
+   its own positioning context. */
+
+.ins-rate,
+.ins-appmenu {
+  position: relative;
+  display: inline-flex;
+}
+
+.ins-rate-trigger-star {
+  display: inline-flex;
+  color: var(--ins-muted);
+}
+
+.ins-btn.is-rated .ins-rate-trigger-star {
+  color: #f5a623;
+}
+
+.ins-rate-panel,
+.ins-appmenu-panel {
+  left: 0;
+}
+
+.ins-rate-panel {
+  min-width: 272px;
+  padding: var(--ins-space-3);
+}
+
+.ins-rate-stars {
+  display: flex;
+  gap: var(--ins-space-1);
+  margin: var(--ins-space-2) 0;
+}
+
+.ins-rate-star {
+  display: inline-flex;
+  padding: var(--ins-space-1);
+  border: 0;
+  background: none;
+  border-radius: var(--ins-radius);
+  color: var(--ins-border-strong);
+  cursor: pointer;
+  transition: color var(--ins-fast) var(--ins-ease), transform var(--ins-fast) var(--ins-ease);
+}
+
+/* Fills up to the hovered star rather than only the one under the cursor, so
+   the control shows the value it is about to set. */
+.ins-rate-star.is-on {
+  color: #f5a623;
+}
+
+.ins-rate-star:hover {
+  transform: scale(1.12);
+}
+
+.ins-rate-note {
+  margin: 0;
+  font-size: var(--ins-type-micro);
+  line-height: 1.45;
+  color: var(--ins-muted);
+}
+
+/* Scoped: the shared .ins-popover-title is a small uppercase eyebrow, which is
+   right for a list header but wrong for a question. */
+.ins-rate-panel .ins-popover-title {
+  margin: 0 0 var(--ins-space-1);
+  padding: 0;
+  font-size: var(--ins-type-meta);
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ins-text);
+}
+
+/* Pushes the "Showing N" label to the far end of the tab row. */
+.ins-tabbar--counted {
+  justify-content: flex-start;
+}
+
+.ins-tabbar-showing {
+  margin: 0 0 0 auto;
+  padding-left: var(--ins-space-4);
+  font-size: var(--ins-type-meta);
+  color: var(--ins-muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 780px) {
+  /* One column: the actions drop below the facts and start from the left,
+     because a right-aligned button row against a narrow column reads as
+     detached from the app it belongs to. */
+  .ins-masthead {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .ins-masthead-actions {
+    margin-top: var(--ins-space-5);
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 640px) {
+  .ins-masthead-facts {
+    gap: var(--ins-space-5);
+  }
+
+  .ins-tabbar-showing {
+    display: none;
+  }
 }
 
 .ins-detail-title-wrap {
@@ -1823,7 +2785,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   margin-bottom: 6px;
 }
@@ -1841,7 +2803,7 @@ body {
 }
 
 .ins-detail-sub {
-  font-size: 13.5px;
+  font-size: 16px;
   color: var(--ins-sub);
   margin-top: 4px;
 }
@@ -1902,7 +2864,7 @@ body {
   position: absolute;
   top: -22px;
   left: -2px;
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 600;
   color: #fff;
   background: var(--ins-accent);
@@ -1934,7 +2896,7 @@ body {
   gap: 12px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--ins-border);
-  font-size: 13px;
+  font-size: 16px;
   align-items: start;
 }
 
@@ -1999,7 +2961,7 @@ body {
 }
 
 .ins-flow-rail-btn:hover {
-  background: var(--surface-tag);
+  background: var(--ins-tag);
 }
 
 .ins-flow-rail-step.is-active .ins-flow-rail-btn {
@@ -2007,7 +2969,7 @@ body {
 }
 
 .ins-flow-rail-num {
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--ins-muted);
 }
@@ -2020,7 +2982,7 @@ body {
 }
 
 .ins-flow-rail-name {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--ins-sub);
 }
 
@@ -2081,7 +3043,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .ins-stage-step {
@@ -2149,11 +3111,11 @@ body {
 }
 
 .ins-flowrow-link:hover {
-  background: var(--surface-tag);
+  background: var(--ins-tag);
 }
 
 .ins-flowrow-num {
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--ins-muted);
 }
@@ -2166,7 +3128,7 @@ body {
 }
 
 .ins-flowrow-label {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--ins-sub);
 }
 
@@ -2192,11 +3154,11 @@ body {
 
 .ins-panel-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .ins-panel-hint {
-  font-size: 12.5px;
+  font-size: 16px;
   color: var(--ins-muted);
 }
 
@@ -2222,7 +3184,7 @@ body {
   padding: 6px 10px 6px 6px;
   border: 1px solid var(--ins-border);
   border-radius: 8px;
-  background: var(--surface-page);
+  background: var(--ins-page);
 }
 
 .ins-swatch:hover {
@@ -2244,12 +3206,12 @@ body {
 }
 
 .ins-swatch-role {
-  font-size: 11px;
+  font-size: 16px;
   color: var(--ins-muted);
 }
 
 .ins-swatch-hex {
-  font-size: 12.5px;
+  font-size: 16px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
@@ -2267,7 +3229,7 @@ body {
 }
 
 .ins-analysis-title {
-  font-size: 11.5px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2278,7 +3240,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--ins-text);
 }
 
@@ -2331,8 +3293,8 @@ body {
   padding: 0 6px 0 12px;
   border: 1px solid var(--ins-border);
   border-radius: 8px;
-  background: var(--surface-page);
-  font-size: 13px;
+  background: var(--ins-page);
+  font-size: 16px;
   font-weight: 500;
   transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease);
 }
@@ -2347,9 +3309,9 @@ body {
 }
 
 .ins-detected-count {
-  font-size: 11.5px;
+  font-size: 16px;
   color: var(--ins-muted);
-  background: var(--surface-tag);
+  background: var(--ins-tag);
   padding: 2px 6px;
   border-radius: 5px;
 }
@@ -2360,7 +3322,7 @@ body {
   gap: 8px;
   padding: 12px;
   border-radius: 8px;
-  background: var(--surface-page);
+  background: var(--ins-page);
   border: 1px solid var(--ins-border);
 }
 
@@ -2377,11 +3339,11 @@ body {
   padding: 14px 16px;
   border-radius: 10px;
   border: 1px solid var(--ins-border);
-  background: var(--surface-page);
+  background: var(--ins-page);
 }
 
 .ins-iconhandoff-desc {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--ins-sub);
   margin-top: 4px;
 }
@@ -2432,11 +3394,11 @@ body {
 
 .ins-dropzone-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .ins-dropzone-desc {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--ins-sub);
 }
 
@@ -2474,7 +3436,7 @@ body {
 }
 
 .ins-visual-query-sub {
-  font-size: 12.5px;
+  font-size: 16px;
   color: var(--ins-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2503,11 +3465,11 @@ body {
 
 .ins-empty-title {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .ins-empty-desc {
-  font-size: 13.5px;
+  font-size: 16px;
   color: var(--ins-sub);
   max-width: 44ch;
 }
@@ -2538,7 +3500,8 @@ body {
 
 .ins-skel--shot {
   width: 100%;
-  border-radius: var(--ins-radius-lg);
+  aspect-ratio: 380 / 532;
+  border-radius: 28px;
   border: 1px solid var(--ins-border);
 }
 
@@ -2566,8 +3529,8 @@ body {
   padding: 9px 12px 9px 12px;
   border-radius: 999px;
   background: var(--ins-text);
-  color: var(--text-color-inverted);
-  font-size: 13px;
+  color: var(--ins-on-accent);
+  font-size: 16px;
   font-weight: 500;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
   pointer-events: auto;
@@ -2592,7 +3555,7 @@ body {
 
 /* Source block under the screen's facts: licence, credit, reuse. */
 .ins-info-list--source {
-  font-size: 12.5px;
+  font-size: 16px;
 }
 
 .ins-info-list--source .ins-info-row {
@@ -2600,33 +3563,33 @@ body {
 }
 
 .ins-app-license {
-  font-size: 12.5px;
+  font-size: 16px;
   color: var(--ins-muted);
   margin-top: 6px;
 }
 
 .ins-similar-basis {
-  font-size: 12px;
+  font-size: 16px;
 }
 
 /* Panel copy for "not analyzed yet" and similar states. */
 .ins-panel-body {
-  font-size: 13.5px;
+  font-size: 16px;
   color: var(--ins-sub);
   max-width: 62ch;
 }
 
 .ins-panel-note {
-  font-size: 12.5px;
+  font-size: 16px;
   color: var(--ins-muted);
 }
 
 .ins-panel-note code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: 16px;
   padding: 1px 5px;
   border-radius: 4px;
-  background: var(--surface-tag);
+  background: var(--ins-tag);
 }
 
 /* Visual search is an entry point for a feature that is not wired up; it is
@@ -2651,7 +3614,7 @@ body {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 12.5px;
+  font-size: 16px;
   color: var(--ins-sub);
   padding: 8px 12px;
   margin-bottom: 14px;
@@ -2665,7 +3628,7 @@ body {
   align-items: center;
   gap: 18px;
   flex-wrap: wrap;
-  font-size: 12.5px;
+  font-size: 16px;
   color: var(--ins-sub);
   padding: 10px 14px;
   margin-bottom: 14px;
@@ -2676,7 +3639,7 @@ body {
 
 .ins-admin-summary strong {
   color: var(--ins-text);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .ins-admin-held {
@@ -2696,7 +3659,7 @@ body {
   border: 1px solid var(--ins-border);
   border-radius: var(--ins-radius);
   background: var(--ins-card);
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .ins-admin-banner.is-error {
@@ -2705,11 +3668,11 @@ body {
 }
 
 .ins-admin-note {
-  font-size: 12.5px;
+  font-size: 16px;
   color: var(--ins-sub);
   padding: 8px 12px;
   border-radius: var(--ins-radius);
-  background: var(--surface-tag);
+  background: var(--ins-tag);
 }
 
 .ins-admin-ok {
@@ -2717,17 +3680,17 @@ body {
   align-items: center;
   gap: 5px;
   color: #16a34a;
-  font-size: 12.5px;
+  font-size: 16px;
 }
 
 .ins-admin-err {
   color: #e5484d;
-  font-size: 12.5px;
+  font-size: 16px;
 }
 
 .ins-admin-warn {
   color: #b45309;
-  font-size: 12.5px;
+  font-size: 16px;
 }
 
 .ins-admin-panel {
@@ -2748,7 +3711,7 @@ body {
 
 .ins-admin-form-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .ins-admin-row {
@@ -2774,7 +3737,7 @@ body {
 }
 
 .ins-field-label {
-  font-size: 11.5px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -2782,7 +3745,7 @@ body {
 }
 
 .ins-field-hint {
-  font-size: 11.5px;
+  font-size: 16px;
   color: var(--ins-muted);
 }
 
@@ -2797,7 +3760,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--ins-sub);
   height: 32px;
 }
@@ -2865,8 +3828,8 @@ body {
   display: block;
   background: repeating-linear-gradient(
     45deg,
-    var(--surface-tag),
-    var(--surface-tag) 6px,
+    var(--ins-tag),
+    var(--ins-tag) 6px,
     transparent 6px,
     transparent 12px
   );
@@ -2886,7 +3849,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--ins-muted);
 }
@@ -2931,18 +3894,18 @@ body {
   gap: 8px;
   flex-wrap: wrap;
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 16px;
 }
 
 .ins-admin-item-id {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 400;
   color: var(--ins-muted);
 }
 
 .ins-admin-item-sub {
-  font-size: 12.5px;
+  font-size: 16px;
   color: var(--ins-muted);
 }
 
@@ -2959,7 +3922,7 @@ body {
   gap: 12px;
   padding: 14px 12px;
   border-top: 1px solid var(--ins-border);
-  background: var(--surface-page);
+  background: var(--ins-page);
 }
 
 /* Flow builder */
@@ -2980,7 +3943,7 @@ body {
   align-items: center;
   justify-content: center;
   min-width: 16px;
-  font-size: 10.5px;
+  font-size: 16px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -2998,8 +3961,8 @@ body {
   padding: 6px 10px;
   border: 1px solid var(--ins-border);
   border-radius: var(--ins-radius);
-  background: var(--surface-page);
-  font-size: 13px;
+  background: var(--ins-page);
+  font-size: 16px;
 }
 
 .ins-admin-step-name {
@@ -3022,11 +3985,25 @@ body {
   background: var(--ins-card);
 }
 
+/* One captured journey in the automatic-capture result: its name, then its
+   screens in the order they were walked. */
+.ins-admin-flowgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--ins-border);
+}
+
+.ins-admin-flowgroup:first-of-type {
+  border-top: 0;
+}
+
 .ins-linkbtn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--ins-accent);
   text-decoration: underline;
@@ -3053,7 +4030,7 @@ body {
   padding: 10px;
   border: 1px solid var(--ins-border);
   border-radius: var(--ins-radius);
-  background: var(--surface-page);
+  background: var(--ins-page);
   margin-bottom: 10px;
 }
 
@@ -3066,7 +4043,7 @@ body {
 }
 
 .ins-flowbuild-num {
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--ins-muted);
   font-variant-numeric: tabular-nums;
@@ -3099,8 +4076,8 @@ body {
   height: 100%;
   background: repeating-linear-gradient(
     45deg,
-    var(--surface-tag),
-    var(--surface-tag) 6px,
+    var(--ins-tag),
+    var(--ins-tag) 6px,
     transparent 6px,
     transparent 12px
   );
@@ -3108,7 +4085,7 @@ body {
 
 .ins-flowbuild-name,
 .ins-flowbuild-tile-name {
-  font-size: 11.5px;
+  font-size: 16px;
   color: var(--ins-sub);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3123,7 +4100,7 @@ body {
 .ins-flowbuild-controls .ins-iconbtn {
   width: 24px;
   height: 22px;
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1;
 }
 
@@ -3165,7 +4142,7 @@ body {
   border-radius: 999px;
   background: var(--ins-accent);
   color: #fff;
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 18px;
   text-align: center;
@@ -3184,7 +4161,7 @@ body {
   flex-direction: column;
   gap: 4px;
   margin-top: 6px;
-  font-size: 12.5px;
+  font-size: 16px;
 }
 
 .ins-flowbuild-heldlist li {
@@ -3215,7 +4192,7 @@ body {
 }
 
 .ins-flow-hint {
-  font-size: 12.5px;
+  font-size: 16px;
   text-align: center;
   padding-top: 14px;
 }
@@ -3227,7 +4204,7 @@ body {
 
 .ins-popover-item-tag {
   margin-left: auto;
-  font-size: 10.5px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -3285,7 +4262,7 @@ body {
   flex-direction: column;
   width: min(1100px, 100%);
   max-height: 100%;
-  background: var(--surface-page);
+  background: var(--ins-page);
   border: 1px solid var(--ins-border);
   border-radius: var(--ins-radius-lg);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
@@ -3326,7 +4303,7 @@ body {
 }
 
 .ins-preview-sub {
-  font-size: 12.5px;
+  font-size: 16px;
   color: var(--ins-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3421,7 +4398,7 @@ body {
   flex-wrap: wrap;
   padding: 10px 14px;
   background: var(--ins-card-alt);
-  font-size: 13px;
+  font-size: 16px;
   flex: none;
 }
 
@@ -3441,7 +4418,7 @@ body {
   overflow-x: auto;
   padding: 12px 14px;
   border-top: 1px solid var(--ins-border);
-  background: var(--surface-page);
+  background: var(--ins-page);
   flex: none;
   scrollbar-width: thin;
 }
@@ -3494,7 +4471,7 @@ body {
   border-radius: 4px;
   background: rgba(8, 9, 12, 0.72);
   color: #fff;
-  font-size: 10.5px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 16px;
   text-align: center;
@@ -3502,10 +4479,10 @@ body {
 
 .ins-preview-hint {
   padding: 0 14px 12px;
-  font-size: 12px;
+  font-size: 16px;
   color: var(--ins-muted);
   text-align: center;
-  background: var(--surface-page);
+  background: var(--ins-page);
   flex: none;
 }
 
@@ -3515,12 +4492,12 @@ body {
   align-items: center;
   gap: 5px;
   align-self: flex-start;
-  font-size: 11.5px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--ins-sub);
   padding: 3px 8px;
   border-radius: 999px;
-  background: var(--surface-tag);
+  background: var(--ins-tag);
   opacity: 0;
   transform: translateY(2px);
   transition: opacity var(--ins-fast) var(--ins-ease), transform var(--ins-fast) var(--ins-ease);
@@ -3650,14 +4627,6 @@ body {
     display: inline-flex;
   }
 
-  .ins-wordmark {
-    margin-right: 0;
-  }
-
-  .ins-wordmark-tag {
-    display: none;
-  }
-
   .ins-app-grid,
   .ins-pattern-grid-wrap,
   .ins-collection-grid {
@@ -3763,7 +4732,6 @@ body {
     transition-duration: 0.01ms !important;
   }
 
-  .ins-card:hover .ins-card-shot,
   .ins-app-card:hover,
   .ins-flow-card:hover,
   .ins-pattern-card:hover {

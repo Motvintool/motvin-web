@@ -25,6 +25,10 @@ export function Screenshot({
   priority?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
+  // Screens arrive over the network into a box whose size is already reserved,
+  // so without this the card sits as an empty frame and then snaps to a full
+  // screenshot. Fading in on decode turns that snap into an arrival.
+  const [loaded, setLoaded] = useState(false);
   const src = inspirationsApi.mediaUrl(screen.url);
   const ratio = screen.width && screen.height ? `${screen.width} / ${screen.height}` : '4 / 3';
 
@@ -40,13 +44,19 @@ export function Screenshot({
     <img
       src={src}
       alt={`${screen.name} screen`}
-      className={`ins-shot-img ${className}`}
+      className={`ins-shot-img ${loaded ? 'is-loaded' : ''} ${className}`}
       style={{ aspectRatio: ratio }}
       width={screen.width || undefined}
       height={screen.height || undefined}
       loading={priority ? 'eager' : 'lazy'}
       decoding="async"
       fetchPriority={priority ? 'high' : 'auto'}
+      onLoad={() => setLoaded(true)}
+      // A cached image can finish before React attaches onLoad, which would
+      // leave it stuck at zero opacity. Catch that case on mount.
+      ref={(node) => {
+        if (node?.complete) setLoaded(true);
+      }}
       onError={() => setFailed(true)}
     />
   );

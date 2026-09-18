@@ -56,9 +56,8 @@ export function Header() {
     <header className="ins-header">
       <div className="ins-header-inner">
         <div className="ins-header-left">
-          <Link href={INSPIRATIONS_ROUTES.explore} className="ins-wordmark" aria-label="Motvin Inspirations home">
-            <img src="/ASSET/Icons/header-motvin-wordmark.svg" alt="" className="ins-wordmark-img theme-icon" />
-            <span className="ins-wordmark-tag">Inspirations</span>
+          <Link href={INSPIRATIONS_ROUTES.explore} className="ins-brand-logo" aria-label="Motvin Inspirations home">
+            <img src="/ASSET/svg/nav-motvin-logo.svg" alt="" className="ins-brand-logo-img" width={40} height={40} />
           </Link>
           <nav className="ins-platform-nav" aria-label="Platform">
             {PLATFORMS.map((p) => {

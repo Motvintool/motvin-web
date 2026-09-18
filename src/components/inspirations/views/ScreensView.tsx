@@ -2,7 +2,6 @@
 
 import { Suspense } from 'react';
 import { formatCount } from '@/lib/inspirations/taxonomy';
-import { ContentTabs } from '../ContentTabs';
 import { FilteredGallery } from '../FilteredGallery';
 import { PageHeading } from '../PageHeading';
 import { useMeta } from '../useMeta';
@@ -13,9 +12,8 @@ export function ScreensView() {
   return (
     <>
       <PageHeading title="Screens" count={meta.counts.screens ? formatCount(meta.counts.screens) : undefined} />
-      <ContentTabs counts={meta.counts} active="screens" />
       <Suspense fallback={null}>
-        <FilteredGallery />
+        <FilteredGallery counts={meta.counts} active="screens" />
       </Suspense>
     </>
   );

@@ -10,7 +10,7 @@ import { CheckIcon, PencilIcon, TrashIcon } from '../Icons';
 /**
  * Every stored screenshot, published or not.
  *
- * Files the licensing gate is holding back are listed first with the reason,
+ * Files the builder could not publish are listed first with the reason,
  * because those are the ones needing a decision. Metadata is edited in place
  * and written to the file's sidecar.
  */

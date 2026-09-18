@@ -2,11 +2,11 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
-import { flowCategoryLabel, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
+import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { App, Flow, Platform, Screen } from '@/lib/inspirations/types';
 import { ContentTabs } from '../ContentTabs';
 import { EmptyState } from '../EmptyState';
-import { FlowCard } from '../FlowCard';
+import { FlowList } from '../FlowList';
 import { FlowIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
 import { CardRowSkeleton } from '../Skeletons';
@@ -47,7 +47,6 @@ export function FlowsView() {
       .map(({ flow, screens }) => ({ flow, screens }));
   }, `flow-screens:${category ?? 'all'}:${platform ?? 'all'}:${visible.map((f) => f.id).join(',')}`);
 
-  const categories = meta.taxonomy.flowCategories ?? [];
   const platforms = Array.from(new Set((flows ?? []).map((f) => f.platform)));
 
   const setParam = (key: string, value?: string) => {
@@ -67,47 +66,23 @@ export function FlowsView() {
       />
       <ContentTabs counts={meta.counts} active="flows" />
 
-      {(categories.length > 0 || platforms.length > 1) && (
+      {/* Category is navigated in the browser's own list below, so only
+          platform is offered here — the same journey differs per platform. */}
+      {platforms.length > 1 && (
         <div className="ins-filterbar">
-          <div className="ins-chips" role="group" aria-label="Flow category">
-            <button
-              type="button"
-              className={`ins-chip ${!category ? 'is-active' : ''}`}
-              aria-pressed={!category}
-              onClick={() => setParam('category')}
-            >
-              All
-            </button>
-            {categories.map((c) => (
+          <div className="ins-chips" role="group" aria-label="Platform">
+            {platforms.map((p) => (
               <button
-                key={c}
+                key={p}
                 type="button"
-                className={`ins-chip ${category === c ? 'is-active' : ''}`}
-                aria-pressed={category === c}
-                onClick={() => setParam('category', category === c ? undefined : c)}
+                className={`ins-chip ins-chip--sm ${platform === p ? 'is-active' : ''}`}
+                aria-pressed={platform === p}
+                onClick={() => setParam('platform', platform === p ? undefined : p)}
               >
-                {flowCategoryLabel(c)}
+                {PLATFORM_LABEL[p] ?? p}
               </button>
             ))}
           </div>
-
-          {platforms.length > 1 && (
-            <div className="ins-filterbar-right">
-              <div className="ins-chips" role="group" aria-label="Platform">
-                {platforms.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    className={`ins-chip ins-chip--sm ${platform === p ? 'is-active' : ''}`}
-                    aria-pressed={platform === p}
-                    onClick={() => setParam('platform', platform === p ? undefined : p)}
-                  >
-                    {PLATFORM_LABEL[p] ?? p}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -135,16 +110,7 @@ export function FlowsView() {
           }
         />
       ) : (
-        <div className="ins-flow-grid">
-          {(resolved ?? []).map((entry) => (
-            <FlowCard
-              key={entry.flow.id}
-              flow={entry.flow}
-              screens={entry.screens}
-              app={apps.get(entry.flow.appId)}
-            />
-          ))}
-        </div>
+        <FlowList entries={resolved ?? []} apps={apps} />
       )}
     </>
   );

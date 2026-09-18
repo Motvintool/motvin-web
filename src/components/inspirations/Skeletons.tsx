@@ -7,25 +7,19 @@
  * actually holds, or by an empty state.
  */
 
-const SKELETON_RATIOS = [16 / 10, 9 / 16, 4 / 5, 3 / 4, 16 / 9, 1, 9 / 16, 16 / 10];
-
-export function ScreenGridSkeleton({ count = 15, columns = 5 }: { count?: number; columns?: number }) {
-  const cols: number[][] = Array.from({ length: columns }, () => []);
-  for (let i = 0; i < count; i++) cols[i % columns].push(SKELETON_RATIOS[i % SKELETON_RATIOS.length]);
-
+export function ScreenGridSkeleton({ count = 12 }: { count?: number }) {
   return (
-    <div className="ins-grid" style={{ ['--ins-cols' as string]: columns }} aria-busy aria-label="Loading screens">
-      {cols.map((col, ci) => (
-        <div className="ins-grid-col" key={ci}>
-          {col.map((ratio, i) => (
-            <div className="ins-card ins-card--skeleton" key={i}>
-              <div className="ins-skel ins-skel--shot" style={{ aspectRatio: String(ratio) }} />
-              <div className="ins-card-meta">
-                <div className="ins-skel ins-skel--line" style={{ width: '46%' }} />
-                <div className="ins-skel ins-skel--line" style={{ width: '70%' }} />
-              </div>
+    <div className="ins-grid" aria-busy aria-label="Loading screens">
+      {Array.from({ length: count }, (_, i) => (
+        <div className="ins-card ins-card--skeleton" key={i}>
+          <div className="ins-skel ins-skel--shot" />
+          <div className="ins-card-meta">
+            <div className="ins-skel" style={{ width: 40, height: 40, borderRadius: 12, flex: 'none' }} />
+            <div className="ins-card-meta-text">
+              <div className="ins-skel ins-skel--line" style={{ width: '46%' }} />
+              <div className="ins-skel ins-skel--line" style={{ width: '70%' }} />
             </div>
-          ))}
+          </div>
         </div>
       ))}
     </div>

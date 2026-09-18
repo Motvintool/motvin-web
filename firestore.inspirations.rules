@@ -1,0 +1,69 @@
+// Firestore rules for Inspirations app ratings.
+//
+// These are NOT deployed from this repo. Merge the `inspirationRatings` block
+// below into the live rules — motvin-ui/Firebase/firestore.rules.active.txt,
+// which motvin-ui/firebase.json deploys — then:
+//
+//     firebase deploy --only firestore:rules
+//
+// The helpers below (isSignedIn) already exist in that file; they are repeated
+// here only so this block reads on its own.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // A whole number from 1 to 5.
+    function isRatingValue(v) {
+      return v is int && v >= 1 && v <= 5;
+    }
+
+    match /inspirationRatings/{appId} {
+
+      // The score is public: anyone browsing the library sees it, signed in or
+      // not. Only the writing is gated.
+      allow read: if true;
+
+      // The aggregate is maintained by the client inside a transaction, so a
+      // signed-in user has to be able to write it. These conditions stop the
+      // obvious abuses — non-numeric values, negative totals, a count that
+      // jumps by more than the one vote a single transaction can add, and an
+      // average outside the 1..5 the stars can display.
+      //
+      // They do NOT make the aggregate tamper-proof. A determined signed-in
+      // user could still write a self-consistent but dishonest sum and count.
+      // Closing that properly means moving the aggregate into a Cloud Function
+      // triggered by writes to userRatings, so the client only ever writes its
+      // own vote. Worth doing before ratings carry any real weight.
+      allow write: if isSignedIn()
+        && request.resource.data.sum is number
+        && request.resource.data.count is int
+        && request.resource.data.count >= 0
+        && request.resource.data.sum >= 0
+        && (!resource.exists() || request.resource.data.count <= resource.data.count + 1)
+        && (request.resource.data.count == 0
+            || (request.resource.data.sum >= request.resource.data.count
+                && request.resource.data.sum <= request.resource.data.count * 5));
+
+      match /userRatings/{uid} {
+
+        // Your own vote is yours alone to write, and it has to be a real
+        // score. This is the rule that actually enforces "only signed-in users
+        // can rate" — the UI hiding the stars is a courtesy, not the gate.
+        allow read: if true;
+        allow create, update: if isSignedIn()
+          && request.auth.uid == uid
+          && request.resource.data.uid == uid
+          && isRatingValue(request.resource.data.value);
+
+        // Ratings are changed by re-rating, never deleted, so the aggregate
+        // can never be left counting a vote that no longer exists.
+        allow delete: if false;
+      }
+    }
+  }
+}

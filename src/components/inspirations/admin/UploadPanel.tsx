@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState, type DragEvent } from 'react';
+import { useRef, useState, type DragEvent } from 'react';
 import { adminApi, safeFileName, type AdminState } from '@/lib/inspirations/admin';
 import { INDUSTRY_LABEL, PLATFORM_LABEL, SCREEN_TYPE_LABEL } from '@/lib/inspirations/taxonomy';
 import { INDUSTRIES, SCREEN_TYPES, type Industry, type Platform, type ScreenType } from '@/lib/inspirations/types';
@@ -40,13 +40,11 @@ export function UploadPanel({
   busy,
   onUploaded,
   run,
-  onGoToLicensing,
 }: {
   state: AdminState;
   busy: boolean;
   onUploaded: () => Promise<void> | void;
   run: (action: () => Promise<unknown>, onDone?: () => void) => Promise<boolean>;
-  onGoToLicensing: () => void;
 }) {
   const [appId, setAppId] = useState(state.apps[0]?.id ?? '');
   // With an empty library there is nothing to select, so the app form opens
@@ -60,18 +58,6 @@ export function UploadPanel({
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const source = state.sources[appId];
-  const approved = source?.status === 'approved';
-
-  const gateNote = useMemo(() => {
-    if (!appId) return null;
-    if (!source) return 'This app has no licence entry yet. Files will upload, but stay unpublished until one is recorded.';
-    if (!approved) {
-      return `This app's licence status is "${source.status || 'unset'}". Files will upload, but stay unpublished until it is approved.`;
-    }
-    return null;
-  }, [appId, source, approved]);
 
   const createApp = async () => {
     const id = (newApp.id || slugify(newApp.name)).trim();
@@ -148,6 +134,11 @@ export function UploadPanel({
 
   return (
     <div className="ins-admin-panel">
+      <p className="ins-field-hint">
+        Screenshots you have already taken. Choose the app and platform, set each screen&rsquo;s type,
+        then upload. For a whole app at once, use <strong>Automatic</strong> instead.
+      </p>
+
       <div className="ins-admin-row">
         <label className="ins-field">
           <span className="ins-field-label">App</span>
@@ -256,15 +247,6 @@ export function UploadPanel({
             )}
           </div>
         </div>
-      )}
-
-      {gateNote && (
-        <p className="ins-admin-note">
-          {gateNote}{' '}
-          <button type="button" className="ins-linkbtn" onClick={onGoToLicensing}>
-            Record the licence
-          </button>
-        </p>
       )}
 
       <div

@@ -6,9 +6,9 @@ import { PageHeading } from '../PageHeading';
 import { CloseIcon, LayersIcon } from '../Icons';
 import { AppsPanel } from './AppsPanel';
 import { FlowsPanel } from './FlowsPanel';
-import { LicensingPanel } from './LicensingPanel';
 import { ScreensPanel } from './ScreensPanel';
 import { UploadPanel } from './UploadPanel';
+import { VideoPanel } from './VideoPanel';
 import { useAdminState } from './useAdminState';
 
 /**
@@ -19,18 +19,23 @@ import { useAdminState } from './useAdminState';
  * so it is always clear what actually became public.
  */
 
-type Tab = 'upload' | 'screens' | 'apps' | 'licensing' | 'flows';
+type Tab = 'manual' | 'automatic' | 'screens' | 'apps' | 'flows';
 
+/**
+ * Two ways to add screens, and they are separate on purpose: Manual is files
+ * you have already chosen and named, Automatic is a recording the pipeline
+ * pulls screens out of by itself. Only one is ever on screen.
+ */
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'upload', label: 'Upload' },
+  { id: 'manual', label: 'Manual' },
+  { id: 'automatic', label: 'Automatic' },
   { id: 'screens', label: 'Screens' },
   { id: 'apps', label: 'Apps' },
-  { id: 'licensing', label: 'Licensing' },
   { id: 'flows', label: 'Flows' },
 ];
 
 export function AdminView() {
-  const [tab, setTab] = useState<Tab>('upload');
+  const [tab, setTab] = useState<Tab>('manual');
   const { state, loading, busy, error, report, refresh, run, setError } = useAdminState();
 
   const held = state?.files.filter((f) => !f.published).length ?? 0;
@@ -39,7 +44,7 @@ export function AdminView() {
     <>
       <PageHeading
         title="Library admin"
-        description="Upload screenshots, record where they came from, and publish them to the gallery."
+        description="Add screens by hand, or let a screen recording fill the library by itself."
         actions={
           <button
             type="button"
@@ -124,18 +129,10 @@ export function AdminView() {
         <p className="ins-muted ins-admin-status">Loading the store…</p>
       ) : (
         <section className="ins-tabpanel" role="tabpanel">
-          {tab === 'upload' && (
-            <UploadPanel
-              state={state}
-              busy={busy}
-              onUploaded={refresh}
-              run={run}
-              onGoToLicensing={() => setTab('licensing')}
-            />
-          )}
+          {tab === 'manual' && <UploadPanel state={state} busy={busy} onUploaded={refresh} run={run} />}
+          {tab === 'automatic' && <VideoPanel busy={busy} onIngested={refresh} />}
           {tab === 'screens' && <ScreensPanel state={state} busy={busy} run={run} />}
           {tab === 'apps' && <AppsPanel state={state} busy={busy} run={run} />}
-          {tab === 'licensing' && <LicensingPanel state={state} busy={busy} run={run} />}
           {tab === 'flows' && <FlowsPanel state={state} busy={busy} run={run} />}
         </section>
       )}

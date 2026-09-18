@@ -83,6 +83,14 @@ export type App = {
   flowCount: number;
   license: string | null;
   attribution: string;
+  /**
+   * Average score out of 5 and how many ratings it came from. Both null until
+   * someone records them — the UI hides the rating entirely rather than
+   * showing a zero, because "0.0 (0)" reads as a bad app rather than an
+   * unrated one.
+   */
+  rating: number | null;
+  ratingCount: number | null;
 };
 
 export type Screen = {
