@@ -35,7 +35,7 @@
   --ins-max: 1600px;
   --ins-gutter: clamp(20px, 3vw, 56px);
   --ins-gap: 24px;
-  --ins-header-h: 68px;
+  --ins-header-h: 92px;
 
   /* Spacing — 4px base. Steps, not arbitrary values. */
   --ins-space-1: 4px;
@@ -284,10 +284,10 @@ body {
   top: 0;
   z-index: 40;
   height: var(--ins-header-h);
-  background: color-mix(in srgb, var(--ins-page) 88%, transparent);
-  backdrop-filter: saturate(140%) blur(10px);
-  -webkit-backdrop-filter: saturate(140%) blur(10px);
-  border-bottom: 1px solid var(--ins-border);
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .ins-header--placeholder {
@@ -299,23 +299,25 @@ body {
   width: 100%;
   padding: 0 80px;
   display: grid;
-  grid-template-columns: 1fr minmax(0, 520px) 1fr;
+  grid-template-columns: 1fr minmax(0, 560px) 1fr;
   align-items: center;
   gap: 16px;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .ins-header-left {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
 }
 
 .ins-header-right {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 28px;
   justify-content: flex-end;
-  /* No min-width: 0 here on purpose. This slot holds fixed labels (Saved,
+  /* No min-width: 0 here on purpose. This slot holds fixed labels (Save,
      Collections) rather than variable text that needs to truncate, so there is
      nothing to gain from opting out of the grid's default auto-minimum sizing
      — and opting out is exactly what let the platform nav overflow into the
@@ -331,39 +333,71 @@ body {
 
 .ins-brand-logo-img {
   display: block;
-  width: 40px;
-  height: 40px;
+  width: 46px;
+  height: 46px;
 }
 
-/* Figma "Container (Discover Web apps | Mobbin)" (node 974:11951): no fill or
-   left inset of its own — the active pill sits flush against the left edge,
-   so its own rounding (and background) reads as the shape's left corner. The
-   hairline border only runs along the top, right and bottom — there is no
-   left border — which is what makes it look like it fades in rather than
-   wrapping the whole shape. */
+/* Figma "PrimaryToggle" (node 1011:7995), three states: for iOS/Android
+  the track is a gradient fading from solid to transparent; Web uses the full
+  solid track. All corners stay at the requested 100px radius in every state. */
 .ins-platform-nav {
   position: relative;
   display: flex;
   align-items: center;
-  padding: 7px 7px 7px 0;
-  border: 1px solid var(--ins-border);
-  border-left: none;
-  border-radius: 0 9999px 9999px 0;
+  flex: none;
+  padding: 7px;
+  overflow: visible;
+  background: linear-gradient(to right, #e2e2e2, transparent);
+  border-radius: 100px;
+  transition: width var(--ins-slow) var(--ins-ease), background var(--ins-slow) var(--ins-ease), border-radius var(--ins-slow) var(--ins-ease);
+}
+
+.ins-platform-nav--ios {
+  width: 68px;
+}
+
+.ins-platform-nav--android {
+  width: 139px;
+}
+
+.ins-platform-nav--web {
+  width: auto;
+  background: #f1f1f1;
+  border-radius: 100px;
+}
+
+/* The pill that actually slides — see indicator/setIndicator in Header.tsx.
+   Sits behind the links (z-index 0) and morphs position + width with a
+   spring-like overshoot rather than a linear ease, which is what reads as
+   "jelly" rather than a mechanical slide. */
+.ins-platform-indicator {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 0;
+  border-radius: 100px;
+  background: #000;
+  z-index: 0;
+  pointer-events: none;
+  transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .ins-platform-link {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 11px 16px;
-  border-radius: 9999px;
+  gap: 6px;
+  padding: 13px 16px;
+  border-radius: 100px;
   font-size: 16px;
   line-height: 20px;
   letter-spacing: 0.2px;
   font-weight: 400;
-  color: #878787;
+  color: #717171;
   white-space: nowrap;
-  transition: background var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease);
+  transition: color var(--ins-fast) var(--ins-ease);
 }
 
 .ins-platform-link:hover {
@@ -371,7 +405,6 @@ body {
 }
 
 .ins-platform-link.is-active {
-  background: #000;
   color: #fff;
   font-weight: 500;
 }
@@ -380,76 +413,77 @@ body {
   color: #fff;
 }
 
-.ins-header-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 6px;
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--ins-sub);
-  transition: background var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease);
-  white-space: nowrap;
+.ins-platform-icon {
+  display: block;
+  flex: none;
+  width: 18px;
+  height: 18px;
 }
 
-.ins-header-link:hover,
-.ins-header-link.is-active {
-  color: var(--ins-text);
-  background: var(--ins-tag);
+/* Figma "container" (node 1012:8849): plain text rather than icon+label
+   pills — Save picks up the app's own active-route colour instead of always
+   reading dark, since there is no "current page" concept in a static frame. */
+.ins-header-textlinks {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: -0.2px;
+}
+
+.ins-header-textlink {
+  color: #878787;
+  transition: color var(--ins-fast) var(--ins-ease);
+}
+
+.ins-header-textlink:hover,
+.ins-header-textlink.is-active {
+  color: #141414;
 }
 
 .ins-header-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   min-width: 0;
 }
 
-.ins-header-searchtoggle,
-.ins-header-menu {
-  display: none;
-}
-
-.ins-header-mobile-search {
-  padding: 8px var(--ins-gutter) 12px;
-  border-bottom: 1px solid var(--ins-border);
-  background: var(--ins-page);
-}
-
-/* Avatar */
-.ins-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
+.ins-header-audio {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--ins-border);
-  background: var(--ins-card);
-  color: var(--ins-sub);
-  margin-left: 6px;
-  overflow: hidden;
-  transition: border-color var(--ins-fast) var(--ins-ease);
+  width: 60px;
+  height: 60px;
+  flex: none;
+  border-radius: 9999px;
+  background: #f2f2f2;
 }
 
-.ins-avatar:hover {
-  border-color: var(--ins-border-strong);
+.ins-header-audio-icon,
+.ins-header-menu-icon {
+  display: block;
+  flex: none;
 }
 
-.ins-avatar.is-signed-in {
-  background: var(--ins-accent);
-  color: #fff;
-  border-color: transparent;
+/* Figma "profile" (node 1012:8852): same gradient-track pattern as
+   .ins-platform-nav, mirrored — fill fades toward the open edge (here, the
+   left, next to the avatar) and rounding only runs along the closed edge (the
+   right, past the menu button). */
+.ins-header-profile {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 10px 10px 0;
+  background: linear-gradient(to left, #ececec, rgba(242, 242, 242, 0));
+  border-radius: 0 9999px 9999px 0;
 }
 
-.ins-avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.ins-avatar-initial {
-  font-size: 16px;
-  font-weight: 600;
+.ins-iconbtn--plain.ins-header-menu {
+  width: 40px;
+  height: 40px;
 }
 
 /* Drawer (mobile menu) */
@@ -533,6 +567,14 @@ body {
   width: 100%;
 }
 
+/* Figma "search" (node 1012:8826): fixed 480x60 in the header specifically —
+   .ins-search's own width:100% above stays the default for any other context
+   this component ends up in. */
+.ins-header-center .ins-search {
+  width: 480px;
+  flex: none;
+}
+
 .ins-search-form {
   display: flex;
   align-items: center;
@@ -556,9 +598,28 @@ body {
   box-shadow: 0 0 0 3px var(--ins-accent-subtle);
 }
 
+.ins-header-center .ins-search-form {
+  height: 60px;
+  padding: 12px 18px 12px 24px;
+  background: #f2f2f2;
+  border: none;
+}
+
+.ins-header-center .ins-search.is-open .ins-search-form,
+.ins-header-center .ins-search-form:focus-within {
+  background: var(--ins-card);
+  box-shadow: 0 0 0 3px var(--ins-accent-subtle);
+}
+
 .ins-search-icon {
   color: var(--ins-muted);
   flex: none;
+}
+
+.ins-header-center .ins-search-icon {
+  color: #7d7d7d;
+  width: 20px;
+  height: 20px;
 }
 
 .ins-search-input {
@@ -576,6 +637,10 @@ body {
 
 .ins-search-input::placeholder {
   color: var(--ins-placeholder);
+}
+
+.ins-header-center .ins-search-input::placeholder {
+  color: #7d7d7d;
 }
 
 .ins-search-input::-webkit-search-cancel-button {
@@ -601,10 +666,16 @@ body {
   color: var(--ins-text);
 }
 
+.ins-kbd-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .ins-kbd {
   display: inline-flex;
   align-items: center;
-  gap: 1px;
+  justify-content: center;
   font-family: var(--font-inter), sans-serif;
   font-size: 16px;
   color: var(--ins-muted);
@@ -613,6 +684,19 @@ body {
   padding: 1px 5px;
   line-height: 1.4;
   background: var(--ins-page);
+}
+
+/* Figma "Kbd" (node 1014:9356): two separate 24x24 white pills instead of one
+   bordered box holding both characters. */
+.ins-header-center .ins-kbd {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 14px;
+  color: #000;
+  border: none;
+  border-radius: 9999px;
+  background: #fff;
 }
 
 .ins-search-menu {
@@ -680,7 +764,7 @@ body {
 
 .ins-main {
   width: 100%;
-  padding: 20px 80px 80px;
+  padding: 24px 80px 80px;
 }
 
 .ins-pagehead {
@@ -688,9 +772,7 @@ body {
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  /* The page opens on a wall of screenshots; giving the title room to breathe
-     is what stops the grid reading as the first thing on the page. */
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 
 .ins-pagehead-text {
@@ -714,15 +796,60 @@ body {
 /* Rule 4: the page title is the one piece of display type, and it tightens
    its tracking to earn the extra size. */
 .ins-title {
-  font-family: var(--font-outfit), var(--font-inter), sans-serif;
-  font-size: var(--ins-type-display);
-  font-weight: 600;
-  letter-spacing: var(--ins-tracking-display);
-  line-height: 1.15;
+  font-family: var(--font-pacifico), var(--font-outfit), var(--font-inter), sans-serif;
+  font-size: 42px;
+  font-weight: 400;
+  letter-spacing: -0.616px;
+  line-height: 1.2;
   display: flex;
   align-items: baseline;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.ins-explore-taxonomy {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
+  margin-bottom: 62px;
+}
+
+.ins-explore-taxonomy-group {
+  min-width: 0;
+  padding-left: 42px;
+}
+
+.ins-explore-taxonomy-group:first-child {
+  padding-left: 0;
+}
+
+.ins-explore-taxonomy-title {
+  margin: 0 0 14px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 20px;
+  letter-spacing: 0.2px;
+  color: #707070;
+}
+
+.ins-explore-taxonomy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+
+.ins-explore-taxonomy-link {
+  display: inline-block;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 30px;
+  color: #141414;
+  transition: color var(--ins-fast) var(--ins-ease);
+}
+
+.ins-explore-taxonomy-link:hover {
+  color: var(--ins-accent);
 }
 
 .ins-title-count {
@@ -821,6 +948,19 @@ body {
   display: none;
 }
 
+.ins-tabs-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--ins-border);
+  flex: 0 0 auto;
+}
+
+.ins-explore-hint {
+  font-size: 14px;
+  margin-top: -12px;
+  margin-bottom: var(--ins-space-5);
+}
+
 .ins-tab {
   position: relative;
   display: inline-flex;
@@ -901,7 +1041,6 @@ body {
   min-height: 34px;
   background: color-mix(in srgb, var(--ins-page) 88%, transparent);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
 }
 
 /* FilterBar's root now — the screen count and Filters trigger, riding the
@@ -911,7 +1050,7 @@ body {
 .ins-tabs-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex: none;
   margin-left: auto;
   padding-left: var(--ins-space-4);
@@ -921,6 +1060,42 @@ body {
   font-size: 16px;
   color: var(--ins-muted);
   white-space: nowrap;
+}
+
+/* Figma "Button" (node 1012:8928): its own sizing rather than .ins-btn --
+   .ins-btn is shared with buttons elsewhere (46px/20px padding here would be
+   a small but real drift from every other secondary button in the app). */
+.ins-filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 20px;
+  border-radius: var(--ins-radius-pill);
+  border: 1px solid var(--ins-border);
+  background: var(--ins-card);
+  color: var(--ins-text);
+  font-size: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease);
+}
+
+.ins-filter-trigger:hover {
+  border-color: var(--ins-border-strong);
+}
+
+.ins-filter-trigger.is-active {
+  background: var(--ins-tag);
+  border-color: var(--ins-border-strong);
+}
+
+.ins-filter-trigger-icon {
+  display: block;
+  flex: none;
+  width: 20px;
+  height: 20px;
 }
 
 .ins-chips {
@@ -1321,24 +1496,6 @@ body {
   margin: 6px 0;
 }
 
-.ins-profile-menu {
-  min-width: 220px;
-}
-
-.ins-profile-user {
-  padding: 8px 10px 10px;
-}
-
-.ins-profile-name {
-  font-weight: 600;
-  font-size: 16px;
-}
-
-.ins-profile-email {
-  font-size: 16px;
-  color: var(--ins-muted);
-}
-
 .ins-theme-row {
   display: flex;
   gap: 6px;
@@ -1375,10 +1532,10 @@ body {
    right now that .ins-main fills the viewport. */
 .ins-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 380px));
+  grid-template-columns: repeat(4, minmax(0, 346px));
   justify-content: space-between;
-  row-gap: 42px;
-  column-gap: 16px;
+  row-gap: 32px;
+  column-gap: 32px;
   align-items: start;
   /* Closing space. Without it the last row butts against the bottom of the
      window and the gallery reads as cut off rather than finished. */
@@ -1407,28 +1564,23 @@ body {
 }
 
 .ins-card {
+  position: relative;
   content-visibility: auto;
-  contain-intrinsic-size: 380px 590px;
+  contain-intrinsic-size: 346px 770px;
 }
 
-/* Figma "List Item" (node 973:77728): a 380x532 frame with the screenshot
-   inset on a tinted mat — 85/86px sides, 39/40px top/bottom at 380px wide.
-   Sized in percent + aspect-ratio rather than fixed px so the same
-   proportions hold when the grid column shrinks below 380px (narrow
-   viewports, see .ins-grid) instead of overflowing it. .ins-card-inset crops
-   the screenshot to fill via object-fit: cover regardless of its own ratio. */
+/* Figma ScreenPreview (node 1014:9412): 346x770 total, with a 346x674
+   screenshot shell, 32px inset, 48px outer radius and 24px inner radius. */
 .ins-card-shot {
   position: relative;
   width: 100%;
-  aspect-ratio: 380 / 532;
-  padding: 10.26% 22.63% 10.53% 22.37%;
-  border-radius: 28px;
+  aspect-ratio: 346 / 674;
+  padding: 32px;
+  border-radius: 48px;
   overflow: hidden;
-  background: rgba(64, 64, 64, 0.06);
+  background: #fafafa;
 }
 
-/* Wraps the screenshot at the frame's fixed inset size (209x453), so the
-   hover actions anchor to the image's edges rather than floating in the mat. */
 .ins-card-inset {
   position: relative;
   width: 100%;
@@ -1454,68 +1606,143 @@ body {
   border-radius: 24px;
 }
 
-/* Only rendered when the screen's own capturedAt says it's genuinely recent —
-   see ScreenCard.tsx. There is no "Updated" counterpart: nothing in the store
-   distinguishes a re-capture from a first one, and a badge with no real signal
-   behind it is worse than no badge. */
-.ins-card-badge {
+/* Figma node 1030:40239 ("Selection"), Default state. Active is
+   .is-selected below. A real button now (AppCard wires it to
+   useAppSelection), so it needs its own cursor/appearance reset and to stay
+   inert while invisible — same reasoning as .ins-card-hover-controls's
+   pointer-events note below. */
+.ins-card-select-ring {
   position: absolute;
-  top: var(--ins-space-4);
-  left: var(--ins-space-4);
-  z-index: 1;
-  padding: 4px 8px;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 16px;
-  letter-spacing: 0.2px;
-  color: #fff;
-  background: rgba(115, 115, 115, 0.56);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border-radius: 8px;
-}
-
-/* Inset matches the screenshot's own radius so the buttons sit inside the
-   rounded corner rather than crowding it. */
-.ins-card-actions {
-  position: absolute;
-  left: var(--ins-space-3);
-  right: var(--ins-space-3);
-  bottom: var(--ins-space-3);
+  top: 26px;
+  left: 26px;
+  z-index: 2;
   display: flex;
   align-items: center;
-  gap: var(--ins-space-2);
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 3px solid #b5b5b5;
+  border-radius: 18px;
+  background: #fff;
   opacity: 0;
-  transform: translateY(4px);
-  transition: opacity var(--ins-fast) var(--ins-ease), transform var(--ins-fast) var(--ins-ease);
+  pointer-events: none;
+  cursor: pointer;
+  transition: opacity var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease);
+}
+
+/* Active state — stays visible and clickable without hovering, so a
+   selection made while scrubbing across the grid doesn't disappear the
+   moment the cursor moves to the next card. */
+.ins-card-select-ring.is-selected {
+  opacity: 1;
+  pointer-events: auto;
+  background: #000;
+  border-color: #000;
+  border-width: 2.5px;
+}
+
+.ins-card-select-check {
+  width: 8px;
+  height: 15px;
+  border-bottom: 2px solid #fff;
+  border-right: 2px solid #fff;
+  transform: translateY(-1px) rotate(45deg);
+}
+
+.ins-card-hover-controls {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  height: 139px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 48px;
+  padding: 16px;
+  background: linear-gradient(to bottom, rgba(250, 250, 250, 0), rgba(250, 250, 250, 0.12));
+  backdrop-filter: blur(16px);
+  opacity: 0;
+  transition: opacity var(--ins-fast) var(--ins-ease);
   pointer-events: none;
 }
 
-.ins-card:hover .ins-card-actions,
-.ins-card:focus-within .ins-card-actions {
+.ins-card:hover .ins-card-select-ring,
+.ins-card:focus-within .ins-card-select-ring,
+.ins-card:hover .ins-card-hover-controls,
+.ins-card:focus-within .ins-card-hover-controls {
   opacity: 1;
-  transform: none;
+}
+
+.ins-card:hover .ins-card-select-ring,
+.ins-card:focus-within .ins-card-select-ring {
   pointer-events: auto;
 }
 
-.ins-card-actions .ins-iconbtn {
-  background: color-mix(in srgb, var(--ins-card) 92%, transparent);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+.ins-card-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 47.997px;
+  height: 47.997px;
+  flex: none;
+  border: none;
+  border-radius: 23.999px;
+  background: #f5f5f5;
+  color: #141414;
+  cursor: pointer;
+  /* .ins-card-hover-controls itself stays pointer-events: none so hovering
+     the gradient strip doesn't block the screenshot link beneath it — only
+     the two actual buttons need to be clickable. */
+  pointer-events: auto;
+  transition: background var(--ins-fast) var(--ins-ease);
 }
 
-/* Figma's "Section": a 40px mark beside a two-line text column (app name,
+.ins-card-control:hover {
+  background: #ececec;
+}
+
+.ins-card-control--prev {
+  color: rgba(20, 20, 20, 0.55);
+}
+
+.ins-card-dots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: auto;
+  padding: 8px;
+  flex: none;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.ins-card-dots span {
+  width: 7.997px;
+  height: 7.997px;
+  border-radius: 9999px;
+  background: #e7e7e7;
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-card-dots .is-active {
+  background: #4b4b4b;
+}
+
+/* Figma's "Section": a 48px mark beside a two-line text column (app name,
    then tagline), clear of the screenshot above it. */
 .ins-card-meta {
-  padding: var(--ins-space-3) var(--ins-space-1) 0;
+  padding: 24px 0;
   display: flex;
   align-items: center;
-  gap: var(--ins-space-2);
+  gap: 12px;
 }
 
 .ins-card-logo {
-  border-radius: 12px;
+  border-radius: 10.4px;
 }
 
 .ins-card-meta-text {
@@ -1526,11 +1753,11 @@ body {
 }
 
 .ins-card-app {
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 22px;
-  letter-spacing: 0.2px;
-  color: #141414;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 28.8px;
+  letter-spacing: 0;
+  color: #121212;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1542,11 +1769,11 @@ body {
 
 .ins-card-tagline {
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 400;
-  line-height: 20px;
-  letter-spacing: 0.2px;
-  color: #707070;
+  line-height: 16.8px;
+  letter-spacing: 0;
+  color: #626262;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1659,6 +1886,20 @@ body {
   gap: var(--ins-gap);
 }
 
+/* AppCard reuses .ins-card wholesale — same shot, badge, actions and meta row
+   as a screen card. The one addition: when an app has no screen to preview,
+   .ins-card-inset's fallback content is its own logo rather than a
+   screenshot, centered since it doesn't fill the frame like a real photo. */
+.ins-card-inset .ins-app-logo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Generic loading placeholder shared by CardRowSkeleton (Apps, Flows,
+   Patterns) — a rough bordered-box stand-in, not tied to any one card's real
+   shape, since the three real cards it stands in for no longer match. */
 .ins-app-card {
   display: flex;
   flex-direction: column;
@@ -1667,68 +1908,6 @@ body {
   border: 1px solid var(--ins-border);
   border-radius: var(--ins-radius-lg);
   background: var(--ins-card);
-  transition: border-color var(--ins-fast) var(--ins-ease), transform var(--ins-slow) var(--ins-ease), box-shadow var(--ins-slow) var(--ins-ease);
-}
-
-.ins-app-card:hover {
-  border-color: var(--ins-border-strong);
-  transform: translateY(-3px);
-  box-shadow: var(--ins-shadow-hover);
-}
-
-.ins-app-card-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.ins-app-card-thumb {
-  aspect-ratio: 4 / 3;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid var(--ins-border);
-  position: relative;
-}
-
-.ins-app-card-thumb .ins-shot-img,
-.ins-app-card-thumb .ins-shot-missing {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  aspect-ratio: auto !important;
-}
-
-.ins-app-card-body {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.ins-app-card-text {
-  min-width: 0;
-}
-
-.ins-app-card-name {
-  font-weight: 600;
-  font-size: 16px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ins-app-card-sub {
-  font-size: 16px;
-  color: var(--ins-muted);
-}
-
-.ins-app-card-counts {
-  display: flex;
-  gap: 12px;
-  font-size: 16px;
-  color: var(--ins-sub);
-  padding-top: 10px;
-  border-top: 1px solid var(--ins-border);
 }
 
 .ins-app-card--skeleton {
@@ -2873,6 +3052,104 @@ body {
   white-space: nowrap;
 }
 
+/* Opens ScreenLightbox. A separate button rather than making the whole shot
+   clickable — the Extract tab already uses hover on this same image to
+   surface detected components, so a full-image click target would compete
+   with that instead of adding a second, clearer way to view it larger. */
+.ins-stage-expand {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ins-card) 88%, transparent);
+  backdrop-filter: blur(6px);
+  color: var(--ins-text);
+  opacity: 0;
+  transition: opacity var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-stage-shot:hover .ins-stage-expand,
+.ins-stage-expand:focus-visible {
+  opacity: 1;
+}
+
+.ins-stage-expand:hover {
+  background: var(--ins-card);
+}
+
+.ins-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 4vw, 48px);
+}
+
+.ins-lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 9, 12, 0.86);
+  backdrop-filter: blur(3px);
+  animation: insFade 140ms var(--ins-ease);
+}
+
+.ins-lightbox-dialog {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
+  animation: insPreviewIn 180ms var(--ins-ease);
+}
+
+.ins-lightbox-shot {
+  max-width: 100%;
+  max-height: calc(100vh - 96px);
+  border-radius: var(--ins-radius-lg);
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+
+.ins-lightbox-shot img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 96px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.ins-lightbox-close {
+  position: fixed;
+  top: clamp(12px, 3vw, 28px);
+  right: clamp(12px, 3vw, 28px);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
 .ins-info {
   display: flex;
   flex-direction: column;
@@ -3548,6 +3825,194 @@ body {
   text-decoration: underline;
   text-underline-offset: 2px;
   margin-left: 4px;
+}
+
+/* Figma node 1036:40753 ("float-collection") — appears once at least one app
+   is checked via its card's selection ring (see AppsGrid/useAppSelection),
+   docked to the viewport rather than the grid so it stays put while you keep
+   scrolling and checking more cards.
+   Centering uses the `translate` property rather than `transform:
+   translateX(-50%)` specifically so the entrance keyframes below are free to
+   animate `transform` on their own — animating `transform` on an element
+   that also has a static `transform` for centering would replace it outright
+   (they're the same property), snapping the bar to the screen's left edge
+   the instant the animation finished instead of leaving it centered. */
+.ins-float-collection {
+  position: fixed;
+  left: 50%;
+  bottom: 30px;
+  translate: -50% 0;
+  z-index: 85;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  animation: insFloatCollectionIn 220ms var(--ins-ease);
+}
+
+@keyframes insFloatCollectionIn {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ins-float-collection-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 9999px;
+  background: rgba(38, 38, 38, 0.88);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 12px 80px rgba(0, 0, 0, 0.16);
+}
+
+/* Hugs its logos rather than always reserving room for three — width is set
+   inline per render (see FloatCollectionBar.tsx) from however many are
+   actually shown, capped at MAX_LOGOS. 54px tall regardless of count: that's
+   just the 38px logo plus its 8px top/bottom inset. */
+.ins-float-collection-logos {
+  position: relative;
+  flex: none;
+  height: 54px;
+  border-radius: 100px;
+  background: #1e1e1e;
+  overflow: hidden;
+}
+
+.ins-float-collection-logo {
+  position: absolute;
+  top: 8px;
+  width: 38px;
+  height: 38px;
+  border-radius: 100px;
+  overflow: hidden;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+}
+
+.ins-float-collection-logo .ins-app-logo {
+  width: 100%;
+  height: 100%;
+}
+
+.ins-float-collection-arrow {
+  flex: none;
+}
+
+.ins-float-collection-input {
+  flex: 1 0 260px;
+  min-width: 0;
+  max-width: 346px;
+  padding: 17px 20px;
+  border: none;
+  border-radius: 100px;
+  background: #1e1e1e;
+  color: #fff;
+}
+
+.ins-float-collection-input::placeholder {
+  color: #9c9c9c;
+}
+
+/* A soft glow rather than an outline — autoFocus puts the caret here the
+   instant the bar appears, so the default 2px outline (and, before `border:
+   none` above, the browser's own default input border) read as a stray
+   white rectangle around the pill. */
+.ins-float-collection-input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.ins-float-collection-save {
+  flex: none;
+  padding: 17px 20px;
+  border-radius: 60px;
+  background: #fff;
+  color: #0e0e0e;
+  font-weight: 500;
+  text-align: center;
+  transition: opacity var(--ins-fast) var(--ins-ease);
+}
+
+.ins-float-collection-save:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ins-float-collection-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 78px;
+  height: 78px;
+  border-radius: 9999px;
+  background: rgba(38, 38, 38, 0.88);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 12px 80px rgba(0, 0, 0, 0.16);
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-float-collection-close:hover {
+  background: rgba(64, 64, 64, 0.92);
+}
+
+/* Figma node 1039:40918 ("float-collection-success") — what
+   FloatCollectionBar swaps to for a couple seconds after Save, in place of
+   the bar and close button, before the selection actually clears. Padding is
+   asymmetric on purpose (22px left, 30px right) to match the design: the
+   circle's own visual weight on the left balances against the extra
+   breathing room the text needs on the right. */
+.ins-float-collection-success {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 30px 22px 22px;
+  border-radius: 9999px;
+  background: rgba(38, 38, 38, 0.88);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 12px 80px rgba(0, 0, 0, 0.16);
+  color: #fff;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.ins-float-collection-success-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 100px;
+  background: #fff;
+}
+
+.ins-float-collection-success-check span {
+  width: 8px;
+  height: 15px;
+  border-bottom: 3px solid #252525;
+  border-right: 3px solid #252525;
+  transform: translateY(-1px) rotate(45deg);
+}
+
+@media (max-width: 640px) {
+  .ins-float-collection {
+    left: 16px;
+    right: 16px;
+    translate: none;
+  }
+
+  .ins-float-collection-bar {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ins-float-collection-logos {
+    display: none;
+  }
+
+  .ins-float-collection-input {
+    flex: 1 1 auto;
+  }
 }
 
 
@@ -4247,7 +4712,6 @@ body {
   inset: 0;
   background: rgba(8, 9, 12, 0.72);
   backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
   animation: insFade 140ms var(--ins-ease);
 }
 
@@ -4574,12 +5038,8 @@ body {
     grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
-  .ins-header-link span {
+  .ins-header-textlinks {
     display: none;
-  }
-
-  .ins-header-link {
-    padding: 0 8px;
   }
 
   .ins-flow-grid {
@@ -4618,13 +5078,8 @@ body {
 
   .ins-header-center,
   .ins-platform-nav,
-  .ins-header-link {
+  .ins-header-textlinks {
     display: none;
-  }
-
-  .ins-header-searchtoggle,
-  .ins-header-menu {
-    display: inline-flex;
   }
 
   .ins-app-grid,
@@ -4644,6 +5099,29 @@ body {
   .ins-pagehead {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .ins-title {
+    font-size: 36px;
+  }
+
+  .ins-explore-taxonomy {
+    grid-template-columns: 1fr 1fr;
+    gap: 24px 18px;
+    margin-bottom: 36px;
+  }
+
+  .ins-explore-taxonomy-group {
+    padding-left: 0;
+  }
+
+  .ins-explore-taxonomy-link {
+    font-size: 18px;
+    line-height: 25px;
+  }
+
+  .ins-tabs--explore {
+    align-items: flex-start;
   }
 
   .ins-detail-head,
@@ -4691,14 +5169,11 @@ body {
     display: none;
   }
 
-  .ins-card-actions {
+  /* No hover on touch, so the selection ring needs to be reachable without
+     it — same reasoning .ins-card-actions used to have here. */
+  .ins-card-select-ring {
     opacity: 1;
-    transform: none;
     pointer-events: auto;
-  }
-
-  .ins-card-actions .ins-iconbtn:nth-child(n + 4) {
-    display: none;
   }
 
   .ins-collection-actions {
@@ -4732,7 +5207,6 @@ body {
     transition-duration: 0.01ms !important;
   }
 
-  .ins-app-card:hover,
   .ins-flow-card:hover,
   .ins-pattern-card:hover {
     transform: none;

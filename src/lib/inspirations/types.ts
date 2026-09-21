@@ -7,7 +7,7 @@
  * filler.
  */
 
-export const PLATFORMS = ['web', 'ios', 'android'] as const;
+export const PLATFORMS = ['ios', 'android', 'web'] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
 export const SCREEN_TYPES = [

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { InspirationsShell } from '@/components/inspirations/InspirationsShell';
 import '@/styles/theme.css';
 import '@/styles/inspirations.css';
+import '@/styles/profile-menu.css';
 
 /**
  * /inspirations — Motvin's visual design discovery platform.

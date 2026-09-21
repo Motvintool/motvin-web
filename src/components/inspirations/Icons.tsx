@@ -107,3 +107,6 @@ export const PlayIcon = (p: IconProps) => (
 export const PencilIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M4 20h4l10-10-4-4L4 16z" /><path d="m13 7 4 4" /></svg>
 );
+export const ExpandIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" /></svg>
+);

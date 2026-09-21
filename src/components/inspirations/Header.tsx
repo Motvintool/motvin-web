@@ -2,36 +2,46 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import { PLATFORMS } from '@/lib/inspirations/types';
 import { GlobalSearch } from './GlobalSearch';
-import { BookmarkIcon, CloseIcon, FolderIcon, MenuIcon, SearchIcon } from './Icons';
+import { CloseIcon } from './Icons';
 import { ProfileMenu } from './ProfileMenu';
 
+const PLATFORM_ICON: Record<(typeof PLATFORMS)[number], string> = {
+  ios: '/ASSET/Icons/Motvin/apple.svg',
+  android: '/ASSET/Icons/Motvin/android.svg',
+  web: '/ASSET/Icons/Motvin/web.svg',
+};
+
 /**
- * Compact sticky header: wordmark · Web / iOS / Android · search · Saved ·
- * Collections · profile · menu. On mobile it collapses to wordmark, a search
- * toggle and the menu; the search field drops in below the bar.
+ * Compact sticky header: wordmark · Web / iOS / Android · search · Save ·
+ * Collections · profile · menu. On mobile it collapses to wordmark and the
+ * menu; the platform nav, search and text links move into the drawer.
  */
 export function Header() {
   const pathname = usePathname();
   const params = useSearchParams();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
 
   const activePlatforms = (params.get('platform') ?? '').split(',').filter(Boolean);
+  // iOS reads as selected when no platform is chosen yet — a visual default
+  // only. The grid itself stays unfiltered until a pill is actually clicked,
+  // so "Clear filters" and the Filters count keep meaning what they mean
+  // today.
+  const visuallyActivePlatform =
+    activePlatforms.length === 1 ? activePlatforms[0] : activePlatforms.length === 0 ? 'ios' : null;
 
-  // Close the drawer and mobile search whenever the route changes. Adjusting
-  // state during render (rather than in an effect) avoids an extra paint with
-  // the menu still open.
+  // Close the drawer whenever the route changes. Adjusting state during
+  // render (rather than in an effect) avoids an extra paint with the menu
+  // still open.
   const routeKey = `${pathname}?${params.toString()}`;
   const [seenRoute, setSeenRoute] = useState(routeKey);
   if (seenRoute !== routeKey) {
     setSeenRoute(routeKey);
     setMenuOpen(false);
-    setSearchOpen(false);
   }
 
   useEffect(() => {
@@ -52,18 +62,50 @@ export function Header() {
     return on ? INSPIRATIONS_ROUTES.explore : `${INSPIRATIONS_ROUTES.explore}?platform=${p}`;
   };
 
+  // The black pill is a single element that slides and resizes between
+  // platforms, rather than each link toggling its own background — that's
+  // what makes the switch read as one shape moving instead of a colour swap.
+  const platformLinkRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
+  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = visuallyActivePlatform ? platformLinkRefs.current[visuallyActivePlatform] : null;
+      setIndicator(el ? { left: el.offsetLeft, width: el.offsetWidth } : null);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [visuallyActivePlatform]);
+
   return (
     <header className="ins-header">
       <div className="ins-header-inner">
         <div className="ins-header-left">
           <Link href={INSPIRATIONS_ROUTES.explore} className="ins-brand-logo" aria-label="Motvin Inspirations home">
-            <img src="/ASSET/svg/nav-motvin-logo.svg" alt="" className="ins-brand-logo-img" width={40} height={40} />
+            <img src="/ASSET/svg/nav-motvin-logo.svg" alt="" className="ins-brand-logo-img" width={46} height={46} />
           </Link>
-          <nav className="ins-platform-nav" aria-label="Platform">
+          <nav className={`ins-platform-nav ${visuallyActivePlatform ? `ins-platform-nav--${visuallyActivePlatform}` : ''}`} aria-label="Platform">
+            {indicator && (
+              <span
+                className="ins-platform-indicator"
+                style={{ transform: `translateX(${indicator.left}px)`, width: indicator.width }}
+                aria-hidden="true"
+              />
+            )}
             {PLATFORMS.map((p) => {
-              const on = activePlatforms.length === 1 && activePlatforms[0] === p;
+              const visuallyOn = p === visuallyActivePlatform;
               return (
-                <Link key={p} href={platformHref(p)} className={`ins-platform-link ${on ? 'is-active' : ''}`} aria-current={on ? 'true' : undefined}>
+                <Link
+                  key={p}
+                  ref={(node) => {
+                    platformLinkRefs.current[p] = node;
+                  }}
+                  href={platformHref(p)}
+                  className={`ins-platform-link ${visuallyOn ? 'is-active' : ''}`}
+                  aria-current={visuallyOn ? 'true' : undefined}
+                >
+                  {visuallyOn && <img src={PLATFORM_ICON[p]} alt="" className="ins-platform-icon" width={18} height={18} />}
                   {PLATFORM_LABEL[p]}
                 </Link>
               );
@@ -73,32 +115,24 @@ export function Header() {
 
         <div className="ins-header-center">
           <GlobalSearch />
+          <span className="ins-header-audio" aria-hidden="true">
+            <img src="/ASSET/Icons/Motvin/music.svg" alt="" className="ins-header-audio-icon" width={20} height={20} />
+          </span>
         </div>
 
         <div className="ins-header-right">
-          <Link href={INSPIRATIONS_ROUTES.saved} className={`ins-header-link ${pathname === INSPIRATIONS_ROUTES.saved ? 'is-active' : ''}`}>
-            <BookmarkIcon size={15} />
-            <span>Saved</span>
-          </Link>
-          <Link href={INSPIRATIONS_ROUTES.collections} className={`ins-header-link ${pathname === INSPIRATIONS_ROUTES.collections ? 'is-active' : ''}`}>
-            <FolderIcon size={15} />
-            <span>Collections</span>
-          </Link>
-          <button type="button" className="ins-iconbtn ins-iconbtn--plain ins-header-searchtoggle" aria-label={searchOpen ? 'Hide search' : 'Search'} aria-expanded={searchOpen} onClick={() => setSearchOpen((o) => !o)}>
-            {searchOpen ? <CloseIcon size={18} /> : <SearchIcon size={18} />}
-          </button>
-          <ProfileMenu />
-          <button type="button" className="ins-iconbtn ins-iconbtn--plain ins-header-menu" aria-label="Open menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}>
-            <MenuIcon size={18} />
-          </button>
+          <div className="ins-header-textlinks">
+            <Link href={INSPIRATIONS_ROUTES.saved} className={`ins-header-textlink ${pathname === INSPIRATIONS_ROUTES.saved ? 'is-active' : ''}`}>Save</Link>
+            <Link href={INSPIRATIONS_ROUTES.collections} className={`ins-header-textlink ${pathname === INSPIRATIONS_ROUTES.collections ? 'is-active' : ''}`}>Collections</Link>
+          </div>
+          <div className="ins-header-profile">
+            <ProfileMenu />
+            <button type="button" className="ins-iconbtn ins-iconbtn--plain ins-header-menu" aria-label="Open menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}>
+              <img src="/ASSET/Icons/Motvin/hamburger-menu.svg" alt="" className="ins-header-menu-icon" width={18} height={15} />
+            </button>
+          </div>
         </div>
       </div>
-
-      {searchOpen && (
-        <div className="ins-header-mobile-search">
-          <GlobalSearch autoFocus />
-        </div>
-      )}
 
       {menuOpen && (
         <div className="ins-drawer" role="dialog" aria-label="Menu">

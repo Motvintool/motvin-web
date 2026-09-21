@@ -142,9 +142,10 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
             <CloseIcon size={13} />
           </button>
         ) : (
-          <kbd className="ins-kbd" aria-hidden>
-            <span className="ins-kbd-mod">⌘</span>K
-          </kbd>
+          <span className="ins-kbd-group" aria-hidden>
+            <kbd className="ins-kbd">⌘</kbd>
+            <kbd className="ins-kbd">K</kbd>
+          </span>
         )}
       </form>
 

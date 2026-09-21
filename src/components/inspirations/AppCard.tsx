@@ -1,43 +1,86 @@
+'use client';
+
 import Link from 'next/link';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { App, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
+import { ArrowLeftIcon, ArrowRightIcon } from './Icons';
 import { Screenshot } from './Screenshot';
+import { useSiblingCycle } from './useSiblingCycle';
 
 /**
- * App tile: logo, name, category, platforms, counts — plus a three-up strip
- * of its screens so the card reads as a collection, not a directory entry.
+ * App tile — the exact same card as a screen (.ins-card): one of the app's
+ * own screenshots inset on the tinted mat, logo + name + tagline below.
+ * Hovering cycles the preview through the app's other screens exactly like a
+ * screen card does (see useSiblingCycle) — but unlike a screen card, the
+ * link always goes to the app page, never to whichever screen is currently
+ * previewed, since that's the one thing this card is for.
+ *
+ * Hovering also reveals a selection ring, top-left (Figma node 1030:40239).
+ * Checking it is how you build up the set of apps the float-collection bar
+ * (see FloatCollectionBar) saves into a new collection — this replaced the
+ * per-card Save/Add-to-collection buttons that used to live here.
  */
-export function AppCard({ app, preview = [] }: { app: App; preview?: Screen[] }) {
+export function AppCard({
+  app,
+  preview,
+  selected = false,
+  onToggleSelect,
+}: {
+  app: App;
+  preview?: Screen | null;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+}) {
+  const href = INSPIRATIONS_ROUTES.app(app);
+  const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step } = useSiblingCycle(
+    preview ?? null,
+  );
+
   return (
-    <Link href={INSPIRATIONS_ROUTES.app(app)} className="ins-app-card">
-      {preview.length > 0 && (
-        <div className="ins-app-card-strip" aria-hidden>
-          {preview.slice(0, 3).map((s) => (
-            <div className="ins-app-card-thumb" key={s.id}>
-              <Screenshot screen={s} />
-            </div>
-          ))}
+    <article className="ins-card" data-id={app.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
+      <div className="ins-card-shot">
+        <button
+          type="button"
+          className={`ins-card-select-ring ${selected ? 'is-selected' : ''}`}
+          aria-label={selected ? `Remove ${app.name} from selection` : `Select ${app.name}`}
+          aria-pressed={selected}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleSelect?.();
+          }}
+        >
+          {selected && <span className="ins-card-select-check" aria-hidden />}
+        </button>
+        <div className="ins-card-inset">
+          <Link href={href} className="ins-card-link" aria-label={app.name}>
+            {activeScreen ? <Screenshot screen={activeScreen} /> : <AppLogo app={app} size={96} />}
+          </Link>
         </div>
-      )}
-      <div className="ins-app-card-body">
-        <AppLogo app={app} size={36} />
-        <div className="ins-app-card-text">
-          <p className="ins-app-card-name">{app.name}</p>
-          <p className="ins-app-card-sub">
-            {INDUSTRY_LABEL[app.industry]} · {app.platforms.map((p) => PLATFORM_LABEL[p]).join(' · ')}
-          </p>
+        {dotCount > 1 && (
+          <div className="ins-card-hover-controls">
+            <button type="button" className="ins-card-control ins-card-control--prev" aria-label="Previous screen" onClick={step(-1)}>
+              <ArrowLeftIcon size={24} />
+            </button>
+            <span className="ins-card-dots">
+              {previewScreens!.map((s, i) => (
+                <span key={s.id} className={i === activeIndex ? 'is-active' : ''} />
+              ))}
+            </span>
+            <button type="button" className="ins-card-control" aria-label="Next screen" onClick={step(1)}>
+              <ArrowRightIcon size={24} />
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="ins-card-meta">
+        <AppLogo app={app} size={40} className="ins-card-logo" />
+        <div className="ins-card-meta-text">
+          <Link href={href} className="ins-card-app">{app.name}</Link>
+          {app.tagline && <p className="ins-card-tagline">{app.tagline}</p>}
         </div>
       </div>
-      <p className="ins-app-card-counts">
-        <span>
-          {app.screenCount} {app.screenCount === 1 ? 'screen' : 'screens'}
-        </span>
-        <span>
-          {app.flowCount} {app.flowCount === 1 ? 'flow' : 'flows'}
-        </span>
-      </p>
-    </Link>
+    </article>
   );
 }

@@ -168,4 +168,19 @@ export const libraryStore = {
     emit();
     return added;
   },
+
+  /** Current state, for a sync layer to read what to push remotely. */
+  getState(): LibraryState {
+    hydrate();
+    return state;
+  },
+
+  /**
+   * Replaces the whole state — e.g. after merging in a signed-in user's
+   * remote library — and notifies subscribers same as any other write.
+   */
+  replaceState(next: LibraryState) {
+    state = next;
+    emit();
+  },
 };

@@ -21,6 +21,7 @@ import {
   ArrowLeftIcon,
   CopyIcon,
   DownloadIcon,
+  ExpandIcon,
   ExternalIcon,
   FlowIcon,
   LayersIcon,
@@ -28,6 +29,7 @@ import {
   ScanIcon,
   SparklesIcon,
 } from './Icons';
+import { ScreenLightbox } from './ScreenLightbox';
 import { Screenshot } from './Screenshot';
 import { SaveButton } from './SaveButton';
 import { ScreenGrid } from './ScreenGrid';
@@ -68,6 +70,7 @@ export function ScreenViewer({
   const { markViewed } = useLibrary();
   const [highlight, setHighlight] = useState<DetectedComponent | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const tabParam = params.get('tab');
   const tab: Tab = TABS.some((t) => t.id === tabParam) ? (tabParam as Tab) : 'overview';
@@ -201,6 +204,14 @@ export function ScreenViewer({
                 <span className="ins-highlight-label">{highlight.label}</span>
               </span>
             )}
+            <button
+              type="button"
+              className="ins-stage-expand"
+              aria-label="View screenshot enlarged"
+              onClick={() => setLightboxOpen(true)}
+            >
+              <ExpandIcon size={16} />
+            </button>
           </div>
         </figure>
 
@@ -400,6 +411,8 @@ export function ScreenViewer({
           </div>
         )}
       </section>
+
+      {lightboxOpen && <ScreenLightbox screen={screen} onClose={() => setLightboxOpen(false)} />}
     </div>
   );
 }

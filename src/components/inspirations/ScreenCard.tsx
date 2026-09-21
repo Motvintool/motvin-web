@@ -6,27 +6,9 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 
 import type { App, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
-import { CollectionMenu } from './CollectionMenu';
-import { LayersIcon, SparklesIcon } from './Icons';
+import { ArrowLeftIcon, ArrowRightIcon } from './Icons';
 import { Screenshot } from './Screenshot';
-import { SaveButton } from './SaveButton';
-
-/** A screen counts as "New" for this many days after its capturedAt date. */
-const NEW_WINDOW_DAYS = 14;
-
-/**
- * Whether to show the "New" badge. Backed by the screen's own capturedAt —
- * most screens have none (it's optional metadata, filled in by whichever
- * pipeline captured them), in which case this is simply false rather than a
- * guess. There is no "Updated" badge for the same reason: nothing in the
- * store distinguishes a re-capture from a first one.
- */
-function isRecentlyCaptured(capturedAt: string | null): boolean {
-  if (!capturedAt) return false;
-  const captured = new Date(capturedAt).getTime();
-  if (Number.isNaN(captured)) return false;
-  return Date.now() - captured < NEW_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-}
+import { useSiblingCycle } from './useSiblingCycle';
 
 const NAME_TAGLINE_SEPARATOR = ' — ';
 
@@ -45,10 +27,14 @@ function splitAppName(name: string): { title: string; tagline: string | null } {
 
 /**
  * One gallery cell, matching Figma's "List Item" component: the screenshot
- * inset on a tinted mat, a real "New" badge when the capture date backs it,
- * and a logo + app-name + tagline row below. Hover reveals
- * Save / Collection / Similar / Analyze along the bottom edge of the
- * screenshot so the content itself stays visible.
+ * inset on a tinted mat, and a logo + app-name + tagline row below.
+ *
+ * Hovering reveals prev/next controls that cycle through other screens from
+ * the same app without leaving the grid — the image, its link and the dots
+ * all track whichever screen is currently shown, then reset to the card's
+ * own screen on mouse leave. The sibling list itself is fetched lazily on
+ * hover intent, not up front, so a large grid doesn't fetch data for cards
+ * nobody looks at closely.
  */
 function ScreenCardImpl({
   screen,
@@ -61,41 +47,52 @@ function ScreenCardImpl({
   showApp?: boolean;
   index?: number;
 }) {
-  const href = INSPIRATIONS_ROUTES.screen(screen);
+  const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step } = useSiblingCycle(screen);
+  // useSiblingCycle's `screen` param is nullable (AppCard may have no preview
+  // to cycle) so its return type is too, but ScreenCard's own `screen` prop
+  // never is — the fallback here is for the type, not a real null case.
+  const shownScreen = activeScreen ?? screen;
+  const href = INSPIRATIONS_ROUTES.screen(shownScreen);
+
   const { title: appTitle, tagline: derivedTagline } = app ? splitAppName(app.name) : { title: '', tagline: null };
   const appDescription = app?.tagline || derivedTagline;
+
   return (
-    <article className="ins-card" data-id={screen.id} role="listitem">
+    <article className="ins-card" data-id={screen.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
       <div className="ins-card-shot">
-        {isRecentlyCaptured(screen.capturedAt) && <span className="ins-card-badge">New</span>}
+        <span className="ins-card-select-ring" aria-hidden="true" />
         <div className="ins-card-inset">
-          <Link href={href} className="ins-card-link" aria-label={`${screen.name}${app ? ` — ${app.name}` : ''}`} prefetch={index !== undefined && index < 10 ? undefined : false}>
-            <Screenshot screen={screen} />
+          <Link href={href} className="ins-card-link" aria-label={`${shownScreen.name}${app ? ` — ${app.name}` : ''}`} prefetch={index !== undefined && index < 10 ? undefined : false}>
+            <Screenshot screen={shownScreen} />
           </Link>
-          <div className="ins-card-actions">
-            <SaveButton type="screen" id={screen.id} />
-            <CollectionMenu type="screen" id={screen.id} />
-            <span className="ins-spacer" />
-            <Link href={`${href}?tab=similar`} className="ins-iconbtn" aria-label="Find similar" title="Similar">
-              <LayersIcon size={15} />
-            </Link>
-            <Link href={`${href}?tab=analyze`} className="ins-iconbtn" aria-label="Analyze UI" title="Analyze">
-              <SparklesIcon size={15} />
-            </Link>
-          </div>
         </div>
+        {dotCount > 1 && (
+          <div className="ins-card-hover-controls">
+            <button type="button" className="ins-card-control ins-card-control--prev" aria-label="Previous screen" onClick={step(-1)}>
+              <ArrowLeftIcon size={24} />
+            </button>
+            <span className="ins-card-dots">
+              {previewScreens!.map((s, i) => (
+                <span key={s.id} className={i === activeIndex ? 'is-active' : ''} />
+              ))}
+            </span>
+            <button type="button" className="ins-card-control" aria-label="Next screen" onClick={step(1)}>
+              <ArrowRightIcon size={24} />
+            </button>
+          </div>
+        )}
       </div>
       <div className="ins-card-meta">
         {showApp && app ? (
           <>
-            <AppLogo app={app} size={40} className="ins-card-logo" />
+            <AppLogo app={app} size={48} className="ins-card-logo" />
             <div className="ins-card-meta-text">
               <Link href={INSPIRATIONS_ROUTES.app(app)} className="ins-card-app">{appTitle}</Link>
               {appDescription && <p className="ins-card-tagline">{appDescription}</p>}
             </div>
           </>
         ) : (
-          <Link href={href} className="ins-card-name">{screen.name}</Link>
+          <Link href={href} className="ins-card-name">{shownScreen.name}</Link>
         )}
       </div>
     </article>

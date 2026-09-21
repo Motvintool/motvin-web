@@ -150,8 +150,12 @@ export const inspirationsApi = {
     return request(`/screens?${params}`, TTL.list, EMPTY_PAGE as Page<Screen>);
   },
 
-  listApps(industry?: string): Promise<App[]> {
-    return request(industry ? `/apps?industry=${industry}` : '/apps', TTL.list, []);
+  listApps(industry?: string, sort?: 'newest' | 'oldest' | 'az' | 'rating'): Promise<App[]> {
+    const params = new URLSearchParams();
+    if (industry) params.set('industry', industry);
+    if (sort) params.set('sort', sort);
+    const qs = params.toString();
+    return request(qs ? `/apps?${qs}` : '/apps', TTL.list, []);
   },
 
   getApp(slug: string): Promise<{ app: App; screens: Screen[]; flows: Flow[]; patterns: Pattern[] } | null> {
