@@ -40,11 +40,19 @@ function ScreenCardImpl({
   screen,
   app,
   showApp = true,
+  showMeta = true,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
   index,
 }: {
   screen: Screen;
   app?: App;
   showApp?: boolean;
+  showMeta?: boolean;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
   index?: number;
 }) {
   const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step } = useSiblingCycle(screen);
@@ -58,9 +66,23 @@ function ScreenCardImpl({
   const appDescription = app?.tagline || derivedTagline;
 
   return (
-    <article className="ins-card" data-id={screen.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
+    <article className={`ins-card ${selected ? 'is-selected' : ''}`} data-id={screen.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
       <div className="ins-card-shot">
-        <span className="ins-card-select-ring" aria-hidden="true" />
+        {selectable && (
+          <button
+            type="button"
+            className={`ins-card-select-ring ${selected ? 'is-selected' : ''}`}
+            aria-label={selected ? `Deselect ${screen.name}` : `Select ${screen.name}`}
+            aria-pressed={selected}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onToggleSelect?.();
+            }}
+          >
+            {selected && <span className="ins-card-select-check" aria-hidden />}
+          </button>
+        )}
         <div className="ins-card-inset">
           <Link href={href} className="ins-card-link" aria-label={`${shownScreen.name}${app ? ` — ${app.name}` : ''}`} prefetch={index !== undefined && index < 10 ? undefined : false}>
             <Screenshot screen={shownScreen} />
@@ -82,19 +104,21 @@ function ScreenCardImpl({
           </div>
         )}
       </div>
-      <div className="ins-card-meta">
-        {showApp && app ? (
-          <>
-            <AppLogo app={app} size={48} className="ins-card-logo" />
-            <div className="ins-card-meta-text">
-              <Link href={INSPIRATIONS_ROUTES.app(app)} className="ins-card-app">{appTitle}</Link>
-              {appDescription && <p className="ins-card-tagline">{appDescription}</p>}
-            </div>
-          </>
-        ) : (
-          <Link href={href} className="ins-card-name">{shownScreen.name}</Link>
-        )}
-      </div>
+      {showMeta && (
+        <div className="ins-card-meta">
+          {showApp && app ? (
+            <>
+              <AppLogo app={app} size={48} className="ins-card-logo" />
+              <div className="ins-card-meta-text">
+                <Link href={INSPIRATIONS_ROUTES.app(app)} className="ins-card-app">{appTitle}</Link>
+                {appDescription && <p className="ins-card-tagline">{appDescription}</p>}
+              </div>
+            </>
+          ) : (
+            <Link href={href} className="ins-card-name">{shownScreen.name}</Link>
+          )}
+        </div>
+      )}
     </article>
   );
 }

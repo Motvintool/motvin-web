@@ -35,9 +35,10 @@ function fetchSiblings(appId: string): Promise<Screen[]> {
  * Hover-intent cycling through a handful of an app's other screens — shared
  * by ScreenCard and AppCard so a card behaves the same way in either grid:
  * pausing over it reveals prev/next controls and dots that scrub through
- * sibling screens without leaving the grid, then resets to `screen` on mouse
- * leave. `screen` may be null (an app with no screens to preview), in which
- * case this is inert — no fetch, no controls, `activeScreen` stays null.
+ * sibling screens without leaving the grid. The most recently chosen screen
+ * remains visible after mouse leave. `screen` may be null (an app with no
+ * screens to preview), in which case this is inert — no fetch, no controls,
+ * `activeScreen` stays null.
  */
 export function useSiblingCycle(screen: Screen | null) {
   const [previewScreens, setPreviewScreens] = useState<Screen[] | null>(null);
@@ -63,9 +64,6 @@ export function useSiblingCycle(screen: Screen | null) {
       window.clearTimeout(hoverTimer.current);
       hoverTimer.current = null;
     }
-    // Back to the card's own screen — hovering away should leave the grid
-    // exactly as it looked before, not mid-scrub.
-    setActiveIndex(0);
   };
 
   const step = (delta: number) => (e: MouseEvent) => {

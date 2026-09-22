@@ -1532,14 +1532,11 @@ body {
    right now that .ins-main fills the viewport. */
 .ins-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 346px));
-  justify-content: space-between;
+  grid-template-columns: repeat(4, minmax(0, 380px));
+  justify-content: start;
   row-gap: 32px;
   column-gap: 32px;
   align-items: start;
-  /* Closing space. Without it the last row butts against the bottom of the
-     window and the gallery reads as cut off rather than finished. */
-  padding-bottom: var(--ins-space-7);
 }
 
 .ins-grid-sentinel {
@@ -1566,7 +1563,7 @@ body {
 .ins-card {
   position: relative;
   content-visibility: auto;
-  contain-intrinsic-size: 346px 770px;
+  contain-intrinsic-size: 380px 846px;
 }
 
 /* Figma ScreenPreview (node 1014:9412): 346x770 total, with a 346x674
@@ -1581,6 +1578,36 @@ body {
   background: #fafafa;
 }
 
+.ins-app-detail-panel .ins-card-shot {
+  padding: 0;
+  aspect-ratio: 282 / 611;
+  border-radius: 30px;
+  background: transparent;
+}
+
+.ins-app-detail-panel .ins-grid {
+  grid-template-columns: repeat(5, minmax(0, 380px));
+}
+
+.ins-app-detail-panel .ins-card-inset {
+  border: 1px solid rgba(11, 12, 14, 0.09);
+  border-radius: 30px;
+}
+
+.ins-app-detail-panel .ins-card.is-selected .ins-card-inset {
+  border-color: #0b0c0e;
+  box-shadow: inset 0 0 0 1px #0b0c0e;
+}
+
+.ins-app-detail-panel .ins-card-inset .ins-shot-img {
+  object-fit: cover;
+}
+
+.ins-app-detail-panel .ins-card-hover-controls {
+  display: none;
+}
+
+
 .ins-card-inset {
   position: relative;
   width: 100%;
@@ -1593,12 +1620,32 @@ body {
 .ins-card-inset .ins-shot-missing {
   width: 100%;
   height: 100%;
+  aspect-ratio: auto !important;
   border-radius: 0;
-  object-fit: cover;
+  object-fit: fill;
 }
 
 .ins-card-link {
+  position: relative;
   display: block;
+  overflow: hidden;
+}
+
+.ins-card-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(11, 12, 14, 0);
+  pointer-events: none;
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-card:hover .ins-card-link::after {
+  background: rgba(11, 12, 14, 0.06);
+}
+
+.ins-card-inset .ins-card-link {
+  height: 100%;
 }
 
 .ins-card-link:focus-visible {
@@ -1670,14 +1717,14 @@ body {
 }
 
 .ins-card:hover .ins-card-select-ring,
-.ins-card:focus-within .ins-card-select-ring,
+.ins-card:has(:focus-visible) .ins-card-select-ring,
 .ins-card:hover .ins-card-hover-controls,
-.ins-card:focus-within .ins-card-hover-controls {
+.ins-card:has(:focus-visible) .ins-card-hover-controls {
   opacity: 1;
 }
 
 .ins-card:hover .ins-card-select-ring,
-.ins-card:focus-within .ins-card-select-ring {
+.ins-card:has(:focus-visible) .ins-card-select-ring {
   pointer-events: auto;
 }
 
@@ -2450,53 +2497,246 @@ body {
 }
 
 /* Collections */
+.ins-collections-page {
+  padding-top: 38px;
+}
+
+.ins-collections-header,
+.ins-collections-heading,
+.ins-collections-actions {
+  display: flex;
+  align-items: center;
+}
+
+.ins-collections-header {
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.ins-collections-heading {
+  gap: 12px;
+  min-width: 0;
+}
+
+.ins-collections-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 58px;
+  height: 58px;
+  color: var(--ins-text);
+  border-radius: var(--ins-radius-pill);
+  transition: transform var(--ins-fast) var(--ins-ease);
+}
+
+.ins-collections-back:hover {
+  transform: translateX(-4px);
+}
+
+.ins-collections-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 28px;
+  border: 1px solid #0b0c0e;
+  border-radius: var(--ins-radius-pill);
+  background: #0b0c0e;
+  color: #fff;
+  font: 500 16px/23.2px var(--font-outfit), var(--font-inter), sans-serif;
+  white-space: nowrap;
+  transition: opacity var(--ins-fast) var(--ins-ease);
+}
+
+.ins-collections-new:hover {
+  opacity: 0.9;
+}
+
+.ins-collections-create {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ins-collections-create-input {
+  width: 330px;
+  padding: 20px 28px;
+  border: 1px solid rgba(11, 12, 14, 0.12);
+  border-radius: var(--ins-radius-pill);
+  background: transparent;
+  color: #0b0c0e;
+  font: 500 16px/23.2px var(--font-outfit), var(--font-inter), sans-serif;
+}
+
+.ins-collections-create-input::placeholder {
+  color: #757575;
+  opacity: 1;
+}
+
+.ins-collections-create-input:focus-visible {
+  outline: none;
+  border-color: #000;
+  box-shadow: 0 0 0 1px #000;
+}
+
+.ins-collections-cancel {
+  padding: 20px 28px;
+  border: 1px solid transparent;
+  border-radius: var(--ins-radius-pill);
+  background: transparent;
+  color: #000;
+  font: 500 16px/23.2px var(--font-outfit), var(--font-inter), sans-serif;
+  white-space: nowrap;
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-collections-cancel:hover {
+  border-color: #f2f2f2;
+  background: #f2f2f2;
+  color: #000;
+}
+
 .ins-collection-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--ins-gap);
+  gap: 32px;
+  margin-top: 32px;
+}
+
+.ins-collection-detail {
+  padding-top: 38px;
+}
+
+.ins-collection-detail-head,
+.ins-collection-detail-title {
+  display: flex;
+  align-items: center;
+}
+
+.ins-collection-detail-head {
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.ins-collection-detail-title {
+  gap: 12px;
+  min-width: 0;
+}
+
+.ins-collection-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 28px;
+  border: none;
+  border-radius: var(--ins-radius-pill);
+  background: var(--ins-tag);
+  color: #0b0c0e;
+  font: 500 16px/23.2px var(--font-outfit), var(--font-inter), sans-serif;
+  white-space: nowrap;
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-collection-remove:hover {
+  background: #f2f2f2;
+}
+
+.ins-collection-detail-tabs {
+  margin-top: 8px;
+  margin-bottom: 46px;
+  padding-left: 72px;
+  gap: 32px;
+}
+
+/* Active count badges are wider than inactive ones in the Figma states.
+   Reserve that footprint for every collection tab so selecting a tab does not
+   move neighbouring labels. */
+.ins-collection-detail-tabs .ins-tab-count,
+.ins-collection-detail-tabs .ins-tab.is-active .ins-tab-count {
+  min-width: 24px;
+  padding: 6px 8px;
+  line-height: 12px;
+  text-align: center;
 }
 
 .ins-collection-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid var(--ins-border);
-  border-radius: var(--ins-radius-lg);
-  background: var(--ins-card);
+  gap: 12px;
+  min-width: 0;
 }
 
 .ins-collection-covers {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  min-height: 120px;
-}
-
-.ins-collection-thumb {
-  aspect-ratio: 4 / 3;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid var(--ins-border);
   position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 414 / 260;
+  padding: 30px;
+  overflow: hidden;
+  border-radius: 24px 24px 32px 32px;
+  background: #fafafa;
+  transition: background var(--ins-fast) var(--ins-ease);
 }
 
-.ins-collection-empty {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  border: 1px dashed var(--ins-border-strong);
-  color: var(--ins-muted);
-  min-height: 120px;
+.ins-collection-cover-layer {
+  position: absolute;
+  display: block;
+  overflow: hidden;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 2px 0 3px rgba(0, 0, 0, 0.07);
+}
+
+.ins-collection-cover-layer .ins-app-logo {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1.2);
+}
+
+.ins-collection-cover-layer--back {
+  right: 7.246%;
+  bottom: 0;
+  width: 28.261%;
+  height: 48.846%;
+  background: #eee;
+}
+
+.ins-collection-cover-layer--middle {
+  left: 36.473%;
+  bottom: 0;
+  width: 35.507%;
+  height: 61.538%;
+  background: #eee;
+}
+
+.ins-collection-cover-layer--front {
+  left: 7.246%;
+  bottom: 0;
+  width: 35.443%;
+  height: 76.923%;
+  background: #eee;
+}
+
+.ins-collection-cover-fade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 48%;
+  background: linear-gradient(to bottom, rgba(250, 250, 250, 0), #fafafa);
+  pointer-events: none;
+  transition: background var(--ins-fast) var(--ins-ease);
 }
 
 .ins-collection-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 2px;
+  gap: 12px;
+  padding: 0 12px;
 }
 
 .ins-collection-text {
@@ -2509,23 +2749,35 @@ body {
 }
 
 .ins-collection-name {
-  font-weight: 600;
-  font-size: 16px;
+  color: #121212;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .ins-collection-sub {
-  font-size: 16px;
-  color: var(--ins-muted);
+  color: #666;
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .ins-collection-actions {
   display: flex;
-  gap: 2px;
+  gap: 8px;
   opacity: 0;
   transition: opacity var(--ins-fast) var(--ins-ease);
+}
+
+.ins-collection-actions .ins-iconbtn--plain {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius-pill);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .ins-collection-card:hover .ins-collection-actions,
@@ -2651,7 +2903,7 @@ body {
   grid-template-columns: minmax(0, 1fr) auto;
   column-gap: var(--ins-space-6);
   align-items: center;
-  margin-bottom: var(--ins-space-6);
+  margin-bottom: 52px;
 }
 
 .ins-masthead-main {
@@ -2676,14 +2928,6 @@ body {
   letter-spacing: var(--ins-tracking-display);
   line-height: 1.1;
   max-width: 20ch;
-}
-
-/* The tagline is part of the title but not the name, so it is set in the same
-   size and lighter — the eye reads the product first, the description second. */
-.ins-masthead-dash,
-.ins-masthead-tagline {
-  color: var(--ins-sub);
-  font-weight: 500;
 }
 
 .ins-masthead-note {
@@ -3636,91 +3880,6 @@ body {
 }
 
 /* =========================================================
-   VISUAL SEARCH
-   ========================================================= */
-
-.ins-visual {
-  margin-top: 48px;
-}
-
-.ins-dropzone {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 18px 20px;
-  border: 1px dashed var(--ins-border-strong);
-  border-radius: var(--ins-radius-lg);
-  background: var(--ins-card);
-  transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease);
-}
-
-.ins-dropzone.is-dragging {
-  border-color: var(--ins-accent);
-  background: var(--ins-accent-subtle);
-}
-
-.ins-dropzone-icon {
-  color: var(--ins-muted);
-  flex: none;
-}
-
-.ins-dropzone-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.ins-dropzone-title {
-  font-weight: 600;
-  font-size: 16px;
-}
-
-.ins-dropzone-desc {
-  font-size: 16px;
-  color: var(--ins-sub);
-}
-
-.ins-visual-results {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.ins-visual-query {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--ins-border);
-  border-radius: var(--ins-radius-lg);
-  background: var(--ins-card);
-}
-
-.ins-visual-thumb {
-  width: 56px;
-  height: 56px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid var(--ins-border);
-}
-
-.ins-visual-query-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.ins-visual-query-title {
-  font-weight: 600;
-}
-
-.ins-visual-query-sub {
-  font-size: 16px;
-  color: var(--ins-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* =========================================================
    EMPTY, SKELETON, TOAST
    ========================================================= */
 
@@ -3846,6 +4005,7 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
+  font-family: var(--font-outfit), var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   animation: insFloatCollectionIn 220ms var(--ins-ease);
 }
 
@@ -3860,9 +4020,8 @@ body {
   gap: 12px;
   padding: 12px;
   border-radius: 9999px;
-  background: rgba(38, 38, 38, 0.88);
-  backdrop-filter: blur(24px);
-  box-shadow: 0 12px 80px rgba(0, 0, 0, 0.16);
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 12px 80px rgba(0, 0, 0, 0.12);
 }
 
 /* Hugs its logos rather than always reserving room for three — width is set
@@ -3874,7 +4033,7 @@ body {
   flex: none;
   height: 54px;
   border-radius: 100px;
-  background: #1e1e1e;
+  background: #e9e9e9;
   overflow: hidden;
 }
 
@@ -3895,21 +4054,31 @@ body {
 
 .ins-float-collection-arrow {
   flex: none;
+  opacity: 0.7;
+}
+
+.ins-float-collection-label {
+  color: #0b0c0e;
+  font-size: 16px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .ins-float-collection-input {
-  flex: 1 0 260px;
+  flex: 0 1 306px;
+  width: 306px;
   min-width: 0;
-  max-width: 346px;
+  max-width: 100%;
   padding: 17px 20px;
   border: none;
   border-radius: 100px;
-  background: #1e1e1e;
-  color: #fff;
+  background: #f0f0f0;
+  color: #0b0c0e;
+  font: 400 16px/1 var(--font-outfit), var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
 
 .ins-float-collection-input::placeholder {
-  color: #9c9c9c;
+  color: #989898;
 }
 
 /* A soft glow rather than an outline — autoFocus puts the caret here the
@@ -3918,18 +4087,24 @@ body {
    white rectangle around the pill. */
 .ins-float-collection-input:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px #fff;
+  box-shadow: 0 0 0 2px rgba(17, 17, 17, 0.12);
 }
 
 .ins-float-collection-save {
   flex: none;
   padding: 17px 20px;
   border-radius: 60px;
-  background: #fff;
-  color: #0e0e0e;
+  border: none;
+  background: #000;
+  color: #fff;
+  font: 500 16px/1 var(--font-outfit), var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   font-weight: 500;
   text-align: center;
-  transition: opacity var(--ins-fast) var(--ins-ease);
+  transition: transform var(--ins-fast) var(--ins-ease), opacity var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-float-collection-save:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .ins-float-collection-save:disabled {
@@ -3945,14 +4120,21 @@ body {
   width: 78px;
   height: 78px;
   border-radius: 9999px;
-  background: rgba(38, 38, 38, 0.88);
-  backdrop-filter: blur(24px);
-  box-shadow: 0 12px 80px rgba(0, 0, 0, 0.16);
-  transition: background var(--ins-fast) var(--ins-ease);
+  border: none;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 12px 80px rgba(0, 0, 0, 0.12);
+  transition: background var(--ins-fast) var(--ins-ease), transform var(--ins-fast) var(--ins-ease);
+}
+
+.ins-float-collection-bar,
+.ins-float-collection-close,
+.ins-float-collection-success {
+  backdrop-filter: blur(16px) !important;
 }
 
 .ins-float-collection-close:hover {
-  background: rgba(64, 64, 64, 0.92);
+  background: rgba(255, 255, 255, 0.84);
+  transform: translateY(-1px);
 }
 
 /* Figma node 1039:40918 ("float-collection-success") — what
@@ -3967,10 +4149,9 @@ body {
   gap: 12px;
   padding: 22px 30px 22px 22px;
   border-radius: 9999px;
-  background: rgba(38, 38, 38, 0.88);
-  backdrop-filter: blur(24px);
-  box-shadow: 0 12px 80px rgba(0, 0, 0, 0.16);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 12px 80px rgba(0, 0, 0, 0.12);
+  color: #0b0c0e;
   font-size: 16px;
   white-space: nowrap;
 }
@@ -3983,14 +4164,14 @@ body {
   width: 34px;
   height: 34px;
   border-radius: 100px;
-  background: #fff;
+  background: #000;
 }
 
 .ins-float-collection-success-check span {
   width: 8px;
   height: 15px;
-  border-bottom: 3px solid #252525;
-  border-right: 3px solid #252525;
+  border-bottom: 3px solid #fff;
+  border-right: 3px solid #fff;
   transform: translateY(-1px) rotate(45deg);
 }
 
@@ -4012,6 +4193,7 @@ body {
 
   .ins-float-collection-input {
     flex: 1 1 auto;
+    width: auto;
   }
 }
 
@@ -5071,6 +5253,10 @@ body {
 }
 
 @media (max-width: 759px) {
+  .ins-main {
+    padding: 24px 20px 60px;
+  }
+
   .ins-header-inner {
     grid-template-columns: 1fr auto;
     gap: 8px;
@@ -5099,6 +5285,31 @@ body {
   .ins-pagehead {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .ins-collections-page {
+    padding-top: 16px;
+  }
+
+  .ins-collections-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ins-collections-actions .ins-btn--primary {
+    width: 100%;
+  }
+
+  .ins-collection-meta {
+    flex-wrap: wrap;
+  }
+
+  .ins-collection-text {
+    flex-basis: 100%;
+  }
+
+  .ins-collection-actions {
+    margin-left: auto;
   }
 
   .ins-title {

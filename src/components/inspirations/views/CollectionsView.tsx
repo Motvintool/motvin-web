@@ -1,27 +1,22 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import type { Screen } from '@/lib/inspirations/types';
 import { CollectionCard } from '../CollectionCard';
 import { EmptyState } from '../EmptyState';
 import { FolderIcon, PlusIcon } from '../Icons';
-import { PageHeading } from '../PageHeading';
+import { useApps } from '../useApps';
 import { useLibrary } from '../useLibrary';
-import { useScreensByIds } from '../useScreensByIds';
 
 const STARTERS = ['My Inspiration', 'Dashboard Ideas', 'Checkout References', 'AI Products', 'Mobile Navigation'];
 
 /** /inspirations/collections — the visitor's own boards, stored in this browser. */
 export function CollectionsView() {
   const { collections, createCollection } = useLibrary();
+  const apps = useApps();
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
-
-  const coverIds = collections.flatMap((c) =>
-    c.items.filter((i) => i.type === 'screen').slice(0, 4).map((i) => i.id),
-  );
-  const { screens } = useScreensByIds(coverIds);
 
   const onCreate = (e: FormEvent) => {
     e.preventDefault();
@@ -32,36 +27,38 @@ export function CollectionsView() {
   };
 
   return (
-    <>
-      <PageHeading
-        title="Collections"
-        count={collections.length ? String(collections.length) : undefined}
-        actions={
-          creating ? (
-            <form className="ins-inline-form" onSubmit={onCreate}>
+    <section className="ins-collections-page">
+      <header className="ins-collections-header">
+        <div className="ins-collections-heading">
+          <Link href={INSPIRATIONS_ROUTES.explore} className="ins-collections-back" aria-label="Back to inspirations">
+            <img src="/ASSET/Icons/Motvin/colletion-back.svg" alt="" width={58} height={58} />
+          </Link>
+          <h1 className="ins-title">Collections</h1>
+        </div>
+        <div className="ins-collections-actions">
+          {creating ? (
+            <form className="ins-collections-create" onSubmit={onCreate}>
               <input
-                className="ins-input"
-                placeholder="Collection name"
+                className="ins-collections-create-input"
+                placeholder="Collection Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus
                 aria-label="New collection name"
                 maxLength={48}
               />
-              <button type="submit" className="ins-btn ins-btn--primary">
-                Create
-              </button>
-              <button type="button" className="ins-btn ins-btn--ghost" onClick={() => setCreating(false)}>
+              <button type="button" className="ins-collections-cancel" onClick={() => setCreating(false)}>
                 Cancel
               </button>
             </form>
           ) : (
-            <button type="button" className="ins-btn ins-btn--primary" onClick={() => setCreating(true)}>
-              <PlusIcon size={15} /> New collection
+            <button type="button" className="ins-collections-new" onClick={() => setCreating(true)}>
+              <img src="/ASSET/Icons/Motvin/colletion-new.svg" alt="" width={16} height={16} />
+              New collection
             </button>
-          )
-        }
-      />
+          )}
+        </div>
+      </header>
 
       {collections.length === 0 ? (
         <>
@@ -85,18 +82,10 @@ export function CollectionsView() {
       ) : (
         <div className="ins-collection-grid">
           {collections.map((c) => (
-            <CollectionCard
-              key={c.id}
-              collection={c}
-              covers={c.items
-                .filter((i) => i.type === 'screen')
-                .map((i) => screens.get(i.id))
-                .filter((s): s is Screen => Boolean(s))
-                .slice(0, 4)}
-            />
+            <CollectionCard key={c.id} collection={c} apps={apps} />
           ))}
         </div>
       )}
-    </>
+    </section>
   );
 }

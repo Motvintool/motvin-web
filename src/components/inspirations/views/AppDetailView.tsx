@@ -10,7 +10,6 @@ import { AppMenu } from '../AppMenu';
 import { AppRating } from '../AppRating';
 import { CollectionMenu } from '../CollectionMenu';
 import { EmptyState } from '../EmptyState';
-import { FlowCard } from '../FlowCard';
 import { FlowsBrowser } from '../FlowsBrowser';
 import { ArrowLeftIcon } from '../Icons';
 import { PatternCard } from '../PatternCard';
@@ -19,10 +18,9 @@ import { SaveButton } from '../SaveButton';
 
 import { ScreenGrid } from '../ScreenGrid';
 
-type AppTab = 'overview' | 'screens' | 'flows' | 'ui-elements' | 'patterns';
+type AppTab = 'screens' | 'flows' | 'ui-elements' | 'patterns';
 
 const TABS: { id: AppTab; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
   { id: 'screens', label: 'Screens' },
   { id: 'flows', label: 'Flows' },
   { id: 'ui-elements', label: 'UI Elements' },
@@ -46,8 +44,8 @@ export function AppDetailView({
   const pathname = usePathname();
 
   const rawTab = params.get('tab');
-  const tab: AppTab = TABS.some((t) => t.id === rawTab) ? (rawTab as AppTab) : 'overview';
-  const setTab = (t: AppTab) => router.replace(t === 'overview' ? pathname : `${pathname}?tab=${t}`, { scroll: false });
+  const tab: AppTab = TABS.some((t) => t.id === rawTab) ? (rawTab as AppTab) : 'screens';
+  const setTab = (t: AppTab) => router.replace(t === 'screens' ? pathname : `${pathname}?tab=${t}`, { scroll: false });
 
   const screenIds = new Set(screens.map((s) => s.id));
   const screenById = new Map(screens.map((s) => [s.id, s]));
@@ -166,35 +164,14 @@ export function AppDetailView({
         </p>
       </div>
 
-      {(tab === 'overview' || tab === 'screens') && (
-        <section className="ins-tabpanel">
-          {tab === 'overview' && flows.length > 0 && (
-            <>
-              <div className="ins-section-head">
-                <h2 className="ins-section-title">Flows</h2>
-                <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm" onClick={() => setTab('flows')}>
-                  See all
-                </button>
-              </div>
-              <div className="ins-flow-grid">
-                {flows.slice(0, 3).map((f) => (
-                  <FlowCard
-                    key={f.id}
-                    flow={f}
-                    app={app}
-                    screens={f.screenIds.map((id) => screenById.get(id)).filter((s): s is Screen => Boolean(s))}
-                  />
-                ))}
-              </div>
-              <div className="ins-section-head">
-                <h2 className="ins-section-title">Screens</h2>
-              </div>
-            </>
-          )}
+      {tab === 'screens' && (
+        <section className="ins-tabpanel ins-app-detail-panel">
           <ScreenGrid
             screens={screens}
             apps={appsMap}
             showApp={false}
+            showMeta={false}
+            selectable
             empty={<EmptyState title="No screens stored for this app yet" />}
           />
         </section>

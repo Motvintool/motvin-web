@@ -7,7 +7,6 @@ import { INDUSTRY_LABEL, SCREEN_TYPE_LABEL, elementLabel, flowCategoryLabel } fr
 import { FilteredGallery } from '../FilteredGallery';
 import { PageHeading } from '../PageHeading';
 import { useMeta } from '../useMeta';
-import { VisualSearchEntry } from '../VisualSearchEntry';
 
 /** Caps each column so one taxonomy with many more values than the others
  * (e.g. a store with 12 screen types but 3 industries) doesn't throw the
@@ -83,7 +82,6 @@ export function ExploreView() {
       <Suspense fallback={null}>
         <FilteredGallery counts={meta.counts} />
       </Suspense>
-      {meta.counts.screens > 0 && <VisualSearchEntry />}
     </>
   );
 }

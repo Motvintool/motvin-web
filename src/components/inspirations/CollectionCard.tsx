@@ -3,19 +3,34 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import type { Collection, Screen } from '@/lib/inspirations/types';
-import { FolderIcon, PencilIcon, TrashIcon } from './Icons';
-import { Screenshot } from './Screenshot';
+import type { App, Collection, SavedItemType } from '@/lib/inspirations/types';
+import { AppLogo } from './AppLogo';
 import { useLibrary } from './useLibrary';
 
 /**
  * Collection board tile: up to four cover screens, name, item count, and
  * inline rename/delete. Opens the saved view filtered to the collection.
  */
-export function CollectionCard({ collection, covers }: { collection: Collection; covers: Screen[] }) {
+export function CollectionCard({ collection, apps }: { collection: Collection; apps: Map<string, App> }) {
   const { renameCollection, deleteCollection } = useLibrary();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(collection.name);
+  const coverApps = collection.items
+    .filter((item) => item.type === 'app')
+    .map((item) => apps.get(item.id))
+    .filter((app): app is App => Boolean(app))
+    .slice(-3);
+  const coverPositions = ['back', 'middle', 'front'].slice(-coverApps.length);
+  const coverAppsByPosition = new Map(coverPositions.map((position, index) => [position, coverApps[index]]));
+  const counts = collection.items.reduce<Record<SavedItemType, number>>(
+    (total, item) => ({ ...total, [item.type]: total[item.type] + 1 }),
+    { screen: 0, app: 0, flow: 0, pattern: 0, component: 0, icon: 0 },
+  );
+  const details = [
+    `${counts.app} ${counts.app === 1 ? 'App' : 'Apps'}`,
+    `${counts.screen} ${counts.screen === 1 ? 'Screen' : 'Screens'}`,
+    `${counts.flow} ${counts.flow === 1 ? 'Flow' : 'Flows'}`,
+  ];
 
   const commit = () => {
     renameCollection(collection.id, name);
@@ -25,16 +40,15 @@ export function CollectionCard({ collection, covers }: { collection: Collection;
   return (
     <div className="ins-collection-card">
       <Link href={`${INSPIRATIONS_ROUTES.saved}?collection=${collection.id}`} className="ins-collection-covers" aria-label={`Open ${collection.name}`}>
-        {covers.slice(0, 4).map((s) => (
-          <div className="ins-collection-thumb" key={s.id}>
-            <Screenshot screen={s} />
-          </div>
-        ))}
-        {covers.length === 0 && (
-          <div className="ins-collection-empty">
-            <FolderIcon size={22} />
-          </div>
-        )}
+        {['back', 'middle', 'front'].map((position) => {
+          const app = coverAppsByPosition.get(position);
+          return (
+            <span key={position} className={`ins-collection-cover-layer ins-collection-cover-layer--${position}`}>
+              {app && <AppLogo app={app} size={200} />}
+            </span>
+          );
+        })}
+        <span className="ins-collection-cover-fade" />
       </Link>
       <div className="ins-collection-meta">
         {editing ? (
@@ -50,12 +64,12 @@ export function CollectionCard({ collection, covers }: { collection: Collection;
         ) : (
           <div className="ins-collection-text">
             <p className="ins-collection-name">{collection.name}</p>
-            <p className="ins-collection-sub">{collection.items.length} {collection.items.length === 1 ? 'item' : 'items'}</p>
+            <p className="ins-collection-sub">{details.join(' · ')}</p>
           </div>
         )}
         <div className="ins-collection-actions">
           <button type="button" className="ins-iconbtn ins-iconbtn--plain" aria-label="Rename collection" onClick={() => setEditing(true)}>
-            <PencilIcon size={14} />
+            <img src="/ASSET/Icons/Motvin/colletion-edit.svg" alt="" width={20} height={20} />
           </button>
           <button
             type="button"
@@ -65,7 +79,7 @@ export function CollectionCard({ collection, covers }: { collection: Collection;
               if (window.confirm(`Delete "${collection.name}"? Items stay in Saved.`)) deleteCollection(collection.id);
             }}
           >
-            <TrashIcon size={14} />
+            <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={20} height={20} />
           </button>
         </div>
       </div>

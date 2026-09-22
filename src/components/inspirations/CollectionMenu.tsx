@@ -16,16 +16,24 @@ export function CollectionMenu({
   variant = 'icon',
   align = 'right',
   className = '',
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
 }: {
   type: SavedItemType;
   id: string;
   variant?: 'icon' | 'button';
   align?: 'left' | 'right';
   className?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }) {
   const { collections, collectionsContaining, createCollection, toggleInCollection } = useLibrary();
   const { show } = useToast();
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -47,7 +55,7 @@ export function CollectionMenu({
       document.removeEventListener('pointerdown', onDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, setOpen]);
 
   useEffect(() => {
     if (creating) inputRef.current?.focus();
@@ -79,7 +87,7 @@ export function CollectionMenu({
 
   return (
     <div className={`ins-popwrap ${className}`} ref={rootRef} onClick={(e) => e.stopPropagation()}>
-      {variant === 'icon' ? (
+      {!hideTrigger && (variant === 'icon' ? (
         <button type="button" className={`ins-iconbtn ${inside.size ? 'is-active' : ''}`} aria-label="Add to collection" aria-expanded={open} aria-haspopup="menu" title="Add to collection" onClick={toggle}>
           <PlusIcon size={15} />
         </button>
@@ -88,7 +96,7 @@ export function CollectionMenu({
           <FolderIcon size={15} />
           <span>Add to Collection</span>
         </button>
-      )}
+      ))}
 
       {open && (
         <div className={`ins-popover ins-popover--${align}`} role="menu" aria-label="Collections">

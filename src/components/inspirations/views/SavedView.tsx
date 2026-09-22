@@ -6,9 +6,11 @@ import { useMemo } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { elementLabel } from '@/lib/inspirations/taxonomy';
-import type { CollectionItem, Screen } from '@/lib/inspirations/types';
+import type { App, CollectionItem, Screen } from '@/lib/inspirations/types';
+import { AppCard } from '../AppCard';
 import { EmptyState } from '../EmptyState';
 import { FlowCard } from '../FlowCard';
+import { FloatCollectionBar } from '../FloatCollectionBar';
 import { BookmarkIcon, ChevronDownIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
 import { PatternCard } from '../PatternCard';
@@ -16,9 +18,10 @@ import { ScreenGrid } from '../ScreenGrid';
 import { useApps } from '../useApps';
 import { useAsync } from '../useAsync';
 import { useLibrary } from '../useLibrary';
+import { useAppSelection } from '../useAppSelection';
 import { useScreensByIds } from '../useScreensByIds';
 
-type SavedTab = 'all' | 'screens' | 'flows' | 'patterns' | 'components';
+type SavedTab = 'all' | 'apps' | 'screens' | 'flows' | 'patterns' | 'components';
 type Sort = 'saved' | 'viewed';
 
 const TABS: { id: SavedTab; label: string }[] = [
@@ -27,6 +30,14 @@ const TABS: { id: SavedTab; label: string }[] = [
   { id: 'flows', label: 'Flows' },
   { id: 'patterns', label: 'Patterns' },
   { id: 'components', label: 'Components' },
+];
+
+const COLLECTION_TABS: { id: SavedTab; label: string }[] = [
+  { id: 'apps', label: 'Apps' },
+  { id: 'screens', label: 'Screens' },
+  { id: 'components', label: 'UI Elements' },
+  { id: 'flows', label: 'Flows' },
+  { id: 'patterns', label: 'Patterns' },
 ];
 
 const SORTS: { id: Sort; label: string }[] = [
@@ -42,15 +53,17 @@ export function SavedView() {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const { saved, collections } = useLibrary();
+  const { saved, collections, deleteCollection } = useLibrary();
   const apps = useApps();
+  const { selected, toggle, clear } = useAppSelection();
 
-  const rawTab = params.get('type');
-  const tab: SavedTab = TABS.some((t) => t.id === rawTab) ? (rawTab as SavedTab) : 'all';
-  const rawSort = params.get('sort');
-  const sort: Sort = SORTS.some((s) => s.id === rawSort) ? (rawSort as Sort) : 'saved';
   const collectionId = params.get('collection');
   const collection = collections.find((c) => c.id === collectionId);
+  const tabs = collection ? COLLECTION_TABS : TABS;
+  const rawTab = params.get('type');
+  const tab: SavedTab = tabs.some((t) => t.id === rawTab) ? (rawTab as SavedTab) : collection ? 'apps' : 'all';
+  const rawSort = params.get('sort');
+  const sort: Sort = SORTS.some((s) => s.id === rawSort) ? (rawSort as Sort) : 'saved';
 
   const setParam = (key: string, value: string | null) => {
     const sp = new URLSearchParams(params.toString());
@@ -94,11 +107,21 @@ export function SavedView() {
 
   const components = items.filter((i) => i.type === 'component');
   const savedAppIds = items.filter((i) => i.type === 'app').map((i) => i.id);
-  const savedApps = savedAppIds.map((id) => apps.get(id)).filter(Boolean);
+  const savedApps = savedAppIds.map((id) => apps.get(id)).filter((app): app is App => Boolean(app));
+  const { data: appPreviews, loading: appPreviewsLoading } = useAsync(async () => {
+    const details = await Promise.all(savedApps.map((app) => inspirationsApi.getApp(app.id)));
+    return new Map(savedApps.map((app, index) => [app.id, details[index]?.screens[0] ?? null]));
+  }, `saved-app-previews:${savedApps.map((app) => app.id).join(',')}`);
+  const selectedApps = [...selected]
+    .reverse()
+    .map((id) => savedApps.find((app) => app.id === id))
+    .filter((app): app is App => Boolean(app));
 
   const count = (t: SavedTab) =>
     t === 'all'
       ? items.length
+      : t === 'apps'
+        ? savedAppIds.length
       : t === 'screens'
         ? screenIds.length
         : t === 'flows'
@@ -109,20 +132,34 @@ export function SavedView() {
 
   const total = items.length;
 
-  return (
-    <>
-      <PageHeading
-        title={collection ? collection.name : 'Saved'}
-        eyebrow={
-          collection ? (
-            <Link href={INSPIRATIONS_ROUTES.collections} className="ins-link">
-              Collections
-            </Link>
-          ) : undefined
-        }
-        count={total ? String(total) : undefined}
-        actions={
-          total > 0 ? (
+  const collectionHeader = collection ? (
+    <header className="ins-collection-detail-head">
+      <div className="ins-collection-detail-title">
+        <Link href={INSPIRATIONS_ROUTES.collections} className="ins-collections-back" aria-label="Back to collections">
+          <img src="/ASSET/Icons/Motvin/colletion-back.svg" alt="" width={58} height={58} />
+        </Link>
+        <h1 className="ins-title">{collection.name}</h1>
+      </div>
+      <button
+        type="button"
+        className="ins-collection-remove"
+        onClick={() => {
+          if (window.confirm(`Remove "${collection.name}"? Items stay in Saved.`)) {
+            deleteCollection(collection.id);
+            router.push(INSPIRATIONS_ROUTES.collections);
+          }
+        }}
+      >
+        <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={20} height={20} />
+        Remove Collection
+      </button>
+    </header>
+  ) : (
+    <PageHeading
+      title="Saved"
+      count={total ? String(total) : undefined}
+      actions={
+        total > 0 ? (
             <label className="ins-select-wrap">
               <span className="ins-select-label">Sort</span>
               <select
@@ -139,12 +176,17 @@ export function SavedView() {
               </select>
               <ChevronDownIcon size={14} className="ins-select-icon" />
             </label>
-          ) : undefined
-        }
-      />
+        ) : undefined
+      }
+    />
+  );
 
-      <div className="ins-tabbar" role="tablist" aria-label="Saved type">
-        {TABS.map((t) => (
+  return (
+    <section className={collection ? 'ins-collection-detail' : undefined}>
+      {collectionHeader}
+
+      <div className={`ins-tabbar ${collection ? 'ins-collection-detail-tabs' : ''}`} role="tablist" aria-label="Saved type">
+        {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -239,22 +281,29 @@ export function SavedView() {
             </section>
           )}
 
-          {tab === 'all' && savedApps.length > 0 && (
+          {(tab === 'all' || tab === 'apps') && savedApps.length > 0 && (
             <section className="ins-result-section">
-              <h2 className="ins-section-title">
+              {tab === 'all' && <h2 className="ins-section-title">
                 Apps <span className="ins-title-count">{savedApps.length}</span>
-              </h2>
-              <div className="ins-element-list">
-                {savedApps.map(
-                  (a) =>
-                    a && (
-                      <Link key={a.id} href={INSPIRATIONS_ROUTES.app(a)} className="ins-element-row">
-                        <span className="ins-element-name">{a.name}</span>
-                        <span className="ins-element-count">{a.screenCount} screens</span>
-                      </Link>
-                    ),
-                )}
-              </div>
+              </h2>}
+              {appPreviewsLoading ? (
+                <div className="ins-grid" aria-busy="true" />
+              ) : (
+                <>
+                  <div className="ins-grid" role="list">
+                    {savedApps.map((app) => (
+                      <AppCard
+                        key={app.id}
+                        app={app}
+                        preview={appPreviews?.get(app.id)}
+                        selected={selected.has(app.id)}
+                        onToggleSelect={() => toggle(app.id)}
+                      />
+                    ))}
+                  </div>
+                  {selectedApps.length > 0 && <FloatCollectionBar apps={selectedApps} onClose={clear} onSaved={clear} />}
+                </>
+              )}
             </section>
           )}
 
@@ -263,6 +312,6 @@ export function SavedView() {
           )}
         </div>
       )}
-    </>
+    </section>
   );
 }
