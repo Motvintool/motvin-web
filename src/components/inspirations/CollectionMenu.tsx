@@ -64,7 +64,7 @@ export function CollectionMenu({
   const toggle = (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setOpen((o) => !o);
+    setOpen(!open);
     setCreating(false);
   };
 

@@ -1,7 +1,6 @@
 'use client';
 
 import { Suspense } from 'react';
-import { formatCount } from '@/lib/inspirations/taxonomy';
 import { FilteredGallery } from '../FilteredGallery';
 import { PageHeading } from '../PageHeading';
 import { useMeta } from '../useMeta';
@@ -11,7 +10,7 @@ export function ScreensView() {
   const meta = useMeta();
   return (
     <>
-      <PageHeading title="Screens" count={meta.counts.screens ? formatCount(meta.counts.screens) : undefined} />
+      <PageHeading title="Screens" />
       <Suspense fallback={null}>
         <FilteredGallery counts={meta.counts} active="screens" />
       </Suspense>

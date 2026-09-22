@@ -84,11 +84,12 @@ const initializedPromise = new Promise<User | null>((resolve) => {
 
 function toAuthUser(user: User | null): AuthUser | null {
   if (!user) return null;
+  const providerPhotoURL = user.providerData.find((provider) => provider.photoURL)?.photoURL ?? '';
   return {
     uid: user.uid || '',
     displayName: user.displayName || '',
     email: user.email || '',
-    photoURL: user.photoURL || '',
+    photoURL: user.photoURL || providerPhotoURL,
     isAnonymous: Boolean(user.isAnonymous),
   };
 }

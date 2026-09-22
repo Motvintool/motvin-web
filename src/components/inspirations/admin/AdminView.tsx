@@ -44,7 +44,6 @@ export function AdminView() {
     <>
       <PageHeading
         title="Library admin"
-        description="Add screens by hand, or let a screen recording fill the library by itself."
         actions={
           <button
             type="button"

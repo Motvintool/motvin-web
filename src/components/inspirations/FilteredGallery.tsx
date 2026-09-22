@@ -2,13 +2,13 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { inspirationsApi, type Page } from '@/lib/inspirations/api';
-import { parseFilters, serializeFilters, type ScreenFilters } from '@/lib/inspirations/filters';
-import type { App, ContentKind, LibraryCounts, Screen } from '@/lib/inspirations/types';
+import { inspirationsApi, type Page, type ScreenSort } from '@/lib/inspirations/api';
+import { EMPTY_FILTERS, parseFilters, serializeFilters, toggleValue, withDefaultPlatform, type ScreenFilters } from '@/lib/inspirations/filters';
+import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
+import { PLATFORMS, type App, type ContentKind, type Industry, type LibraryCounts, type Platform, type Screen } from '@/lib/inspirations/types';
 import { AppsGrid } from './AppsGrid';
-import { ContentTabs } from './ContentTabs';
 import { EmptyState } from './EmptyState';
-import { FilterBar } from './FilterBar';
+import { FilterPill, FilterToolbar, NavPill, SortPill, ToolbarRow, type SortOption } from './FilterToolbar';
 import { ImageIcon } from './Icons';
 import { ScreenGrid } from './ScreenGrid';
 import { useAsync } from './useAsync';
@@ -24,11 +24,24 @@ import { useMeta } from './useMeta';
  * is unrated right now — it's a fine order, just not a distinguishing one yet.
  */
 type ExploreAppSort = 'curated' | 'newest' | 'oldest' | 'rating';
-const EXPLORE_SORTS: { sort: ExploreAppSort; label: string }[] = [
-  { sort: 'curated', label: 'Curated Apps' },
-  { sort: 'newest', label: 'Newest Apps' },
-  { sort: 'oldest', label: 'Oldest Apps' },
-  { sort: 'rating', label: 'Top Rated Apps' },
+const EXPLORE_SORTS: SortOption<ExploreAppSort>[] = [
+  { value: 'curated', label: 'Curated' },
+  { value: 'newest', label: 'Newest' },
+  { value: 'oldest', label: 'Oldest' },
+  { value: 'rating', label: 'Top rated' },
+];
+
+/**
+ * Screens-feed orders, for the toolbar's sort dropdown. "Most popular" is the
+ * store's curated order — the manifest's own build-time ranking — which is
+ * the closest thing the library has to popularity until real usage data
+ * exists to rank by.
+ */
+const SCREEN_SORTS: SortOption<ScreenSort>[] = [
+  { value: 'curated', label: 'Most popular' },
+  { value: 'newest', label: 'Newest' },
+  { value: 'oldest', label: 'Oldest' },
+  { value: 'app', label: 'By app' },
 ];
 
 /**
@@ -45,22 +58,12 @@ function appMatchesFilters(app: App, filters: ScreenFilters): boolean {
 }
 
 /**
- * The content-type tabs, the screen count and Filters trigger riding their
- * right edge, and the gallery beneath — all bound to the URL.
+ * The filter toolbar and the gallery beneath it, all bound to the URL.
  *
- * The tabs and the trigger used to be two separate rows (ContentTabs rendered
- * by the page, a standalone .ins-filterbar underneath). They are combined here
- * instead, because the trigger's "N screens" count and active-filter badge can
- * only be known once this component's own fetch has resolved — the page above
- * has no way to hand that number to a tab row it renders before this one even
- * mounts.
- *
- * ContentTabs always renders here, but its five content-type links
- * (Apps/Screens/UI Elements/Flows/Patterns) only show on Screens — on Explore
- * (`active` unset) they're hidden via `hideKinds`, since Explore already has
- * its own route back to itself in the header's hamburger drawer, and Explore's
- * app-sort options (Curated/Newest/Oldest/Top Rated Apps) take over the row
- * instead via ContentTabs's `secondary` slot.
+ * Explore (`active` unset) browses apps: its toolbar offers only the
+ * dimensions an app feed can honor (Categories, Platform) plus the app-sort
+ * dropdown. Screens/UI Elements (`active` set) browse the screens feed with
+ * the full dimension set.
  *
  * Screens pages are keyed by the serialised filter string, so a response only
  * renders when it belongs to the current filters — a late reply for a
@@ -78,7 +81,7 @@ export function FilteredGallery({
   counts: LibraryCounts | null;
   active?: ContentKind;
 }) {
-  const { filters, update, clear } = useExploreFilters();
+  const { filters, update } = useExploreFilters();
   const meta = useMeta();
   const router = useRouter();
   const pathname = usePathname();
@@ -92,17 +95,49 @@ export function FilteredGallery({
   // Sort lives in its own query param rather than on ScreenFilters — every
   // other page that uses that type (Screens, Apps, UI Elements, ...) has no
   // use for a sort toggle, so it stays local to the one view that does.
-  const rawSort = searchParams.get('sort');
-  const sort: ExploreAppSort = EXPLORE_SORTS.some((s) => s.sort === rawSort) ? (rawSort as ExploreAppSort) : 'curated';
-  const setSort = (next: ExploreAppSort) => {
+  const setUrlParam = (name: string, value: string | null) => {
     const params = new URLSearchParams(searchParams.toString());
-    if (next === 'curated') params.delete('sort');
-    else params.set('sort', next);
+    if (value) params.set(name, value);
+    else params.delete(name);
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
 
-  const key = `${appId ?? ''}|${serializeFilters(filters).toString()}`;
+  const rawSort = searchParams.get('sort');
+  const sort: ExploreAppSort = EXPLORE_SORTS.some((s) => s.value === rawSort) ? (rawSort as ExploreAppSort) : 'curated';
+  const setSort = (next: ExploreAppSort) => setUrlParam('sort', next === 'curated' ? null : next);
+
+  // The screens feed's own sort and its single-select UI-element dimension,
+  // both living in the URL like every other filter. Unknown values fall back
+  // to the defaults instead of breaking the fetch.
+  const screenSort: ScreenSort = SCREEN_SORTS.some((s) => s.value === rawSort) ? (rawSort as ScreenSort) : 'curated';
+  // `kind` is the param several pages still link with (?kind=list from
+  // Explore, saved items, app detail) — accepted as an alias here and
+  // normalised to `element` on the next write.
+  const rawElement = searchParams.get('element') ?? searchParams.get('kind');
+  const element = rawElement && meta.taxonomy.elements.includes(rawElement) ? rawElement : null;
+
+  const setElement = (next: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('kind');
+    if (next) params.set('element', next);
+    else params.delete('element');
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  // Clears every screens-feed dimension — including `element`, which lives
+  // outside ScreenFilters — in one URL write; two writes in a row would each
+  // start from the same stale params and undo each other.
+  const clearScreens = () => {
+    const params = serializeFilters({ ...EMPTY_FILTERS, query: filters.query }, new URLSearchParams(searchParams.toString()));
+    params.delete('element');
+    params.delete('kind');
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  const key = `${appId ?? ''}|${serializeFilters(filters).toString()}|${element ?? ''}|${screenSort}`;
 
   const [pages, setPages] = useState<Pages>({ key: ' ', items: [], total: 0, next: null });
   const [loadingMore, setLoadingMore] = useState(false);
@@ -110,9 +145,12 @@ export function FilteredGallery({
   useEffect(() => {
     if (exploreMode) return; // Explore renders AppsGrid, not this screens feed.
     let cancelled = false;
-    const [, query] = key.split('|');
+    const [, query, keyElement, keySort] = key.split('|');
     inspirationsApi
-      .listScreens(parseFilters(new URLSearchParams(query)), 0, 'curated', { app: appId })
+      .listScreens(withDefaultPlatform(parseFilters(new URLSearchParams(query))), 0, (keySort as ScreenSort) || 'curated', {
+        app: appId,
+        element: keyElement || undefined,
+      })
       .then((page: Page<Screen>) => {
         if (cancelled) return;
         setPages({ key, items: page.items, total: page.total, next: page.nextOffset });
@@ -130,9 +168,12 @@ export function FilteredGallery({
   const loadMore = useCallback(() => {
     if (!ready || pages.next === null || loadingMore) return;
     setLoadingMore(true);
-    const [, query] = key.split('|');
+    const [, query, keyElement, keySort] = key.split('|');
     inspirationsApi
-      .listScreens(parseFilters(new URLSearchParams(query)), pages.next, 'curated', { app: appId })
+      .listScreens(withDefaultPlatform(parseFilters(new URLSearchParams(query))), pages.next, (keySort as ScreenSort) || 'curated', {
+        app: appId,
+        element: keyElement || undefined,
+      })
       .then((page) => {
         setPages((prev) =>
           prev.key !== key
@@ -150,7 +191,7 @@ export function FilteredGallery({
     () => (exploreMode ? inspirationsApi.listApps(undefined, sort === 'curated' ? undefined : sort) : Promise.resolve([])),
     `filtered-gallery-apps:${exploreMode}:${sort}`,
   );
-  const apps = allApps?.filter((a) => appMatchesFilters(a, filters)) ?? [];
+  const apps = allApps?.filter((a) => appMatchesFilters(a, withDefaultPlatform(filters))) ?? [];
   const appsLibraryEmpty = meta.counts.apps === 0;
 
   // The only ScreenFilters dimensions an app feed can't honor.
@@ -158,36 +199,31 @@ export function FilteredGallery({
 
   return (
     <>
-      <ContentTabs
-        counts={counts}
-        active={active}
-        hideKinds={exploreMode}
-        secondary={
-          exploreMode &&
-          EXPLORE_SORTS.map(({ sort: s, label }) => (
-            <button
-              key={s}
-              type="button"
-              className={`ins-tab ${sort === s ? 'is-active' : ''}`}
-              aria-pressed={sort === s}
-              onClick={() => setSort(s)}
-            >
-              {label}
-            </button>
-          ))
-        }
-        right={
-          <FilterBar
-            filters={filters}
-            onChange={update}
-            onClear={clear}
-            total={exploreMode ? (allApps ? apps.length : null) : ready ? pages.total : null}
-            unit={exploreMode ? 'app' : 'screen'}
-          />
-        }
-      />
       {exploreMode ? (
         <>
+          <ToolbarRow
+            total={allApps ? apps.length : null}
+            unit="app"
+            right={<SortPill value={sort} options={EXPLORE_SORTS} onChange={setSort} />}
+          >
+            <NavPill counts={counts} />
+            <FilterPill
+              label="Categories"
+              options={meta.taxonomy.industries.map((v) => ({ value: v, label: INDUSTRY_LABEL[v as Industry] ?? v }))}
+              selected={filters.industries}
+              onToggle={(v) => update({ industries: toggleValue(filters.industries, v as Industry) })}
+              onClear={() => update({ industries: [] })}
+            />
+            <FilterPill
+              label="Platform"
+              options={PLATFORMS.map((v) => ({ value: v, label: PLATFORM_LABEL[v] ?? v }))}
+              selected={[filters.platforms[0] ?? 'ios']}
+              onToggle={(v) => update({ platforms: v === 'ios' ? [] : [v as Platform] })}
+              onClear={() => update({ platforms: [] })}
+              multi={false}
+              clearable={false}
+            />
+          </ToolbarRow>
           {droppedFilterCount > 0 && (
             <p className="ins-muted ins-explore-hint">
               Screen type and style filters don&apos;t apply to apps — clear them to narrow further.
@@ -205,27 +241,46 @@ export function FilteredGallery({
           />
         </>
       ) : (
-        <ScreenGrid
-          screens={items}
-          loading={!ready || loadingMore}
-          hasMore={ready && pages.next !== null}
-          onLoadMore={loadMore}
-          empty={
-            libraryEmpty ? (
-              <EmptyState
-                icon={<ImageIcon size={22} />}
-                title="No screens in the library yet"
-                description="Screens appear here once they are added to the store in motvin-backend and approved for publishing."
-              />
-            ) : (
-              <EmptyState
-                title="No screens match these filters"
-                description="Try removing a filter, or search for something broader."
-                action={{ label: 'Clear filters', onClick: clear }}
-              />
-            )
-          }
-        />
+        <>
+          <FilterToolbar
+            filters={filters}
+            onChange={update}
+            element={element}
+            onElement={setElement}
+            total={ready ? pages.total : null}
+            sort={screenSort}
+            sortOptions={SCREEN_SORTS}
+            onSort={(next) => setUrlParam('sort', next === 'curated' ? null : next)}
+            counts={counts}
+          />
+          {/* .ins-shot-panel applies the app-page gallery treatment: five
+              frameless, hairline-bordered shots per row. */}
+          <div className="ins-shot-panel">
+            <ScreenGrid
+              screens={items}
+              showMeta={false}
+              selectable
+              loading={!ready || loadingMore}
+              hasMore={ready && pages.next !== null}
+              onLoadMore={loadMore}
+              empty={
+                libraryEmpty ? (
+                  <EmptyState
+                    icon={<ImageIcon size={22} />}
+                    title="No screens in the library yet"
+                    description="Screens appear here once they are added to the store in motvin-backend and approved for publishing."
+                  />
+                ) : (
+                  <EmptyState
+                    title="No screens match these filters"
+                    description="Try removing a filter, or search for something broader."
+                    action={{ label: 'Clear filters', onClick: clearScreens }}
+                  />
+                )
+              }
+            />
+          </div>
+        </>
       )}
     </>
   );

@@ -3,8 +3,8 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import { INDUSTRY_LABEL, PLATFORM_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from '@/lib/inspirations/taxonomy';
-import type { Industry, Platform, ScreenType, Style } from '@/lib/inspirations/types';
+import { INDUSTRY_LABEL, SCREEN_TYPE_LABEL } from '@/lib/inspirations/taxonomy';
+import type { Industry, ScreenType } from '@/lib/inspirations/types';
 import { AppCard } from '../AppCard';
 import { EmptyState } from '../EmptyState';
 import { FlowCard } from '../FlowCard';
@@ -57,10 +57,7 @@ export function SearchView() {
     ];
     return (
       <>
-        <PageHeading
-          title="Search"
-          description="Describe what you're looking for — an industry, a screen type, a platform, a style."
-        />
+        <PageHeading title="Search" />
         {starters.length > 0 ? (
           <div className="ins-trending">
             {starters.map((s) => (
@@ -75,16 +72,6 @@ export function SearchView() {
       </>
     );
   }
-
-  const intent = data?.intent;
-  const understood = intent
-    ? [
-        ...intent.industries.map((i) => INDUSTRY_LABEL[i as Industry] ?? i),
-        ...intent.screenTypes.map((t) => SCREEN_TYPE_LABEL[t as ScreenType] ?? t),
-        ...intent.platforms.map((p) => PLATFORM_LABEL[p as Platform] ?? p),
-        ...intent.styles.map((s) => STYLE_LABEL[s as Style] ?? s),
-      ]
-    : [];
 
   const countFor = (t: ResultTab) => {
     if (!data) return undefined;
@@ -102,18 +89,6 @@ export function SearchView() {
           <>
             Results for <span className="ins-title-query">“{query}”</span>
           </>
-        }
-        description={
-          understood.length > 0 ? (
-            <span className="ins-understood">
-              Understood as{' '}
-              {understood.map((u) => (
-                <span key={u} className="ins-tag">
-                  {u}
-                </span>
-              ))}
-            </span>
-          ) : undefined
         }
       />
 
@@ -145,7 +120,7 @@ export function SearchView() {
         <div className="ins-results">
           {(tab === 'all' || tab === 'apps') && data.apps.length > 0 && (
             <section className="ins-result-section">
-              {tab === 'all' && <SectionHead title="Apps" count={data.apps.length} onMore={() => setTab('apps')} />}
+              {tab === 'all' && <SectionHead title="Apps" onMore={() => setTab('apps')} />}
               <div className="ins-app-grid">
                 {(tab === 'all' ? data.apps.slice(0, 4) : data.apps).map((app) => (
                   <AppCard key={app.id} app={app} />
@@ -157,7 +132,7 @@ export function SearchView() {
           {(tab === 'all' || tab === 'screens') && data.screens.length > 0 && (
             <section className="ins-result-section">
               {tab === 'all' && (
-                <SectionHead title="Screens" count={data.screenTotal ?? data.screens.length} onMore={() => setTab('screens')} />
+                <SectionHead title="Screens" onMore={() => setTab('screens')} />
               )}
               <ScreenGrid screens={tab === 'all' ? data.screens.slice(0, 15) : data.screens} />
             </section>
@@ -165,7 +140,7 @@ export function SearchView() {
 
           {(tab === 'all' || tab === 'flows') && data.flows.length > 0 && (
             <section className="ins-result-section">
-              {tab === 'all' && <SectionHead title="Flows" count={data.flows.length} onMore={() => setTab('flows')} />}
+              {tab === 'all' && <SectionHead title="Flows" onMore={() => setTab('flows')} />}
               <div className="ins-flow-grid">
                 {(tab === 'all' ? data.flows.slice(0, 3) : data.flows).map((flow) => (
                   <FlowCard key={flow.id} flow={flow} app={apps.get(flow.appId)} />
@@ -176,7 +151,7 @@ export function SearchView() {
 
           {(tab === 'all' || tab === 'patterns') && data.patterns.length > 0 && (
             <section className="ins-result-section">
-              {tab === 'all' && <SectionHead title="Patterns" count={data.patterns.length} onMore={() => setTab('patterns')} />}
+              {tab === 'all' && <SectionHead title="Patterns" onMore={() => setTab('patterns')} />}
               <div className="ins-pattern-grid-wrap">
                 {(tab === 'all' ? data.patterns.slice(0, 4) : data.patterns).map((p) => (
                   <PatternCard key={p.id} pattern={p} />
@@ -194,12 +169,10 @@ export function SearchView() {
   );
 }
 
-function SectionHead({ title, count, onMore }: { title: string; count: number; onMore: () => void }) {
+function SectionHead({ title, onMore }: { title: string; onMore: () => void }) {
   return (
     <div className="ins-section-head">
-      <h2 className="ins-section-title">
-        {title} <span className="ins-title-count">{count}</span>
-      </h2>
+      <h2 className="ins-section-title">{title}</h2>
       <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm" onClick={onMore}>
         See all
       </button>

@@ -31,6 +31,19 @@ export const EMPTY_FILTERS: ScreenFilters = {
   query: '',
 };
 
+/**
+ * The platform actually browsed when the URL names none. Mobbin's model, and
+ * ours: a visitor is always in exactly one platform's section — iOS by
+ * default — rather than an "all platforms" soup no control can describe. The
+ * URL stays clean for the default; only Android/Web are ever written to it.
+ */
+export const DEFAULT_PLATFORM: Platform = 'ios';
+
+/** Filters with the platform default made real, for feeds and matching. */
+export function withDefaultPlatform(filters: ScreenFilters): ScreenFilters {
+  return filters.platforms.length ? filters : { ...filters, platforms: [DEFAULT_PLATFORM] };
+}
+
 function parseList<T extends string>(raw: string | null, allowed: readonly T[]): T[] {
   if (!raw) return [];
   const set = new Set<string>(allowed);

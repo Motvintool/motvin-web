@@ -27,10 +27,10 @@ export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const activePlatforms = (params.get('platform') ?? '').split(',').filter(Boolean);
-  // iOS reads as selected when no platform is chosen yet — a visual default
-  // only. The grid itself stays unfiltered until a pill is actually clicked,
-  // so "Clear filters" and the Filters count keep meaning what they mean
-  // today.
+  // iOS highlighted with no param is the truth, not a visual default: every
+  // feed applies DEFAULT_PLATFORM (iOS) when the URL names no platform, so
+  // this nav, the toolbar's Platform pill and the docked Apps/Web switcher
+  // always describe the same single-platform view.
   const visuallyActivePlatform =
     activePlatforms.length === 1 ? activePlatforms[0] : activePlatforms.length === 0 ? 'ios' : null;
 
@@ -57,9 +57,28 @@ export function Header() {
     };
   }, [menuOpen]);
 
+  // Switching platform keeps the visitor where they are: same browse page,
+  // same filters, only the platform param changes. From a detail page (a
+  // screen, app or flow) there is no "same view on another platform" to keep,
+  // so those fall back to Explore.
+  const BROWSE_PATHS: string[] = [
+    INSPIRATIONS_ROUTES.explore,
+    INSPIRATIONS_ROUTES.apps,
+    INSPIRATIONS_ROUTES.screens,
+    INSPIRATIONS_ROUTES.uiElements,
+    INSPIRATIONS_ROUTES.flows,
+    INSPIRATIONS_ROUTES.patterns,
+    INSPIRATIONS_ROUTES.search,
+  ];
   const platformHref = (p: string) => {
+    const staying = BROWSE_PATHS.includes(pathname);
+    const base = staying ? pathname : INSPIRATIONS_ROUTES.explore;
+    const sp = staying ? new URLSearchParams(params.toString()) : new URLSearchParams();
     const on = activePlatforms.length === 1 && activePlatforms[0] === p;
-    return on ? INSPIRATIONS_ROUTES.explore : `${INSPIRATIONS_ROUTES.explore}?platform=${p}`;
+    if (on) sp.delete('platform');
+    else sp.set('platform', p);
+    const qs = sp.toString();
+    return qs ? `${base}?${qs}` : base;
   };
 
   // The black pill is a single element that slides and resizes between
@@ -121,9 +140,13 @@ export function Header() {
         </div>
 
         <div className="ins-header-right">
-          <div className="ins-header-textlinks">
-            <Link href={INSPIRATIONS_ROUTES.saved} className={`ins-header-textlink ${pathname === INSPIRATIONS_ROUTES.saved ? 'is-active' : ''}`}>Save</Link>
-            <Link href={INSPIRATIONS_ROUTES.collections} className={`ins-header-textlink ${pathname === INSPIRATIONS_ROUTES.collections ? 'is-active' : ''}`}>Collections</Link>
+          <div className="ins-header-action-links">
+            <Link href={INSPIRATIONS_ROUTES.saved} className="ins-header-action-link" aria-label="Saved" aria-current={pathname === INSPIRATIONS_ROUTES.saved ? 'page' : undefined}>
+              <img src="/ASSET/Icons/Motvin/save.svg" alt="" width={24} height={24} />
+            </Link>
+            <Link href={INSPIRATIONS_ROUTES.collections} className="ins-header-action-link" aria-label="Collections" aria-current={pathname === INSPIRATIONS_ROUTES.collections ? 'page' : undefined}>
+              <img src="/ASSET/Icons/Motvin/collection.svg" alt="" width={24} height={24} />
+            </Link>
           </div>
           <div className="ins-header-profile">
             <ProfileMenu />

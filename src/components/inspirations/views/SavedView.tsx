@@ -157,7 +157,6 @@ export function SavedView() {
   ) : (
     <PageHeading
       title="Saved"
-      count={total ? String(total) : undefined}
       actions={
         total > 0 ? (
             <label className="ins-select-wrap">
@@ -214,7 +213,7 @@ export function SavedView() {
             <section className="ins-result-section">
               {tab === 'all' && (
                 <h2 className="ins-section-title">
-                  Screens <span className="ins-title-count">{screens.length}</span>
+                  Screens
                 </h2>
               )}
               <ScreenGrid screens={screens} apps={apps} />
@@ -225,7 +224,7 @@ export function SavedView() {
             <section className="ins-result-section">
               {tab === 'all' && (
                 <h2 className="ins-section-title">
-                  Flows <span className="ins-title-count">{(flows ?? []).length}</span>
+                  Flows
                 </h2>
               )}
               <div className="ins-flow-grid">
@@ -240,7 +239,7 @@ export function SavedView() {
             <section className="ins-result-section">
               {tab === 'all' && (
                 <h2 className="ins-section-title">
-                  Patterns <span className="ins-title-count">{patterns.length}</span>
+                  Patterns
                 </h2>
               )}
               <div className="ins-pattern-grid-wrap">
@@ -255,7 +254,7 @@ export function SavedView() {
             <section className="ins-result-section">
               {tab === 'all' && (
                 <h2 className="ins-section-title">
-                  Components <span className="ins-title-count">{components.length}</span>
+                  Components
                 </h2>
               )}
               <div className="ins-element-list">
@@ -284,7 +283,7 @@ export function SavedView() {
           {(tab === 'all' || tab === 'apps') && savedApps.length > 0 && (
             <section className="ins-result-section">
               {tab === 'all' && <h2 className="ins-section-title">
-                Apps <span className="ins-title-count">{savedApps.length}</span>
+                Apps
               </h2>}
               {appPreviewsLoading ? (
                 <div className="ins-grid" aria-busy="true" />

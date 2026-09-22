@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { AuthUser } from '@/lib/firebase/auth';
 
 /**
@@ -13,6 +14,8 @@ import type { AuthUser } from '@/lib/firebase/auth';
  * The wrapper class list matters — the profile menu styles hook off it.
  */
 
+const AVATAR_PLACEHOLDER = '/ASSET/Icons/sidebar-avatar-placeholder.svg';
+
 type Props = {
   user: AuthUser | null;
 };
@@ -22,24 +25,44 @@ function firstAlphanumericChar(text: string): string {
   return match ? match[0].toUpperCase() : 'U';
 }
 
+/**
+ * The photo state, hardened against Google's avatar host:
+ *
+ * - `referrerPolicy="no-referrer"` — lh3.googleusercontent.com intermittently
+ *   answers 403 when the request carries a referrer, which is why a photo
+ *   that loaded yesterday shows as missing today. Sending none makes the
+ *   request reliable.
+ * - One cache-busted retry on error — a transient 429/network failure would
+ *   otherwise be replayed from the browser's negative cache for the rest of
+ *   the session.
+ * - Only after the retry also fails does the placeholder appear.
+ *
+ * Keyed by URL from the parent, so a changed photo resets both counters.
+ */
+function AvatarPhoto({ src }: { src: string }) {
+  const [attempt, setAttempt] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return <img className="mi-top-avatar" src={AVATAR_PLACEHOLDER} alt="" />;
+  }
+
+  return (
+    <img
+      className="mi-top-avatar"
+      src={attempt === 0 ? src : `${src}${src.includes('?') ? '&' : '?'}mretry=${attempt}`}
+      alt=""
+      referrerPolicy="no-referrer"
+      onError={() => (attempt === 0 ? setAttempt(1) : setFailed(true))}
+    />
+  );
+}
+
 export function LibraryProfileBadge({ user }: Props) {
   const signedIn = Boolean(user && !user.isAnonymous);
 
   if (signedIn && user?.photoURL) {
-    return (
-      <img
-        className="mi-top-avatar"
-        src={user.photoURL}
-        alt=""
-        onError={(e) => {
-          // Broken profile photo — fall back to the placeholder rather than
-          // leaving the alt text as a dangling glyph.
-          const img = e.currentTarget;
-          img.onerror = null;
-          img.src = '/ASSET/Icons/sidebar-avatar-placeholder.svg';
-        }}
-      />
-    );
+    return <AvatarPhoto key={user.photoURL} src={user.photoURL} />;
   }
 
   if (signedIn) {
@@ -52,13 +75,7 @@ export function LibraryProfileBadge({ user }: Props) {
     );
   }
 
-  return (
-    <img
-      className="mi-top-avatar"
-      src="/ASSET/Icons/sidebar-avatar-placeholder.svg"
-      alt=""
-    />
-  );
+  return <img className="mi-top-avatar" src={AVATAR_PLACEHOLDER} alt="" />;
 }
 
 /**

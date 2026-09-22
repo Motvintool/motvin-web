@@ -165,7 +165,7 @@ export function AppDetailView({
       </div>
 
       {tab === 'screens' && (
-        <section className="ins-tabpanel ins-app-detail-panel">
+        <section className="ins-tabpanel ins-shot-panel">
           <ScreenGrid
             screens={screens}
             apps={appsMap}

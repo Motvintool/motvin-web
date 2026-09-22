@@ -98,6 +98,14 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
       e.preventDefault();
       setOpen(false);
       router.push(suggestions[active].href);
+    } else if (e.key === 'Enter') {
+      // No suggestion highlighted — run the plain query. Handled explicitly
+      // rather than left to the browser's implicit submit-on-Enter, which
+      // doesn't reliably fire for a `type="search"` input in every
+      // environment; every other key here is already explicit, so Enter
+      // shouldn't be the one exception.
+      e.preventDefault();
+      submit();
     } else if (e.key === 'Escape') {
       setOpen(false);
       inputRef.current?.blur();

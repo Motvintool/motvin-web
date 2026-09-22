@@ -2,10 +2,11 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
-import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
-import type { App, Flow, Platform, Screen } from '@/lib/inspirations/types';
-import { ContentTabs } from '../ContentTabs';
+import { DEFAULT_PLATFORM } from '@/lib/inspirations/filters';
+import { PLATFORM_LABEL, flowCategoryLabel } from '@/lib/inspirations/taxonomy';
+import { PLATFORMS, type App, type Flow, type Platform, type Screen } from '@/lib/inspirations/types';
 import { EmptyState } from '../EmptyState';
+import { FilterPill, NavPill, ToolbarRow } from '../FilterToolbar';
 import { FlowList } from '../FlowList';
 import { FlowIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
@@ -29,14 +30,16 @@ export function FlowsView() {
   const apps = useApps();
 
   const category = params.get('category') ?? undefined;
-  const platform = (params.get('platform') as Platform | null) ?? undefined;
+  // No param means the iOS default — the same real default every feed and the
+  // header nav use, so this page always agrees with both.
+  const platform = (params.get('platform') as Platform | null) ?? DEFAULT_PLATFORM;
 
   const { data: flows, loading } = useAsync(
     () => inspirationsApi.listFlows(category),
     `flows:${category ?? 'all'}`,
   );
 
-  const visible = (flows ?? []).filter((f) => !platform || f.platform === platform);
+  const visible = (flows ?? []).filter((f) => f.platform === platform);
 
   // Flow cards need their screens; one request per flow, cached by the client.
   const { data: resolved } = useAsync<{ flow: Flow; screens: Screen[] }[]>(async () => {
@@ -47,64 +50,66 @@ export function FlowsView() {
       .map(({ flow, screens }) => ({ flow, screens }));
   }, `flow-screens:${category ?? 'all'}:${platform ?? 'all'}:${visible.map((f) => f.id).join(',')}`);
 
-  const platforms = Array.from(new Set((flows ?? []).map((f) => f.platform)));
-
-  const setParam = (key: string, value?: string) => {
+  // One URL write per call: two sequential setParam calls would each start
+  // from this render's (stale) params, so the second would resurrect the key
+  // the first had just deleted.
+  const setParams = (patch: Record<string, string | undefined>) => {
     const sp = new URLSearchParams(params.toString());
-    if (value) sp.set(key, value);
-    else sp.delete(key);
+    for (const [key, value] of Object.entries(patch)) {
+      if (value) sp.set(key, value);
+      else sp.delete(key);
+    }
     const qs = sp.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
+  const setParam = (key: string, value?: string) => setParams({ [key]: value });
 
   return (
     <>
-      <PageHeading
-        title="Flows"
-        count={meta.counts.flows ? String(meta.counts.flows) : undefined}
-        description="Screens connected into the journeys users actually take."
-      />
-      <ContentTabs counts={meta.counts} active="flows" />
-
-      {/* Category is navigated in the browser's own list below, so only
-          platform is offered here — the same journey differs per platform. */}
-      {platforms.length > 1 && (
-        <div className="ins-filterbar">
-          <div className="ins-chips" role="group" aria-label="Platform">
-            {platforms.map((p) => (
-              <button
-                key={p}
-                type="button"
-                className={`ins-chip ins-chip--sm ${platform === p ? 'is-active' : ''}`}
-                aria-pressed={platform === p}
-                onClick={() => setParam('platform', platform === p ? undefined : p)}
-              >
-                {PLATFORM_LABEL[p] ?? p}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <PageHeading title="Flows" />
+      {/* Same toolbar shape as the Screens page: one pill per dimension.
+          Category is single-select because the flows API takes one category;
+          Platform only appears once the library actually spans more than one. */}
+      <ToolbarRow total={loading ? null : visible.length} unit="flow">
+        <NavPill counts={meta.counts} />
+        <FilterPill
+          label="Category"
+          options={meta.taxonomy.flowCategories.map((c) => ({ value: c, label: flowCategoryLabel(c) }))}
+          selected={category ? [category] : []}
+          onToggle={(v) => setParam('category', v === category ? undefined : v)}
+          onClear={() => setParam('category')}
+          multi={false}
+        />
+        <FilterPill
+          label="Platform"
+          options={PLATFORMS.map((p) => ({ value: p, label: PLATFORM_LABEL[p] ?? p }))}
+          selected={[platform]}
+          onToggle={(v) => setParam('platform', v === DEFAULT_PLATFORM ? undefined : v)}
+          onClear={() => setParam('platform')}
+          multi={false}
+          clearable={false}
+        />
+      </ToolbarRow>
 
       {loading ? (
         <CardRowSkeleton count={6} />
       ) : visible.length === 0 ? (
+        // "Filtered" means the visitor chose something beyond the defaults —
+        // a category, or a platform explicitly in the URL. The iOS default
+        // isn't a filter they can clear.
         <EmptyState
           icon={<FlowIcon size={22} />}
-          title={category || platform ? 'No flows match this filter' : 'No flows in the library yet'}
+          title={category || params.get('platform') ? 'No flows match this filter' : 'No flows in the library yet'}
           description={
-            category || platform
+            category || params.get('platform')
               ? undefined
               : 'A flow is an ordered set of stored screens. Build one on the admin Flows tab.'
           }
           action={
-            category || platform
+            category || params.get('platform')
               ? {
                   label: 'Show all flows',
-                  onClick: () => {
-                    setParam('category');
-                    setParam('platform');
-                  },
+                  onClick: () => setParams({ category: undefined, platform: undefined }),
                 }
               : undefined
           }

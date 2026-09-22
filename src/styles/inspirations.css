@@ -320,7 +320,7 @@ body {
 .ins-header-right {
   display: flex;
   align-items: center;
-  gap: 28px;
+  gap: 16px;
   justify-content: flex-end;
   /* No min-width: 0 here on purpose. This slot holds fixed labels (Save,
      Collections) rather than variable text that needs to truncate, so there is
@@ -425,27 +425,27 @@ body {
   height: 18px;
 }
 
-/* Figma "container" (node 1012:8849): plain text rather than icon+label
-   pills — Save picks up the app's own active-route colour instead of always
-   reading dark, since there is no "current page" concept in a static frame. */
-.ins-header-textlinks {
+/* Figma "actions" (node 1104:8796): 40px Save and Collections icon targets,
+   then a separate 16px gap before the profile treatment. */
+.ins-header-action-links {
   display: flex;
   align-items: center;
-  gap: 20px;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 22px;
-  letter-spacing: -0.2px;
+  gap: 8px;
 }
 
-.ins-header-textlink {
-  color: #878787;
-  transition: color var(--ins-fast) var(--ins-ease);
+.ins-header-action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
 }
 
-.ins-header-textlink:hover,
-.ins-header-textlink.is-active {
-  color: #141414;
+.ins-header-action-link img {
+  display: block;
+  width: 24px;
+  height: 24px;
 }
 
 .ins-header-center {
@@ -489,6 +489,7 @@ body {
 .ins-iconbtn--plain.ins-header-menu {
   width: 40px;
   height: 40px;
+  display: none;
 }
 
 /* Drawer (mobile menu) */
@@ -875,33 +876,11 @@ body {
   opacity: 0.35;
 }
 
-.ins-title-count {
-  font-family: var(--font-inter), sans-serif;
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--ins-muted);
-}
-
 .ins-title-query {
   color: var(--ins-sub);
   font-weight: 500;
 }
 
-.ins-desc {
-  font-size: var(--ins-type-body);
-  color: var(--ins-sub);
-  margin-top: var(--ins-space-2);
-  max-width: 62ch;
-  margin-top: 4px;
-  max-width: 62ch;
-}
-
-.ins-understood {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
 
 .ins-section-head {
   display: flex;
@@ -950,36 +929,18 @@ body {
    underline and a weight shift for the active one. .ins-tabbar carries this
    same look wherever it is reused (the app-detail page's own tab row), so
    Inspirations has one tab system rather than two. */
-.ins-tabs,
 .ins-tabbar {
   display: flex;
   align-items: center;
   gap: 28px;
-  /* .mi-sort-bar needs no margin of its own — Compare and the density toggle
-     share its row, so the grid below is the next thing regardless. Here the
-     tab row is standalone, so it keeps a bottom margin sized like the other
-     section gaps in this file rather than sitting flush against whatever
-     follows (a filter row on Explore, a tab panel on the app-detail page). */
   margin-bottom: var(--ins-space-5);
   overflow-x: auto;
   scrollbar-width: none;
 }
 
-.ins-tabs::-webkit-scrollbar,
 .ins-tabbar::-webkit-scrollbar,
 .ins-chips::-webkit-scrollbar {
   display: none;
-}
-
-.ins-tabs:has(.ins-filter-panel) {
-  overflow: visible;
-}
-
-.ins-tabs-divider {
-  width: 1px;
-  height: 18px;
-  background: var(--ins-border);
-  flex: 0 0 auto;
 }
 
 .ins-explore-hint {
@@ -1052,79 +1013,7 @@ body {
   background: var(--ins-text);
 }
 
-/* Filter bar + chips */
-/* Sticky, because the filters are how you narrow a long scroll and having to
-   scroll back up to reach them is what makes a gallery tiring. The blur keeps
-   the screenshots reading through it rather than being cut off by a bar. */
-.ins-filterbar {
-  position: sticky;
-  top: var(--ins-header-h, 56px);
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 28px;
-  padding: 10px 0;
-  min-height: 34px;
-  background: color-mix(in srgb, var(--ins-page) 88%, transparent);
-  backdrop-filter: blur(10px);
-}
-
-/* FilterBar's root now — the screen count and Filters trigger, riding the
-   right edge of .ins-tabs the same way .ins-tabbar-showing rides the
-   app-detail page's tab row. Was .ins-filterbar-right, back when it sat in its
-   own standalone row under a chip list that no longer exists. */
-.ins-tabs-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: none;
-  margin-left: auto;
-  padding-left: var(--ins-space-4);
-}
-
-.ins-filterbar-count {
-  font-size: 16px;
-  color: var(--ins-muted);
-  white-space: nowrap;
-}
-
-/* Figma "Button" (node 1012:8928): its own sizing rather than .ins-btn --
-   .ins-btn is shared with buttons elsewhere (46px/20px padding here would be
-   a small but real drift from every other secondary button in the app). */
-.ins-filter-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 46px;
-  padding: 0 20px;
-  border-radius: var(--ins-radius-pill);
-  border: 1px solid var(--ins-border);
-  background: var(--ins-card);
-  color: var(--ins-text);
-  font-size: 16px;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: background var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease);
-}
-
-.ins-filter-trigger:hover {
-  border-color: var(--ins-border-strong);
-}
-
-.ins-filter-trigger.is-active {
-  background: var(--ins-tag);
-  border-color: var(--ins-border-strong);
-}
-
-.ins-filter-trigger-icon {
-  display: block;
-  flex: none;
-  width: 20px;
-  height: 20px;
-}
-
+/* Chips (still used by search starters, admin panels and the saved page). */
 .ins-chips {
   display: flex;
   align-items: center;
@@ -1181,6 +1070,276 @@ body {
   opacity: 0.6;
 }
 
+/* =========================================================
+   FILTER TOOLBAR (Screens page)
+   One dropdown pill per dimension on the left; "Showing N screens" and the
+   sort dropdown on the right. An applied pill shows the selected value with
+   an ⊗ instead of the dimension name with a caret.
+   ========================================================= */
+
+/* The anchor carries the row's margins so that when the row docks — leaving
+   the flow — the space it held is fully preserved by the anchor's min-height
+   + margins and the gallery never jumps. The row's offsetHeight, which the
+   dock code measures, excludes margins, so none may live on the row itself. */
+.ins-ftoolbar-anchor {
+  margin: 4px 0 24px;
+}
+
+/* Plain in-page row: no forced height, no background — those exist only to
+   make the docked bar read as part of the (blurred, 92px-tall) header, and
+   leaking them into the normal in-flow state left a tall empty band above a
+   ~44px-tall row of pills whenever a filter was edited on the page itself. */
+.ins-ftoolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+/* Docked (Mobbin's header swap): the row leaves the flow and takes over the
+   header bar — same height, same 80px side padding as .ins-header-inner — one
+   z step above the header so it paints over the (faded) header content while
+   the header's own glass keeps providing the background. The anchor below
+   holds the row's height so the gallery doesn't jump. */
+.ins-ftoolbar.is-docked {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 41;
+  height: var(--ins-header-h, 92px);
+  margin: 0;
+  padding: 0 80px;
+  flex-wrap: nowrap;
+  /* The header's own glass, carried by the bar itself so the blur is present
+     even where it overhangs the header. */
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  /* Choreographed cross-fade, not a simultaneous blink: the header content
+     fades out quickly (below), and the toolbar arrives on a short delay with
+     a long, soft ease-out — the bar itself never moves or resizes.
+     `backwards` keeps it invisible through the delay. */
+  animation: insDockFade 420ms cubic-bezier(0.16, 1, 0.3, 1) 120ms backwards;
+}
+
+@keyframes insDockFade {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The counterpart fade: while the toolbar occupies the bar, the header's own
+   content steps aside (kept mounted so search state and menus survive). */
+.ins-header-inner {
+  transition: opacity 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.ins-toolbar-docked .ins-header-inner {
+  opacity: 0;
+  pointer-events: none;
+}
+
+
+.ins-fpill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: var(--ins-radius-pill);
+  border: 1px solid var(--ins-border);
+  background: var(--ins-card);
+  color: var(--ins-text);
+  font-size: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease), box-shadow var(--ins-fast) var(--ins-ease);
+}
+
+.ins-fpill:hover {
+  border-color: var(--ins-border-strong);
+}
+
+/* Applied reads as the strongest element in the row: the 1px border thickens
+   via an inset shadow so the pill's height never shifts. */
+.ins-fpill.is-applied {
+  border-color: var(--ins-text);
+  box-shadow: inset 0 0 0 1px var(--ins-text);
+  font-weight: 600;
+  padding-right: 12px;
+}
+
+.ins-fpill-more {
+  color: var(--ins-muted);
+  font-weight: 600;
+}
+
+.ins-fpill-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--ins-text);
+  color: var(--ins-on-accent);
+  flex: none;
+  transition: opacity var(--ins-fast) var(--ins-ease);
+}
+
+.ins-fpill-x:hover {
+  opacity: 0.75;
+}
+
+.ins-ftoolbar-divider {
+  width: 1px;
+  height: 26px;
+  background: #d6d8dd;
+  margin: 0 8px;
+  flex: none;
+}
+
+.ins-ftoolbar-context {
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  box-sizing: border-box;
+  padding: 3px;
+  border: 1px solid #f2f2f2;
+  border-radius: var(--ins-radius-pill);
+  background: #f2f2f2;
+  color: #0b0c0e;
+  font-family: Indivisible, sans-serif !important;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 23.2px;
+  white-space: nowrap;
+}
+
+.ins-ftoolbar-context button {
+  padding: 6px 16px;
+  border: 0;
+  border-radius: var(--ins-radius-pill);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  white-space: nowrap;
+  transition: background var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease);
+}
+
+.ins-ftoolbar-context button:hover {
+  color: #0b0c0e;
+}
+
+.ins-ftoolbar-context .is-active {
+  background: #fff;
+  font-weight: 600;
+}
+
+.ins-ftoolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.ins-fshowing {
+  color: #8a8f9a;
+  font-family: Indivisible, sans-serif !important;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.ins-fsort {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 20px;
+  border: 1px solid #ecedef;
+  border-radius: var(--ins-radius-pill);
+  background: #fff;
+  color: #0b0c0e;
+  font-family: Indivisible, sans-serif !important;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 23.2px;
+  white-space: nowrap;
+  transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-fsort:hover {
+  border-color: #d6d8dd;
+  background: #fafafa;
+}
+
+.ins-fsort-icon {
+  display: block;
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.ins-fmenu {
+  min-width: 220px;
+  max-height: 340px;
+  overflow-y: auto;
+  z-index: 200;
+}
+
+.ins-fmenu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ins-text);
+  font-size: 15px;
+  text-align: left;
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-fmenu-item:hover {
+  background: var(--ins-tag);
+}
+
+.ins-fmenu-item.is-selected {
+  font-weight: 600;
+}
+
+.ins-fmenu-check {
+  display: inline-flex;
+  justify-content: center;
+  width: 16px;
+  flex: none;
+}
+
+/* Content-type switcher: reads as the row's anchor, so it carries the most
+   visual weight of the unapplied pills. */
+.ins-fpill--nav {
+  font-weight: 700;
+  border-color: var(--ins-border-strong);
+}
+
+.ins-fmenu-count {
+  margin-left: auto;
+  color: var(--ins-muted);
+  font-size: 14px;
+}
+
 .ins-badge {
   display: inline-flex;
   align-items: center;
@@ -1196,36 +1355,7 @@ body {
   line-height: 1;
 }
 
-/* Filter panel */
-.ins-filter-panel {
-  width: min(560px, calc(100vw - 2 * var(--ins-gutter)));
-  padding: 12px 14px 16px;
-  z-index: 200;
-}
-
-.ins-filter-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.ins-filter-group {
-  border: 0;
-  padding: 10px 0 0;
-  margin: 0;
-}
-
-.ins-filter-legend {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--ins-muted);
-  padding: 0;
-  margin-bottom: 8px;
-}
-
+/* Option chip rows in the admin panels. */
 .ins-filter-options {
   display: flex;
   flex-wrap: wrap;
@@ -1603,35 +1733,35 @@ body {
   padding: 32px;
   border-radius: 48px;
   overflow: hidden;
-  background: #fafafa;
+  background: #f5f5f5;
 }
 
-.ins-app-detail-panel .ins-card-shot {
+.ins-shot-panel .ins-card-shot {
   padding: 0;
   aspect-ratio: 282 / 611;
   border-radius: 30px;
   background: transparent;
 }
 
-.ins-app-detail-panel .ins-grid {
+.ins-shot-panel .ins-grid {
   grid-template-columns: repeat(5, minmax(0, 380px));
 }
 
-.ins-app-detail-panel .ins-card-inset {
+.ins-shot-panel .ins-card-inset {
   border: 1px solid rgba(11, 12, 14, 0.09);
   border-radius: 30px;
 }
 
-.ins-app-detail-panel .ins-card.is-selected .ins-card-inset {
+.ins-shot-panel .ins-card.is-selected .ins-card-inset {
   border-color: #0b0c0e;
   box-shadow: inset 0 0 0 1px #0b0c0e;
 }
 
-.ins-app-detail-panel .ins-card-inset .ins-shot-img {
+.ins-shot-panel .ins-card-inset .ins-shot-img {
   object-fit: cover;
 }
 
-.ins-app-detail-panel .ins-card-hover-controls {
+.ins-shot-panel .ins-card-hover-controls {
   display: none;
 }
 
@@ -3535,6 +3665,15 @@ body {
 }
 
 .ins-flow-rail-name {
+  display: block;
+  /* A flex item's min-width defaults to its content's, not 0 — so without
+     this, a long screen name (e.g. "accounts.google.com") refuses to shrink
+     below its own unwrapped width and spills out of its 150px column into
+     the next step's caption instead of truncating. */
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: 16px;
   color: var(--ins-sub);
 }
@@ -5252,10 +5391,6 @@ body {
     grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
-  .ins-header-textlinks {
-    display: none;
-  }
-
   .ins-flow-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -5296,8 +5431,12 @@ body {
 
   .ins-header-center,
   .ins-platform-nav,
-  .ins-header-textlinks {
+  .ins-header-action-links {
     display: none;
+  }
+
+  .ins-iconbtn--plain.ins-header-menu {
+    display: inline-flex;
   }
 
   .ins-app-grid,
@@ -5363,28 +5502,20 @@ body {
     line-height: 25px;
   }
 
-  .ins-tabs--explore {
-    align-items: flex-start;
+  /* On narrow screens the toolbar wraps; the count hides so pills keep room. */
+  .ins-ftoolbar-right {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
   }
 
-  .ins-tabs-right {
-    position: sticky;
-    right: 0;
-    z-index: 2;
-    padding-left: 12px;
-    background: var(--ins-page);
+  /* Docked rows don't wrap, so the right side stays inline on its row edge. */
+  .ins-ftoolbar.is-docked .ins-ftoolbar-right {
+    margin-left: auto;
+    width: auto;
   }
 
-  .ins-tabs-right:has(.ins-filter-panel) {
-    z-index: 200;
-  }
-
-  .ins-filter-trigger {
-    width: 46px;
-    padding: 0;
-  }
-
-  .ins-filter-trigger-label {
+  .ins-fshowing {
     display: none;
   }
 
@@ -5396,27 +5527,6 @@ body {
 
   .ins-detail-actions {
     flex-wrap: wrap;
-  }
-
-  .ins-filterbar {
-    flex-wrap: wrap;
-  }
-
-  .ins-filterbar-count {
-    display: none;
-  }
-
-  .ins-filter-panel {
-    position: fixed;
-    left: 12px;
-    right: 12px;
-    top: auto;
-    bottom: max(12px, env(safe-area-inset-bottom));
-    width: auto;
-    max-height: min(420px, calc(100dvh - 96px));
-    overflow-y: auto;
-    border-radius: 16px;
-    z-index: 200;
   }
 
   .ins-extract-cols {

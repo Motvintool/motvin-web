@@ -4,8 +4,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { PATTERN_CATEGORIES } from '@/lib/inspirations/taxonomy';
 import type { Pattern, PatternCategory, Screen } from '@/lib/inspirations/types';
-import { ContentTabs } from '../ContentTabs';
 import { EmptyState } from '../EmptyState';
+import { FilterPill, NavPill, ToolbarRow } from '../FilterToolbar';
 import { GridIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
 import { PatternCard } from '../PatternCard';
@@ -48,33 +48,19 @@ export function PatternsView() {
 
   return (
     <>
-      <PageHeading
-        title="Patterns"
-        count={meta.counts.patterns ? String(meta.counts.patterns) : undefined}
-        description="Recurring UI solutions, shown as real examples side by side."
-      />
-      <ContentTabs counts={meta.counts} active="patterns" />
+      <PageHeading title="Patterns" />
 
-      {present.size > 0 && (
-        <div className="ins-filterbar">
-          <div className="ins-chips" role="group" aria-label="Pattern category">
-            <button type="button" className={`ins-chip ${!category ? 'is-active' : ''}`} aria-pressed={!category} onClick={() => pick()}>
-              All
-            </button>
-            {PATTERN_CATEGORIES.filter((c) => present.has(c)).map((c) => (
-              <button
-                key={c}
-                type="button"
-                className={`ins-chip ${category === c ? 'is-active' : ''}`}
-                aria-pressed={category === c}
-                onClick={() => pick(category === c ? undefined : c)}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <ToolbarRow total={loading ? null : visible.length} unit="pattern">
+        <NavPill counts={meta.counts} />
+        <FilterPill
+          label="Category"
+          options={PATTERN_CATEGORIES.filter((c) => present.has(c)).map((c) => ({ value: c, label: c }))}
+          selected={category ? [category] : []}
+          onToggle={(v) => pick(v === category ? undefined : (v as PatternCategory))}
+          onClear={() => pick()}
+          multi={false}
+        />
+      </ToolbarRow>
 
       {loading ? (
         <CardRowSkeleton count={8} />
