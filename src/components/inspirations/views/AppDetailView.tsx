@@ -57,7 +57,7 @@ export function AppDetailView({
   return (
     <>
       <div className="ins-detail-top">
-        <Link href={INSPIRATIONS_ROUTES.apps} className="ins-back">
+        <Link href={INSPIRATIONS_ROUTES.explore} className="ins-back">
           <ArrowLeftIcon size={15} /> Apps
         </Link>
       </div>

@@ -294,6 +294,11 @@ body {
   background: var(--ins-page);
 }
 
+.ins-header:has(.ins-drawer) {
+  z-index: 300;
+  backdrop-filter: none;
+}
+
 .ins-header-inner {
   height: 100%;
   width: 100%;
@@ -490,7 +495,7 @@ body {
 .ins-drawer {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 300;
 }
 
 .ins-drawer-backdrop {
@@ -796,7 +801,7 @@ body {
 /* Rule 4: the page title is the one piece of display type, and it tightens
    its tracking to earn the extra size. */
 .ins-title {
-  font-family: var(--font-pacifico), var(--font-outfit), var(--font-inter), sans-serif;
+  font-family: var(--font-pacifico), var(--font-outfit), var(--font-inter), sans-serif !important;
   font-size: 42px;
   font-weight: 400;
   letter-spacing: -0.616px;
@@ -817,6 +822,22 @@ body {
 .ins-explore-taxonomy-group {
   min-width: 0;
   padding-left: 42px;
+  position: relative;
+}
+
+.ins-explore-taxonomy-group:nth-child(-n + 3)::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  height: 132px;
+  content: "";
+  background: linear-gradient(
+      to bottom,
+      rgba(234, 234, 234, 0),
+      rgba(234, 234, 234, 1),
+      rgba(234, 234, 234, 0)
+    );
 }
 
 .ins-explore-taxonomy-group:first-child {
@@ -837,19 +858,21 @@ body {
   flex-direction: column;
   gap: 4px;
   margin: 0;
+  font-weight: 700;
 }
 
 .ins-explore-taxonomy-link {
   display: inline-block;
   font-size: 22px;
-  font-weight: 500;
+  font-weight: 700;
   line-height: 30px;
   color: #141414;
-  transition: color var(--ins-fast) var(--ins-ease);
+  transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.ins-explore-taxonomy-link:hover {
-  color: var(--ins-accent);
+.ins-explore-taxonomy-list:has(.ins-explore-taxonomy-link:hover)
+  .ins-explore-taxonomy-link:not(:hover) {
+  opacity: 0.35;
 }
 
 .ins-title-count {
@@ -946,6 +969,10 @@ body {
 .ins-tabbar::-webkit-scrollbar,
 .ins-chips::-webkit-scrollbar {
   display: none;
+}
+
+.ins-tabs:has(.ins-filter-panel) {
+  overflow: visible;
 }
 
 .ins-tabs-divider {
@@ -1173,6 +1200,7 @@ body {
 .ins-filter-panel {
   width: min(560px, calc(100vw - 2 * var(--ins-gutter)));
   padding: 12px 14px 16px;
+  z-index: 200;
 }
 
 .ins-filter-head {
@@ -1642,6 +1670,10 @@ body {
 
 .ins-card:hover .ins-card-link::after {
   background: rgba(11, 12, 14, 0.06);
+}
+
+.ins-explore-view .ins-card:hover .ins-card-link::after {
+  background: transparent;
 }
 
 .ins-card-inset .ins-card-link {
@@ -5335,6 +5367,27 @@ body {
     align-items: flex-start;
   }
 
+  .ins-tabs-right {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    padding-left: 12px;
+    background: var(--ins-page);
+  }
+
+  .ins-tabs-right:has(.ins-filter-panel) {
+    z-index: 200;
+  }
+
+  .ins-filter-trigger {
+    width: 46px;
+    padding: 0;
+  }
+
+  .ins-filter-trigger-label {
+    display: none;
+  }
+
   .ins-detail-head,
   .ins-app-head {
     flex-direction: column;
@@ -5358,10 +5411,12 @@ body {
     left: 12px;
     right: 12px;
     top: auto;
-    bottom: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
     width: auto;
-    max-height: 70vh;
+    max-height: min(420px, calc(100dvh - 96px));
     overflow-y: auto;
+    border-radius: 16px;
+    z-index: 200;
   }
 
   .ins-extract-cols {

@@ -51,12 +51,14 @@ export function FilterBar({
         <button
           type="button"
           className={`ins-filter-trigger ${active ? 'is-active' : ''}`}
+          aria-label="Filter screens"
           aria-expanded={panelOpen}
           aria-haspopup="dialog"
+          title="Filter screens"
           onClick={() => setPanelOpen((o) => !o)}
         >
           <img src="/ASSET/Icons/Motvin/filter-inspiration.svg" alt="" className="ins-filter-trigger-icon" width={20} height={20} />
-          Filter
+          <span className="ins-filter-trigger-label">Filter</span>
           {active > 0 && <span className="ins-badge">{active}</span>}
         </button>
         {panelOpen && (

@@ -61,7 +61,7 @@ export function ExploreView() {
   ].filter((group) => group.items.length > 0);
 
   return (
-    <>
+    <div className="ins-explore-view">
       <PageHeading title="Inspirations" />
       {taxonomyGroups.length > 0 && (
         <section className="ins-explore-taxonomy" aria-label="Explore categories">
@@ -82,6 +82,6 @@ export function ExploreView() {
       <Suspense fallback={null}>
         <FilteredGallery counts={meta.counts} />
       </Suspense>
-    </>
+    </div>
   );
 }

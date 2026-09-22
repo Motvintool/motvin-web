@@ -5,6 +5,7 @@ import { AuthProvider } from '@/components/shared/AuthProvider';
 import { BANNER_RESERVE_SCRIPT } from '@/components/library/ProductBanner';
 import { THEME_INIT_SCRIPT } from '@/lib/theme';
 import '@/styles/auth-modal.css';
+import '@/styles/global.css';
 
 // Matches the weights the static site requested from Google Fonts. Exposed as
 // CSS variables because the ported stylesheets reference them by variable
