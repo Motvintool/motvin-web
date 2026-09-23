@@ -753,7 +753,7 @@ body {
 .ins-search-overlay .ins-search-modal {
   position: relative;
   width: min(900px, calc(100vw - 40px));
-  height: min(740px, calc(100vh - 40px));
+  height: min(720px, calc(100vh - 40px));
   overflow: hidden;
   border-radius: 36px;
   background: rgba(255, 255, 255, 0.80);
@@ -761,7 +761,7 @@ body {
   backdrop-filter: blur(12px);
 }
 .ins-header-center .ins-search-modal.is-searching,
-.ins-search-overlay .ins-search-modal.is-searching { align-self: start; height: auto; max-height: calc(100vh - 40px); margin-top: max(0px, calc((100vh - 740px) / 2 - 24px)); }
+.ins-search-overlay .ins-search-modal.is-searching { align-self: start; height: auto; max-height: calc(100vh - 40px); margin-top: max(0px, calc((100vh - 720px) / 2 - 24px)); }
 
 .ins-search-modal button {
   appearance: none;
