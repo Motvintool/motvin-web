@@ -776,10 +776,13 @@ body {
 .ins-search-modal-field input { width: 100%; min-width: 0; max-width: none; height: 42px; border: 0; outline: 0; background: transparent; color: #111; font-size: 16px; -webkit-appearance: none; appearance: none; }
 .ins-search-modal-field input::placeholder { color: #7d7d7d; }
 .ins-search-modal-field input::-webkit-search-cancel-button { display: none; }
-.ins-search-modal-platforms { position: absolute; right: 24px; display: flex; align-items: center; gap: 20px; }
+.ins-search-modal-platforms { position: absolute; right: 24px; display: flex; align-items: center; gap: 8px; }
 .ins-search-modal.is-searching .ins-search-modal-field { gap: 0; }
 .ins-search-modal.is-searching .ins-search-modal-field > img { width: 0; opacity: 0; transform: translateX(-12px); }
-.ins-search-modal-platforms img:nth-child(2) { width: 20px; height: auto; opacity: 0.5; }
+/* Grey = an available filter, not yet chosen — same idea as the header's own
+   platform nav, just without room here for a full pill + label. */
+.ins-search-modal-platforms button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; color: #ADADAD; transition: color 120ms ease; }
+.ins-search-modal-platforms button.is-active { color: #000000; }
 .ins-search-chips { display: flex; gap: 12px; height: 74px; padding: 8px 20px 0px; overflow-x: auto; }
 .ins-search-chip { display: inline-flex; align-items: center; height: 48px; flex: none; border-radius: 999px; background: #e6e6e6; color: #151515; font-size: 16px; white-space: nowrap; }
 .ins-search-chip-query { display: inline-flex; align-items: center; gap: 8px; height: 100%; padding: 0 8px 0 12px; color: inherit; font: inherit; }
@@ -800,6 +803,11 @@ body {
 .ins-search-modal.is-searching .ins-search-modal-results { height: auto; max-height: calc(100vh - 114px); }
 .ins-search-modal-title { padding: 0 20px 16px; color: #737373; font-size: 16px; }
 .ins-search-suggestions { display: flex; flex-direction: column; }
+.ins-search-search-actions { display: flex; flex-direction: column; gap: 10px; padding: 0 4px 20px; }
+.ins-search-search-action { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 66px; padding: 14px 16px; border-radius: 16px; color: #121212; font: inherit; font-size: 16px; text-align: left; }
+.ins-search-search-action:hover, .ins-search-search-action:focus-visible, .ins-search-search-action.is-active { background: #fff; }
+.ins-search-search-action > span { display: grid; place-items: center; flex: none; width: 38px; height: 38px; overflow: hidden; border-radius: 8px; background: #e6e6e6; }
+.ins-search-search-action img { display: block; width: 20px; height: 20px; object-fit: contain; }
 .ins-search-suggestion-section { display: flex; flex-direction: column; gap: 16px; padding: 0 4px 20px; }
 .ins-search-suggestion-heading { padding-left: 8px; color: #313131; font-size: 16px; }
 .ins-search-modal-list { display: flex; flex-direction: column; gap: 10px; }
@@ -814,15 +822,15 @@ body {
 .ins-search-modal-empty { padding: 16px 20px; color: #777; font-size: 16px; }
 .ins-search-suggestion-elements { padding-top: 16px; }
 .ins-search-suggestion-footer { margin: 0; padding: 20px 8px 0; color: rgba(18, 18, 18, 0.5); font-size: 16px; }
-.ins-search-suggestion-footer button { padding: 0; color: inherit; font: inherit; text-decoration: underline; }
+.ins-search-suggestion-footer a { padding: 0; color: inherit; font: inherit; text-decoration: underline; }
 .ins-search-categories { display: flex; flex-direction: column; gap: 4px; }
 .ins-search-categories button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 48px; padding: 8px 8px 8px 20px; border-radius: 999px; color: #000; font-size: 16px; text-align: left; }
-.ins-search-categories button:hover { background: #fff; }
+.ins-search-categories button:hover, .ins-search-categories button.is-active { background: #fff; }
 .ins-search-categories strong { flex: 1; font-weight: 500; }
 .ins-search-categories span { padding: 4px 10px; color: #4e4e4e; font-weight: 400; }
 .ins-search-resource-list { display: flex; flex-direction: column; gap: 4px; }
 .ins-search-resource-list button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 48px; padding: 8px 8px 8px 20px; border-radius: 999px; color: #000; font-size: 16px; text-align: left; }
-.ins-search-resource-list button:hover { background: #fff; }
+.ins-search-resource-list button:hover, .ins-search-resource-list button.is-active { background: #fff; }
 .ins-search-resource-list strong { flex: 1; font-weight: 500; }
 .ins-search-resource-list span { padding: 4px 10px; color: #4e4e4e; font-weight: 400; }
 .ins-search-top-rated { display: flex; flex-direction: column; gap: 24px; }
@@ -852,6 +860,13 @@ body {
 .ins-search-top-elements button > span { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 6px; border-radius: 10px; box-sizing: border-box; overflow: hidden; }
 .ins-search-top-elements button > span img { display: block; width: auto; height: 20px; max-width: 20px; object-fit: contain; }
 .ins-search-top-flows button { padding-right: 24px; }
+.ins-card-link { position: relative; }
+/* No border/box-shadow — a stroke reads as a UI element sitting on top of
+   the screenshot; a soft fill alone reads as the text itself glowing.
+   `scale` grows the box a bit past the OCR word's own bounding rect without
+   touching its `left/top/width/height` — those are the percentage coords
+   the backend measured, not something to recompute here just to pad them. */
+.ins-card-text-highlight { position: absolute; z-index: 2; border-radius: 3px; background: rgba(255, 220, 72, 0.4); transform: scale(1.15); pointer-events: none; }
 @media (max-width: 720px) { .ins-header-center .ins-search-modal, .ins-search-overlay .ins-search-modal { width: calc(100vw - 24px); height: min(700px, calc(100vh - 24px)); border-radius: 22px; } .ins-header-center .ins-search-modal.is-searching, .ins-search-overlay .ins-search-modal.is-searching { height: auto; max-height: calc(100vh - 24px); } .ins-search-modal-head { padding: 0 16px; } .ins-search-modal-field { margin-right: 98px; } .ins-search-modal-field input { width: 100%; max-width: none; } .ins-search-modal-platforms { right: 16px; gap: 10px; } .ins-search-modal-body.has-nav { display: grid; grid-template-columns: 1fr; } .ins-search-modal-nav { flex-direction: row; padding: 12px; overflow-x: auto; } .ins-search-modal-nav button { flex: none; padding: 0 16px; } .ins-search-modal-results { padding: 16px; } }
 
 .ins-search-menu-head {

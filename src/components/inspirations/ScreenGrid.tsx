@@ -27,6 +27,7 @@ export function ScreenGrid({
   showApp = true,
   showMeta = true,
   selectable = false,
+  textHighlights,
   empty,
 }: {
   screens: Screen[];
@@ -38,6 +39,7 @@ export function ScreenGrid({
   showApp?: boolean;
   showMeta?: boolean;
   selectable?: boolean;
+  textHighlights?: Record<string, Array<{ left: number; top: number; width: number; height: number }>>;
   empty?: ReactNode;
 }) {
   const fetchedApps = useApps();
@@ -94,6 +96,7 @@ export function ScreenGrid({
             selected={selectedIds.has(screen.id)}
             onToggleSelect={() => toggleSelection(screen.id)}
             index={index}
+            textHighlights={textHighlights?.[screen.id]}
           />
         ))}
       </div>

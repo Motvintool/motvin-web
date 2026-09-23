@@ -36,10 +36,11 @@ export function SearchView() {
   const apps = useApps();
 
   const query = params.get('q')?.trim() ?? '';
+  const textSearch = params.get('mode') === 'text';
   const rawTab = params.get('type');
   const tab: ResultTab = TABS.some((t) => t.id === rawTab) ? (rawTab as ResultTab) : 'all';
 
-  const { data, loading } = useAsync(() => inspirationsApi.search(query), `search:${query}`);
+  const { data, loading } = useAsync(() => inspirationsApi.search(query, textSearch ? 'text' : undefined), `search:${query}:${textSearch ? 'text' : 'all'}`);
 
   const setTab = (t: ResultTab) => {
     const sp = new URLSearchParams(params.toString());
@@ -134,7 +135,7 @@ export function SearchView() {
               {tab === 'all' && (
                 <SectionHead title="Screens" onMore={() => setTab('screens')} />
               )}
-              <ScreenGrid screens={tab === 'all' ? data.screens.slice(0, 15) : data.screens} />
+              <ScreenGrid screens={tab === 'all' ? data.screens.slice(0, 15) : data.screens} textHighlights={textSearch ? data.textHighlights : undefined} />
             </section>
           )}
 

@@ -110,6 +110,7 @@ export type SearchResults = {
   patterns: Pattern[];
   total: number;
   screenTotal: number;
+  textHighlights?: Record<string, Array<{ left: number; top: number; width: number; height: number }>>;
 };
 
 const EMPTY_SEARCH: SearchResults = {
@@ -210,9 +211,9 @@ export const inspirationsApi = {
     return request('/elements', TTL.list, []);
   },
 
-  search(query: string): Promise<SearchResults> {
+  search(query: string, mode?: 'text'): Promise<SearchResults> {
     if (!query.trim()) return Promise.resolve(EMPTY_SEARCH);
-    return request(`/search?q=${encodeURIComponent(query)}`, TTL.search, EMPTY_SEARCH);
+    return request(`/search?q=${encodeURIComponent(query)}${mode === 'text' ? '&mode=text' : ''}`, TTL.search, EMPTY_SEARCH);
   },
 
   /** Screens resolved by id, for saved items and collections. */

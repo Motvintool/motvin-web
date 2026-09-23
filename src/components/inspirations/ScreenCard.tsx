@@ -45,6 +45,7 @@ function ScreenCardImpl({
   selected = false,
   onToggleSelect,
   index,
+  textHighlights,
 }: {
   screen: Screen;
   app?: App;
@@ -54,6 +55,7 @@ function ScreenCardImpl({
   selected?: boolean;
   onToggleSelect?: () => void;
   index?: number;
+  textHighlights?: Array<{ left: number; top: number; width: number; height: number }>;
 }) {
   const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step } = useSiblingCycle(screen);
   // useSiblingCycle's `screen` param is nullable (AppCard may have no preview
@@ -86,6 +88,14 @@ function ScreenCardImpl({
         <div className="ins-card-inset">
           <Link href={href} className="ins-card-link" aria-label={`${shownScreen.name}${app ? ` — ${app.name}` : ''}`} prefetch={index !== undefined && index < 10 ? undefined : false}>
             <Screenshot screen={shownScreen} />
+            {shownScreen.id === screen.id && textHighlights?.map((highlight, index) => (
+              <span
+                key={`${highlight.left}-${highlight.top}-${index}`}
+                className="ins-card-text-highlight"
+                aria-hidden
+                style={{ left: `${highlight.left}%`, top: `${highlight.top}%`, width: `${highlight.width}%`, height: `${highlight.height}%` }}
+              />
+            ))}
           </Link>
         </div>
         {dotCount > 1 && (

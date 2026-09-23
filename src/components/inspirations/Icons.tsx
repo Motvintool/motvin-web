@@ -1,4 +1,4 @@
-import type { SVGProps } from 'react';
+import { useId, type SVGProps } from 'react';
 
 /**
  * Inline icon set for the Inspirations UI. 1.5px strokes on a 24 grid so
@@ -110,3 +110,58 @@ export const PencilIcon = (p: IconProps) => (
 export const ExpandIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" /></svg>
 );
+export const AppleIcon = (p: IconProps) => (
+  <svg {...base(p)} fill="currentColor" stroke="none">
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M18.7102 19.5C17.8802 20.74 17.0002 21.95 15.6602 21.97C14.3202 22 13.8902 21.18 12.3702 21.18C10.8402 21.18 10.3702 21.95 9.10017 22C7.79017 22.05 6.80017 20.68 5.96017 19.47C4.25017 17 2.94017 12.45 4.70017 9.39C5.57017 7.87 7.13017 6.91 8.82017 6.88C10.1002 6.86 11.3202 7.75 12.1102 7.75C12.8902 7.75 14.3702 6.68 15.9202 6.84C16.5702 6.87 18.3902 7.1 19.5602 8.82C19.4702 8.88 17.3902 10.1 17.4102 12.63C17.4402 15.65 20.0602 16.66 20.0902 16.67C20.0602 16.74 19.6702 18.11 18.7102 19.5ZM13.0002 3.5C13.7302 2.67 14.9402 2.04 15.9402 2C16.0702 3.17 15.6002 4.35 14.9002 5.19C14.2102 6.04 13.0702 6.7 11.9502 6.61C11.8002 5.46 12.3602 4.26 13.0002 3.5Z"
+    />
+  </svg>
+);
+export const WebIcon = (p: IconProps) => (
+  <svg {...base(p)} fill="currentColor" stroke="none">
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M9.4815 3.35567C7.73495 3.86235 6.1823 4.88152 5.02609 6.28022C3.86989 7.67891 3.16382 9.39218 3 11.1965H7.13081C7.3716 8.4508 8.17095 5.78261 9.48021 3.35438M7.13081 12.8035H3C3.16348 14.6079 3.86924 16.3214 5.02522 17.7203C6.1812 19.1192 7.73371 20.1387 9.48021 20.6456C8.17095 18.2174 7.3716 15.5492 7.13081 12.8035ZM11.5508 20.9889C9.98569 18.5168 9.02614 15.7129 8.74957 12.8035H15.2491C14.9726 15.7129 14.013 18.5168 12.4479 20.9889C12.1491 21.0037 11.8496 21.0037 11.5508 20.9889ZM14.5198 20.6444C16.2661 20.1375 17.8185 19.1182 18.9744 17.7195C20.1304 16.3208 20.8363 14.6077 21 12.8035H16.8692C16.6284 15.5492 15.829 18.2174 14.5198 20.6456M16.8692 11.1978H21C20.8365 9.3934 20.1308 7.67996 18.9748 6.28104C17.8188 4.88211 16.2663 3.86265 14.5198 3.35567C15.829 5.7839 16.6284 8.45209 16.8692 11.1978ZM11.5508 3.01113C11.8501 2.99629 12.1499 2.99629 12.4492 3.01113C14.0139 5.48331 14.973 8.28721 15.2491 11.1965H8.75086C9.03098 8.26922 9.99269 5.46276 11.5508 3.01113Z"
+    />
+  </svg>
+);
+/** Android's dome silhouette with its antenna lines and eyes cut out via an
+ * SVG mask (luminance masking is the SVG default, so it needs no extra
+ * declaration) rather than painted on top — a painted-on background color
+ * would only match a plain white host and break on anything else. */
+export const AndroidIcon = (p: IconProps) => {
+  const { size = 16, ...rest } = p;
+  const maskId = useId();
+  return (
+    <svg
+      width={size}
+      height={size * (13.7224 / 22.1227)}
+      viewBox="0 0 22.1227 13.7224"
+      fill="currentColor"
+      stroke="none"
+      aria-hidden
+      {...rest}
+    >
+      <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="23" height="14">
+        <path
+          fillRule="evenodd"
+          clipRule="evenodd"
+          d="M21.0116 12.6113H1.11112C1.61262 7.5578 5.87612 3.6113 11.0611 3.6113C16.2471 3.6113 20.5101 7.5578 21.0116 12.6113Z"
+          fill="white"
+          stroke="white"
+          strokeWidth="2.22222"
+          strokeLinejoin="round"
+        />
+        <path d="M6.06164 4.6113L4.06164 1.1113M15.5616 4.6113L17.5616 1.1113" stroke="white" strokeWidth="2.22222" strokeLinecap="round" strokeLinejoin="round" />
+        <path fillRule="evenodd" clipRule="evenodd" d="M6.56164 10.1113C7.11392 10.1113 7.56164 9.66359 7.56164 9.1113C7.56164 8.55902 7.11392 8.1113 6.56164 8.1113C6.00935 8.1113 5.56164 8.55902 5.56164 9.1113C5.56164 9.66359 6.00935 10.1113 6.56164 10.1113Z" fill="black" />
+        <path fillRule="evenodd" clipRule="evenodd" d="M15.5616 10.1113C16.1139 10.1113 16.5616 9.66359 16.5616 9.1113C16.5616 8.55902 16.1139 8.1113 15.5616 8.1113C15.0094 8.1113 14.5616 8.55902 14.5616 9.1113C14.5616 9.66359 15.0094 10.1113 15.5616 10.1113Z" fill="black" />
+      </mask>
+      <g mask={`url(#${maskId})`}>
+        <path fillRule="evenodd" clipRule="evenodd" d="M-0.937712 -5.3887H23.0623V18.6113H-0.937712V-5.3887Z" />
+      </g>
+    </svg>
+  );
+};

@@ -22,7 +22,7 @@ export const INSPIRATIONS_ROUTES = {
   screen: (screen: Pick<Screen, 'id'>) => `/inspirations/screen/${screen.id}`,
   flow: (flow: Pick<Flow, 'id'>) => `/inspirations/flow/${flow.id}`,
   pattern: (pattern: Pick<Pattern, 'slug'>) => `/inspirations/pattern/${pattern.slug}`,
-  searchFor: (query: string) => `/inspirations/search?q=${encodeURIComponent(query)}`,
+  searchFor: (query: string, mode?: 'text') => `/inspirations/search?q=${encodeURIComponent(query)}${mode === 'text' ? '&mode=text' : ''}`,
   /** Hand-off into the existing Motvin icon library. */
   iconLibrary: (query: string) => `/icons?q=${encodeURIComponent(query)}`,
 } as const;

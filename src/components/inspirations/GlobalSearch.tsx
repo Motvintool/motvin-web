@@ -7,23 +7,36 @@ import { EMPTY_FILTERS } from '@/lib/inspirations/filters';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { suggestQueries, type SearchSuggestion } from '@/lib/inspirations/search';
-import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
-import type { App, Flow, Industry, Screen } from '@/lib/inspirations/types';
+import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
+import type { App, Flow, Industry, Platform, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
-import { CloseIcon, SearchIcon } from './Icons';
+import { AndroidIcon, AppleIcon, CloseIcon, SearchIcon, WebIcon } from './Icons';
 
 const FIGMA_APP_ART = '/ASSET/search-modal/figma-02.png';
+/** Lives under the shared Motvin icon set (`/ASSET/Icons/Motvin/`), not
+ * alongside the rest of the search modal's own icons in
+ * `/ASSET/search-modal/icons/` — kept at its existing path instead of
+ * duplicating it into the modal's own folder. */
+const TEXT_IN_SCREENSHOT_ICON = '/ASSET/Icons/Motvin/text-in-screenshot.svg';
 const FIGMA_MODAL_ICONS = {
   search: '/ASSET/search-modal/icons/search.svg',
-  apple: '/ASSET/search-modal/icons/apple.svg',
-  android: '/ASSET/search-modal/icons/android.svg',
-  web: '/ASSET/search-modal/icons/web.svg',
   list: '/ASSET/search-modal/icons/list.svg',
   grid: '/ASSET/search-modal/icons/grid.svg',
   flow: '/ASSET/search-modal/icons/flow.svg',
   topRated: '/ASSET/search-modal/icons/top-rated.svg',
   categories: '/ASSET/search-modal/icons/categories.svg',
 } as const;
+/** The modal's platform switch — Apple's icon reads as "iOS" here, matching
+ * the header's own platform nav. Inline icon components rather than the
+ * `<img src>` asset files the rest of this modal uses: an externally-loaded
+ * SVG image can't be recolored by the surrounding page's CSS (`currentColor`
+ * only resolves through CSS inheritance when the SVG is actually in the DOM),
+ * so there'd be no way to switch between the active/inactive colors below. */
+const MODAL_PLATFORMS: { value: Platform; Icon: typeof AppleIcon }[] = [
+  { value: 'ios', Icon: AppleIcon },
+  { value: 'android', Icon: AndroidIcon },
+  { value: 'web', Icon: WebIcon },
+];
 const FIGMA_TOP_RATED_CARDS = [
   ['Login', 'login'],
   ['Signup', 'signup'],
@@ -82,11 +95,35 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   const [open, setOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [active, setActive] = useState(-1);
+  const [activeSearchAction, setActiveSearchAction] = useState<'search' | 'screenshot' | null>('search');
   const [section, setSection] = useState<'top' | 'categories' | 'screens' | 'elements' | 'flows'>('top');
+  // Arrow-key position within whichever single-column section (Categories,
+  // Screens, UI Elements, Flows) is currently showing — separate from
+  // `active`, which is the same idea for the live-typing suggestions list,
+  // since the two are never shown at once but shouldn't share position when
+  // switching between them. Not wired up for Top Rated: that tab is several
+  // visually distinct grids (apps, screens, elements, flows) side by side,
+  // not one list, so a single up/down axis doesn't map onto it cleanly —
+  // left mouse/Tab-only rather than force a 2D grid nav scheme onto it.
+  const [browseActive, setBrowseActive] = useState(-1);
+  // A toggle, not a single-select-always-on control: clicking the active
+  // platform again clears it back to "all platforms", same as leaving none
+  // of the three picked. Only affects the Top Rated preview here — Apps and
+  // Flows carry a real platform each; the decorative Screens showcase (fixed
+  // stock imagery behind whichever screen a click happens to land on) and
+  // the UI Elements counts (aggregated across all platforms already) have no
+  // honest per-platform breakdown to filter with the data this modal fetches.
+  const [modalPlatform, setModalPlatform] = useState<Platform | null>(null);
   const [topApps, setTopApps] = useState<App[]>([]);
-  const [topScreens, setTopScreens] = useState<Screen[]>([]);
-  const [topElements, setTopElements] = useState<{ kind: string; count: number }[]>([]);
-  const [topFlows, setTopFlows] = useState<Flow[]>([]);
+  // Unlike `topApps` (there's no dedicated "Apps" sidebar section — apps only
+  // ever appear in the Top Rated preview, so capping the fetch itself is
+  // fine), these three back BOTH the Top Rated preview AND their own
+  // sidebar section (Screens/UI Elements/Flows) — the section needs the
+  // real, full list, so nothing here gets truncated at fetch time. The
+  // preview-sized slices for the Top Rated tab are derived below instead.
+  const [screens, setScreens] = useState<Screen[]>([]);
+  const [elements, setElements] = useState<{ kind: string; count: number }[]>([]);
+  const [flows, setFlows] = useState<Flow[]>([]);
   const [categories, setCategories] = useState<{ value: string; label: string; count: number }[]>([]);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>(loadRecentSearches);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -94,6 +131,23 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   const rootRef = useRef<HTMLDivElement>(null);
   const appsRef = useRef<App[]>([]);
   const listId = useId();
+  // `close()` focuses the header input back so keyboard focus lands
+  // somewhere sensible instead of dropping onto <body> — but focusing it
+  // fires the very `onFocus` below that opens the modal, which would reopen
+  // it immediately after closing. This suppresses just that one, synchronous
+  // re-open; a real click or Tab into the field still opens it normally.
+  const suppressAutoOpenRef = useRef(false);
+
+  // Closing returns focus to the header's own search field — the thing that
+  // opened the modal in the first place — rather than blurring both inputs
+  // into nothing, which dropped keyboard focus on the floor (back to
+  // <body>) every time a result was picked or the modal was dismissed.
+  const close = () => {
+    setOpen(false);
+    suppressAutoOpenRef.current = true;
+    inputRef.current?.focus();
+    suppressAutoOpenRef.current = false;
+  };
 
   // Keep the field in sync when the URL query changes (Back/Forward). Adjusts
   // state during render — React's documented pattern for deriving from props.
@@ -104,7 +158,11 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     setValue(urlQuery);
   }
 
-  // ⌘K / Ctrl K focuses search; "/" too when not typing elsewhere.
+  // ⌘K / Ctrl K focuses search; "/" too when not typing elsewhere; Escape
+  // closes the modal from anywhere inside it, not only while a result item
+  // happens to be plain-text focused — the per-input Escape handler this
+  // replaced only fired while focus was still sitting in the search field
+  // itself, so tabbing into the results list and pressing Escape did nothing.
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -117,6 +175,13 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
       } else if (e.key === '/' && !typing) {
         e.preventDefault();
         (open ? modalInputRef.current : inputRef.current)?.focus();
+      } else if (e.key === 'Escape' && open) {
+        // Routed through `close()` (defined below) rather than duplicated
+        // here — a plain `setOpen(false); inputRef.current?.focus()` skips
+        // the guard `close` sets around that same refocus, so the refocus's
+        // own `onFocus` handler reopens the modal in the same tick, right
+        // back to where it started.
+        close();
       }
     };
     document.addEventListener('keydown', onKey);
@@ -136,6 +201,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
         if (!cancelled) {
           setSuggestions(s);
           setActive(-1);
+          setActiveSearchAction('search');
         }
       });
     }, 120);
@@ -154,17 +220,17 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
       inspirationsApi.listElements(),
       inspirationsApi.listFlows(),
       inspirationsApi.getMeta(),
-    ]).then(([apps, screens, elements, flows, meta]) => {
+    ]).then(([apps, screensPage, elementsList, flowsList, meta]) => {
       if (cancelled) return;
       appsRef.current = apps;
       setTopApps(apps.slice(0, 7));
       setRecentSearches((searches) => searches.map((search) => {
         const app = apps.find(({ name }) => name.toLocaleLowerCase() === search.query.toLocaleLowerCase());
-        return app && !search.iconSrc ? { ...search, icon: 'app', iconSrc: inspirationsApi.mediaUrl(app.logo) } : search;
+        return app && !search.iconSrc ? { ...search, icon: 'app', iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined } : search;
       }));
-        setTopScreens(screens.items.slice(0, FIGMA_TOP_RATED_CARDS.length));
-      setTopElements(elements.slice(0, 7));
-        setTopFlows(flows.slice(0, 12));
+        setScreens(screensPage.items);
+      setElements(elementsList);
+        setFlows(flowsList);
         setCategories(
           meta.taxonomy.industries.map((industry) => ({
             value: industry,
@@ -195,7 +261,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     const search = {
       query: trimmedQuery,
       icon: app ? 'app' : recentSearchIconFor(trimmedQuery, suggestion),
-      iconSrc: suggestion?.iconSrc ?? (app ? inspirationsApi.mediaUrl(app.logo) : undefined),
+      iconSrc: suggestion?.iconSrc ?? (app ? inspirationsApi.mediaUrl(app.logo) ?? undefined : undefined),
     };
     setRecentSearches((searches) => [
       search,
@@ -211,19 +277,97 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     window.localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(recentSearches));
   }, [recentSearches]);
 
-  const submit = useCallback(
-    (e?: FormEvent) => {
-      e?.preventDefault();
-      const q = value.trim();
+  // Shared by the form submit and by clicking a recent search — a past
+  // search is something you already ran once, so clicking it re-runs it
+  // immediately rather than just dropping it back into the field for a
+  // second Enter press.
+  const runSearch = useCallback(
+    (query: string, mode?: 'text') => {
+      const q = query.trim();
       if (!q) return;
       addRecentSearch(q);
       setOpen(false);
-      router.push(INSPIRATIONS_ROUTES.searchFor(q));
+      router.push(INSPIRATIONS_ROUTES.searchFor(q, mode));
     },
-    [addRecentSearch, router, value],
+    [addRecentSearch, router],
   );
 
+  const submit = useCallback(
+    (e?: FormEvent) => {
+      e?.preventDefault();
+      // Enter (and the form's own submit) fires whichever of the two search
+      // actions the pointer last hovered — the same thing clicking it
+      // directly would run — rather than always defaulting to a plain
+      // search regardless of which one is showing as selected. Without
+      // this, hovering "Text in Screenshot" and pressing Enter (the natural
+      // thing to do once it looks selected) silently ran a plain search
+      // instead, with no highlights and no indication why.
+      runSearch(value, activeSearchAction === 'screenshot' ? 'text' : undefined);
+    },
+    [runSearch, value, activeSearchAction],
+  );
+
+  const modalSuggestions = suggestions.slice(0, 12);
+  // Matched against the full fetched list, not a 7-item preview slice — a
+  // kind that exists but didn't happen to make the Top Rated row's cutoff
+  // would otherwise never be found here no matter how exactly it's typed.
+  const matchingElements = elements.filter(({ kind }) => kind.toLocaleLowerCase().includes(value.trim().toLocaleLowerCase()));
+  const visibleTopApps = modalPlatform ? topApps.filter((app) => app.platforms.includes(modalPlatform)) : topApps;
+  const visibleFlows = modalPlatform ? flows.filter((flow) => flow.platform === modalPlatform) : flows;
+  // Unlike the Top Rated tab's decorative Screens showcase (fixed stock
+  // imagery, positionally paired with whichever screen happens to fill that
+  // slot), the dedicated Screens tab lists real screens with real names —
+  // each one does carry a genuine platform, so filtering it is honest too.
+  const visibleScreens = modalPlatform ? screens.filter((screen) => screen.platform === modalPlatform) : screens;
+  // Preview-sized slices for the Top Rated tab only — the sidebar's own
+  // Screens/UI Elements/Flows sections use the full lists above instead, so
+  // browsing there isn't artificially capped to whatever fits in this row.
+  const previewScreens = screens.slice(0, FIGMA_TOP_RATED_CARDS.length);
+  const previewElements = elements.slice(0, 7);
+  const previewFlows = visibleFlows.slice(0, 12);
+  const modalSections = [
+    { key: 'top' as const, label: 'Top rated', icon: FIGMA_MODAL_ICONS.topRated },
+    { key: 'categories' as const, label: 'Categories', icon: FIGMA_MODAL_ICONS.categories },
+    { key: 'screens' as const, label: 'Screens', icon: FIGMA_MODAL_ICONS.grid },
+    { key: 'elements' as const, label: 'UI Elements', icon: FIGMA_MODAL_ICONS.list },
+    { key: 'flows' as const, label: 'Flows', icon: FIGMA_MODAL_ICONS.flow },
+  ];
+  // What `browseActive` indexes into for the current section — Top Rated
+  // isn't included (see the state comment above), so it's just an empty
+  // list there and arrow keys quietly do nothing, same as a section with no
+  // items in it yet.
+  const browseItems: { onActivate: () => void }[] =
+    section === 'categories'
+      ? categories.map((c) => ({ onActivate: () => { close(); router.push(`${INSPIRATIONS_ROUTES.screens}?industry=${c.value}`); } }))
+      : section === 'screens'
+        ? visibleScreens.map((s) => ({ onActivate: () => { close(); router.push(INSPIRATIONS_ROUTES.screen(s)); } }))
+        : section === 'elements'
+          ? elements.map((el) => ({ onActivate: () => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(el.kind)}`); } }))
+          : section === 'flows'
+            ? visibleFlows.map((f) => ({ onActivate: () => { close(); router.push(INSPIRATIONS_ROUTES.flow(f)); } }))
+            : [];
+
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (!value.trim()) {
+      // Browsing a section (no query typed) — up/down walks whichever
+      // single-column list is showing, Enter opens what's highlighted. A
+      // separate branch rather than a fallthrough guard: with nothing
+      // typed, `suggestions` has nothing meaningful in it either, so an
+      // empty `browseItems` (Top Rated, or a section with nothing in it)
+      // must not fall through into the suggestions logic below.
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setOpen(true);
+        setBrowseActive((a) => Math.min(a + 1, browseItems.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setBrowseActive((a) => Math.max(a - 1, -1));
+      } else if (e.key === 'Enter' && browseActive >= 0 && browseItems[browseActive]) {
+        e.preventDefault();
+        browseItems[browseActive].onActivate();
+      }
+      return;
+    }
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setOpen(true);
@@ -244,26 +388,10 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
       // shouldn't be the one exception.
       e.preventDefault();
       submit();
-    } else if (e.key === 'Escape') {
-      setOpen(false);
-      inputRef.current?.blur();
     }
+    // Escape is handled by the document-level listener above, uniformly for
+    // the whole modal rather than only while one of these inputs has focus.
   };
-
-  const close = () => {
-    setOpen(false);
-    modalInputRef.current?.blur();
-    inputRef.current?.blur();
-  };
-  const modalSuggestions = suggestions.slice(0, 12);
-  const matchingElements = topElements.filter(({ kind }) => kind.toLocaleLowerCase().includes(value.trim().toLocaleLowerCase()));
-  const modalSections = [
-    { key: 'top' as const, label: 'Top rated', icon: FIGMA_MODAL_ICONS.topRated },
-    { key: 'categories' as const, label: 'Categories', icon: FIGMA_MODAL_ICONS.categories },
-    { key: 'screens' as const, label: 'Screens', icon: FIGMA_MODAL_ICONS.grid },
-    { key: 'elements' as const, label: 'UI Elements', icon: FIGMA_MODAL_ICONS.list },
-    { key: 'flows' as const, label: 'Flows', icon: FIGMA_MODAL_ICONS.flow },
-  ];
   return (
     <div className={`ins-search ${open ? 'is-open' : ''} ${className}`} ref={rootRef} role="search">
       <form onSubmit={submit} className="ins-search-form">
@@ -282,7 +410,9 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
           aria-controls={listId}
           aria-expanded={open}
           role="combobox"
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            if (!suppressAutoOpenRef.current) setOpen(true);
+          }}
           onChange={(e) => {
             setValue(e.target.value);
             setOpen(true);
@@ -327,17 +457,26 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                 onKeyDown={onKeyDown}
               />
             </div>
-            <div className="ins-search-modal-platforms" aria-hidden="true">
-              <img src={FIGMA_MODAL_ICONS.apple} alt="" width={24} height={24} />
-              <img src={FIGMA_MODAL_ICONS.android} alt="" width={24} height={24} />
-              <img src={FIGMA_MODAL_ICONS.web} alt="" width={24} height={24} />
+            <div className="ins-search-modal-platforms" role="group" aria-label="Filter by platform">
+              {MODAL_PLATFORMS.map(({ value, Icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={modalPlatform === value ? 'is-active' : ''}
+                  aria-pressed={modalPlatform === value}
+                  aria-label={PLATFORM_LABEL[value] ?? value}
+                  onClick={() => setModalPlatform((current) => (current === value ? null : value))}
+                >
+                  <Icon size={20} />
+                </button>
+              ))}
             </div>
           </form>
           {!value.trim() && recentSearches.length > 0 && (
             <div className="ins-search-chips" aria-label="Recent searches">
               {recentSearches.map(({ query, icon, iconSrc }) => (
                 <div key={query} className="ins-search-chip">
-                  <button type="button" className="ins-search-chip-query" onClick={() => setValue(query)}><img className={`ins-search-chip-icon ${iconSrc ? 'is-app-logo' : ''}`} src={iconSrc ?? RECENT_SEARCH_ICON_SOURCES[icon]} alt="" width={icon === 'app' || iconSrc ? 28 : 20} height={icon === 'app' || iconSrc ? 28 : 20} />{query}</button>
+                  <button type="button" className="ins-search-chip-query" onClick={() => runSearch(query)}><img className={`ins-search-chip-icon ${iconSrc ? 'is-app-logo' : ''}`} src={iconSrc ?? RECENT_SEARCH_ICON_SOURCES[icon]} alt="" width={icon === 'app' || iconSrc ? 28 : 20} height={icon === 'app' || iconSrc ? 28 : 20} />{query}</button>
                   <button type="button" className="ins-search-chip-remove" aria-label={`Remove ${query} from recent searches`} onClick={() => removeRecentSearch(query)}><CloseIcon size={14} /></button>
                 </div>
               ))}
@@ -347,7 +486,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
             {!value.trim() && (
               <nav className="ins-search-modal-nav" aria-label="Search sections">
                 {modalSections.map(({ key, label, icon }) => (
-                  <button key={key} type="button" className={section === key ? 'is-active' : ''} onClick={() => setSection(key)}><img src={icon} alt="" width={20} height={20} />{label}</button>
+                  <button key={key} type="button" className={section === key ? 'is-active' : ''} onClick={() => { setSection(key); setBrowseActive(-1); }}><img src={icon} alt="" width={20} height={20} />{label}</button>
                 ))}
               </nav>
             )}
@@ -356,17 +495,20 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
               {!value.trim() && section === 'top' ? (
                 <div className="ins-search-top-rated">
                   <div className="ins-search-top-apps" aria-label="Top rated apps">
-                    {topApps.map((app) => (
+                    {visibleTopApps.map((app) => (
                       <button key={app.id} type="button" onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.app(app)); }}>
                         <AppLogo app={app} size={82} />
                         <strong>{app.name}</strong>
                       </button>
                     ))}
+                    {modalPlatform && visibleTopApps.length === 0 && (
+                      <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} apps yet.</p>
+                    )}
                   </div>
                   <section className="ins-search-top-section">
                     <div className="ins-search-top-heading">Screens</div>
                     <div className="ins-search-top-screens">
-                      {topScreens.map((screen, index) => {
+                      {previewScreens.map((screen, index) => {
                         const [label, assetName] = FIGMA_TOP_RATED_CARDS[index];
                         return (
                           <button key={screen.id} type="button" className={index === 0 ? 'is-featured' : ''} onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.screen(screen)); }}>
@@ -384,22 +526,32 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                   <section className="ins-search-top-section">
                     <div className="ins-search-top-heading">UI Elements</div>
                     <div className="ins-search-top-elements">
-                      {topElements.map((element) => <button key={element.kind} type="button" onClick={() => router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`)}><span><img src="/ASSET/search-modal/top-rated/element.svg" alt="" width={20} height={20} /></span>{element.kind}</button>)}
+                      {previewElements.map((element) => <button key={element.kind} type="button" onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}><span><img src="/ASSET/search-modal/top-rated/element.svg" alt="" width={20} height={20} /></span>{element.kind}</button>)}
                     </div>
                   </section>
                   <section className="ins-search-top-section">
                     <div className="ins-search-top-heading">Flows</div>
                     <div className="ins-search-top-elements ins-search-top-flows">
-                      {topFlows.map((flow) => <button key={flow.id} type="button" onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.flow(flow)); }}><span><img src="/ASSET/search-modal/top-rated/flow.svg" alt="" width={20} height={20} /></span>{flow.name}</button>)}
+                      {previewFlows.map((flow) => <button key={flow.id} type="button" onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.flow(flow)); }}><span><img src="/ASSET/search-modal/top-rated/flow.svg" alt="" width={20} height={20} /></span>{flow.name}</button>)}
+                      {modalPlatform && previewFlows.length === 0 && (
+                        <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} flows yet.</p>
+                      )}
                     </div>
                   </section>
                 </div>
               ) : !value.trim() && section === 'categories' ? (
                 <div className="ins-search-categories" aria-label="Categories">
-                  {categories.map(({ value, label, count }) => (
+                  {categories.map(({ value, label, count }, index) => (
                     <button
                       key={value}
                       type="button"
+                     
+                      role="option"
+                      aria-selected={index === browseActive}
+                      className={index === browseActive ? 'is-active' : ''}
+                      onMouseEnter={() => setBrowseActive(index)}
+                      onFocus={() => setBrowseActive(index)}
+                      onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.screens}?industry=${value}`); }}
                     >
                       <strong>{label}</strong>
                       <span>{count}</span>
@@ -408,17 +560,40 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                 </div>
               ) : !value.trim() && section === 'screens' ? (
                 <div className="ins-search-resource-list" aria-label="Screens">
-                  {topScreens.map((screen) => (
-                    <button key={screen.id} type="button" onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.screen(screen)); }}>
+                  {visibleScreens.map((screen, index) => (
+                    <button
+                      key={screen.id}
+                      type="button"
+                     
+                      role="option"
+                      aria-selected={index === browseActive}
+                      className={index === browseActive ? 'is-active' : ''}
+                      onMouseEnter={() => setBrowseActive(index)}
+                      onFocus={() => setBrowseActive(index)}
+                      onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.screen(screen)); }}
+                    >
                       <strong>{screen.name}</strong>
                       <span>{screen.elements.length}</span>
                     </button>
                   ))}
+                  {modalPlatform && visibleScreens.length === 0 && (
+                    <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} screens yet.</p>
+                  )}
                 </div>
               ) : !value.trim() && section === 'elements' ? (
                 <div className="ins-search-resource-list" aria-label="UI Elements">
-                  {topElements.map((element) => (
-                    <button key={element.kind} type="button" onClick={() => router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`)}>
+                  {elements.map((element, index) => (
+                    <button
+                      key={element.kind}
+                      type="button"
+                     
+                      role="option"
+                      aria-selected={index === browseActive}
+                      className={index === browseActive ? 'is-active' : ''}
+                      onMouseEnter={() => setBrowseActive(index)}
+                      onFocus={() => setBrowseActive(index)}
+                      onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}
+                    >
                       <strong>{element.kind}</strong>
                       <span>{element.count}</span>
                     </button>
@@ -426,15 +601,52 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                 </div>
               ) : !value.trim() && section === 'flows' ? (
                 <div className="ins-search-resource-list" aria-label="Flows">
-                  {topFlows.map((flow) => (
-                    <button key={flow.id} type="button" onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.flow(flow)); }}>
+                  {visibleFlows.map((flow, index) => (
+                    <button
+                      key={flow.id}
+                      type="button"
+                     
+                      role="option"
+                      aria-selected={index === browseActive}
+                      className={index === browseActive ? 'is-active' : ''}
+                      onMouseEnter={() => setBrowseActive(index)}
+                      onFocus={() => setBrowseActive(index)}
+                      onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.flow(flow)); }}
+                    >
                       <strong>{flow.name}</strong>
                       <span>{flow.screenIds.length}</span>
                     </button>
                   ))}
+                  {modalPlatform && visibleFlows.length === 0 && (
+                    <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} flows yet.</p>
+                  )}
                 </div>
               ) : (
                 <div className="ins-search-suggestions">
+                  <section className="ins-search-search-actions" aria-label="Search actions">
+                    <button
+                      type="button"
+                     
+                      className={`ins-search-search-action ${activeSearchAction === 'search' ? 'is-active' : ''}`}
+                      onMouseEnter={() => { setActive(-1); setActiveSearchAction('search'); }}
+                      onFocus={() => { setActive(-1); setActiveSearchAction('search'); }}
+                      onClick={() => runSearch(value)}
+                    >
+                      <span><img src={FIGMA_MODAL_ICONS.search} alt="" width={20} height={20} /></span>
+                      Search
+                    </button>
+                    <button
+                      type="button"
+                     
+                      className={`ins-search-search-action ${activeSearchAction === 'screenshot' ? 'is-active' : ''}`}
+                      onMouseEnter={() => { setActive(-1); setActiveSearchAction('screenshot'); }}
+                      onFocus={() => { setActive(-1); setActiveSearchAction('screenshot'); }}
+                      onClick={() => runSearch(value, 'text')}
+                    >
+                      <span><img src={TEXT_IN_SCREENSHOT_ICON} alt="" width={20} height={20} /></span>
+                      Text in Screenshot
+                    </button>
+                  </section>
                   <section className="ins-search-suggestion-section">
                     <div className="ins-search-suggestion-heading">Others</div>
                     <div className="ins-search-modal-list">
@@ -442,10 +654,12 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       <button
                         key={`${s.href}-${i}`}
                         type="button"
+                       
                         className={`ins-search-modal-item ${i === active ? 'is-active' : ''}`}
                         role="option"
                         aria-selected={i === active}
-                        onMouseEnter={() => setActive(i)}
+                        onMouseEnter={() => { setActive(i); setActiveSearchAction(null); }}
+                        onFocus={() => { setActive(i); setActiveSearchAction(null); }}
                         onClick={() => { addRecentSearch(s.label, s); close(); router.push(s.href); }}
                       >
                         <span className="ins-search-modal-item-mark">{s.iconSrc ? <img src={s.iconSrc} alt="" /> : s.label.slice(0, 1)}</span>
@@ -461,11 +675,14 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                     <section className="ins-search-suggestion-section ins-search-suggestion-elements">
                       <div className="ins-search-suggestion-heading">UI Elements</div>
                       <div className="ins-search-top-elements">
-                        {matchingElements.map((element) => <button key={element.kind} type="button" onClick={() => router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`)}><span><img src="/ASSET/search-modal/top-rated/element.svg" alt="" width={20} height={20} /></span>{element.kind}</button>)}
+                        {matchingElements.map((element) => <button key={element.kind} type="button" onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}><span><img src="/ASSET/search-modal/top-rated/element.svg" alt="" width={20} height={20} /></span>{element.kind}</button>)}
                       </div>
                     </section>
                   )}
-                  <p className="ins-search-suggestion-footer">Looking for something else? <button type="button">Request app</button></p>
+                  <p className="ins-search-suggestion-footer">
+                    Looking for something else?{' '}
+                    <a href={`mailto:surendarv638@gmail.com?subject=${encodeURIComponent(`App request: ${value.trim()}`)}`}>Request app</a>
+                  </p>
                 </div>
               )}
             </div>
