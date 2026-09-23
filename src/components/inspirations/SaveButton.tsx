@@ -34,7 +34,10 @@ export function SaveButton({
     e.preventDefault();
     e.stopPropagation();
     const nowSaved = toggleSaved(type, id);
-    show(nowSaved ? 'Saved' : 'Removed from saved', nowSaved ? { label: 'View', onClick: () => router.push(INSPIRATIONS_ROUTES.saved) } : undefined);
+    show(
+      nowSaved ? 'Saved' : 'Removed from saved',
+      nowSaved ? { label: 'View', onClick: () => router.push(INSPIRATIONS_ROUTES.collections) } : undefined,
+    );
   };
 
   const text = label ?? (saved ? 'Saved' : 'Save');

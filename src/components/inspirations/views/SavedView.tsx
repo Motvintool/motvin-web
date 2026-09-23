@@ -2,16 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useMemo } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { elementLabel } from '@/lib/inspirations/taxonomy';
 import type { App, CollectionItem, Screen } from '@/lib/inspirations/types';
 import { AppCard } from '../AppCard';
+import { CollectionCard } from '../CollectionCard';
 import { EmptyState } from '../EmptyState';
 import { FlowCard } from '../FlowCard';
 import { FloatCollectionBar } from '../FloatCollectionBar';
-import { BookmarkIcon, ChevronDownIcon } from '../Icons';
+import { BookmarkIcon, FolderIcon, PlusIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
 import { PatternCard } from '../PatternCard';
 import { ScreenGrid } from '../ScreenGrid';
@@ -21,16 +22,10 @@ import { useLibrary } from '../useLibrary';
 import { useAppSelection } from '../useAppSelection';
 import { useScreensByIds } from '../useScreensByIds';
 
-type SavedTab = 'all' | 'apps' | 'screens' | 'flows' | 'patterns' | 'components';
-type Sort = 'saved' | 'viewed';
+type SavedTab = 'apps' | 'screens' | 'flows' | 'patterns' | 'components';
 
-const TABS: { id: SavedTab; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'screens', label: 'Screens' },
-  { id: 'flows', label: 'Flows' },
-  { id: 'patterns', label: 'Patterns' },
-  { id: 'components', label: 'Components' },
-];
+/** Suggested starting boards for a visitor with none yet. */
+const BOARD_STARTERS = ['My Inspiration', 'Dashboard Ideas', 'Checkout References', 'AI Products', 'Mobile Navigation'];
 
 const COLLECTION_TABS: { id: SavedTab; label: string }[] = [
   { id: 'apps', label: 'Apps' },
@@ -40,30 +35,38 @@ const COLLECTION_TABS: { id: SavedTab; label: string }[] = [
   { id: 'patterns', label: 'Patterns' },
 ];
 
-const SORTS: { id: Sort; label: string }[] = [
-  { id: 'saved', label: 'Recently saved' },
-  { id: 'viewed', label: 'Recently viewed' },
-];
-
 /**
- * /inspirations/saved — what the visitor bookmarked, in the same gallery as
- * Explore. `?collection=` narrows to one board.
+ * /inspirations/collections — the visitor's boards. Bare, it's the boards
+ * grid; `?collection=<id>` opens one board's contents behind its own
+ * Apps/Screens/UI Elements/Flows/Patterns tabs — every dimension a
+ * "browse everything by type" view would have offered, a real board already
+ * has, so there's no separate flat-list destination duplicating it.
+ * `/inspirations/saved` used to be that second, overlapping entry point; it
+ * now redirects here (next.config.ts).
  */
 export function SavedView() {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const { saved, collections, deleteCollection } = useLibrary();
+  const { collections, createCollection, deleteCollection } = useLibrary();
   const apps = useApps();
   const { selected, toggle, clear } = useAppSelection();
+  const [creatingBoard, setCreatingBoard] = useState(false);
+  const [newBoardName, setNewBoardName] = useState('');
 
   const collectionId = params.get('collection');
   const collection = collections.find((c) => c.id === collectionId);
-  const tabs = collection ? COLLECTION_TABS : TABS;
+
   const rawTab = params.get('type');
-  const tab: SavedTab = tabs.some((t) => t.id === rawTab) ? (rawTab as SavedTab) : collection ? 'apps' : 'all';
-  const rawSort = params.get('sort');
-  const sort: Sort = SORTS.some((s) => s.id === rawSort) ? (rawSort as Sort) : 'saved';
+  const tab: SavedTab = COLLECTION_TABS.some((t) => t.id === rawTab) ? (rawTab as SavedTab) : 'apps';
+
+  const onCreateBoard = (e: FormEvent) => {
+    e.preventDefault();
+    if (!newBoardName.trim()) return;
+    createCollection(newBoardName);
+    setNewBoardName('');
+    setCreatingBoard(false);
+  };
 
   const setParam = (key: string, value: string | null) => {
     const sp = new URLSearchParams(params.toString());
@@ -74,19 +77,9 @@ export function SavedView() {
   };
 
   const items: CollectionItem[] = useMemo(() => {
-    const source = collection ? collection.items : saved;
-    const list = [...source];
-    if (sort === 'viewed') {
-      const stamp = (i: CollectionItem): string => {
-        const viewed = (i as { viewedAt?: string }).viewedAt;
-        return viewed ?? i.addedAt;
-      };
-      list.sort((a, b) => stamp(b).localeCompare(stamp(a)));
-    } else {
-      list.sort((a, b) => b.addedAt.localeCompare(a.addedAt));
-    }
-    return list;
-  }, [collection, saved, sort]);
+    if (!collection) return [];
+    return [...collection.items].sort((a, b) => b.addedAt.localeCompare(a.addedAt));
+  }, [collection]);
 
   const screenIds = items.filter((i) => i.type === 'screen').map((i) => i.id);
   const { screens: screenMap } = useScreensByIds(screenIds);
@@ -118,10 +111,8 @@ export function SavedView() {
     .filter((app): app is App => Boolean(app));
 
   const count = (t: SavedTab) =>
-    t === 'all'
-      ? items.length
-      : t === 'apps'
-        ? savedAppIds.length
+    t === 'apps'
+      ? savedAppIds.length
       : t === 'screens'
         ? screenIds.length
         : t === 'flows'
@@ -132,67 +123,103 @@ export function SavedView() {
 
   const total = items.length;
 
-  const collectionHeader = collection ? (
-    <header className="ins-collection-detail-head">
-      <div className="ins-collection-detail-title">
-        <Link href={INSPIRATIONS_ROUTES.collections} className="ins-collections-back" aria-label="Back to collections">
-          <img src="/ASSET/Icons/Motvin/colletion-back.svg" alt="" width={58} height={58} />
-        </Link>
-        <h1 className="ins-title">{collection.name}</h1>
-      </div>
-      <button
-        type="button"
-        className="ins-collection-remove"
-        onClick={() => {
-          if (window.confirm(`Remove "${collection.name}"? Items stay in Saved.`)) {
-            deleteCollection(collection.id);
-            router.push(INSPIRATIONS_ROUTES.collections);
+  // --- Boards grid (no ?collection=): boards + create-board panel only. No
+  // tab strip here — type-browsing lives inside a board, not duplicated at
+  // this level too.
+  if (!collection) {
+    return (
+      <section>
+        <PageHeading
+          title="Collections"
+          actions={
+            creatingBoard ? (
+              <form className="ins-collections-create" onSubmit={onCreateBoard}>
+                <input
+                  className="ins-collections-create-input"
+                  placeholder="Collection Name"
+                  value={newBoardName}
+                  onChange={(e) => setNewBoardName(e.target.value)}
+                  autoFocus
+                  aria-label="New collection name"
+                  maxLength={48}
+                />
+                <button type="button" className="ins-collections-cancel" onClick={() => setCreatingBoard(false)}>
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <button type="button" className="ins-collections-new" onClick={() => setCreatingBoard(true)}>
+                <img src="/ASSET/Icons/Motvin/colletion-new.svg" alt="" width={16} height={16} />
+                New collection
+              </button>
+            )
           }
-        }}
-      >
-        <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={20} height={20} />
-        Remove Collection
-      </button>
-    </header>
-  ) : (
-    <PageHeading
-      title="Saved"
-      actions={
-        total > 0 ? (
-            <label className="ins-select-wrap">
-              <span className="ins-select-label">Sort</span>
-              <select
-                className="ins-select"
-                value={sort}
-                onChange={(e) => setParam('sort', e.target.value === 'saved' ? null : e.target.value)}
-                aria-label="Sort saved items"
-              >
-                {SORTS.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
+        />
+
+        {collections.length === 0 ? (
+          <>
+            <EmptyState
+              icon={<FolderIcon size={22} />}
+              title="No collections yet"
+              description="Collections are visual boards. Save screens, apps, flows and patterns into them as you explore."
+              action={{ label: 'Start exploring', href: INSPIRATIONS_ROUTES.explore }}
+            />
+            <div className="ins-starters">
+              <p className="ins-muted">Start with a board:</p>
+              <div className="ins-chips">
+                {BOARD_STARTERS.map((s) => (
+                  <button key={s} type="button" className="ins-chip" onClick={() => createCollection(s)}>
+                    <PlusIcon size={12} /> {s}
+                  </button>
                 ))}
-              </select>
-              <ChevronDownIcon size={14} className="ins-select-icon" />
-            </label>
-        ) : undefined
-      }
-    />
-  );
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="ins-collection-grid">
+            {collections.map((c) => (
+              <CollectionCard key={c.id} collection={c} apps={apps} />
+            ))}
+          </div>
+        )}
+      </section>
+    );
+  }
 
+  // --- One board's contents — Apps/Screens/UI Elements/Flows/Patterns tabs.
   return (
-    <section className={collection ? 'ins-collection-detail' : undefined}>
-      {collectionHeader}
+    <section className="ins-collection-detail">
+      <header className="ins-collection-detail-head">
+        <div className="ins-collection-detail-title">
+          <Link href={INSPIRATIONS_ROUTES.collections} className="ins-collections-back" aria-label="Back to collections">
+            <img src="/ASSET/Icons/Motvin/colletion-back.svg" alt="" width={58} height={58} />
+          </Link>
+          <h1 className="ins-title">{collection.name}</h1>
+        </div>
+        <button
+          type="button"
+          className="ins-collection-remove"
+          onClick={() => {
+            if (window.confirm(`Remove "${collection.name}"? Items stay saved.`)) {
+              deleteCollection(collection.id);
+              router.push(INSPIRATIONS_ROUTES.collections);
+            }
+          }}
+        >
+          <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={20} height={20} />
+          Remove Collection
+        </button>
+      </header>
 
-      <div className={`ins-tabbar ${collection ? 'ins-collection-detail-tabs' : ''}`} role="tablist" aria-label="Saved type">
-        {tabs.map((t) => (
+      <div className="ins-tabbar ins-collection-detail-tabs" role="tablist" aria-label="Item type">
+        {COLLECTION_TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             role="tab"
             aria-selected={tab === t.id}
             className={`ins-tab ${tab === t.id ? 'is-active' : ''}`}
-            onClick={() => setParam('type', t.id === 'all' ? null : t.id)}
+            onClick={() => setParam('type', t.id === 'apps' ? null : t.id)}
           >
             {t.label}
             {count(t.id) > 0 && <span className="ins-tab-count">{count(t.id)}</span>}
@@ -203,89 +230,87 @@ export function SavedView() {
       {total === 0 ? (
         <EmptyState
           icon={<BookmarkIcon size={22} />}
-          title={collection ? 'This collection is empty' : 'Nothing saved yet'}
+          title="This collection is empty"
           description="Hover any screen and press Save, or add it to a collection."
           action={{ label: 'Explore screens', href: INSPIRATIONS_ROUTES.explore }}
         />
       ) : (
         <div className="ins-results">
-          {(tab === 'all' || tab === 'screens') && screens.length > 0 && (
-            <section className="ins-result-section">
-              {tab === 'all' && (
-                <h2 className="ins-section-title">
-                  Screens
-                </h2>
-              )}
-              <ScreenGrid screens={screens} apps={apps} />
+          {tab === 'screens' && (
+            <section className="ins-result-section ins-shot-panel">
+              <ScreenGrid
+                screens={screens}
+                apps={apps}
+                showApp={false}
+                showMeta={false}
+                selectable
+                empty={<EmptyState title="No saved screens" />}
+              />
             </section>
           )}
 
-          {(tab === 'all' || tab === 'flows') && (flows ?? []).length > 0 && (
+          {tab === 'flows' && (
             <section className="ins-result-section">
-              {tab === 'all' && (
-                <h2 className="ins-section-title">
-                  Flows
-                </h2>
+              {(flows ?? []).length === 0 ? (
+                <EmptyState title="No saved flows" />
+              ) : (
+                <div className="ins-flow-grid">
+                  {(flows ?? []).map(({ flow, screens: flowScreens }) => (
+                    <FlowCard key={flow.id} flow={flow} screens={flowScreens} app={apps.get(flow.appId)} />
+                  ))}
+                </div>
               )}
-              <div className="ins-flow-grid">
-                {(flows ?? []).map(({ flow, screens: flowScreens }) => (
-                  <FlowCard key={flow.id} flow={flow} screens={flowScreens} app={apps.get(flow.appId)} />
-                ))}
-              </div>
             </section>
           )}
 
-          {(tab === 'all' || tab === 'patterns') && patterns.length > 0 && (
+          {tab === 'patterns' && (
             <section className="ins-result-section">
-              {tab === 'all' && (
-                <h2 className="ins-section-title">
-                  Patterns
-                </h2>
+              {patterns.length === 0 ? (
+                <EmptyState title="No saved patterns" />
+              ) : (
+                <div className="ins-pattern-grid-wrap">
+                  {patterns.map((p) => (
+                    <PatternCard key={p.id} pattern={p} />
+                  ))}
+                </div>
               )}
-              <div className="ins-pattern-grid-wrap">
-                {patterns.map((p) => (
-                  <PatternCard key={p.id} pattern={p} />
-                ))}
-              </div>
             </section>
           )}
 
-          {(tab === 'all' || tab === 'components') && components.length > 0 && (
+          {tab === 'components' && (
             <section className="ins-result-section">
-              {tab === 'all' && (
-                <h2 className="ins-section-title">
-                  Components
-                </h2>
+              {components.length === 0 ? (
+                <EmptyState title="No saved components" />
+              ) : (
+                <div className="ins-element-list">
+                  {components.map((c) => {
+                    const [screenId, kind] = c.id.split(':');
+                    const screen = screenMap.get(screenId);
+                    return (
+                      <Link
+                        key={c.id}
+                        href={
+                          screen
+                            ? `${INSPIRATIONS_ROUTES.screen(screen)}?tab=extract`
+                            : `${INSPIRATIONS_ROUTES.uiElements}?kind=${kind}`
+                        }
+                        className="ins-element-row"
+                      >
+                        <span className="ins-element-name">{elementLabel(kind)}</span>
+                        <span className="ins-element-count">{screen ? screen.name : ''}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
               )}
-              <div className="ins-element-list">
-                {components.map((c) => {
-                  const [screenId, kind] = c.id.split(':');
-                  const screen = screenMap.get(screenId);
-                  return (
-                    <Link
-                      key={c.id}
-                      href={
-                        screen
-                          ? `${INSPIRATIONS_ROUTES.screen(screen)}?tab=extract`
-                          : `${INSPIRATIONS_ROUTES.uiElements}?kind=${kind}`
-                      }
-                      className="ins-element-row"
-                    >
-                      <span className="ins-element-name">{elementLabel(kind)}</span>
-                      <span className="ins-element-count">{screen ? screen.name : ''}</span>
-                    </Link>
-                  );
-                })}
-              </div>
             </section>
           )}
 
-          {(tab === 'all' || tab === 'apps') && savedApps.length > 0 && (
+          {tab === 'apps' && (
             <section className="ins-result-section">
-              {tab === 'all' && <h2 className="ins-section-title">
-                Apps
-              </h2>}
-              {appPreviewsLoading ? (
+              {savedApps.length === 0 ? (
+                <EmptyState title="No saved apps" />
+              ) : appPreviewsLoading ? (
                 <div className="ins-grid" aria-busy="true" />
               ) : (
                 <>
@@ -304,10 +329,6 @@ export function SavedView() {
                 </>
               )}
             </section>
-          )}
-
-          {tab !== 'all' && count(tab) === 0 && (
-            <EmptyState title={`No saved ${tab}`} action={{ label: 'Show everything', onClick: () => setParam('type', null) }} />
           )}
         </div>
       )}

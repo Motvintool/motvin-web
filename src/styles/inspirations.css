@@ -302,6 +302,14 @@ body {
 .ins-header-inner {
   height: 100%;
   width: 100%;
+  position: relative;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.ins-header-content {
+  height: 100%;
+  width: 100%;
   padding: 0 80px;
   display: grid;
   grid-template-columns: 1fr minmax(0, 560px) 1fr;
@@ -1097,17 +1105,23 @@ body {
   margin: 0;
 }
 
+/* Keep the original row in normal flow while its interactive copy is in the
+   header. This preserves the anchor's geometry and prevents scroll anchoring
+   from snapping the page at the dock boundary. */
+.ins-ftoolbar.is-docked-placeholder {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* Docked (Mobbin's header swap): the row leaves the flow and takes over the
    header bar — same height, same 80px side padding as .ins-header-inner — one
    z step above the header so it paints over the (faded) header content while
    the header's own glass keeps providing the background. The anchor below
    holds the row's height so the gallery doesn't jump. */
 .ins-ftoolbar.is-docked {
-  position: fixed;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 41;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   height: var(--ins-header-h, 92px);
   margin: 0;
   padding: 0 80px;
@@ -1136,13 +1150,24 @@ body {
 
 /* The counterpart fade: while the toolbar occupies the bar, the header's own
    content steps aside (kept mounted so search state and menus survive). */
-.ins-header-inner {
+.ins-header-content {
   transition: opacity 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-body.ins-toolbar-docked .ins-header-inner {
-  opacity: 0;
+body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   pointer-events: none;
+  visibility: hidden;
+  animation: insHeaderContentFadeOut 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.ins-header-content > .ins-ftoolbar {
+  pointer-events: auto;
+}
+
+@keyframes insHeaderContentFadeOut {
+  to {
+    opacity: 0;
+  }
 }
 
 
@@ -1191,6 +1216,10 @@ body.ins-toolbar-docked .ins-header-inner {
   color: var(--ins-on-accent);
   flex: none;
   transition: opacity var(--ins-fast) var(--ins-ease);
+}
+
+.ins-fpill-x svg {
+  stroke-width: 4px;
 }
 
 .ins-fpill-x:hover {

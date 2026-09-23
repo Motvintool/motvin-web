@@ -100,6 +100,7 @@ export function Header() {
   return (
     <header className="ins-header">
       <div className="ins-header-inner">
+        <div className="ins-header-content">
         <div className="ins-header-left">
           <Link href={INSPIRATIONS_ROUTES.explore} className="ins-brand-logo" aria-label="Motvin Inspirations home">
             <img src="/ASSET/svg/nav-motvin-logo.svg" alt="" className="ins-brand-logo-img" width={46} height={46} />
@@ -141,12 +142,19 @@ export function Header() {
 
         <div className="ins-header-right">
           <div className="ins-header-action-links">
-            <Link href={INSPIRATIONS_ROUTES.saved} className="ins-header-action-link" aria-label="Saved" aria-current={pathname === INSPIRATIONS_ROUTES.saved ? 'page' : undefined}>
+            <Link
+              href={INSPIRATIONS_ROUTES.collections}
+              className="ins-header-action-link"
+              aria-label="Collections"
+              aria-current={pathname === INSPIRATIONS_ROUTES.collections ? 'page' : undefined}
+            >
               <img src="/ASSET/Icons/Motvin/save.svg" alt="" width={24} height={24} />
             </Link>
-            <Link href={INSPIRATIONS_ROUTES.collections} className="ins-header-action-link" aria-label="Collections" aria-current={pathname === INSPIRATIONS_ROUTES.collections ? 'page' : undefined}>
-              <img src="/ASSET/Icons/Motvin/collection.svg" alt="" width={24} height={24} />
-            </Link>
+            {/* Same-origin but deliberately a new tab, so leaving to read
+                release notes never loses whatever the visitor was browsing. */}
+            <a href="/updates/" className="ins-header-action-link" aria-label="Release notes" target="_blank" rel="noopener noreferrer">
+              <img src="/ASSET/Icons/Motvin/collection.svg" alt="" width={22} height={22} />
+            </a>
           </div>
           <div className="ins-header-profile">
             <ProfileMenu />
@@ -154,6 +162,7 @@ export function Header() {
               <img src="/ASSET/Icons/Motvin/hamburger-menu.svg" alt="" className="ins-header-menu-icon" width={18} height={15} />
             </button>
           </div>
+        </div>
         </div>
       </div>
 
@@ -180,10 +189,10 @@ export function Header() {
               <Link href={INSPIRATIONS_ROUTES.flows} className="ins-drawer-link">Flows</Link>
               <Link href={INSPIRATIONS_ROUTES.patterns} className="ins-drawer-link">Patterns</Link>
               <p className="ins-drawer-label">Library</p>
-              <Link href={INSPIRATIONS_ROUTES.saved} className="ins-drawer-link">Saved</Link>
               <Link href={INSPIRATIONS_ROUTES.collections} className="ins-drawer-link">Collections</Link>
               <p className="ins-drawer-label">Motvin</p>
               <a href="/icons" className="ins-drawer-link">Icon library</a>
+              <a href="/updates/" className="ins-drawer-link" target="_blank" rel="noopener noreferrer">Release notes</a>
               <Link href="/" className="ins-drawer-link">Home</Link>
             </nav>
           </div>

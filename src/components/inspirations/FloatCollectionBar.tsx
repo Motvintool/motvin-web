@@ -1,22 +1,26 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
+import { DEFAULT_COLLECTION_NAME } from '@/lib/inspirations/store';
 import type { App, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { useLibrary } from './useLibrary';
 
 /** The stack only has room to show a few faces before they'd be unreadable. */
 const MAX_LOGOS = 3;
-/** Pre-filled rather than a placeholder — this preserves the existing save flow. */
-const DEFAULT_NAME = 'My Favourite Collection';
 /** How long the success state (Figma node 1039:40918) stays up before the
  * selection actually clears and the bar disappears — long enough to read,
  * short enough that it doesn't feel stuck. */
 const SUCCESS_DURATION_MS = 1600;
 
 /**
- * Floating bar for saving selected apps into a collection or selected screens
- * into the main Saved library.
+ * Floating bar for saving a selection — apps or screens — into a collection.
+ * One flow either way: name it (pre-filled with the shared default board so
+ * leaving it untouched is a one-click save) and submit. Screens used to have
+ * their own shortcut here that skipped straight into a separate flat "Saved"
+ * pool with no naming step; that pool had nowhere left to be viewed once the
+ * standalone Saved page was removed, so it's gone — every save, app or
+ * screen, goes through the one collection-based path Collections shows.
  * Figma: node 1067:48859 ("float-collection"), node 1039:40918
  * ("float-collection-success") for the confirmation it swaps to on save.
  *
@@ -28,21 +32,21 @@ export function FloatCollectionBar({
   apps,
   screens,
   screenApp,
-  destination = 'collection',
   onClose,
   onSaved,
 }: {
   apps?: App[];
   screens?: Screen[];
   screenApp?: App;
-  destination?: 'collection' | 'saved';
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { createCollection, isSaved, toggleInCollection, toggleSaved } = useLibrary();
-  const [name, setName] = useState(DEFAULT_NAME);
+  const { getOrCreateCollectionByName, toggleInCollection } = useLibrary();
+  // Pre-filled rather than a placeholder — same name the store auto-creates
+  // for a plain bookmark, so leaving it untouched here lands in that same
+  // board rather than spawning a lookalike duplicate.
+  const [name, setName] = useState(DEFAULT_COLLECTION_NAME);
   const [saved, setSaved] = useState(false);
-  const saveToLibrary = destination === 'saved';
 
   // The success state is a confirmation, not a modal you dismiss — it clears
   // itself (via onSaved, which drops the selection and unmounts this whole
@@ -55,16 +59,12 @@ export function FloatCollectionBar({
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (saveToLibrary) {
-      for (const screen of screens ?? []) {
-        if (!isSaved('screen', screen.id)) toggleSaved('screen', screen.id);
-      }
-      setSaved(true);
-      return;
-    }
     const trimmed = name.trim();
     if (!trimmed) return;
-    const collection = createCollection(trimmed);
+    // Reuses a board with this exact name if one already exists — the
+    // pre-filled default name is meant to keep landing in the same board,
+    // not spawn a fresh lookalike every time it's submitted unchanged.
+    const collection = getOrCreateCollectionByName(trimmed);
     if (screens) {
       for (const screen of screens) toggleInCollection(collection.id, { type: 'screen', id: screen.id });
     } else {
@@ -93,14 +93,14 @@ export function FloatCollectionBar({
           <span className="ins-float-collection-success-check" aria-hidden>
             <span />
           </span>
-          {saveToLibrary ? 'Saved' : 'Saved to collection'}
+          Saved to collection
         </div>
       </div>
     );
   }
 
   return (
-    <div className="ins-float-collection" role="region" aria-label={saveToLibrary ? 'Save selected screens' : 'Save selected items to a collection'}>
+    <div className="ins-float-collection" role="region" aria-label="Save selected items to a collection">
       <form className="ins-float-collection-bar" onSubmit={onSubmit}>
         <div className="ins-float-collection-logos" style={{ width: logosWidth }}>
           {visible.map((app, i) => (
@@ -113,31 +113,23 @@ export function FloatCollectionBar({
             </span>
           ))}
         </div>
-        {saveToLibrary ? (
-          <span className="ins-float-collection-label">
-            Save {screens?.length === 1 ? 'screen' : `${screens?.length ?? 0} screens`}
-          </span>
-        ) : (
-          <>
-            <img
-              src="/ASSET/Icons/Motvin/float-collection-arrow.svg"
-              alt=""
-              className="ins-float-collection-arrow"
-              width={27}
-              height={20}
-            />
-            <input
-              type="text"
-              className="ins-float-collection-input"
-              placeholder="Collection name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={48}
-              aria-label="Collection name"
-            />
-          </>
-        )}
-        <button type="submit" className="ins-float-collection-save" disabled={!saveToLibrary && !name.trim()}>
+        <img
+          src="/ASSET/Icons/Motvin/float-collection-arrow.svg"
+          alt=""
+          className="ins-float-collection-arrow"
+          width={27}
+          height={20}
+        />
+        <input
+          type="text"
+          className="ins-float-collection-input"
+          placeholder="Collection name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={48}
+          aria-label="Collection name"
+        />
+        <button type="submit" className="ins-float-collection-save" disabled={!name.trim()}>
           Save
         </button>
       </form>

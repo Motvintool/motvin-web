@@ -63,6 +63,13 @@ const nextConfig: NextConfig = {
       // links by 308-redirecting to the new canonical /updates URL.
       { source: '/release-notes', destination: '/updates', permanent: true },
       { source: '/release-notes/:rest*', destination: '/updates/:rest*', permanent: true },
+      // /inspirations/saved (the flat "everything bookmarked" list) and
+      // /inspirations/collections (organized boards) used to be two separate
+      // routes for one feature — confusing as two competing destinations.
+      // They're merged into /inspirations/collections (?type=all for the
+      // flat list); any surviving link to the old URL lands there, with its
+      // query string (e.g. ?collection=id) carried over automatically.
+      { source: '/inspirations/saved', destination: '/inspirations/collections', permanent: true },
     ];
   },
 

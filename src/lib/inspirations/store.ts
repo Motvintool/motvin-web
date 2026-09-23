@@ -14,6 +14,15 @@ const SAVED_KEY = 'motvin-inspirations-saved';
 const COLLECTIONS_KEY = 'motvin-inspirations-collections';
 const LOCAL_USER = 'local';
 
+/**
+ * The board a plain "Save" (the bookmark button — no board chosen) lands in.
+ * `/inspirations/saved`, the flat list that used to show these, is gone —
+ * Collections is the only place anything saved is ever visible, so a bookmark
+ * has to land somewhere inside it, not in a separate pool nothing renders.
+ * Auto-created on first use; reused by matching this exact name afterwards.
+ */
+export const DEFAULT_COLLECTION_NAME = 'My Favourite Collection';
+
 export type LibraryState = {
   saved: SavedItem[];
   collections: Collection[];
@@ -65,6 +74,47 @@ function newId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+/**
+ * The given name, suffixed " 2", " 3", … if it collides with an existing
+ * board's name — two boards named identically are indistinguishable in the
+ * grid, so an intentionally-NEW board (createCollection, renameCollection)
+ * never reuses a name silently; only `getOrCreateCollectionByName`'s "same
+ * name = same board" merge is allowed to match exactly. `excludeId` skips one
+ * collection's own current name when renaming, so renaming "Foo" to "Foo"
+ * isn't treated as a collision with itself.
+ */
+function uniqueCollectionName(name: string, excludeId?: string): string {
+  const base = name.trim() || 'Untitled';
+  const taken = new Set(state.collections.filter((c) => c.id !== excludeId).map((c) => c.name));
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base} ${n}`)) n += 1;
+  return `${base} ${n}`;
+}
+
+/**
+ * Finds a board by exact name, creating it (in-memory, on `state` directly —
+ * the caller emits) if none matches yet. Saving into a collection is always
+ * "the board called X" rather than "a new board" — the float-collection bar
+ * pre-fills the default board's name specifically so leaving it untouched
+ * lands back in the SAME board, not a lookalike duplicate every time it's
+ * submitted unchanged; typing an existing board's exact name does the same.
+ */
+function getOrCreateCollectionByName(name: string): Collection {
+  const trimmed = name.trim() || 'Untitled';
+  const existing = state.collections.find((c) => c.name === trimmed);
+  if (existing) return existing;
+  const collection: Collection = {
+    id: newId('col'),
+    userId: LOCAL_USER,
+    name: trimmed,
+    items: [],
+    createdAt: new Date().toISOString(),
+  };
+  state = { ...state, collections: [collection, ...state.collections] };
+  return collection;
+}
+
 export const libraryStore = {
   subscribe(listener: () => void) {
     hydrate();
@@ -99,11 +149,26 @@ export const libraryStore = {
   toggleSaved(type: SavedItemType, id: string): boolean {
     hydrate();
     const exists = libraryStore.isSaved(type, id);
+    const addedAt = new Date().toISOString();
+    // Mirrored into the default board in the same write — a bookmark that
+    // only lived in `saved` would be invisible anywhere in the UI now that
+    // Collections is the one place any of this renders.
+    const defaultCollection = getOrCreateCollectionByName(DEFAULT_COLLECTION_NAME);
     state = {
       ...state,
       saved: exists
         ? state.saved.filter((s) => !(s.type === type && s.id === id))
-        : [{ type, id, addedAt: new Date().toISOString() }, ...state.saved],
+        : [{ type, id, addedAt }, ...state.saved],
+      collections: state.collections.map((c) =>
+        c.id !== defaultCollection.id
+          ? c
+          : {
+              ...c,
+              items: exists
+                ? c.items.filter((i) => !(i.type === type && i.id === id))
+                : [{ type, id, addedAt }, ...c.items.filter((i) => !(i.type === type && i.id === id))],
+            },
+      ),
     };
     emit();
     return !exists;
@@ -124,7 +189,7 @@ export const libraryStore = {
     const collection: Collection = {
       id: newId('col'),
       userId: LOCAL_USER,
-      name: name.trim() || 'Untitled',
+      name: uniqueCollectionName(name),
       items: [],
       createdAt: new Date().toISOString(),
     };
@@ -133,11 +198,32 @@ export const libraryStore = {
     return collection;
   },
 
+  /**
+   * Saving into a NAMED board — the float-collection bar's flow — reuses an
+   * existing board with that exact name instead of always minting a new one,
+   * so submitting the pre-filled default name twice lands both saves in the
+   * one board, not two identically-named lookalikes. `createCollection`
+   * above stays a plain always-new constructor for the explicit "+ New
+   * collection" affordance, which should make a fresh board every time.
+   */
+  getOrCreateCollectionByName(name: string): Collection {
+    hydrate();
+    const before = state.collections;
+    const collection = getOrCreateCollectionByName(name);
+    // The helper only touches `state` when it actually creates a new board;
+    // reusing an existing one is a no-op read, so skip the write/notify then.
+    if (state.collections !== before) emit();
+    return collection;
+  },
+
   renameCollection(id: string, name: string) {
     hydrate();
+    const trimmed = name.trim();
     state = {
       ...state,
-      collections: state.collections.map((c) => (c.id === id ? { ...c, name: name.trim() || c.name } : c)),
+      collections: state.collections.map((c) =>
+        c.id === id ? { ...c, name: trimmed ? uniqueCollectionName(trimmed, id) : c.name } : c,
+      ),
     };
     emit();
   },

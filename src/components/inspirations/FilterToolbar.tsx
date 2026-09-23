@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { ScreenFilters } from '@/lib/inspirations/filters';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import {
@@ -174,7 +175,7 @@ export function FilterPill({
               }
             }}
           >
-            <CloseIcon size={10} />
+            <CloseIcon size={10} strokeWidth={4} />
           </span>
         ) : (
           <ChevronDownIcon size={14} />
@@ -398,6 +399,8 @@ export function ToolbarRow({
   const [docked, setDocked] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
+  const inFlowRowHeightRef = useRef(0);
+  const dockedRef = useRef(false);
 
   // The docked bar's Apps/Web switcher — Mobbin's top-level split. "Web" sets
   // ?platform=web (and the Platform pill hides, web having no sub-platforms);
@@ -427,20 +430,24 @@ export function ToolbarRow({
     // The row's vertical margins live on the anchor (see .ins-ftoolbar-anchor)
     // so offsetHeight, which excludes margins, accounts for all the space the
     // row actually frees up when it leaves the flow.
-    anchor.style.minHeight = `${row.offsetHeight}px`;
+    inFlowRowHeightRef.current = row.offsetHeight;
+    anchor.style.minHeight = `${inFlowRowHeightRef.current}px`;
     const check = () => {
-      const next = anchor.getBoundingClientRect().top <= headerH;
-      // The docked row is a different (taller) size than the in-flow row —
-      // it fills the header bar (headerH), not its own natural height. The
-      // anchor must switch to reserving THAT much once docked, or the extra
-      // space the fixed bar actually covers is never accounted for: the
-      // content right after the anchor renders under the bar's bottom edge
-      // (a permanent overlap that reads as a gap right at the dock
-      // transition and as clipped content further down the page). While
-      // still in flow, keep the measurement fresh — pills wrap and unwrap as
-      // filters change, and a stale value would leave a gap or a jump.
-      anchor.style.minHeight = next ? `${headerH}px` : `${row.offsetHeight}px`;
-      setDocked(next);
+      const grid = anchor.parentElement?.querySelector<HTMLElement>('.ins-grid');
+      const trigger = grid ?? anchor;
+      const triggerTop = trigger.getBoundingClientRect().top;
+      const next = dockedRef.current
+        ? triggerTop <= headerH + 32
+        : triggerTop <= headerH;
+      // The portaled header copy is outside this anchor, so retain only the
+      // in-flow row's height here. Reserving the full header height adds a
+      // visible blank band above the grid at the docking boundary.
+      if (!next) inFlowRowHeightRef.current = row.offsetHeight;
+      anchor.style.minHeight = `${inFlowRowHeightRef.current}px`;
+      if (next !== dockedRef.current) {
+        dockedRef.current = next;
+        setDocked(next);
+      }
     };
     check();
     window.addEventListener('scroll', check, { passive: true });
@@ -451,31 +458,26 @@ export function ToolbarRow({
     };
   }, []);
 
-  // The header can't know about this component, so the swap signal travels as
-  // a body class the header's CSS listens for. While docked, the body also
-  // holds a minimum height: picking a filter from the docked bar can shrink
-  // the results below the current scroll position, and without this the
-  // browser clamps the scroll and rips the bar away mid-interaction — the new
-  // results ARE applied, but it reads as being thrown off the page. Held
-  // height keeps the bar (and the visitor) in place; scrolling up undocks and
-  // releases it.
+  // The header listens for this body class to swap its content with the
+  // portaled toolbar while the in-flow placeholder keeps the page stable.
+  const headerContent =
+    typeof document === 'undefined' ? null : document.querySelector<HTMLElement>('.ins-header-content');
+
   useEffect(() => {
     document.body.classList.toggle('ins-toolbar-docked', docked);
-    if (docked) {
-      const viewport = window.innerHeight || document.documentElement.clientHeight;
-      document.body.style.minHeight = `${window.scrollY + viewport}px`;
-    } else {
-      document.body.style.minHeight = '';
-    }
     return () => {
       document.body.classList.remove('ins-toolbar-docked');
-      document.body.style.minHeight = '';
     };
   }, [docked]);
 
-  return (
-    <div ref={anchorRef} className="ins-ftoolbar-anchor">
-      <div ref={rowRef} className={`ins-ftoolbar ${docked ? 'is-docked' : ''}`} role="group" aria-label="Filters and sort">
+  const toolbar = (inHeader = false) => (
+    <div
+      ref={inHeader ? undefined : rowRef}
+      className={`ins-ftoolbar ${inHeader ? 'is-docked' : ''} ${docked && !inHeader ? 'is-docked-placeholder' : ''}`}
+      role="group"
+      aria-label="Filters and sort"
+      aria-hidden={docked && !inHeader ? true : undefined}
+    >
         {docked && (
           <>
             <div className="ins-ftoolbar-context" role="group" aria-label="Apps or web">
@@ -513,7 +515,13 @@ export function ToolbarRow({
           )}
           {right}
         </div>
-      </div>
+    </div>
+  );
+
+  return (
+    <div ref={anchorRef} className="ins-ftoolbar-anchor">
+      {toolbar()}
+      {docked && headerContent && createPortal(toolbar(true), headerContent)}
     </div>
   );
 }

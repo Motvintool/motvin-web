@@ -39,7 +39,7 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
 
   return (
     <div className="ins-collection-card">
-      <Link href={`${INSPIRATIONS_ROUTES.saved}?collection=${collection.id}`} className="ins-collection-covers" aria-label={`Open ${collection.name}`}>
+      <Link href={`${INSPIRATIONS_ROUTES.collections}?collection=${collection.id}`} className="ins-collection-covers" aria-label={`Open ${collection.name}`}>
         {['back', 'middle', 'front'].map((position) => {
           const app = coverAppsByPosition.get(position);
           return (
@@ -76,7 +76,7 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
             className="ins-iconbtn ins-iconbtn--plain"
             aria-label="Delete collection"
             onClick={() => {
-              if (window.confirm(`Delete "${collection.name}"? Items stay in Saved.`)) deleteCollection(collection.id);
+              if (window.confirm(`Delete "${collection.name}"? Items stay saved.`)) deleteCollection(collection.id);
             }}
           >
             <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={20} height={20} />

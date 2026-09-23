@@ -106,7 +106,6 @@ export function ScreenGrid({
         <FloatCollectionBar
           screens={selectedScreens}
           screenApp={selectedApp}
-          destination="saved"
           onClose={clearSelection}
           onSaved={clearSelection}
         />

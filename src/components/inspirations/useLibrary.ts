@@ -35,6 +35,7 @@ export function useLibrary() {
     toggleSaved: libraryStore.toggleSaved,
     markViewed: libraryStore.markViewed,
     createCollection: libraryStore.createCollection,
+    getOrCreateCollectionByName: libraryStore.getOrCreateCollectionByName,
     renameCollection: libraryStore.renameCollection,
     deleteCollection: libraryStore.deleteCollection,
     toggleInCollection: libraryStore.toggleInCollection,

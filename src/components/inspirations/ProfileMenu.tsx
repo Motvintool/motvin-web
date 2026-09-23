@@ -8,7 +8,7 @@ import { useAuthModal } from '@/components/shared/AuthModal';
 import { isAdminEmail } from '@/lib/inspirations/admin';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { applyTheme, getStoredTheme, storeTheme, type ThemePreference } from '@/lib/theme';
-import { BookmarkIcon, FolderIcon, UploadIcon } from './Icons';
+import { FolderIcon, UploadIcon } from './Icons';
 
 /**
  * Avatar chip + dropdown for the Inspirations header. The chip and dropdown
@@ -76,10 +76,6 @@ export function ProfileMenu() {
           )}
 
           <div className="mi-profile-menu-items">
-            <Link href={INSPIRATIONS_ROUTES.saved} className="mi-profile-item" role="menuitem" onClick={() => setOpen(false)}>
-              <BookmarkIcon size={16} />
-              <span>Saved</span>
-            </Link>
             <Link href={INSPIRATIONS_ROUTES.collections} className="mi-profile-item" role="menuitem" onClick={() => setOpen(false)}>
               <FolderIcon size={16} />
               <span>Collections</span>

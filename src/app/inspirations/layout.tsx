@@ -20,8 +20,12 @@ import '@/styles/profile-menu.css';
  *   /inspirations/screen/[id]     Screen detail + Analyze / Extract tools
  *   /inspirations/flow/[id]       Flow viewer
  *   /inspirations/pattern/[slug]  Pattern examples
- *   /inspirations/collections     User boards
- *   /inspirations/saved           Saved items
+ *   /inspirations/collections     Saved items — everything bookmarked
+ *                                 (?type=all) and organized boards
+ *                                 (?type=boards, the default), one board's
+ *                                 contents via ?collection=<id>. Formerly
+ *                                 split across this route and /saved, which
+ *                                 now redirects here (next.config.ts).
  *
  * Styles follow the repo convention (one feature stylesheet, theme tokens
  * from theme.css) and the shell provides header + toasts to every route.
