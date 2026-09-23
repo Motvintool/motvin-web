@@ -359,7 +359,7 @@ body {
   align-items: center;
   flex: none;
   height: 52px;
-  padding: 4px;
+  padding: 6px;
   overflow: visible;
   background: linear-gradient(to right, #e2e2e2, transparent);
   border-radius: 100px;
@@ -386,8 +386,8 @@ body {
    "jelly" rather than a mechanical slide. */
 .ins-platform-indicator {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
+  top: 6px;
+  bottom: 6px;
   left: 0;
   border-radius: 100px;
   background: #000;
@@ -403,7 +403,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 44px;
+  height: 40px;
   padding: 0 16px;
   border-radius: 100px;
   font-size: 16px;
@@ -611,22 +611,23 @@ body {
 
 .ins-search.is-open .ins-search-form,
 .ins-search-form:focus-within {
-  border-color: var(--ins-accent);
+  border-color: var(--ins-border-strong);
   background: var(--ins-card);
-  box-shadow: 0 0 0 3px var(--ins-accent-subtle);
+  box-shadow: 0 0 0 1.5px var(--ins-border);
 }
 
 .ins-header-center .ins-search-form {
   height: 52px;
-  padding: 8px 18px 8px 20px;
+  padding: 8px 13px 8px 18px;
   background: #f2f2f2;
   border: none;
 }
 
 .ins-header-center .ins-search.is-open .ins-search-form,
-.ins-header-center .ins-search-form:focus-within {
+.ins-header-center .ins-search-form:focus-within,
+.ins-header-center .ins-search-form:hover {
   background: var(--ins-card);
-  box-shadow: 0 0 0 3px var(--ins-accent-subtle);
+  box-shadow: 0 0 0 1.5px var(--ins-border);
 }
 
 .ins-search-icon {
@@ -746,7 +747,7 @@ body {
   place-items: center;
   padding: 24px;
   background: rgba(0, 0, 0, 0.12);
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(11px);
 }
 
 .ins-header-center .ins-search-modal,
@@ -837,26 +838,31 @@ body {
 .ins-search-top-section { display: flex; flex-direction: column; gap: 12px; width: 100%; }
 .ins-search-top-apps { display: flex; align-items: flex-start; gap: 8px; width: 100%; }
 .ins-search-top-apps button { display: grid; justify-items: center; gap: 8px; min-width: 0; color: #111; font-size: 16px; }
+.ins-search-top-apps button.is-active > .ins-app-logo, .ins-search-top-apps button:hover > .ins-app-logo { box-shadow: var(--ins-focus); }
 .ins-search-top-apps button > .ins-app-logo { width: 82px; height: 82px; border-radius: 20px; object-fit: cover; }
 .ins-search-top-apps button > .ins-app-logo--initials { display: grid; place-items: center; background: #e6e6e6; color: #111; font-size: 28px; }
 .ins-search-top-apps strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
 .ins-search-top-heading { color: #313131; font-size: 16px; }
 .ins-search-top-screens { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-.ins-search-top-screens button { position: relative; display: block; height: 166px; overflow: hidden; padding: 20px; border-radius: 16px; background: #e6e6e6; color: #1d1d1d; text-align: left; }
+.ins-search-top-screens button { position: relative; display: block; height: 166px; overflow: hidden; padding: 20px; border-radius: 16px; background: #e6e6e6; color: #1d1d1d; text-align: left; transition: background 160ms ease; }
+.ins-search-top-screens button.is-active, .ins-search-top-screens button:hover { background: #dddddd; }
 .ins-search-top-screens button.is-featured { grid-column: span 2; height: auto; aspect-ratio: 2.1; }
 .ins-search-top-screens button.is-featured strong { font-size: 16px; }
 .ins-search-top-screens button:not(.is-featured) { align-self: start; height: auto; aspect-ratio: 1; }
 .ins-search-top-screens strong { position: absolute; top: 20px; left: 20px; z-index: 1; font-size: 16px; font-weight: 500; }
-.ins-search-top-screen-preview { position: absolute; right: 18px; bottom: -11px; width: 72px; height: 97px; }
+.ins-search-top-screen-preview { position: absolute; right: 18px; bottom: -11px; width: 72px; height: 97px; transition: transform 160ms ease; }
+.ins-search-top-screens button.is-active .ins-search-top-screen-preview, .ins-search-top-screens button:hover .ins-search-top-screen-preview { transform: translateY(-4px); }
 .ins-search-top-screen-preview img { position: absolute; bottom: 0; width: 43px; height: 97px; border-radius: 4px; object-fit: cover; }
 .ins-search-top-screen-preview .is-back { right: 0; opacity: 0.8; }
 .ins-search-top-screen-preview .is-front { left: 0; z-index: 1; box-shadow: 6px 0 15px rgba(0, 0, 0, 0.12); }
 .ins-search-top-screens button.is-featured .ins-search-top-screen-preview { right: 18px; bottom: -11px; width: 72px; height: 97px; }
 .ins-search-top-screens button.is-featured .ins-search-top-screen-preview img { width: 43px; height: 97px; }
 .ins-search-top-screens button.is-featured .ins-search-top-screen-preview .is-front { box-shadow: 8px 0 20px rgba(0, 0, 0, 0.12); }
-.ins-search-top-screen-fade { position: absolute; right: 0; bottom: 0; left: 0; z-index: 2; height: 63px; background: linear-gradient(to bottom, rgba(230, 230, 230, 0), #e6e6e6); pointer-events: none; }
+.ins-search-top-screen-fade { position: absolute; right: 0; bottom: 0; left: 0; z-index: 2; height: 63px; background: linear-gradient(to bottom, rgba(230, 230, 230, 0), #e6e6e6); pointer-events: none; transition: background 160ms ease; }
+.ins-search-top-screens button.is-active .ins-search-top-screen-fade, .ins-search-top-screens button:hover .ins-search-top-screen-fade { background: linear-gradient(to bottom, rgba(221, 221, 221, 0), #dddddd); }
 .ins-search-top-elements { display: flex; flex-wrap: wrap; gap: 12px; }
-.ins-search-top-elements button { display: inline-flex; align-items: center; gap: 4px; height: 48px; padding: 0 20px 0 16px; border-radius: 999px; background: #e6e6e6; color: #000; font-size: 16px; font-weight: 500; white-space: nowrap; }
+.ins-search-top-elements button { display: inline-flex; align-items: center; gap: 4px; height: 48px; padding: 0 20px 0 16px; border-radius: 999px; background: #e6e6e6; color: #000; font-size: 16px; font-weight: 500; white-space: nowrap; transition: background 160ms ease; }
+.ins-search-top-elements button.is-active, .ins-search-top-elements button:hover { background: #dddddd; }
 .ins-search-top-elements button > span { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 6px; border-radius: 10px; box-sizing: border-box; overflow: hidden; }
 .ins-search-top-elements button > span img { display: block; width: auto; height: 20px; max-width: 20px; object-fit: contain; }
 .ins-search-top-flows button { padding-right: 24px; }
@@ -919,7 +925,7 @@ body {
 
 .ins-main {
   width: 100%;
-  padding: 24px 80px 80px;
+  padding: 52px 80px 80px;
 }
 
 .ins-pagehead {
@@ -1434,8 +1440,8 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 46px;
-  padding: 0 20px;
+  height: 44px;
+  padding: 0 18px;
   border: 1px solid #ecedef;
   border-radius: var(--ins-radius-pill);
   background: #fff;
@@ -3246,7 +3252,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
 }
 
 .ins-masthead-logo {
-  border-radius: 22%;
+  border-radius: 24px;
   margin-bottom: var(--ins-space-5);
 }
 
@@ -3255,7 +3261,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   font-family: var(--font-outfit), var(--font-inter), sans-serif;
   /* Scales with the viewport: at 96px the mark is large enough that a fixed
      28px title beside it looks timid. */
-  font-size: clamp(30px, 3.6vw, 46px);
+  font-size: clamp(26px, 3.6vw, 42px);
   font-weight: 600;
   letter-spacing: var(--ins-tracking-display);
   line-height: 1.1;

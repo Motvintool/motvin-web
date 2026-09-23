@@ -56,11 +56,7 @@ export function AppDetailView({
 
   return (
     <>
-      <div className="ins-detail-top">
-        <Link href={INSPIRATIONS_ROUTES.explore} className="ins-back">
-          <ArrowLeftIcon size={15} /> Apps
-        </Link>
-      </div>
+
 
       {/*
         Masthead, read top to bottom: mark, then what the product is, then the
@@ -70,7 +66,7 @@ export function AppDetailView({
       */}
       <header className="ins-masthead">
         <div className="ins-masthead-main">
-        <AppLogo app={app} size={96} className="ins-masthead-logo" />
+        <AppLogo app={app} size={90} className="ins-masthead-logo" />
 
         <h1 className="ins-masthead-title">
           {app.name}
