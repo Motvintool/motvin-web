@@ -103,7 +103,7 @@ export function Header() {
         <div className="ins-header-content">
         <div className="ins-header-left">
           <Link href={INSPIRATIONS_ROUTES.explore} className="ins-brand-logo" aria-label="Motvin Inspirations home">
-            <img src="/ASSET/svg/nav-motvin-logo.svg" alt="" className="ins-brand-logo-img" width={46} height={46} />
+            <img src="/ASSET/svg/nav-motvin-logo.svg" alt="" className="ins-brand-logo-img" width={48} height={48} />
           </Link>
           <nav className={`ins-platform-nav ${visuallyActivePlatform ? `ins-platform-nav--${visuallyActivePlatform}` : ''}`} aria-label="Platform">
             {indicator && (

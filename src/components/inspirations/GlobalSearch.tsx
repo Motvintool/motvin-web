@@ -403,15 +403,44 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setOpen(true);
-      setActive((a) => suggestions.length ? (a >= suggestions.length - 1 ? 0 : a + 1) : -1);
+      if (activeSearchAction === 'search') {
+        setActiveSearchAction('screenshot');
+      } else if (activeSearchAction === 'screenshot') {
+        if (modalSuggestions.length > 0) {
+          setActiveSearchAction(null);
+          setActive(0);
+        } else {
+          setActiveSearchAction('search');
+        }
+      } else if (active >= 0 && active < modalSuggestions.length - 1) {
+        setActive(active + 1);
+      } else {
+        setActive(-1);
+        setActiveSearchAction('search');
+      }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setActive((a) => suggestions.length ? (a <= 0 ? suggestions.length - 1 : a - 1) : -1);
-    } else if (e.key === 'Enter' && active >= 0 && suggestions[active]) {
+      if (activeSearchAction === 'search' || (activeSearchAction === null && active === -1)) {
+        if (modalSuggestions.length > 0) {
+          setActiveSearchAction(null);
+          setActive(modalSuggestions.length - 1);
+        } else {
+          setActiveSearchAction('screenshot');
+          setActive(-1);
+        }
+      } else if (activeSearchAction === 'screenshot') {
+        setActiveSearchAction('search');
+      } else if (active > 0) {
+        setActive(active - 1);
+      } else {
+        setActive(-1);
+        setActiveSearchAction('screenshot');
+      }
+    } else if (e.key === 'Enter' && active >= 0 && modalSuggestions[active]) {
       e.preventDefault();
-      addRecentSearch(suggestions[active].label, suggestions[active]);
+      addRecentSearch(modalSuggestions[active].label, modalSuggestions[active]);
       setOpen(false);
-      router.push(suggestions[active].href);
+      router.push(modalSuggestions[active].href);
     } else if (e.key === 'Enter') {
       // No suggestion highlighted — run the plain query. Handled explicitly
       // rather than left to the browser's implicit submit-on-Enter, which
