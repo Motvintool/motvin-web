@@ -1,0 +1,17 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="22.1227" height="13.7224" viewBox="0 0 22.1227 13.7224" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Mask group">
+<mask id="mask0_0_256" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="0" y="0" width="23" height="14">
+<g id="Group">
+<g id="Group_2">
+<path id="Vector" fill-rule="evenodd" clip-rule="evenodd" d="M21.0116 12.6113H1.11112C1.61262 7.5578 5.87612 3.6113 11.0611 3.6113C16.2471 3.6113 20.5101 7.5578 21.0116 12.6113Z" fill="white" stroke="white" stroke-width="2.22222" stroke-linejoin="round"/>
+<path id="Vector_2" d="M6.06164 4.6113L4.06164 1.1113M15.5616 4.6113L17.5616 1.1113" stroke="white" stroke-width="2.22222" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_3" d="M6.56164 10.1113C7.11392 10.1113 7.56164 9.66359 7.56164 9.1113C7.56164 8.55902 7.11392 8.1113 6.56164 8.1113C6.00935 8.1113 5.56164 8.55902 5.56164 9.1113C5.56164 9.66359 6.00935 10.1113 6.56164 10.1113Z" fill="black"/>
+<path id="Vector_4" d="M15.5616 10.1113C16.1139 10.1113 16.5616 9.66359 16.5616 9.1113C16.5616 8.55902 16.1139 8.1113 15.5616 8.1113C15.0094 8.1113 14.5616 8.55902 14.5616 9.1113C14.5616 9.66359 15.0094 10.1113 15.5616 10.1113Z" fill="black"/>
+</g>
+</g>
+</mask>
+<g mask="url(#mask0_0_256)">
+<path id="Vector_5" fill-rule="evenodd" clip-rule="evenodd" d="M-0.937712 -5.3887H23.0623V18.6113H-0.937712V-5.3887Z" fill="#626262"/>
+</g>
+</g>
+</svg>

@@ -16,6 +16,7 @@ export type SearchSuggestion = {
   label: string;
   hint: string;
   href: string;
+  iconSrc?: string;
 };
 
 export async function suggestQueries(raw: string, limit = 7): Promise<SearchSuggestion[]> {
@@ -38,6 +39,7 @@ export async function suggestQueries(raw: string, limit = 7): Promise<SearchSugg
         label: app.name,
         hint: `App · ${INDUSTRY_LABEL[app.industry] ?? app.industry} · ${app.screenCount} screens`,
         href: INSPIRATIONS_ROUTES.app(app),
+        iconSrc: inspirationsApi.mediaUrl(app.logo),
       });
     }
   }

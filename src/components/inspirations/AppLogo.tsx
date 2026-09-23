@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import type { App } from '@/lib/inspirations/types';
 
@@ -9,9 +10,10 @@ import type { App } from '@/lib/inspirations/types';
  * label, not an invented brand colour.
  */
 export function AppLogo({ app, size = 20, className = '' }: { app: App; size?: number; className?: string }) {
+  const [failed, setFailed] = useState(false);
   const src = inspirationsApi.mediaUrl(app.logo);
 
-  if (src) {
+  if (src && !failed) {
     return (
       <img
         src={src}
@@ -21,6 +23,7 @@ export function AppLogo({ app, size = 20, className = '' }: { app: App; size?: n
         className={`ins-app-logo ${className}`}
         style={{ width: size, height: size }}
         loading="lazy"
+        onError={() => setFailed(true)}
       />
     );
   }
