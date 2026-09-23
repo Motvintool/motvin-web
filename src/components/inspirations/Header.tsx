@@ -148,12 +148,12 @@ export function Header() {
               aria-label="Collections"
               aria-current={pathname === INSPIRATIONS_ROUTES.collections ? 'page' : undefined}
             >
-              <img src="/ASSET/Icons/Motvin/save.svg" alt="" width={24} height={24} />
+              <img src="/ASSET/Icons/Motvin/save.svg" alt="" width={20} height={20} />
             </Link>
             {/* Same-origin but deliberately a new tab, so leaving to read
                 release notes never loses whatever the visitor was browsing. */}
             <a href="/updates/" className="ins-header-action-link" aria-label="Release notes" target="_blank" rel="noopener noreferrer">
-              <img src="/ASSET/Icons/Motvin/collection.svg" alt="" width={22} height={22} />
+              <img src="/ASSET/Icons/Motvin/collection.svg" alt="" width={20} height={20} />
             </a>
           </div>
           <div className="ins-header-profile">
