@@ -46,6 +46,7 @@ function ScreenCardImpl({
   onToggleSelect,
   index,
   textHighlights,
+  onRemove,
 }: {
   screen: Screen;
   app?: App;
@@ -56,6 +57,7 @@ function ScreenCardImpl({
   onToggleSelect?: () => void;
   index?: number;
   textHighlights?: Array<{ left: number; top: number; width: number; height: number }>;
+  onRemove?: () => void;
 }) {
   const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step } = useSiblingCycle(screen);
   // useSiblingCycle's `screen` param is nullable (AppCard may have no preview
@@ -83,6 +85,20 @@ function ScreenCardImpl({
             }}
           >
             {selected && <span className="ins-card-select-check" aria-hidden />}
+          </button>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            className="ins-card-remove-btn"
+            aria-label={`Remove ${screen.name}`}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onRemove();
+            }}
+          >
+            <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={16} height={16} />
           </button>
         )}
         <div className="ins-card-inset">

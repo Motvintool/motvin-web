@@ -73,6 +73,7 @@ export function AppsGrid({
             app={app}
             preview={previews?.get(app.id)}
             selected={selected.has(app.id)}
+            selectable
             onToggleSelect={() => toggle(app.id)}
           />
         ))}

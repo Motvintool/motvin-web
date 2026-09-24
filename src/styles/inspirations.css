@@ -4421,7 +4421,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   translate: -50% 0;
   z-index: 85;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 16px;
   font-family: var(--font-outfit), var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   animation: insFloatCollectionIn 220ms var(--ins-ease);
@@ -4434,12 +4434,191 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
 
 .ins-float-collection-bar {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 0;
+  align-items: flex-start;
   padding: 12px;
-  border-radius: 9999px;
+  border-radius: 40px;
   background: rgba(255, 255, 255, 0.75);
   box-shadow: 0 12px 80px rgba(0, 0, 0, 0.12);
+  width: 525px;
+  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ins-float-collection-bar.is-expanded {
+  border-radius: 30px 30px 40px 40px;
+}
+
+.ins-float-collection-list-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  width: 100%;
+  opacity: 0;
+  pointer-events: none;
+  transition: grid-template-rows 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease;
+}
+
+.ins-float-collection-bar.is-expanded .ins-float-collection-list-wrapper {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  pointer-events: auto;
+  transition: grid-template-rows 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease 0.1s;
+}
+
+.ins-float-collection-list-inner {
+  overflow: hidden;
+  width: 100%;
+  min-height: 0;
+  transform: translateZ(0);
+}
+
+.ins-float-collection-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 8px; /* Adds up to 20px top padding when combined with bar's 12px */
+  padding-bottom: 20px; /* Gap between list and main input */
+  width: 100%;
+}
+
+.ins-float-collection-list-title {
+  padding: 0 8px;
+  font: 600 16px/1 var(--font-inter), sans-serif;
+  color: #0b0c0e;
+}
+
+.ins-float-collection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.ins-float-collection-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 10px 24px;
+  background-color: #f0f0f0;
+  border-radius: 100px;
+  cursor: pointer;
+  transform: translateZ(0);
+  transition: background-color var(--ins-fast) var(--ins-ease);
+}
+
+.ins-card-remove-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 100px;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  opacity: 0;
+  transition: opacity var(--ins-fast) var(--ins-ease), background-color var(--ins-fast) var(--ins-ease);
+  z-index: 10;
+  cursor: pointer;
+  border: none;
+}
+
+.ins-card:hover .ins-card-remove-btn,
+.ins-pattern-card:hover + .ins-card-remove-btn,
+.ins-flow-card:hover + .ins-card-remove-btn,
+.ins-element-row:hover + .ins-card-remove-btn,
+.ins-card-remove-btn:hover {
+  opacity: 1;
+}
+
+.ins-card-remove-btn:hover {
+  background-color: rgba(0, 0, 0, 0.8);
+}
+
+.ins-float-collection-item:hover {
+  background-color: #e6e6e6;
+}
+
+.ins-float-collection-item-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 500 16px/1 var(--font-inter), sans-serif;
+  color: #0b0c0e;
+}
+
+.ins-float-collection-item-select {
+  width: 34px;
+  height: 34px;
+  border-radius: 100px;
+  border: 3px solid #b5b5b5;
+  background: #fff;
+}
+
+.ins-float-collection-item-select.is-active {
+  background: #000;
+  border-color: #000;
+  border-width: 2.7px;
+  position: relative;
+}
+
+.ins-float-collection-item-select.is-active::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 16px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: translate(-50%, -60%) rotate(45deg);
+}
+
+.ins-float-collection-new {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 10px 16px 24px;
+  border: 1px dashed #cacaca;
+  border-radius: 100px;
+  cursor: pointer;
+  overflow: hidden;
+  max-height: 100px;
+  opacity: 1;
+  background-color: transparent;
+  transform: translateZ(0);
+  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), background-color var(--ins-fast) var(--ins-ease);
+}
+
+.ins-float-collection-new.is-hidden {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 0;
+  margin-top: -10px; /* offsets the gap of the list if needed, but gap is on parent */
+  pointer-events: none;
+}
+
+.ins-float-collection-new:hover {
+  background-color: #f8f8f8;
+}
+
+.ins-float-collection-new-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 500 16px/1 var(--font-inter), sans-serif;
+  color: #4c4c4c;
+}
+
+.ins-float-collection-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
 }
 
 /* Hugs its logos rather than always reserving room for three — width is set
@@ -4482,6 +4661,20 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   white-space: nowrap;
 }
 
+.ins-float-collection-selector {
+  flex: 0 1 306px;
+  width: 306px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 17px 20px;
+  border-radius: 100px;
+  background: #f0f0f0;
+  color: #0b0c0e;
+  font: 500 16px/1 var(--font-inter), sans-serif;
+  cursor: pointer;
+}
+
 .ins-float-collection-input {
   flex: 0 1 306px;
   width: 306px;
@@ -4492,7 +4685,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   border-radius: 100px;
   background: #f0f0f0;
   color: #0b0c0e;
-  font: 400 16px/1 var(--font-outfit), var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font: 500 16px/1 var(--font-inter), sans-serif;
 }
 
 .ins-float-collection-input::placeholder {

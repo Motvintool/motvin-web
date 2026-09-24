@@ -5,6 +5,7 @@ import { DEFAULT_COLLECTION_NAME } from '@/lib/inspirations/store';
 import type { App, Screen, SavedItemType } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { useLibrary } from './useLibrary';
+import { ChevronDownIcon } from './Icons';
 
 /** The stack only has room to show a few faces before they'd be unreadable. */
 const MAX_LOGOS = 3;
@@ -43,52 +44,59 @@ export function FloatCollectionBar({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { getOrCreateCollectionByName, toggleInCollection } = useLibrary();
-  // Pre-filled rather than a placeholder — same name the store auto-creates
-  // for a plain bookmark, so leaving it untouched here lands in that same
-  // board rather than spawning a lookalike duplicate.
+  const { collections, getOrCreateCollectionByName, addToCollection } = useLibrary();
+  const [uiState, setUiState] = useState<'default' | 'expand' | 'add-new-collection'>('default');
   const [name, setName] = useState(DEFAULT_COLLECTION_NAME);
+  // Support multi-select, defaulting to no collections selected
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
 
-  // The success state is a confirmation, not a modal you dismiss — it clears
-  // itself (via onSaved, which drops the selection and unmounts this whole
-  // component) rather than waiting on any further input.
   useEffect(() => {
     if (!saved) return;
     const timer = setTimeout(onSaved, SUCCESS_DURATION_MS);
     return () => clearTimeout(timer);
   }, [saved, onSaved]);
 
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    // Reuses a board with this exact name if one already exists — the
-    // pre-filled default name is meant to keep landing in the same board,
-    // not spawn a fresh lookalike every time it's submitted unchanged.
-    const collection = getOrCreateCollectionByName(trimmed);
-    if (items) {
-      for (const item of items) toggleInCollection(collection.id, item);
-    } else if (screens) {
-      for (const screen of screens) toggleInCollection(collection.id, { type: 'screen', id: screen.id });
+  const onSubmit = (e?: FormEvent) => {
+    e?.preventDefault();
+    let targetCollectionIds: string[] = [];
+
+    if (uiState === 'add-new-collection') {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const collection = getOrCreateCollectionByName(trimmed);
+      targetCollectionIds = [collection.id];
     } else {
-      for (const app of apps ?? []) toggleInCollection(collection.id, { type: 'app', id: app.id });
+      // 'default' or 'expand' -> save to selectedIds
+      // If none selected, fallback to DEFAULT_COLLECTION_NAME
+      if (selectedIds.length === 0) {
+        const collection = getOrCreateCollectionByName(DEFAULT_COLLECTION_NAME);
+        targetCollectionIds = [collection.id];
+      } else {
+        targetCollectionIds = selectedIds;
+      }
+    }
+
+    const itemsToSave = items || (screens ? screens.map(s => ({ type: 'screen' as const, id: s.id })) : (apps || []).map(a => ({ type: 'app' as const, id: a.id })));
+    
+    for (const collectionId of targetCollectionIds) {
+      for (const item of itemsToSave) {
+        addToCollection(collectionId, item);
+      }
     }
     setSaved(true);
   };
 
-  // Oldest-of-the-visible-set first, most recent last — so the most recently
-  // checked app paints on top (it's last in the DOM) at the frontmost
-  // position (left: 8, closest to the container's left edge), exactly like a
-  // real stack of things being added one at a time. The container hugs
-  // however many of these there are (capped at MAX_LOGOS) rather than always
-  // reserving room for three, so the offsets have to scale with the actual
-  // count too — a fixed 8/30/52 (right for exactly three) left a lone logo
-  // sitting at 52 in a 54px-wide box, almost entirely clipped off the edge
-  // instead of sitting flush in the one slot available.
   const visualApps = apps ?? (screens && screenApp ? screens.map(() => screenApp) : []);
   const visible = visualApps.slice(0, MAX_LOGOS).reverse();
   const logosWidth = 54 + (visible.length - 1) * 22;
+
+  let selectorText = 'Select Collections';
+  if (selectedIds.length === 1) {
+    selectorText = collections.find(c => c.id === selectedIds[0])?.name || 'Select Collections';
+  } else if (selectedIds.length > 1) {
+    selectorText = `${selectedIds.length} Selected`;
+  }
 
   if (saved) {
     return (
@@ -105,37 +113,98 @@ export function FloatCollectionBar({
 
   return (
     <div className="ins-float-collection" role="region" aria-label="Save selected items to a collection">
-      <form className="ins-float-collection-bar" onSubmit={onSubmit}>
-        <div className="ins-float-collection-logos" style={{ width: logosWidth }}>
-          {visible.map((app, i) => (
-            <span
-              key={app.id}
-              className="ins-float-collection-logo"
-              style={{ left: 8 + (visible.length - 1 - i) * 22 }}
-            >
-              <AppLogo app={app} size={38} />
-            </span>
-          ))}
+      <form className={`ins-float-collection-bar ${uiState !== 'default' ? 'is-expanded' : ''}`} onSubmit={onSubmit}>
+        <div className="ins-float-collection-list-wrapper">
+          <div className="ins-float-collection-list-inner">
+            <div className="ins-float-collection-list-container">
+              <div className="ins-float-collection-list-title">Add to Collection</div>
+              <div className="ins-float-collection-list">
+                {collections.map(c => (
+                  <div 
+                    key={c.id} 
+                    className="ins-float-collection-item"
+                    onClick={() => {
+                      if (selectedIds.includes(c.id)) {
+                        setSelectedIds(selectedIds.filter(id => id !== c.id));
+                      } else {
+                        setSelectedIds([...selectedIds, c.id]);
+                      }
+                      setUiState('expand');
+                    }}
+                  >
+                    <div className="ins-float-collection-item-label">
+                      <img src="/ASSET/Icons/Motvin/collection-list.svg" alt="" width={22} height={22} style={{ opacity: 0.8 }} />
+                      {c.name}
+                    </div>
+                    <div className={`ins-float-collection-item-select ${selectedIds.includes(c.id) && uiState !== 'add-new-collection' ? 'is-active' : ''}`} />
+                  </div>
+                ))}
+                <div 
+                  className={`ins-float-collection-new ${uiState === 'add-new-collection' ? 'is-hidden' : ''}`}
+                  onClick={() => {
+                    setUiState('add-new-collection');
+                    setName('');
+                  }}
+                >
+                  <div className="ins-float-collection-new-label">
+                    <img src="/ASSET/Icons/Motvin/add-new-collection.svg" alt="" width={22} height={22} style={{ opacity: 0.6 }} />
+                    Add to new collection
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <img
-          src="/ASSET/Icons/Motvin/float-collection-arrow.svg"
-          alt=""
-          className="ins-float-collection-arrow"
-          width={27}
-          height={20}
-        />
-        <input
-          type="text"
-          className="ins-float-collection-input"
-          placeholder="Collection name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          maxLength={48}
-          aria-label="Collection name"
-        />
-        <button type="submit" className="ins-float-collection-save" disabled={!name.trim()}>
-          Save
-        </button>
+
+        <div className="ins-float-collection-main">
+          <div className="ins-float-collection-logos" style={{ width: logosWidth }}>
+            {visible.map((app, i) => (
+              <span
+                key={app.id}
+                className="ins-float-collection-logo"
+                style={{ left: 8 + (visible.length - 1 - i) * 22 }}
+              >
+                <AppLogo app={app} size={38} />
+              </span>
+            ))}
+          </div>
+          <img
+            src="/ASSET/Icons/Motvin/float-collection-arrow.svg"
+            alt=""
+            className="ins-float-collection-arrow"
+            width={27}
+            height={20}
+          />
+          
+          {uiState === 'add-new-collection' ? (
+            <input
+              type="text"
+              className="ins-float-collection-input"
+              placeholder="Collection Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={48}
+              aria-label="Collection name"
+              autoFocus
+            />
+          ) : (
+            <div 
+              className="ins-float-collection-selector"
+              onClick={() => setUiState(uiState === 'default' ? 'expand' : 'default')}
+            >
+              <span className="truncate flex-1">{selectorText}</span>
+              <ChevronDownIcon size={20} style={{ flex: 'none', transform: uiState === 'expand' ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
+            </div>
+          )}
+
+          <button 
+            type="submit" 
+            className="ins-float-collection-save" 
+            disabled={(uiState === 'add-new-collection' && !name.trim()) || (uiState !== 'add-new-collection' && selectedIds.length === 0)}
+          >
+            Save
+          </button>
+        </div>
       </form>
       <button type="button" className="ins-float-collection-close" aria-label="Cancel selection" onClick={onClose}>
         <img src="/ASSET/Icons/Motvin/float-collection-close.svg" alt="" width={20} height={20} />

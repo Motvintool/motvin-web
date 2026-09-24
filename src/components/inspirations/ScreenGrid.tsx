@@ -29,6 +29,7 @@ export function ScreenGrid({
   selectable = false,
   textHighlights,
   empty,
+  onRemoveItem,
 }: {
   screens: Screen[];
   /** Overrides the shared app lookup; omit and the grid fetches it itself. */
@@ -41,6 +42,7 @@ export function ScreenGrid({
   selectable?: boolean;
   textHighlights?: Record<string, Array<{ left: number; top: number; width: number; height: number }>>;
   empty?: ReactNode;
+  onRemoveItem?: (id: string) => void;
 }) {
   const fetchedApps = useApps();
   const apps = appsOverride ?? fetchedApps;
@@ -95,6 +97,7 @@ export function ScreenGrid({
             selectable={selectable}
             selected={selectedIds.has(screen.id)}
             onToggleSelect={() => toggleSelection(screen.id)}
+            onRemove={onRemoveItem ? () => onRemoveItem(screen.id) : undefined}
             index={index}
             textHighlights={textHighlights?.[screen.id]}
           />

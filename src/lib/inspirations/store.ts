@@ -210,6 +210,46 @@ export const libraryStore = {
     return added;
   },
 
+  addToCollection(collectionId: string, item: Omit<CollectionItem, 'addedAt'>): boolean {
+    hydrate();
+    let added = false;
+    state = {
+      ...state,
+      collections: state.collections.map((c) => {
+        if (c.id !== collectionId) return c;
+        const exists = c.items.some((i) => i.type === item.type && i.id === item.id);
+        if (exists) return c;
+        added = true;
+        return {
+          ...c,
+          items: [{ ...item, addedAt: new Date().toISOString() }, ...c.items],
+        };
+      }),
+    };
+    if (added) emit();
+    return added;
+  },
+
+  removeFromCollection(collectionId: string, item: Omit<CollectionItem, 'addedAt'>): boolean {
+    hydrate();
+    let removed = false;
+    state = {
+      ...state,
+      collections: state.collections.map((c) => {
+        if (c.id !== collectionId) return c;
+        const exists = c.items.some((i) => i.type === item.type && i.id === item.id);
+        if (!exists) return c;
+        removed = true;
+        return {
+          ...c,
+          items: c.items.filter((i) => !(i.type === item.type && i.id === item.id)),
+        };
+      }),
+    };
+    if (removed) emit();
+    return removed;
+  },
+
   /** Current state, for a sync layer to read what to push remotely. */
   getState(): LibraryState {
     hydrate();

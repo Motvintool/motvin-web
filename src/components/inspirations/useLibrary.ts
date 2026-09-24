@@ -30,5 +30,7 @@ export function useLibrary() {
     renameCollection: libraryStore.renameCollection,
     deleteCollection: libraryStore.deleteCollection,
     toggleInCollection: libraryStore.toggleInCollection,
+    addToCollection: libraryStore.addToCollection,
+    removeFromCollection: libraryStore.removeFromCollection,
   };
 }

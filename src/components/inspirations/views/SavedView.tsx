@@ -48,7 +48,7 @@ export function SavedView() {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const { collections, createCollection, deleteCollection } = useLibrary();
+  const { collections, createCollection, deleteCollection, removeFromCollection } = useLibrary();
   const apps = useApps();
   const { selected, toggle, clear } = useAppSelection();
   const [creatingBoard, setCreatingBoard] = useState(false);
@@ -243,7 +243,11 @@ export function SavedView() {
                 apps={apps}
                 showApp={false}
                 showMeta={false}
-                selectable
+                onRemoveItem={(id) => {
+                  if (window.confirm('Remove this screen?')) {
+                    removeFromCollection(collection.id, { type: 'screen', id });
+                  }
+                }}
                 empty={<EmptyState title="No saved screens" />}
               />
             </section>
@@ -256,7 +260,23 @@ export function SavedView() {
               ) : (
                 <div className="ins-flow-grid">
                   {(flows ?? []).map(({ flow, screens: flowScreens }) => (
-                    <FlowCard key={flow.id} flow={flow} screens={flowScreens} app={apps.get(flow.appId)} />
+                    <div key={flow.id} style={{ position: 'relative' }}>
+                      <FlowCard flow={flow} screens={flowScreens} app={apps.get(flow.appId)} />
+                      <button
+                        type="button"
+                        className="ins-card-remove-btn"
+                        aria-label={`Remove ${flow.name}`}
+                        style={{ top: 12, right: 12, zIndex: 10 }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (window.confirm(`Remove "${flow.name}"?`)) {
+                            removeFromCollection(collection.id, { type: 'flow', id: flow.id });
+                          }
+                        }}
+                      >
+                        <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={16} height={16} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -270,7 +290,23 @@ export function SavedView() {
               ) : (
                 <div className="ins-pattern-grid-wrap">
                   {patterns.map((p) => (
-                    <PatternCard key={p.id} pattern={p} />
+                    <div key={p.id} style={{ position: 'relative' }}>
+                      <PatternCard pattern={p} />
+                      <button
+                        type="button"
+                        className="ins-card-remove-btn"
+                        aria-label={`Remove ${p.name}`}
+                        style={{ top: 12, right: 12, zIndex: 10 }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (window.confirm(`Remove "${p.name}"?`)) {
+                            removeFromCollection(collection.id, { type: 'pattern', id: p.id });
+                          }
+                        }}
+                      >
+                        <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={16} height={16} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -287,18 +323,33 @@ export function SavedView() {
                     const [screenId, kind] = c.id.split(':');
                     const screen = screenMap.get(screenId);
                     return (
-                      <Link
-                        key={c.id}
-                        href={
-                          screen
-                            ? `${INSPIRATIONS_ROUTES.screen(screen)}?tab=extract`
-                            : `${INSPIRATIONS_ROUTES.uiElements}?kind=${kind}`
-                        }
-                        className="ins-element-row"
-                      >
-                        <span className="ins-element-name">{elementLabel(kind)}</span>
-                        <span className="ins-element-count">{screen ? screen.name : ''}</span>
-                      </Link>
+                      <div key={c.id} style={{ position: 'relative' }}>
+                        <Link
+                          href={
+                            screen
+                              ? `${INSPIRATIONS_ROUTES.screen(screen)}?tab=extract`
+                              : `${INSPIRATIONS_ROUTES.uiElements}?kind=${kind}`
+                          }
+                          className="ins-element-row"
+                        >
+                          <span className="ins-element-name">{elementLabel(kind)}</span>
+                          <span className="ins-element-count">{screen ? screen.name : ''}</span>
+                        </Link>
+                        <button
+                          type="button"
+                          className="ins-card-remove-btn"
+                          aria-label={`Remove ${elementLabel(kind)}`}
+                          style={{ top: '50%', right: 12, transform: 'translateY(-50%)', zIndex: 10, width: 28, height: 28 }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (window.confirm(`Remove UI Element "${elementLabel(kind)}"?`)) {
+                              removeFromCollection(collection.id, { type: 'component', id: c.id });
+                            }
+                          }}
+                        >
+                          <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={14} height={14} />
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -320,12 +371,14 @@ export function SavedView() {
                         key={app.id}
                         app={app}
                         preview={appPreviews?.get(app.id)}
-                        selected={selected.has(app.id)}
-                        onToggleSelect={() => toggle(app.id)}
+                        onRemove={() => {
+                          if (window.confirm(`Remove "${app.name}"?`)) {
+                            removeFromCollection(collection.id, { type: 'app', id: app.id });
+                          }
+                        }}
                       />
                     ))}
                   </div>
-                  {selectedApps.length > 0 && <FloatCollectionBar apps={selectedApps} onClose={clear} onSaved={clear} />}
                 </>
               )}
             </section>

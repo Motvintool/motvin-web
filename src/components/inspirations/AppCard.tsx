@@ -25,12 +25,16 @@ export function AppCard({
   app,
   preview,
   selected = false,
+  selectable = false,
   onToggleSelect,
+  onRemove,
 }: {
   app: App;
   preview?: Screen | null;
   selected?: boolean;
+  selectable?: boolean;
   onToggleSelect?: () => void;
+  onRemove?: () => void;
 }) {
   const href = INSPIRATIONS_ROUTES.app(app);
   const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step } = useSiblingCycle(
@@ -40,19 +44,35 @@ export function AppCard({
   return (
     <article className="ins-card" data-id={app.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
       <div className="ins-card-shot">
-        <button
-          type="button"
-          className={`ins-card-select-ring ${selected ? 'is-selected' : ''}`}
-          aria-label={selected ? `Remove ${app.name} from selection` : `Select ${app.name}`}
-          aria-pressed={selected}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onToggleSelect?.();
-          }}
-        >
-          {selected && <span className="ins-card-select-check" aria-hidden />}
-        </button>
+        {selectable && (
+          <button
+            type="button"
+            className={`ins-card-select-ring ${selected ? 'is-selected' : ''}`}
+            aria-label={selected ? `Remove ${app.name} from selection` : `Select ${app.name}`}
+            aria-pressed={selected}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleSelect?.();
+            }}
+          >
+            {selected && <span className="ins-card-select-check" aria-hidden />}
+          </button>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            className="ins-card-remove-btn"
+            aria-label={`Remove ${app.name}`}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onRemove();
+            }}
+          >
+            <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={16} height={16} />
+          </button>
+        )}
         <div className="ins-card-inset">
           <Link href={href} className="ins-card-link" aria-label={app.name}>
             {activeScreen ? <Screenshot screen={activeScreen} /> : <AppLogo app={app} size={96} />}
