@@ -6099,3 +6099,282 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
     transform: none;
   }
 }
+
+
+/* ─── Screen states ─────────────────────────────────────────────────────────
+   The condition a screen was captured in: loading, empty, a sheet over it.
+   Shown as a small badge on the card and inline on the detail page. Colours
+   are per state so a wall of cards can be scanned for "all the empty
+   states" without reading. */
+.ins-card-states {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.ins-shot-panel .ins-card-states {
+  top: 10px;
+  left: 10px;
+}
+
+.ins-state-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: #0b0c0e;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 2px rgba(11, 12, 14, 0.12), inset 0 0 0 1px rgba(11, 12, 14, 0.08);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ins-state-badge--inline {
+  height: 20px;
+  font-size: 12px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.ins-state-badge.is-loading { background: #eef2ff; color: #3730a3; }
+.ins-state-badge.is-empty { background: #f3f4f6; color: #374151; }
+.ins-state-badge.is-error { background: #fee2e2; color: #991b1b; }
+.ins-state-badge.is-success { background: #dcfce7; color: #166534; }
+.ins-state-badge.is-modal,
+.ins-state-badge.is-bottom-sheet { background: #fdf4ff; color: #86198f; }
+.ins-state-badge.is-toast { background: #fff7ed; color: #9a3412; }
+.ins-state-badge.is-coach-mark { background: #fefce8; color: #854d0e; }
+.ins-state-badge.is-permission { background: #ecfeff; color: #155e75; }
+.ins-state-badge.is-scrolled,
+.ins-state-badge.is-keyboard { background: #f8fafc; color: #475569; }
+
+.ins-detail-desc {
+  margin: 6px 0 0;
+  max-width: 62ch;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ins-sub);
+}
+
+/* ─── Automatic capture: live progress and the result ──────────────────── */
+.ins-ingest {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius-lg);
+  background: var(--ins-card);
+}
+
+.ins-ingest-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ins-ingest-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ins-muted);
+  background: var(--ins-tag);
+}
+
+.ins-ingest-step.is-active {
+  color: #0b0c0e;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #0b0c0e;
+}
+
+.ins-ingest-step.is-done {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.ins-ingest-step-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.ins-ingest-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ins-tag);
+  overflow: hidden;
+}
+
+.ins-ingest-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: #0b0c0e;
+  transition: width 240ms ease;
+}
+
+.ins-ingest-bar.is-indeterminate > span {
+  width: 30% !important;
+  animation: ins-ingest-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes ins-ingest-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+.ins-ingest-message {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 16px;
+}
+
+.ins-ingest-log {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--ins-radius);
+  background: #0b0c0e;
+  color: #d4d4d8;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  max-height: 150px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.ins-ingest-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-size: 16px;
+  color: var(--ins-sub);
+}
+
+.ins-ingest-summary strong {
+  color: #0b0c0e;
+}
+
+.ins-ingest-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ins-border);
+}
+
+.ins-ingest-flow-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.ins-ingest-strip {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x proximity;
+}
+
+.ins-ingest-shot {
+  flex: 0 0 132px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scroll-snap-align: start;
+  text-decoration: none;
+  color: inherit;
+}
+
+.ins-ingest-shot-img {
+  position: relative;
+  aspect-ratio: 9 / 19.5;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--ins-tag);
+  border: 1px solid var(--ins-border);
+}
+
+.ins-ingest-shot-img img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ins-ingest-shot-num {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(11, 12, 14, 0.85);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ins-ingest-shot .ins-card-states {
+  top: 6px;
+  left: auto;
+  right: 6px;
+}
+
+.ins-ingest-shot .ins-state-badge {
+  height: 18px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+.ins-ingest-shot-name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.ins-ingest-shot-sub {
+  font-size: 12px;
+  color: var(--ins-muted);
+}
+
+.ins-ingest-excluded {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--ins-radius);
+  background: var(--ins-tag);
+  font-size: 14px;
+  color: var(--ins-sub);
+}

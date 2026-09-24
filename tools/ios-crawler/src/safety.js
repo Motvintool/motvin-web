@@ -66,6 +66,46 @@ const BLOCKING_TEXT = [
 ];
 
 /**
+ * Text that means the screen belongs to someone else's product: Google's,
+ * Apple's or Facebook's sign-in pages, shown inside the app through a web
+ * view or a system sheet. They are captured like any other frame, but they
+ * are not the app's design and never reach the library. The screens before
+ * and after them do, so a journey through a sign-in still reads as one.
+ *
+ * The app's own "Continue with Google" button is not this — that is the
+ * app's login screen. What is matched here is the provider's UI: the account
+ * chooser, the "to continue to <App>" line, Apple ID prompts, the Facebook
+ * login form, and the iOS alert that precedes a web sign-in.
+ */
+const EXTERNAL_AUTH_TEXT = [
+  /\bchoose an account\b/i,
+  /\bto continue to\b/i,
+  /\buse another account\b/i,
+  /\bforgot email\?/i,
+  /\baccounts\.google\.com\b/i,
+  /\bsign in with google\b[\s\S]*\b(email or phone|create account|next)\b/i,
+  /\buse your google account\b/i,
+  /\bsign in with (your )?apple ?id\b/i,
+  /\bapple ?id\b[\s\S]*\b(hide my email|share my email|use a different|continue with password)\b/i,
+  /\b(hide my email|share my email)\b/i,
+  /\blog ?in (to|with) facebook\b/i,
+  /\bcontinue as [a-z]+\b[\s\S]*\bfacebook\b/i,
+  /\bwants to use\b[\s\S]*\bto sign in\b/i,
+  /\b(google|apple|facebook)\.com\b/i,
+];
+
+/**
+ * Whether the visible text is a third-party sign-in page.
+ * @param {string} text all visible text, newline- or space-separated
+ */
+export function isExternalAuthScreen(text) {
+  const haystack = String(text || '');
+  if (!haystack.trim()) return false;
+  const pattern = EXTERNAL_AUTH_TEXT.find((rule) => rule.test(haystack));
+  return pattern ? { external: true, reason: `third-party sign-in UI (${pattern.source.slice(0, 40)})` } : false;
+}
+
+/**
  * Controls the crawler never taps. Split by why, because the log should say
  * which rule stopped it — "destructive" and "access control" are different
  * conversations with whoever reads the run report.

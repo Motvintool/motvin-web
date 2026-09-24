@@ -14,8 +14,17 @@ import {
   STYLE_LABEL,
   elementLabel,
   formatCount,
+  SCREEN_STATE_LABEL,
 } from '@/lib/inspirations/taxonomy';
-import { PLATFORMS, type Industry, type LibraryCounts, type Platform, type ScreenType, type Style } from '@/lib/inspirations/types';
+import {
+  PLATFORMS,
+  type Industry,
+  type LibraryCounts,
+  type Platform,
+  type ScreenState,
+  type ScreenType,
+  type Style,
+} from '@/lib/inspirations/types';
 import { useMeta } from './useMeta';
 import { CheckIcon, ChevronDownIcon, CloseIcon } from './Icons';
 
@@ -565,6 +574,17 @@ export function FilterToolbar<S extends string>({
         onToggle={(v) => onChange({ screenTypes: toggle(filters.screenTypes, v as ScreenType) })}
         onClear={() => onChange({ screenTypes: [] })}
       />
+      {meta.taxonomy.states.length > 0 && (
+        <FilterPill
+          // The condition a screen is in, separate from what it is: "empty
+          // states" or "loading screens" across every app is one click here.
+          label="State"
+          options={meta.taxonomy.states.map((v) => ({ value: v, label: SCREEN_STATE_LABEL[v as ScreenState] ?? v }))}
+          selected={filters.states}
+          onToggle={(v) => onChange({ states: toggle(filters.states, v as ScreenState) })}
+          onClear={() => onChange({ states: [] })}
+        />
+      )}
       <FilterPill
         // "Element" (the field name), not "UI Elements" — the content-type
         // switcher pill already reads "UI Elements" on this page, and two

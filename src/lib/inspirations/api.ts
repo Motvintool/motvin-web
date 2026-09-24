@@ -88,7 +88,7 @@ const EMPTY_PAGE: Page<never> = { items: [], total: 0, limit: 30, offset: 0, nex
 
 export const EMPTY_META: LibraryMeta = {
   counts: { apps: 0, screens: 0, 'ui-elements': 0, flows: 0, patterns: 0 },
-  taxonomy: { platforms: [], screenTypes: [], industries: [], styles: [], elements: [], flowCategories: [] },
+  taxonomy: { platforms: [], screenTypes: [], states: [], industries: [], styles: [], elements: [], flowCategories: [] },
   generatedAt: '',
 };
 
@@ -140,6 +140,7 @@ export const inspirationsApi = {
     const params = new URLSearchParams();
     listParam('platform', filters.platforms, params);
     listParam('type', filters.screenTypes, params);
+    listParam('state', filters.states, params);
     listParam('industry', filters.industries, params);
     listParam('style', filters.styles, params);
     if (filters.query) params.set('q', filters.query);

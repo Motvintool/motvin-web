@@ -50,10 +50,29 @@ because a crawl is blocked behind a 12 GB Xcode install. Screenshot an app on a
 real iPhone, or screen-record a walk through it, and point `ingest` at the result.
 
 **Video is the higher-yield route.** Three minutes of tapping produces a few
-hundred frames, of which perhaps twenty are distinct screens; `selectStableFrames`
-keeps a frame only where the UI held still for at least half a second, so
-mid-animation and mid-scroll frames never reach the library. The frame kept is
-the *last* of each still run, by which point any transition has finished.
+hundred frames, of which perhaps twenty are distinct screens. The recording is
+read as a *timeline*, not a pile of frames ([`src/segment.js`](src/segment.js)):
+
+| It finds | How |
+|---|---|
+| every screen the UI held still on | runs of near-identical frames, merged across settling (a header drawing a beat late, a carousel advancing) |
+| splash, toasts, spinners shown only briefly | a short hold is kept when it sits between two settled screens and is not a blend of them |
+| dialogs, bottom sheets, toasts | a scrim (uniform darkening that keeps the picture underneath) with something drawn on it; or a compact change against an untouched screen |
+| loading and skeleton states | same chrome as the screen that followed, far less in it, gone quickly — named "*X* — loading" |
+| scrolled views | content shifted under fixed chrome; folded into the origin when the text barely changed |
+| revisits | the same screen seen again is one screen with a recorded return, not a duplicate |
+| system prompts iOS did not record | a scrim with nothing on it (iOS leaves permission alerts out of recordings) — dropped and counted |
+| Google / Apple / Facebook sign-in pages | recognised from their text and **left out of the library**; the screens either side still publish, and the flow closes over the gap |
+
+Frames are sampled at 5 per second by default, with a 32×64 thumbnail written
+beside each so all of the above runs on a few thousand pixels per frame — a
+three-minute recording segments in well under a second once its frames are
+read. Tune with `--fps`, `--min-hold <seconds>` (default 0.5) and `--no-brief`.
+
+Every screen carries what the timeline knew about it into the store: when it
+was on screen and for how long, whether it was brief, what it overlaid or
+loaded into, how many times it was returned to, and its dominant colours. The
+screen page's **Analyze UI** panel is built from those facts.
 
 ### Nothing to fill in
 
@@ -161,7 +180,8 @@ node crawl.js ingest --from ~/Desktop/session.mov --authorized --authorized-by "
 ```
 
 Classify screens already in the store (safe to re-run; skips anything already
-classified unless you pass `--overwrite`):
+classified unless you pass `--overwrite`). A stored Google/Apple/Facebook
+sign-in page is removed from the store and its flow, unless `--keep-external`:
 
 ```bash
 node crawl.js classify --app-id my-app
@@ -230,16 +250,20 @@ Into the Inspirations store (`motvin-backend/data/inspirations/`):
 | `apps.json`, `flows.json` | upserted |
 | `sources.json` | upserted as **`approved`** — origin recorded, nothing held back |
 
-## Screen types
+## Screen types and states
 
-The crawler classifies into 29 types (`splash`, `onboarding`, `permission`,
-`login`, `signup`, `home`, `dashboard`, `feed`, `category`, `search`,
-`search_results`, `detail`, `product_detail`, `cart`, `checkout`, `payment`,
-`paywall`, `profile`, `settings`, `notifications`, `messages`, `map`, `calendar`,
-`media`, `player`, `form`, `confirmation`, `error`, `empty_state`, `other`).
+The crawler classifies into 37 types — the 29 places (`splash`, `onboarding`,
+`permission`, `login`, `signup`, `home`, `feed`, `search`, `detail`, `cart`,
+`checkout`, `paywall`, `settings`, …) plus the conditions a screen can be in
+(`loading`, `empty_state`, `error`, `confirmation`, `dialog`, `bottom_sheet`,
+`toast`, `coach_mark`, `otp`) and `external_auth`, which is recognised only to
+be excluded.
 
-The manifest builder accepts only 13. So each crawler type declares what it
-files under:
+The manifest builder accepts 29 published types and 11 **states** (`loading`,
+`empty`, `error`, `success`, `modal`, `bottom-sheet`, `toast`, `coach-mark`,
+`permission`, `scrolled`, `keyboard`), and the gallery filters on both, so
+"every empty state across all apps" is one click. Each crawler type declares
+what it files under:
 
 ```js
 product_detail:   { publishedAs: 'product',  flow: 'shopping' },
@@ -264,7 +288,8 @@ to `SCREEN_TYPES` in the backend's `manifest.builder.ts`.
 | `src/safety.js` | blocked screens, forbidden controls, the authorization gate |
 | `src/taxonomy.js` | screen types and their mapping to what the builder publishes |
 | `src/ingest.js` | the Simulator-free front door: folder or video → store, and `classify` |
-| `src/frames.js` | frame extraction — picks ffmpeg or the AVFoundation fallback |
+| `src/segment.js` | the recording as a timeline: holds, overlays, loading states, scrolls, revisits, dropped scrims |
+| `src/frames.js` | frame extraction plus per-frame thumbnails — picks ffmpeg or the AVFoundation fallback |
 | `src/frames.m` | the fallback reader, compiled on demand into `.bin/` |
 | `src/ocr.js` / `src/ocr.m` | on-device text recognition via Vision, same compile-on-demand trick |
 | `src/heuristics.js` | the offline rules: text → screen type, screen types → named flows |

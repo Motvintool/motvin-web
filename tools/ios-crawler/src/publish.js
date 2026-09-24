@@ -5,18 +5,29 @@
  * motvin-backend/data/inspirations/README.md and enforced by
  * manifest.builder.ts, so this module's whole job is translation:
  *
- *   screens/ios/<app>/<type>[-n].png   the frame
- *   screens/ios/<app>/<type>[-n].json  the sidecar the builder reads
- *   analysis/<screen-id>.json          the crawler's full record — the rich
- *                                      29-value screen type, the description,
- *                                      the navigation edges, the blocked flag
- *   apps.json / flows.json             upserted
- *   sources.json                       upserted as status "approved"
+ *   screens/ios/<app>/<flow>/<n>.png    the frame, inside its journey
+ *   screens/ios/<app>/<flow>/<n>.json   the sidecar the builder reads — name,
+ *                                       type, state, description, tags,
+ *                                       elements, style, capture facts
+ *   screens/ios/<app>/<type>[-n].png    the fallback layout, when screens
+ *                                       could not be grouped
+ *   analysis/<screen-id>.json           the full record — the fine-grained
+ *                                       screen type, the description, the
+ *                                       findings the screen page shows, the
+ *                                       palette, where it sat in the
+ *                                       recording, what led to it and what it
+ *                                       led to
+ *   apps.json / flows.json              upserted
+ *   sources.json                        upserted as status "approved"
  *
  * sources.json still records where each capture came from — its permission,
  * licence and attribution all surface in the manifest and on the screen page.
  * It no longer holds anything back: captures publish as soon as they are
  * written, and removing one is done from /inspirations/admin afterwards.
+ *
+ * A node marked `skipPublish` — a third-party sign-in page — is left out of
+ * the store entirely, and reported, so the journey around it still reads as
+ * one.
  */
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -24,7 +35,16 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run } from './exec.js';
 import { log } from './log.js';
-import { flowCategoryFor, publishedTypeFor, filterStyles, INDUSTRIES } from './taxonomy.js';
+import { buildSections } from './heuristics.js';
+import {
+  filterStates,
+  filterStyles,
+  flowCategoryFor,
+  INDUSTRIES,
+  isPublishable,
+  publishedTypeFor,
+  stateFor,
+} from './taxonomy.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -61,13 +81,31 @@ export function safeName(name) {
 }
 
 /**
+ * Gives every node a name no other node in the same publish shares. Two
+ * screens honestly titled the same ("Address unavailable" on every tab of a
+ * delivery app) get a running number rather than colliding in a flow strip.
+ */
+function uniqueNames(nodes) {
+  const seen = new Map();
+  const names = new Map();
+  for (const node of nodes) {
+    const base = String(node.analysis?.name || 'Screen').trim() || 'Screen';
+    const count = (seen.get(base.toLowerCase()) ?? 0) + 1;
+    seen.set(base.toLowerCase(), count);
+    names.set(node.id, count === 1 ? base : `${base} (${count})`);
+  }
+  return names;
+}
+
+/**
  * Publishes a crawl.
- * @param {{graph: ScreenGraph, app: object, dataDir?: string, dryRun?: boolean}} options
+ * @param {{graph: ScreenGraph, app: object, flows?: object[], dataDir?: string, dryRun?: boolean,
+ *          capture?: {source?: string, fps?: number, frames?: number, durationSeconds?: number}}} options
  */
 export function publishCrawl(options) {
   const { graph, app } = options;
   const dataDir = resolveDataDir(options.dataDir);
-  const platform = 'ios';
+  const platform = app.platform || 'ios';
 
   if (!existsSync(dataDir)) {
     throw new Error(
@@ -83,8 +121,24 @@ export function publishCrawl(options) {
   const analysisDir = join(dataDir, 'analysis');
 
   const written = [];
+  const skipped = [];
   const typeCounts = new Map();
-  const nodes = [...graph.nodes.values()];
+  const allNodes = [...graph.nodes.values()];
+
+  // What is left out, and why. A third-party sign-in page is recognised so
+  // that it can be excluded; the screens either side of it still publish.
+  const nodes = allNodes.filter((node) => {
+    const reason =
+      node.skipReason ?? (node.skipPublish ? 'excluded' : !isPublishable(node.analysis?.screenType) ? `${node.analysis.screenType} screens are not published` : null);
+    if (reason) {
+      skipped.push({ nodeId: node.id, name: node.analysis?.name ?? node.id, screenType: node.analysis?.screenType ?? 'other', reason });
+      return false;
+    }
+    return true;
+  });
+
+  const names = uniqueNames(nodes);
+  const nameOf = (nodeId) => names.get(nodeId) ?? graph.get(nodeId)?.analysis?.name ?? null;
 
   if (!options.dryRun) {
     mkdirSync(appDir, { recursive: true });
@@ -102,22 +156,32 @@ export function publishCrawl(options) {
    * which is the layout a manual upload produces.
    */
   const placement = new Map();
-  const flowGroups = options.flows ?? [];
+  const flowGroups = (options.flows ?? [])
+    .map((group) => ({ ...group, nodeIds: group.nodeIds.filter((id) => nodes.some((node) => node.id === id)) }))
+    .filter((group) => group.nodeIds.length >= 1);
 
+  const usedFolders = new Set();
   for (const group of flowGroups) {
-    const folder = safeName(group.name) || 'flow';
+    let folder = safeName(group.name) || 'flow';
+    let n = 2;
+    while (usedFolders.has(folder)) folder = `${safeName(group.name) || 'flow'}-${n++}`;
+    usedFolders.add(folder);
     group.folder = folder;
     if (!options.dryRun) mkdirSync(join(appDir, folder), { recursive: true });
     group.nodeIds.forEach((nodeId, position) => {
-      placement.set(nodeId, { folder, position: position + 1 });
+      placement.set(nodeId, { folder, position: position + 1, total: group.nodeIds.length, name: group.name });
     });
   }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const capture = options.capture ?? {};
 
   // ─── Screens ────────────────────────────────────────────────────────────
   for (const node of nodes) {
     const analysis = node.analysis;
     const publishedType = publishedTypeFor(analysis.screenType);
     const placed = placement.get(node.id);
+    const name = names.get(node.id);
 
     let relativePath;
     let screenId;
@@ -135,32 +199,98 @@ export function publishCrawl(options) {
     }
 
     const fileName = `${relativePath}.png`;
+    const states = filterStates([...(analysis.states ?? []), stateFor(analysis.screenType)].filter(Boolean));
+    const nodeCapture = node.capture ?? null;
+
+    const captureFacts = nodeCapture
+      ? {
+          atSeconds: nodeCapture.start,
+          holdSeconds: nodeCapture.holdSeconds,
+          brief: Boolean(nodeCapture.brief),
+          visits: nodeCapture.visits ?? 1,
+          ...(nodeCapture.overlayOf ? { overlayOf: nameOf(nodeCapture.overlayOf) } : {}),
+          ...(nodeCapture.loadingOf ? { loadingOf: nameOf(nodeCapture.loadingOf) } : {}),
+          ...(nodeCapture.scrolledFrom ? { scrolledFrom: nameOf(nodeCapture.scrolledFrom) } : {}),
+        }
+      : null;
 
     const sidecar = {
-      name: analysis.name,
+      name,
       screenType: publishedType,
-      tags: [...new Set([...analysis.tags, analysis.screenType.replace(/_/g, '-'), 'ios'])].slice(0, 12),
-      elements: analysis.elements,
+      fineType: analysis.screenType,
+      states,
+      description: analysis.description || '',
+      tags: [...new Set([...(analysis.tags ?? []), analysis.screenType.replace(/_/g, '-'), ...states, platform])].slice(0, 14),
+      elements: analysis.elements ?? [],
       style: filterStyles(analysis.style),
-      capturedAt: new Date().toISOString().slice(0, 10),
+      capturedAt: today,
+      ...(captureFacts ? { capture: captureFacts } : {}),
     };
 
-    // The full record, including everything the 13-value published vocabulary
-    // cannot express.
+    const reachedFrom = graph.edges.filter((edge) => edge.to === node.id).map((edge) => ({ from: edge.from, via: edge.label, name: nameOf(edge.from) }));
+    const leadsTo = graph.edges.filter((edge) => edge.from === node.id).map((edge) => ({ to: edge.to, via: edge.label, name: nameOf(edge.to) }));
+
+    const palette = (nodeCapture?.colors ?? []).map((color) => ({ hex: color.hex, role: color.role, share: color.share }));
+
+    const sections = buildSections({
+      analysis: { ...analysis, name },
+      capture: nodeCapture
+        ? {
+            ...nodeCapture,
+            frames: capture.frames,
+            fps: capture.fps,
+            overlayOfName: captureFacts?.overlayOf ?? null,
+            loadingOfName: captureFacts?.loadingOf ?? null,
+            scrolledFromName: captureFacts?.scrolledFrom ?? null,
+          }
+        : null,
+      flow: placed ? { name: placed.name, position: placed.position, total: placed.total } : null,
+      from: [...new Set(reachedFrom.map((edge) => edge.name).filter(Boolean))],
+      to: [...new Set(leadsTo.map((edge) => edge.name).filter(Boolean))],
+    });
+
+    // The full record, including everything the published vocabulary cannot
+    // express, in the shape the screen page's "Analyze UI" panel reads.
     const analysisRecord = {
+      screenId,
       screen_id: screenId,
+      analyzer: analysis.viaHeuristics ? 'motvin on-device (Vision OCR + rules)' : analysis.analyzer ?? 'claude',
+      analyzedAt: new Date().toISOString(),
       screen_type: analysis.screenType,
       published_as: publishedType,
+      states,
       category: analysis.category ?? app.industry,
       flow: analysis.flow ?? flowCategoryFor(analysis.screenType),
       // The journey this screen was filed under, and where in it — the pair a
       // gallery needs to show a flow as a sequence.
-      flow_name: flowGroups.find((group) => group.folder === placed?.folder)?.name ?? null,
+      flow_name: placed?.name ?? null,
       flow_position: placed?.position ?? null,
+      name,
       description: analysis.description,
       tags: sidecar.tags,
       elements: analysis.elements,
       style: sidecar.style,
+      sections,
+      palette,
+      capture: nodeCapture
+        ? {
+            source: capture.source ?? null,
+            fps: capture.fps ?? null,
+            frames: capture.frames ?? null,
+            frame: nodeCapture.frame,
+            atSeconds: nodeCapture.start,
+            endSeconds: nodeCapture.end,
+            holdSeconds: nodeCapture.holdSeconds,
+            brief: Boolean(nodeCapture.brief),
+            kind: nodeCapture.kind,
+            overlay: nodeCapture.overlay ?? null,
+            overlayOf: captureFacts?.overlayOf ?? null,
+            loadingOf: captureFacts?.loadingOf ?? null,
+            scrolledFrom: captureFacts?.scrolledFrom ?? null,
+            visits: nodeCapture.visits ?? 1,
+          }
+        : null,
+      signals: analysis.signals ?? null,
       crawler: {
         nodeId: node.id,
         depth: node.depth,
@@ -176,8 +306,8 @@ export function publishCrawl(options) {
           skipReason: action.skipReason,
           leadsTo: action.resultNodeId,
         })),
-        reachedFrom: graph.edges.filter((edge) => edge.to === node.id).map((edge) => ({ from: edge.from, via: edge.label })),
-        leadsTo: graph.edges.filter((edge) => edge.from === node.id).map((edge) => ({ to: edge.to, via: edge.label })),
+        reachedFrom,
+        leadsTo,
       },
       capturedAt: sidecar.capturedAt,
       capturedBy: 'motvin-ios-crawler',
@@ -192,11 +322,18 @@ export function publishCrawl(options) {
     written.push({
       nodeId: node.id,
       screenId,
+      name,
       file: fileName,
       flow: placed?.folder ?? null,
+      flowName: placed?.name ?? null,
       position: placed?.position ?? null,
       screenType: analysis.screenType,
       publishedType,
+      states,
+      brief: Boolean(nodeCapture?.brief),
+      atSeconds: nodeCapture?.start ?? null,
+      holdSeconds: nodeCapture?.holdSeconds ?? null,
+      url: `/api/inspirations/screens/${platform}/${app.appId}/${fileName}`,
     });
   }
 
@@ -218,7 +355,7 @@ export function publishCrawl(options) {
     appsDoc.apps.push(appRecord);
   }
 
-  // ─── sources.json — the gate, always left for a human ───────────────────
+  // ─── sources.json — provenance, recorded and published ──────────────────
   const sourcesFile = join(dataDir, 'sources.json');
   const sourcesDoc = readJson(sourcesFile, { version: 1, sources: {} });
   sourcesDoc.sources = sourcesDoc.sources || {};
@@ -227,7 +364,7 @@ export function publishCrawl(options) {
   sourcesDoc.sources[app.appId] = {
     ...previous,
     sourceUrl: app.website ?? previous.sourceUrl ?? '',
-    capturedAt: new Date().toISOString().slice(0, 10),
+    capturedAt: today,
     capturedBy: 'motvin-ios-crawler',
     permission: auth.permission ?? previous.permission ?? '',
     license: auth.license ?? previous.license ?? '',
@@ -238,7 +375,7 @@ export function publishCrawl(options) {
     // permission — the manifest shows all of it. It just no longer gates:
     // captures publish as soon as they are written.
     status: 'approved',
-    notes: [previous.notes, `Crawled ${new Date().toISOString().slice(0, 10)} — authorized by ${auth.authorizedBy ?? 'unrecorded'} (${auth.grantedAt ?? 'no date'}).`]
+    notes: [previous.notes, `Captured ${today} — authorized by ${auth.authorizedBy ?? 'unrecorded'} (${auth.grantedAt ?? 'no date'}).`]
       .filter(Boolean)
       .join(' ')
       .slice(0, 500),
@@ -306,6 +443,7 @@ export function publishCrawl(options) {
     dataDir,
     appDir,
     screens: written,
+    skipped,
     flows,
     status: sourcesDoc.sources[app.appId].status,
   };

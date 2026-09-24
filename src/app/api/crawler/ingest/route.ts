@@ -9,11 +9,22 @@ import { pipeline } from 'node:stream/promises';
 /**
  * POST /api/crawler/ingest — a screen recording in, captured screens out.
  *
- * The browser cannot run ffmpeg, so the admin page hands the video here and
- * this route drives tools/ios-crawler as a subprocess. Running the CLI rather
- * than importing its modules is deliberate: it is the same code path the
- * terminal uses and the self-test covers, so the web route cannot drift away
- * from the tested one.
+ * The browser cannot run a video decoder, so the admin page hands the video
+ * here and this route drives tools/ios-crawler as a subprocess. Running the CLI
+ * rather than importing its modules is deliberate: it is the same code path
+ * the terminal uses and the self-test covers, so the web route cannot drift
+ * away from the tested one.
+ *
+ * The response is a stream of newline-delimited JSON, one object per line:
+ *
+ *   {"type":"progress", stage, message, …}   a stage began or advanced
+ *   {"type":"log", line}                      a line the CLI printed for a person
+ *   {"type":"result", data}                   the final result — the last line
+ *   {"type":"error", message}                 the run failed — the last line
+ *
+ * A recording takes tens of seconds to read, classify and publish, and a
+ * spinner for that long reads as a hang. Streaming the CLI's own stages lets
+ * the page say "reading screen 7 of 23" instead.
  *
  * Authorization is delegated, not reimplemented. The caller's Firebase token is
  * passed to the backend's own admin session endpoint, and only a 200 from there
@@ -28,13 +39,30 @@ import { pipeline } from 'node:stream/promises';
 /** Hard ceiling on an upload. A three-minute recording is well under this. */
 const MAX_BYTES = 2 * 1024 * 1024 * 1024;
 
-/** Prefix the CLI uses for its machine-readable result line. */
+/** Prefixes the CLI uses for its machine-readable lines. */
 const RESULT_MARKER = 'MOTVIN_RESULT';
+const PROGRESS_MARKER = 'MOTVIN_PROGRESS';
 
 /** Extensions the crawler recognises as a recording. */
 const VIDEO_EXT = new Set(['mov', 'mp4', 'm4v', 'avi', 'mkv']);
 
-type CliResult = {
+export type IngestScreen = {
+  screenId: string;
+  name: string;
+  file: string;
+  url: string;
+  flow: string | null;
+  flowName: string | null;
+  position: number | null;
+  screenType: string;
+  publishedType: string;
+  states: string[];
+  brief: boolean;
+  atSeconds: number | null;
+  holdSeconds: number | null;
+};
+
+export type IngestResult = {
   ingested: number;
   duplicates: number;
   status: string;
@@ -43,17 +71,25 @@ type CliResult = {
   backend: string;
   grouped: boolean;
   app: { id: string; name: string; industry: string };
-  identified: { confident: boolean; detected: boolean } | null;
+  identified: { confident: boolean; detected: boolean; evidence?: string | null } | null;
+  excluded: { file: string; name: string; reason: string }[];
+  skipped: { nodeId: string; name: string; screenType: string; reason: string }[];
+  capture: { source: string; fps: number; frames: number; durationSeconds: number; excluded?: number } | null;
+  timeline: {
+    frames: number;
+    fps: number;
+    durationSeconds: number;
+    dropped: { transitions: number; blank: number; scrims: number; revisits: number; merged: number };
+  } | null;
   flows: { id: string; name: string; category: string; screenIds: string[] }[];
-  screens: {
-    screenId: string;
-    file: string;
-    flow: string | null;
-    position: number | null;
-    screenType: string;
-    publishedType: string;
-  }[];
+  screens: IngestScreen[];
 };
+
+export type IngestEvent =
+  | { type: 'progress'; stage: string; message: string; done?: number; total?: number; frames?: number; screens?: number }
+  | { type: 'log'; line: string }
+  | { type: 'result'; data: IngestResult }
+  | { type: 'error'; message: string };
 
 function backendBase(): string {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, '');
@@ -92,8 +128,9 @@ export async function POST(request: Request) {
 
   const params = new URL(request.url).searchParams;
   const extension = (params.get('ext')?.trim().toLowerCase() || 'mov').replace(/^\./, '');
-  const fps = Number(params.get('fps') ?? 2);
-  const minRun = Number(params.get('minRun') ?? 2);
+  const fps = Number(params.get('fps') ?? 5);
+  const minHold = Number(params.get('minHold') ?? 0.5);
+  const keepBrief = params.get('brief') !== '0';
 
   // The video's own name is the last resort for naming the app, used when no
   // analyzer can identify it. A fixed temp name would make every such upload an
@@ -107,7 +144,7 @@ export async function POST(request: Request) {
 
   if (!VIDEO_EXT.has(extension)) return fail(`Unsupported video type ".${extension}".`, 400);
   if (!Number.isFinite(fps) || fps < 1 || fps > 10) return fail('fps must be between 1 and 10.', 400);
-  if (!Number.isFinite(minRun) || minRun < 1 || minRun > 20) return fail('minRun must be between 1 and 20.', 400);
+  if (!Number.isFinite(minHold) || minHold < 0.1 || minHold > 5) return fail('minHold must be between 0.1 and 5 seconds.', 400);
   if (!request.body) return fail('No video in the request body.', 400);
 
   const declared = Number(request.headers.get('content-length') ?? 0);
@@ -118,36 +155,70 @@ export async function POST(request: Request) {
 
   try {
     await pipeline(Readable.fromWeb(request.body as Parameters<typeof Readable.fromWeb>[0]), createWriteStream(videoPath));
-
-    // No --app: the app is identified from the screens, so an upload needs no
-    // form first. The signed-in admin's address is recorded as who captured it.
-    const result = await runCrawler([
-      'ingest',
-      '--from', videoPath,
-      '--authorized',
-      '--authorized-by', admin.email,
-      '--json',
-      '--fps', String(fps),
-      '--min-run', String(minRun),
-    ]);
-
-    if (!result.ok) return fail(result.message, 422);
-    return Response.json({ success: true, data: result.data });
   } catch (error) {
-    return fail((error as Error).message, 500);
-  } finally {
     await rm(workDir, { recursive: true, force: true });
+    return fail((error as Error).message, 500);
   }
+
+  // No --app: the app is identified from the screens, so an upload needs no
+  // form first. The signed-in admin's address is recorded as who captured it.
+  const args = [
+    'ingest',
+    '--from', videoPath,
+    '--authorized',
+    '--authorized-by', admin.email,
+    '--json',
+    '--fps', String(fps),
+    '--min-hold', String(minHold),
+    ...(keepBrief ? [] : ['--no-brief']),
+  ];
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const send = (event: IngestEvent) => controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      let closed = false;
+      const finish = async () => {
+        if (closed) return;
+        closed = true;
+        await rm(workDir, { recursive: true, force: true });
+        controller.close();
+      };
+      runCrawler(args, send)
+        .then(async (outcome) => {
+          if (outcome.ok) send({ type: 'result', data: outcome.data });
+          else send({ type: 'error', message: outcome.message });
+          await finish();
+        })
+        .catch(async (error: Error) => {
+          send({ type: 'error', message: error.message });
+          await finish();
+        });
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Accel-Buffering': 'no',
+    },
+  });
 }
 
 /**
- * Runs the CLI and pulls the marked result line out of its output.
+ * Runs the CLI, relaying its progress lines as they arrive, and resolves with
+ * the marked result line.
  *
  * On failure the last few log lines become the message, because the CLI's own
- * errors ("ffmpeg is needed…", "no frame held still long enough…") are already
- * written for a person to read and are far more useful than an exit code.
+ * errors ("no frame held still long enough…", "the analyzer stopped
+ * responding…") are already written for a person to read and are far more
+ * useful than an exit code.
  */
-function runCrawler(args: string[]): Promise<{ ok: true; data: CliResult } | { ok: false; message: string }> {
+function runCrawler(
+  args: string[],
+  send: (event: IngestEvent) => void,
+): Promise<{ ok: true; data: IngestResult } | { ok: false; message: string }> {
   const script = join(process.cwd(), 'tools', 'ios-crawler', 'crawl.js');
 
   return new Promise((resolve) => {
@@ -156,34 +227,60 @@ function runCrawler(args: string[]): Promise<{ ok: true; data: CliResult } | { o
       env: { ...process.env, NO_COLOR: '1' },
     });
 
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk;
+    let result: IngestResult | null = null;
+    let resultError: string | null = null;
+    const humanLines: string[] = [];
+    let buffer = '';
+
+    const handleLine = (raw: string) => {
+      const line = raw.replace(/\r$/, '');
+      if (!line.trim()) return;
+      if (line.startsWith(PROGRESS_MARKER)) {
+        try {
+          const event = JSON.parse(line.slice(PROGRESS_MARKER.length).trim()) as Omit<Extract<IngestEvent, { type: 'progress' }>, 'type'>;
+          send({ type: 'progress', ...event });
+        } catch {
+          // A malformed progress line is not worth failing the run for.
+        }
+        return;
+      }
+      if (line.startsWith(RESULT_MARKER)) {
+        try {
+          result = JSON.parse(line.slice(RESULT_MARKER.length).trim()) as IngestResult;
+        } catch {
+          resultError = 'The crawler returned a result that could not be read.';
+        }
+        return;
+      }
+      const clean = line.replace(/^[✗!›✓⊘]\s*/, '').trim();
+      humanLines.push(clean);
+      send({ type: 'log', line: line.trim() });
+    };
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString('utf-8');
+      let index = buffer.indexOf('\n');
+      while (index !== -1) {
+        handleLine(buffer.slice(0, index));
+        buffer = buffer.slice(index + 1);
+        index = buffer.indexOf('\n');
+      }
     });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
+    child.stderr.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString('utf-8').split('\n')) {
+        if (line.trim()) humanLines.push(line.trim());
+      }
     });
 
     child.on('error', (error) => resolve({ ok: false, message: `Could not start the crawler: ${error.message}` }));
 
     child.on('close', (code) => {
-      const marked = stdout.split('\n').find((line) => line.startsWith(RESULT_MARKER));
-      if (marked) {
-        try {
-          return resolve({ ok: true, data: JSON.parse(marked.slice(RESULT_MARKER.length).trim()) as CliResult });
-        } catch {
-          return resolve({ ok: false, message: 'The crawler returned a result that could not be read.' });
-        }
-      }
-
-      const lines = `${stdout}\n${stderr}`
-        .split('\n')
-        .map((line) => line.replace(/^[✗!›✓⊘]\s*/, '').trim())
-        .filter(Boolean);
+      if (buffer.trim()) handleLine(buffer);
+      if (result) return resolve({ ok: true, data: result });
+      if (resultError) return resolve({ ok: false, message: resultError });
       resolve({
         ok: false,
-        message: lines.slice(-4).join(' — ') || `The crawler exited with code ${code}.`,
+        message: humanLines.filter(Boolean).slice(-4).join(' — ') || `The crawler exited with code ${code}.`,
       });
     });
   });

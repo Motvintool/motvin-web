@@ -12,20 +12,55 @@ export type Platform = (typeof PLATFORMS)[number];
 
 export const SCREEN_TYPES = [
   'landing',
+  'splash',
+  'onboarding',
+  'permission',
   'login',
   'signup',
+  'home',
   'dashboard',
-  'search',
-  'pricing',
-  'checkout',
-  'settings',
-  'profile',
-  'onboarding',
   'feed',
+  'search',
+  'detail',
   'product',
+  'cart',
+  'checkout',
+  'pricing',
+  'profile',
+  'settings',
+  'notifications',
+  'messages',
+  'map',
+  'calendar',
+  'player',
+  'form',
+  'modal',
+  'success',
+  'error',
+  'empty',
+  'loading',
   'other',
 ] as const;
 export type ScreenType = (typeof SCREEN_TYPES)[number];
+
+/**
+ * The condition a screen is in, independent of what it is. A checkout can be
+ * loading, a feed can be empty, a settings page can have a sheet over it.
+ */
+export const SCREEN_STATES = [
+  'loading',
+  'empty',
+  'error',
+  'success',
+  'modal',
+  'bottom-sheet',
+  'toast',
+  'coach-mark',
+  'permission',
+  'scrolled',
+  'keyboard',
+] as const;
+export type ScreenState = (typeof SCREEN_STATES)[number];
 
 export const INDUSTRIES = [
   'saas',
@@ -38,6 +73,9 @@ export const INDUSTRIES = [
   'ai',
   'social',
   'finance',
+  'food',
+  'entertainment',
+  'lifestyle',
 ] as const;
 export type Industry = (typeof INDUSTRIES)[number];
 
@@ -93,6 +131,16 @@ export type App = {
   ratingCount: number | null;
 };
 
+export type ScreenCapture = {
+  atSeconds: number | null;
+  holdSeconds: number | null;
+  brief: boolean;
+  visits: number | null;
+  overlayOf: string | null;
+  loadingOf: string | null;
+  scrolledFrom: string | null;
+};
+
 export type Screen = {
   id: string;
   appId: string;
@@ -107,6 +155,14 @@ export type Screen = {
   bytes: number;
   platform: Platform;
   screenType: ScreenType;
+  /** The capture pipeline's finer type (`coach_mark`, `otp`, …); equals screenType when unknown. */
+  fineType: string;
+  /** Conditions the screen is in. Empty for a plain, settled screen. */
+  states: ScreenState[];
+  /** One or two measured sentences about the screen. Empty when nothing was recorded. */
+  description: string;
+  /** Facts about the moment of capture, when it came from a recording. */
+  capture: ScreenCapture | null;
   industry: Industry;
   tags: string[];
   elements: ElementKind[];
@@ -196,6 +252,7 @@ export type LibraryMeta = {
   taxonomy: {
     platforms: Platform[];
     screenTypes: ScreenType[];
+    states: ScreenState[];
     industries: Industry[];
     styles: Style[];
     elements: ElementKind[];

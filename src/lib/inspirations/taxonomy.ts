@@ -3,6 +3,7 @@ import type {
   Industry,
   PatternCategory,
   Platform,
+  ScreenState,
   ScreenType,
   Style,
 } from './types';
@@ -22,19 +23,82 @@ export const PLATFORM_LABEL: Record<Platform, string> = {
 
 export const SCREEN_TYPE_LABEL: Record<ScreenType, string> = {
   landing: 'Landing',
-  login: 'Login',
-  signup: 'Signup',
-  dashboard: 'Dashboard',
-  search: 'Search',
-  pricing: 'Pricing',
-  checkout: 'Checkout',
-  settings: 'Settings',
-  profile: 'Profile',
+  splash: 'Splash',
   onboarding: 'Onboarding',
+  permission: 'Permission',
+  login: 'Login',
+  signup: 'Sign up',
+  home: 'Home',
+  dashboard: 'Dashboard',
   feed: 'Feed',
+  search: 'Search',
+  detail: 'Detail',
   product: 'Product',
+  cart: 'Cart',
+  checkout: 'Checkout',
+  pricing: 'Pricing',
+  profile: 'Profile',
+  settings: 'Settings',
+  notifications: 'Notifications',
+  messages: 'Messages',
+  map: 'Map',
+  calendar: 'Calendar',
+  player: 'Player',
+  form: 'Form',
+  modal: 'Modal',
+  success: 'Success',
+  error: 'Error',
+  empty: 'Empty state',
+  loading: 'Loading',
   other: 'Other',
 };
+
+/** Label for a screen type, including one this build has not seen. */
+export function screenTypeLabel(type: string): string {
+  return (
+    SCREEN_TYPE_LABEL[type as ScreenType] ??
+    type.split(/[-_\s]+/).map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ')
+  );
+}
+
+export const SCREEN_STATE_LABEL: Record<ScreenState, string> = {
+  loading: 'Loading',
+  empty: 'Empty',
+  error: 'Error',
+  success: 'Success',
+  modal: 'Modal',
+  'bottom-sheet': 'Bottom sheet',
+  toast: 'Toast',
+  'coach-mark': 'Coach mark',
+  permission: 'Permission',
+  scrolled: 'Scrolled',
+  keyboard: 'Keyboard',
+};
+
+export function screenStateLabel(state: string): string {
+  return (
+    SCREEN_STATE_LABEL[state as ScreenState] ??
+    state.split(/[-_\s]+/).map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ')
+  );
+}
+
+/**
+ * The finer type the capture pipeline recorded, written for people.
+ * "coach_mark" → "Coach mark", "otp" → "Verification code".
+ */
+export function fineTypeLabel(fineType: string): string {
+  const special: Record<string, string> = {
+    otp: 'Verification code',
+    empty_state: 'Empty state',
+    search_results: 'Search results',
+    product_detail: 'Product detail',
+    coach_mark: 'Coach mark',
+    bottom_sheet: 'Bottom sheet',
+    external_auth: 'External sign-in',
+    confirmation: 'Success',
+  };
+  return special[fineType] ?? screenTypeLabel(fineType);
+}
 
 export const INDUSTRY_LABEL: Record<Industry, string> = {
   saas: 'SaaS',
@@ -47,6 +111,9 @@ export const INDUSTRY_LABEL: Record<Industry, string> = {
   ai: 'AI',
   social: 'Social',
   finance: 'Finance',
+  food: 'Food & drink',
+  entertainment: 'Entertainment',
+  lifestyle: 'Lifestyle',
 };
 
 export const STYLE_LABEL: Record<Style, string> = {

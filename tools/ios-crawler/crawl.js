@@ -29,6 +29,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 
 /** Prefix for the `--json` result line, so a caller can find it among the logs. */
 const RESULT_MARKER = 'MOTVIN_RESULT';
+/** Prefix for `--json` progress lines, one per stage, so a caller can show them live. */
+const PROGRESS_MARKER = 'MOTVIN_PROGRESS';
 
 const USAGE = `${bold('motvin-ios-crawler')} — automated iOS screen capture for Inspirations
 
@@ -65,16 +67,21 @@ ${bold('ingest options')}
   --app <file>              app config JSON. Omit it and the app is identified
                             from the screens themselves
   --authorized-by <who>     recorded in sources.json when there is no --app
-  --fps <n>                 frames per second to pull from a video          ${dim('default 2')}
-  --min-run <n>             frames a screen must hold still to count        ${dim('default 2')}
+  --fps <n>                 frames per second to pull from a video          ${dim('default 5')}
+  --min-hold <seconds>      how long a screen must hold still to count      ${dim('default 0.5')}
+  --no-brief                drop screens shown for less than --min-hold even
+                            when they are distinct (splash, toasts, spinners)
   --data-dir <path>         Inspirations store
   --no-classify             skip analysis; file everything as "other"
   --dry-run                 report what would be written, write nothing
+  --json                    print machine-readable progress and result lines
 
 ${bold('classify options')}
   --app-id <id>             app slug as stored under screens/<platform>/    ${dim('required')}
   --platform <p>            ios | android | web                             ${dim('default ios')}
   --overwrite               re-analyse screens that already have a screenType
+  --keep-external           leave Google/Apple/Facebook sign-in pages in the
+                            store instead of removing them
   --dry-run                 report without writing
 
 ${bold('Examples')}
@@ -279,14 +286,25 @@ async function runIngest(flags) {
     dataDir: flags.dataDir,
     backend: flags.classify === false ? 'none' : flags.backend,
     fps: flags.fps === undefined ? undefined : Number(flags.fps),
+    minHoldSeconds: flags.minHold === undefined ? undefined : Number(flags.minHold),
     minRun: flags.minRun === undefined ? undefined : Number(flags.minRun),
+    keepBrief: flags.brief !== false,
     dryRun: flags.dryRun === true,
+    onProgress: flags.json
+      ? (event) => process.stdout.write(`${PROGRESS_MARKER} ${JSON.stringify(event)}\n`)
+      : undefined,
   });
 
   log.raw('');
-  log.info(`${result.ingested} unique screen(s), ${result.duplicates.length} duplicate(s) dropped`);
+  log.info(
+    `${result.ingested} unique screen(s), ${result.duplicates.length} repeat(s) dropped` +
+      (result.excluded.length ? `, ${result.excluded.length} third-party sign-in screen(s) left out` : ''),
+  );
   log.info(`${result.flows.length} flow(s) written`);
-  if (!flags.dryRun) await rebuildManifest(result.dataDir);
+  if (!flags.dryRun) {
+    if (flags.json) process.stdout.write(`${PROGRESS_MARKER} ${JSON.stringify({ stage: 'manifest', message: 'Rebuilding the library index' })}\n`);
+    await rebuildManifest(result.dataDir);
+  }
 
   if (result.identified && !result.identified.confident) {
     log.warn(`"${result.app.name}" is a best guess — rename it under Apps if it is wrong.`);
@@ -306,6 +324,10 @@ async function runIngest(flags) {
         grouped: result.grouped,
         app: result.app,
         identified: result.identified,
+        excluded: result.excluded,
+        skipped: result.skipped,
+        capture: result.capture,
+        timeline: result.timeline,
         // Named journeys, each with its screens in walk order — what the admin
         // page renders as a flow.
         flows: result.flows.map((flow) => ({
@@ -340,12 +362,13 @@ async function runClassify(flags) {
     dataDir: flags.dataDir,
     backend: flags.backend,
     overwrite: flags.overwrite === true,
+    keepExternal: flags.keepExternal === true,
     dryRun: flags.dryRun === true,
   });
 
   log.raw('');
-  log.info(`${result.classified} screen(s) classified`);
-  if (result.classified && !flags.dryRun) await rebuildManifest(result.dataDir);
+  log.info(`${result.classified} screen(s) classified${result.removed ? `, ${result.removed} removed` : ''}`);
+  if ((result.classified || result.removed) && !flags.dryRun) await rebuildManifest(result.dataDir);
   return result.failed ? 1 : 0;
 }
 

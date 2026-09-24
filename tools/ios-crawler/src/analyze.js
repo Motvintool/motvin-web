@@ -24,7 +24,7 @@ import { run } from './exec.js';
 import { log } from './log.js';
 import { luminance } from './hash.js';
 import { buildOcr, readText } from './ocr.js';
-import { classifyScreen, groupFlowsLocally } from './heuristics.js';
+import { classifyScreen, groupFlowsLocally, guessBrand } from './heuristics.js';
 import { ELEMENTS, INDUSTRIES, PUBLISHED_FLOW_CATEGORIES, SCREEN_TYPE_NAMES, STYLES } from './taxonomy.js';
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
@@ -140,6 +140,8 @@ Return exactly this shape, no prose, no markdown fence:
 }
 
 Rules for "blocked": set it true for sign-in, sign-up, one-time-code, CAPTCHA, biometric, paywall, subscription, payment, and system permission prompts. The crawler captures those screens and stops exploring that branch. Never suggest an action that would sign in, pay, subscribe, grant a permission, or dismiss a security prompt.
+
+Rules for "screen_type": prefer the most specific state when one applies — "loading" for spinners and skeletons, "empty_state" for a screen whose content area says there is nothing yet, "error" for failures, "confirmation" for success messages, "dialog"/"bottom_sheet"/"toast" for something drawn over a dimmed or unchanged screen, "coach_mark" for a first-use tip, "splash" for a launch screen, "otp" for a verification-code entry, and "external_auth" for a Google, Apple or Facebook sign-in page (the provider's own UI, not the app's button).
 
 Rules for "actions": list only controls that plausibly navigate to a different screen — tab bar items, list rows, cards, nav buttons, "see all" links. Skip decorative images, labels, and anything that only changes state in place. Mark "risk" honestly: anything that spends money, deletes, posts, shares, messages, or authenticates is not "safe". Cap the list at 12, most promising first.
 
@@ -316,8 +318,12 @@ export function normaliseAnalysis(raw, elements) {
     .filter(Boolean)
     .slice(0, 12);
 
+  const stateOfType = { dialog: 'modal', bottom_sheet: 'bottom-sheet', toast: 'toast', loading: 'loading', empty_state: 'empty', error: 'error', confirmation: 'success', coach_mark: 'coach-mark', permission: 'permission' };
+
   return {
     screenType,
+    states: stateOfType[screenType] ? [stateOfType[screenType]] : [],
+    external: screenType === 'external_auth' ? 'model recognised a third-party sign-in page' : null,
     category: INDUSTRIES.includes(raw.category) ? raw.category : null,
     flow: typeof raw.flow === 'string' ? raw.flow.toLowerCase().trim() : null,
     name: String(raw.name || '').trim() || 'Untitled screen',
@@ -391,9 +397,23 @@ export async function identifyApp(imagePaths, options = {}) {
   const backend = pickBackend(options.backend);
 
   if (backend === 'local') {
-    // Rules cannot recognise a brand. Saying so lets the caller fall back to
-    // the recording's own name instead of publishing a confident wrong guess.
-    throw new Error('the local analyzer cannot identify an app — name it yourself, or set ANTHROPIC_API_KEY');
+    // Rules cannot recognise a logo, but apps print their own name where
+    // lawyers make them — "Acme Terms of Use", "© Acme", "Welcome to Acme".
+    // When the caller has the recognised text, that is read; otherwise there
+    // is nothing honest to say, and saying so lets the caller fall back to the
+    // recording's own name instead of publishing a confident wrong guess.
+    const brand = options.lineSets ? guessBrand(options.lineSets) : null;
+    if (!brand) {
+      throw new Error('the local analyzer cannot identify an app — name it yourself, or set ANTHROPIC_API_KEY');
+    }
+    return {
+      name: brand.name,
+      confident: false,
+      industry: 'productivity',
+      tagline: '',
+      website: '',
+      evidence: brand.evidence,
+    };
   }
 
   const sample = imagePaths.slice(0, 3);
@@ -583,9 +603,13 @@ export function normaliseFlows(raw, screenCount) {
 
 /**
  * Analyses one screenshot.
+ *
  * @param {string} imagePath
  * @param {Array} elements accessibility elements, or [] when idb is absent
- * @param {{backend?: string}} options
+ * @param {{backend?: string, context?: object, lines?: Array, luminance?: number|null, colors?: object[]}} options
+ *   `context` is what the segmenter knows about the frame's place in a
+ *   recording; `lines` are OCR lines already read (so the text is read once),
+ *   and `luminance`/`colors` come from the frame's thumbnail when there is one.
  */
 export async function analyseScreen(imagePath, elements = [], options = {}) {
   const backend = pickBackend(options.backend);
@@ -594,10 +618,29 @@ export async function analyseScreen(imagePath, elements = [], options = {}) {
   if (backend === 'local') {
     // Brightness is read alongside the text so the rules can call a screen dark
     // or light — the one style judgement available without a model.
-    const [lines, brightness] = await Promise.all([readText(imagePath), luminance(imagePath).catch(() => null)]);
-    return classifyScreen(lines, { luminance: brightness });
+    const [lines, brightness] = await Promise.all([
+      options.lines ?? readText(imagePath),
+      options.luminance !== undefined ? options.luminance : luminance(imagePath).catch(() => null),
+    ]);
+    const analysis = classifyScreen(lines, { luminance: brightness, colors: options.colors, context: options.context });
+    analysis.lines = lines;
+    return analysis;
   }
 
   const reply = backend === 'api' ? await callApi(imagePath, elements) : await callCli(imagePath, elements);
-  return normaliseAnalysis(extractJson(reply), elements);
+  const analysis = normaliseAnalysis(extractJson(reply), elements);
+  analysis.analyzer = backend === 'api' ? DEFAULT_MODEL : 'claude CLI';
+  // The model does not see the recording, so what the segmenter measured is
+  // layered on afterwards: a dialog it called "settings" is still a dialog.
+  const context = options.context;
+  if (context) {
+    const states = new Set(analysis.states ?? []);
+    if (context.kind === 'loading') states.add('loading');
+    if (context.overlay?.kind === 'dialog') states.add('modal');
+    if (context.overlay?.kind === 'bottom_sheet') states.add('bottom-sheet');
+    if (context.overlay?.kind === 'toast') states.add('toast');
+    if (context.kind === 'scrolled') states.add('scrolled');
+    analysis.states = [...states];
+  }
+  return analysis;
 }

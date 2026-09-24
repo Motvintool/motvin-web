@@ -1,11 +1,13 @@
 import {
   INDUSTRIES,
   PLATFORMS,
+  SCREEN_STATES,
   SCREEN_TYPES,
   STYLES,
   type Industry,
   type Platform,
   type Screen,
+  type ScreenState,
   type ScreenType,
   type Style,
 } from './types';
@@ -18,6 +20,7 @@ import {
 export type ScreenFilters = {
   platforms: Platform[];
   screenTypes: ScreenType[];
+  states: ScreenState[];
   industries: Industry[];
   styles: Style[];
   query: string;
@@ -26,6 +29,7 @@ export type ScreenFilters = {
 export const EMPTY_FILTERS: ScreenFilters = {
   platforms: [],
   screenTypes: [],
+  states: [],
   industries: [],
   styles: [],
   query: '',
@@ -54,6 +58,7 @@ export function parseFilters(params: URLSearchParams): ScreenFilters {
   return {
     platforms: parseList(params.get('platform'), PLATFORMS),
     screenTypes: parseList(params.get('type'), SCREEN_TYPES),
+    states: parseList(params.get('state'), SCREEN_STATES),
     industries: parseList(params.get('industry'), INDUSTRIES),
     styles: parseList(params.get('style'), STYLES),
     query: params.get('q')?.trim() ?? '',
@@ -68,6 +73,7 @@ export function serializeFilters(filters: ScreenFilters, base?: URLSearchParams)
   };
   setList('platform', filters.platforms);
   setList('type', filters.screenTypes);
+  setList('state', filters.states);
   setList('industry', filters.industries);
   setList('style', filters.styles);
   if (filters.query) params.set('q', filters.query);
@@ -79,6 +85,7 @@ export function countActiveFilters(filters: ScreenFilters): number {
   return (
     filters.platforms.length +
     filters.screenTypes.length +
+    filters.states.length +
     filters.industries.length +
     filters.styles.length
   );
@@ -95,6 +102,7 @@ export function toggleValue<T>(list: T[], value: T): T[] {
 export function matchesFilters(screen: Screen, filters: ScreenFilters): boolean {
   if (filters.platforms.length && !filters.platforms.includes(screen.platform)) return false;
   if (filters.screenTypes.length && !filters.screenTypes.includes(screen.screenType)) return false;
+  if (filters.states.length && !filters.states.some((v) => (screen.states ?? []).includes(v))) return false;
   if (filters.industries.length && !filters.industries.includes(screen.industry)) return false;
   if (filters.styles.length && !filters.styles.some((s) => screen.style.includes(s))) return false;
   return true;

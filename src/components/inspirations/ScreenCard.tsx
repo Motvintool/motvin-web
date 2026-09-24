@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 
 import type { App, Screen } from '@/lib/inspirations/types';
+import { screenStateLabel } from '@/lib/inspirations/taxonomy';
 import { AppLogo } from './AppLogo';
 import { ArrowLeftIcon, ArrowRightIcon } from './Icons';
 import { Screenshot } from './Screenshot';
@@ -114,6 +115,16 @@ function ScreenCardImpl({
             ))}
           </Link>
         </div>
+        {/* The condition the screen was captured in — loading, empty, a sheet
+            over it — read from the store, never inferred. A plain settled
+            screen has no badge, so the badge means something when it shows. */}
+        {shownScreen.states?.length > 0 && (
+          <span className="ins-card-states" aria-label={`State: ${shownScreen.states.map(screenStateLabel).join(', ')}`}>
+            {shownScreen.states.filter((v) => v !== 'keyboard' && v !== 'scrolled').slice(0, 2).map((v) => (
+              <span key={v} className={`ins-state-badge is-${v}`}>{screenStateLabel(v)}</span>
+            ))}
+          </span>
+        )}
         {dotCount > 1 && (
           <div className="ins-card-hover-controls">
             <button type="button" className="ins-card-control ins-card-control--prev" aria-label="Previous screen" onClick={step(-1)}>

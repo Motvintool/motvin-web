@@ -6,10 +6,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import {
+  fineTypeLabel,
   INDUSTRY_LABEL,
   PERMISSION_LABEL,
   PLATFORM_LABEL,
   SCREEN_TYPE_LABEL,
+  screenStateLabel,
   STYLE_LABEL,
 } from '@/lib/inspirations/taxonomy';
 import type { App, DetectedComponent, Flow, Pattern, Screen } from '@/lib/inspirations/types';
@@ -44,6 +46,12 @@ import { useLibrary } from './useLibrary';
  */
 
 type Tab = 'overview' | 'similar' | 'analyze' | 'extract' | 'flow';
+
+/** 9.2 → "0:09", for the moment in a recording a screen was seen. */
+function formatClock(seconds: number): string {
+  const whole = Math.floor(seconds);
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
 
 const TABS: { id: Tab; label: string; icon: typeof LayersIcon }[] = [
   { id: 'similar', label: 'Similar', icon: LayersIcon },
@@ -130,9 +138,24 @@ export function ScreenViewer({
           )}
           <h1 className="ins-detail-title">{screen.name}</h1>
           <p className="ins-detail-sub">
-            {SCREEN_TYPE_LABEL[screen.screenType]} · {INDUSTRY_LABEL[screen.industry]} ·{' '}
-            {PLATFORM_LABEL[screen.platform]}
+            {SCREEN_TYPE_LABEL[screen.screenType]}
+            {screen.fineType && screen.fineType !== screen.screenType && ` (${fineTypeLabel(screen.fineType)})`} ·{' '}
+            {INDUSTRY_LABEL[screen.industry]} · {PLATFORM_LABEL[screen.platform]}
+            {screen.states?.length > 0 && (
+              <>
+                {' · '}
+                {screen.states.map((v) => (
+                  <Link key={v} href={`${INSPIRATIONS_ROUTES.screens}?state=${v}`} className={`ins-state-badge is-${v} ins-state-badge--inline`}>
+                    {screenStateLabel(v)}
+                  </Link>
+                ))}
+              </>
+            )}
           </p>
+          {/* What was measured about the screen when it was captured — one or
+              two sentences, never a guess. Absent for manually uploaded
+              screens, which have no record to quote. */}
+          {screen.description && <p className="ins-detail-desc">{screen.description}</p>}
         </div>
         <div className="ins-detail-actions">
           <SaveButton type="screen" id={screen.id} variant="button" />
@@ -250,6 +273,39 @@ export function ScreenViewer({
                 </Link>
               </dd>
             </div>
+            {screen.states?.length > 0 && (
+              <div className="ins-info-row">
+                <dt>State</dt>
+                <dd className="ins-info-tags">
+                  {screen.states.map((v) => (
+                    <Link key={v} href={`${INSPIRATIONS_ROUTES.screens}?state=${v}`} className="ins-tag">
+                      {screenStateLabel(v)}
+                    </Link>
+                  ))}
+                </dd>
+              </div>
+            )}
+            {screen.capture && (screen.capture.overlayOf || screen.capture.loadingOf || screen.capture.scrolledFrom) && (
+              <div className="ins-info-row">
+                <dt>Relates to</dt>
+                <dd>
+                  {screen.capture.overlayOf && `Shown over “${screen.capture.overlayOf}”`}
+                  {screen.capture.loadingOf && `Loads into “${screen.capture.loadingOf}”`}
+                  {screen.capture.scrolledFrom && `Scrolled view of “${screen.capture.scrolledFrom}”`}
+                </dd>
+              </div>
+            )}
+            {screen.capture && screen.capture.atSeconds !== null && (
+              <div className="ins-info-row">
+                <dt>In recording</dt>
+                <dd>
+                  {formatClock(screen.capture.atSeconds)}
+                  {screen.capture.holdSeconds !== null && ` · held ${screen.capture.holdSeconds}s`}
+                  {screen.capture.brief && ' · brief'}
+                  {(screen.capture.visits ?? 1) > 1 && ` · seen ${screen.capture.visits}×`}
+                </dd>
+              </div>
+            )}
             {screen.style.length > 0 && (
               <div className="ins-info-row">
                 <dt>Style</dt>
