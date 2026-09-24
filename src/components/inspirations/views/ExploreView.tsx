@@ -7,6 +7,10 @@ import { INDUSTRY_LABEL, SCREEN_TYPE_LABEL, elementLabel, flowCategoryLabel } fr
 import { FilteredGallery } from '../FilteredGallery';
 import { PageHeading } from '../PageHeading';
 import { useMeta } from '../useMeta';
+import { ExploreSkeleton } from '../Skeletons';
+import { useAsync } from '../useAsync';
+import { EMPTY_META, inspirationsApi } from '@/lib/inspirations/api';
+
 
 /** Caps each column so one taxonomy with many more values than the others
  * (e.g. a store with 12 screen types but 3 industries) doesn't throw the
@@ -19,7 +23,8 @@ const MAX_TAXONOMY_ITEMS = 5;
  * the first viewport.
  */
 export function ExploreView() {
-  const meta = useMeta();
+  const { data, loading } = useAsync(() => inspirationsApi.getMeta(), 'meta');
+  const meta = data ?? EMPTY_META;
 
   // Every value here comes from meta.taxonomy — what the store actually
   // holds — rather than a fixed list, so a group disappears instead of
@@ -59,6 +64,10 @@ export function ExploreView() {
       })),
     },
   ].filter((group) => group.items.length > 0);
+
+  if (loading) {
+    return <ExploreSkeleton />;
+  }
 
   return (
     <div className="ins-explore-view">

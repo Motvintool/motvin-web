@@ -13,7 +13,36 @@
   display: inline-flex;
 }
 
-/* Avatar chip */
+/* Avatar chip & Pill */
+
+.ins-profile-pill {
+  transition: all var(--ins-fast) var(--ins-ease);
+  border-radius: 9999px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0px 4px 0px;
+  display: flex;
+}
+
+.ins-profile-pill.is-logged-out {
+  /* No padding overrides needed */
+}
+
+.ins-profile-login-btn {
+  background: #000;
+  color: #fff;
+  border: none;
+  border-radius: 9999px;
+  height: 40px;
+  padding: 0 20px;
+  font: 500 15px/40px var(--font-inter), sans-serif;
+  cursor: pointer;
+  transition: opacity var(--ins-fast) var(--ins-ease);
+}
+
+.ins-profile-login-btn:hover {
+  opacity: 0.8;
+}
 
 .mi-top-avatar-wrap {
   width: 40px;
@@ -21,6 +50,7 @@
   border: 1.8px solid rgb(92, 74, 228);
   border-radius: 50%;
   padding: 1.8px;
+  background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -36,7 +66,7 @@
 .mi-top-avatar-wrap.mi-initials-mode {
   border: none;
   padding: 0;
-  background: transparent;
+  background: #fff;
 }
 
 .mi-top-avatar {

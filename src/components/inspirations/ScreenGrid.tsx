@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { App, Screen } from '@/lib/inspirations/types';
 import { FloatCollectionBar } from './FloatCollectionBar';
 import { ScreenCard } from './ScreenCard';
-import { ScreenGridSkeleton } from './Skeletons';
+
 import { useApps } from './useApps';
 
 /**
@@ -77,7 +77,7 @@ export function ScreenGrid({
   }, [hasMore, onLoadMore, loading, screens.length]);
 
   if (loading && screens.length === 0) {
-    return <ScreenGridSkeleton count={12} />;
+    return null;
   }
 
   if (!loading && screens.length === 0) {

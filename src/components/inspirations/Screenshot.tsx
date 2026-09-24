@@ -25,9 +25,9 @@ export function Screenshot({
   priority?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
-  // Screens arrive over the network into a box whose size is already reserved,
-  // so without this the card sits as an empty frame and then snaps to a full
-  // screenshot. Fading in on decode turns that snap into an arrival.
+  // The card already reserves its geometry. Track decode only for callers that
+  // need the loaded state; keeping the image visible avoids a blank handoff
+  // when a page skeleton gives way to its real preview cards.
   const [loaded, setLoaded] = useState(false);
   const src = inspirationsApi.mediaUrl(screen.url);
   const ratio = screen.width && screen.height ? `${screen.width} / ${screen.height}` : '4 / 3';

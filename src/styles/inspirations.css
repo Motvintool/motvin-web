@@ -326,10 +326,10 @@ body {
 }
 
 .ins-header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
   justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  display: flex;
   /* No min-width: 0 here on purpose. This slot holds fixed labels (Save,
      Collections) rather than variable text that needs to truncate, so there is
      nothing to gain from opting out of the grid's default auto-minimum sizing
@@ -1990,6 +1990,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   height: 100%;
   border-radius: 24px;
   overflow: hidden;
+  background: #e5e5e5;
 }
 
 .ins-card-inset .ins-shot-img,
@@ -2262,10 +2263,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   height: auto;
   object-fit: cover;
   border-radius: var(--ins-radius);
-  /* Held at zero until the file decodes; .is-loaded is set from onLoad. The
-     frame beneath shows through as a tinted placeholder in the meantime. */
-  opacity: 0;
-  transition: opacity var(--ins-slow) var(--ins-ease);
+  opacity: 1;
 }
 
 .ins-shot-img.is-loaded {
@@ -2281,7 +2279,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
 
 @media (prefers-reduced-motion: reduce) {
   .ins-shot-img {
-    transition: none;
+    opacity: 1;
   }
 }
 
@@ -4335,7 +4333,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
 .ins-skel {
   position: relative;
   overflow: hidden;
-  background: var(--skeleton-card-bg);
+  background: #e5e5e5;
   border-radius: 6px;
 }
 
@@ -4354,13 +4352,86 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
 
 .ins-skel--shot {
   width: 100%;
-  aspect-ratio: 380 / 532;
-  border-radius: 28px;
-  border: 1px solid var(--ins-border);
+  aspect-ratio: 346 / 674;
+  border-radius: 48px;
 }
 
 .ins-skel--line {
-  height: 11px;
+  height: 14px;
+}
+
+/* Explore loading frame (Figma 1141:36936). The taxonomy remains visible so
+   the loading state preserves the page's navigation and layout landmarks. */
+.ins-skeleton-toolbar {
+  min-height: 44px;
+}
+
+.ins-skeleton-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ins-skeleton-toolbar-group--right {
+  margin-left: auto;
+  gap: 10px;
+}
+
+.ins-skel--pill {
+  height: 44px;
+  border-radius: 999px;
+}
+
+.ins-skel--pill-first {
+  width: 100px;
+}
+
+.ins-skel--pill-second,
+.ins-skel--sort {
+  width: 120px;
+}
+
+.ins-skel--pill-third {
+  width: 80px;
+}
+
+.ins-skel--count {
+  width: 50px;
+  height: 16px;
+}
+
+.ins-card--skeleton {
+  min-width: 0;
+}
+
+.ins-card--skeleton .ins-card-shot {
+  padding: 0;
+  background: transparent;
+}
+
+.ins-card--skeleton .ins-card-meta {
+  gap: 12px;
+  padding: 24px 0;
+}
+
+.ins-skel--app-icon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 10px;
+}
+
+.ins-card--skeleton .ins-card-meta-text {
+  gap: 8px;
+}
+
+.ins-skel--app-name {
+  width: 90px;
+  height: 20px;
+}
+
+.ins-skel--app-description {
+  width: 110px;
 }
 
 .ins-toast-stack {

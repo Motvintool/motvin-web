@@ -86,7 +86,7 @@ export function Header() {
   // platforms, rather than each link toggling its own background — that's
   // what makes the switch read as one shape moving instead of a colour swap.
   const platformLinkRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
-  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
+  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>({ left: 6, width: 83 });
 
   useLayoutEffect(() => {
     const measure = () => {
@@ -157,46 +157,10 @@ export function Header() {
           </div>
           <div className="ins-header-profile">
             <ProfileMenu />
-            <button type="button" className="ins-iconbtn ins-iconbtn--plain ins-header-menu" aria-label="Open menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}>
-              <img src="/ASSET/Icons/Motvin/hamburger-menu.svg" alt="" className="ins-header-menu-icon" width={18} height={15} />
-            </button>
           </div>
-        </div>
         </div>
       </div>
-
-      {menuOpen && (
-        <div className="ins-drawer" role="dialog" aria-label="Menu">
-          <div className="ins-drawer-backdrop" onClick={() => setMenuOpen(false)} />
-          <div className="ins-drawer-panel">
-            <div className="ins-drawer-head">
-              <span className="ins-drawer-title">Menu</span>
-              <button type="button" className="ins-iconbtn ins-iconbtn--plain" aria-label="Close menu" onClick={() => setMenuOpen(false)}>
-                <CloseIcon size={18} />
-              </button>
-            </div>
-            <nav className="ins-drawer-nav">
-              <p className="ins-drawer-label">Platform</p>
-              {PLATFORMS.map((p) => (
-                <Link key={p} href={platformHref(p)} className="ins-drawer-link">{PLATFORM_LABEL[p]}</Link>
-              ))}
-              <p className="ins-drawer-label">Browse</p>
-              <Link href={INSPIRATIONS_ROUTES.explore} className="ins-drawer-link">Explore</Link>
-              <Link href={INSPIRATIONS_ROUTES.apps} className="ins-drawer-link">Apps</Link>
-              <Link href={INSPIRATIONS_ROUTES.screens} className="ins-drawer-link">Screens</Link>
-              <Link href={INSPIRATIONS_ROUTES.uiElements} className="ins-drawer-link">UI Elements</Link>
-              <Link href={INSPIRATIONS_ROUTES.flows} className="ins-drawer-link">Flows</Link>
-              <Link href={INSPIRATIONS_ROUTES.patterns} className="ins-drawer-link">Patterns</Link>
-              <p className="ins-drawer-label">Library</p>
-              <Link href={INSPIRATIONS_ROUTES.collections} className="ins-drawer-link">Collections</Link>
-              <p className="ins-drawer-label">Motvin</p>
-              <a href="/icons" className="ins-drawer-link">Icon library</a>
-              <a href="/updates/" className="ins-drawer-link" target="_blank" rel="noopener noreferrer">Release notes</a>
-              <Link href="/" className="ins-drawer-link">Home</Link>
-            </nav>
-          </div>
-        </div>
-      )}
-    </header>
+    </div>
+  </header>
   );
 }

@@ -6,9 +6,10 @@ import { AppCard } from './AppCard';
 import { EmptyState } from './EmptyState';
 import { FloatCollectionBar } from './FloatCollectionBar';
 import { FolderIcon } from './Icons';
-import { ScreenGridSkeleton } from './Skeletons';
+
 import { useAppSelection } from './useAppSelection';
 import { useAsync } from './useAsync';
+import { ScreenGridSkeleton } from './Skeletons';
 
 /**
  * A grid of app cards — each showing one of the app's own screens, same as
@@ -43,9 +44,11 @@ export function AppsGrid({
   }, `apps-grid-previews:${key}`);
   const { selected, toggle, clear } = useAppSelection();
 
-  if (loading || previewsLoading) return <ScreenGridSkeleton count={8} />;
+  if (loading || previewsLoading) {
+    return <ScreenGridSkeleton count={4} />;
+  }
 
-  if (apps.length === 0) {
+  if (!loading && !previewsLoading && apps.length === 0) {
     return (
       <EmptyState
         icon={<FolderIcon size={22} />}

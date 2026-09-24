@@ -45,21 +45,28 @@ export function ProfileMenu() {
 
   return (
     <div className="mi-profile-menu-container" ref={rootRef}>
-      <button
-        type="button"
-        className={badgeWrapClassName(user)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={signedIn ? user?.displayName || 'Account' : 'Account menu'}
-        onClick={() => {
-          // Read the stored preference as the menu opens so the radio group
-          // reflects a change made on another page.
-          setTheme(getStoredTheme());
-          setOpen((o) => !o);
-        }}
-      >
-        <LibraryProfileBadge user={user} />
-      </button>
+      <div className={`ins-profile-pill ${!signedIn ? 'is-logged-out' : ''}`}>
+        {!signedIn && (
+          <button type="button" className="ins-profile-login-btn" onClick={() => openAuth('login')}>
+            Login
+          </button>
+        )}
+        <button
+          type="button"
+          className={badgeWrapClassName(user)}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label={signedIn ? user?.displayName || 'Account' : 'Account menu'}
+          onClick={() => {
+            // Read the stored preference as the menu opens so the radio group
+            // reflects a change made on another page.
+            setTheme(getStoredTheme());
+            setOpen((o) => !o);
+          }}
+        >
+          <LibraryProfileBadge user={user} />
+        </button>
+      </div>
 
       <div className={`mi-profile-dropdown${open ? ' is-open' : ''}`} role="menu">
         <div className="mi-profile-dropdown-inner">
