@@ -353,7 +353,7 @@ function IngestSummary({
         )}
         {result.excluded.length > 0 && (
           <span>
-            <strong>{result.excluded.length}</strong> third-party sign-in screen{result.excluded.length === 1 ? '' : 's'} left out
+            <strong>{result.excluded.length}</strong> screen{result.excluded.length === 1 ? '' : 's'} left out
           </span>
         )}
       </div>

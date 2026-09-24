@@ -56,6 +56,10 @@ const STILL_CHANGED = 0.03;
 /** Up to this much change is something settling rather than a navigation. */
 const SOFT_MAD = 12;
 
+/** A hold's last frame is a candidate to represent it only if it arrived this quietly. */
+const SETTLED_MAD = 8;
+const SETTLED_CHANGED = 0.1;
+
 /** Two adjacent holds this close are one screen that was still drawing. */
 const MERGE_MAD = 14;
 const MERGE_CHANGED = 0.15;
@@ -235,7 +239,7 @@ export function segmentRecording(thumbs, options) {
   for (const hold of holds) {
     hold.frames = hold.end - hold.start + 1;
     hold.seconds = hold.frames / fps;
-    hold.rep = representative(hold, steps);
+    hold.rep = representative(hold, steps, prints);
     hold.print = prints[hold.rep];
   }
 
@@ -511,29 +515,47 @@ function canonical(screen) {
 }
 
 /**
- * The frame that best represents a hold: the last frame of the longest run of
- * still steps inside it, which is the state the UI actually held rather than
- * the moment it was still drawing. A hold with no still step inside (a single
- * frame, or nothing but settling) is represented by its last frame.
+ * The frame that best represents a hold: the settled frame with the most
+ * drawn on it.
+ *
+ * A hold often spans a screen still completing itself — a splash whose logo
+ * fades in, a page whose header and tab bar arrive a beat after its list, a
+ * feed whose images land one by one. The frame someone would screenshot is the
+ * last one of those, not the first. So the candidates are the end of every
+ * still run inside the hold plus the hold's last frame, and the one with the
+ * most structure wins; later frames win ties. Taking structure rather than
+ * simply the last frame keeps a fade-out at the end of a hold from being
+ * chosen over the screen before it.
  */
-function representative(hold, steps) {
-  let bestStart = hold.end;
-  let bestEnd = hold.end;
-  let bestLength = 0;
+function representative(hold, steps, prints) {
+  // The hold's last frame counts only when it is itself settled: the step
+  // into it was small. A hold merged across settling can end on the first
+  // frame of the transition out, and that frame is mid-motion however much
+  // is drawn on it.
+  const lastStep = steps[hold.end];
+  const candidates = new Set();
+  if (hold.end === hold.start || !lastStep || (lastStep.mad <= SETTLED_MAD && lastStep.changed <= SETTLED_CHANGED)) {
+    candidates.add(hold.end);
+  }
   let runStart = hold.start;
   for (let frame = hold.start + 1; frame <= hold.end + 1; frame++) {
     const still = frame <= hold.end && steps[frame] && steps[frame].label === 'still';
     if (!still) {
-      const length = frame - 1 - runStart;
-      if (length >= bestLength) {
-        bestLength = length;
-        bestStart = runStart;
-        bestEnd = frame - 1;
-      }
+      if (frame - 1 > runStart) candidates.add(frame - 1);
       runStart = frame;
     }
   }
-  return bestLength > 0 ? bestEnd : hold.end;
+  if (!candidates.size) candidates.add(hold.start);
+  let best = hold.end;
+  let bestEdge = -1;
+  for (const frame of [...candidates].sort((a, b) => a - b)) {
+    const edge = prints[frame].edge;
+    if (edge >= bestEdge * 0.98) {
+      bestEdge = Math.max(bestEdge, edge);
+      best = frame;
+    }
+  }
+  return best;
 }
 
 function nearestKept(holds, index, direction) {

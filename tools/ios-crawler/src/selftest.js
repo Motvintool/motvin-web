@@ -690,7 +690,7 @@ export async function selfTest() {
     check('a frame the segmenter saw loading is a loading state', classifyScreen([line('Search', 0.2)], ctx({ kind: 'loading', edge: 4 })).screenType === 'loading');
     check(
       'a text-heavy frame the segmenter called loading is not',
-      classifyScreen(Array.from({ length: 15 }, (_, i) => line(`Item ${i}`, 0.2 + i * 0.04)), ctx({ kind: 'loading', edge: 4 })).screenType !== 'loading',
+      classifyScreen(Array.from({ length: 25 }, (_, i) => line(`Item ${i}`, 0.15 + i * 0.028)), ctx({ kind: 'loading', edge: 4 })).screenType !== 'loading',
     );
     check(
       'a tip drawn over a dimmed screen is a coach mark',
@@ -725,6 +725,23 @@ export async function selfTest() {
     check('the first tab-bar screen is home even when it is busy', first.screenType === 'home', first.screenType);
     check('a state travels with the classification', classifyScreen([line('Search', 0.2)], ctx({ kind: 'loading', edge: 4 })).states.includes('loading'));
     check('a description is written from measured facts', /Login screen .*keyboard/.test(classifyScreen([line('Log in', 0.2, 0.04), line('Email', 0.3), line('Password', 0.4), ...keyboard]).description));
+
+    log.heading('Loading states are not published by default');
+    {
+      const loadStore = join(dir, 'load-store');
+      mkdirSync(join(loadStore, 'screens', 'ios'), { recursive: true });
+      mkdirSync(join(loadStore, 'analysis'), { recursive: true });
+      for (const [file, value] of [['apps.json', { version: 1, apps: [] }], ['flows.json', { version: 1, flows: [] }], ['sources.json', { version: 1, sources: {} }]]) {
+        writeFileSync(join(loadStore, file), JSON.stringify(value));
+      }
+      const g = new ScreenGraph();
+      g.add({ fingerprint: printHome, labels: [], screenshot: home, analysis: analysisFor('Home', 'home') });
+      const loading = g.add({ fingerprint: printSearch, labels: [], screenshot: search, analysis: analysisFor('Home — loading', 'loading') });
+      loading.skipPublish = true;
+      loading.skipReason = 'loading state — not published';
+      const out = publishCrawl({ graph: g, dataDir: loadStore, dryRun: true, app: { appId: 'load-app', name: 'Load App', industry: 'food' } });
+      check('a loading state marked for skipping is left out and reported', out.screens.length === 1 && out.skipped[0]?.screenType === 'loading');
+    }
 
     log.heading('Brand from the screens');
     const brand = guessBrand([[line('Skip', 0.08), line('By clicking in, I accept the Privacy Policy', 0.55), line('Swiggy Terms of Use and Instamart Terms of Use', 0.58)]]);

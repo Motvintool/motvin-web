@@ -554,6 +554,17 @@ async function ingestTimeline({ timeline, frames, analyzer, graph, duplicates, e
       continue;
     }
 
+    // Loading states publish by default, labelled as such; --skip-loading
+    // leaves them out. They stay in the graph either way so the journey and
+    // the naming of what came after still read right.
+    if ((analysis.screenType === 'loading' || screen.kind === 'loading') && options.skipLoading === true) {
+      node.skipPublish = true;
+      node.skipReason = 'loading state — not published (--skip-loading)';
+      excluded.push({ file: fileName, name: analysis.name, reason: 'loading state' });
+      log.blocked(`${node.id} ${clock(screen.start)} ${analysis.name} — loading state, not published`);
+      continue;
+    }
+
     const verdict = isBlockingScreen({
       screenType: analysis.screenType,
       name: analysis.name,

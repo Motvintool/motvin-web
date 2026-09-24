@@ -81,7 +81,9 @@ export function extractSignals(lines, options = {}) {
     (line) => line.y >= TAB_BAR_TOP && /^[A-Za-z][A-Za-z' ]{1,13}$/.test(line.text) && !/^[A-Z]{2,5}$/.test(line.text),
   );
   const bottomRows = groupByRow(bottomWords).sort((a, b) => b.length - a.length);
-  const bottomItems = bottomRows[0] ?? [];
+  // Left to right, so the first label is the leftmost tab — the section name
+  // in most tab bars.
+  const bottomItems = [...(bottomRows[0] ?? [])].sort((a, b) => a.x - b.x);
 
   const singleLetters = clean.filter((line) => line.y > KEYBOARD_TOP && /^[a-z]$/i.test(line.text)).length;
   const keyRows = clean.filter((line) => line.y > KEYBOARD_TOP && /^(qwertyuiop|asdfghjkl|zxcvbnm)$/i.test(line.text.replace(/\s+/g, ''))).length;
@@ -357,6 +359,20 @@ function titleFrom(lines, box = null) {
   return pick ? cleanTitle(pick.text) : null;
 }
 
+/** The largest wordy line in the body of the screen, below the header. */
+function headlineFrom(lines) {
+  const body = lines
+    .filter((line) => line.y >= HEADER_BOTTOM && line.y < 0.7)
+    .filter((line) => {
+      const text = line.text;
+      if (text.length < 4 || text.length > 40 || NOT_A_TITLE.test(text) || CTA.test(text)) return false;
+      const letters = (text.match(/[a-z]/gi) || []).length;
+      return letters >= 4 && letters / text.length >= 0.6 && /[a-z]{3}/i.test(text) && !/search/i.test(text);
+    })
+    .sort((a, b) => b.h - a.h);
+  return body[0] ? cleanTitle(body[0].text) : null;
+}
+
 /** Strips OCR leftovers and chevrons, and trims to a name-sized length. */
 export function cleanTitle(text) {
   let title = String(text)
@@ -416,8 +432,11 @@ export function classifyScreen(lines, options = {}) {
   if (screenType === 'overlay') screenType = OVERLAY_TYPE_FOR[context.overlay?.kind] ?? 'dialog';
 
   // A screen the segmenter called a loading state but that is full of text is
-  // not loading; it was simply sparse against a very dense neighbour.
-  if (context.kind === 'loading' && screenType !== 'loading' && signals.lineCount > 12) context.kind = 'screen';
+  // not loading; it was simply sparse against a very dense neighbour. The
+  // segmenter's evidence is structural (same chrome, content arriving), so it
+  // takes a lot of text to overrule it.
+  if (context.kind === 'loading' && screenType !== 'loading' && signals.lineCount > 20) context.kind = 'screen';
+  if (context.kind === 'loading' && screenType !== 'loading' && !['splash', 'external_auth'].includes(screenType)) screenType = 'loading';
 
   const elements = [];
   if (signals.tabBar) elements.push('tab-bar');
@@ -485,6 +504,10 @@ export function classifyScreen(lines, options = {}) {
       ctas: signals.ctas.slice(0, 4),
       keyboard: signals.keyboard,
       title: titleFrom(signals.lines, context.overlay?.box ?? null),
+      // The largest real words in the body — a section heading or a hero
+      // line — kept so a screen can be told apart from siblings that share
+      // its navigation title.
+      headline: headlineFrom(signals.lines),
     },
     viaHeuristics: true,
   };
@@ -697,13 +720,19 @@ export function groupFlowsLocally(screens) {
   }
 
   // Pass three: absorb runs too short to stand alone into a neighbour, so no
-  // flow is a single screen and nothing is dropped.
+  // flow is a single screen and nothing is dropped. A lone splash or welcome
+  // screen absorbed into the sign-in that follows makes that flow the app's
+  // onboarding, which is what a library calls "splash, then sign in".
   for (let i = 0; i < runs.length; i++) {
     if (runs[i].screens.length >= 2 || runs.length === 1) continue;
     const previous = runs[i - 1];
     const next = runs[i + 1];
     const target = previous ?? next;
     if (!target) continue;
+    if (i === 0 && runs[i].name === 'Onboarding' && target.category === 'authentication') {
+      target.name = 'Onboarding';
+      target.category = 'onboarding';
+    }
     target.screens.push(...runs[i].screens);
     target.screens.sort((a, b) => a - b);
     runs.splice(i, 1);

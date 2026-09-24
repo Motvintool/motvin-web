@@ -81,18 +81,50 @@ export function safeName(name) {
 }
 
 /**
- * Gives every node a name no other node in the same publish shares. Two
- * screens honestly titled the same ("Address unavailable" on every tab of a
- * delivery app) get a running number rather than colliding in a flow strip.
+ * Gives every node a name no other node in the same publish shares.
+ *
+ * Tab-based apps title every section with the same widget — "Address
+ * unavailable" on Food, Grocery and Dining alike — so colliding names are
+ * first told apart by what the screen itself says: the leading tab label
+ * (which names the section), then the body headline. Only when neither
+ * separates them does a running number.
  */
 function uniqueNames(nodes) {
-  const seen = new Map();
-  const names = new Map();
+  const groups = new Map();
   for (const node of nodes) {
     const base = String(node.analysis?.name || 'Screen').trim() || 'Screen';
-    const count = (seen.get(base.toLowerCase()) ?? 0) + 1;
-    seen.set(base.toLowerCase(), count);
-    names.set(node.id, count === 1 ? base : `${base} (${count})`);
+    const key = base.toLowerCase();
+    if (!groups.has(key)) groups.set(key, { base, nodes: [] });
+    groups.get(key).nodes.push(node);
+  }
+
+  const names = new Map();
+  for (const { base, nodes: members } of groups.values()) {
+    if (members.length === 1) {
+      names.set(members[0].id, base);
+      continue;
+    }
+    // The leading tab label names the section a tab-bar screen is on — "Food",
+    // "Grocery", "Dining" — and is the one honest thing that tells siblings
+    // with the same navigation title apart. A screen without a usable label
+    // gets a running number instead; body text would read as a caption, not
+    // a name.
+    const labels = members.map((node) => {
+      const label = node.analysis?.signals?.tabLabels?.[0];
+      return label && label.toLowerCase() !== base.toLowerCase() && /^[A-Za-z][A-Za-z' ]{1,13}$/.test(label) ? label : null;
+    });
+    const counts = new Map();
+    for (const label of labels) if (label) counts.set(label.toLowerCase(), (counts.get(label.toLowerCase()) ?? 0) + 1);
+    let n = 0;
+    members.forEach((node, index) => {
+      const label = labels[index];
+      if (label && counts.get(label.toLowerCase()) === 1) {
+        names.set(node.id, `${base} · ${label}`);
+      } else {
+        n++;
+        names.set(node.id, n === 1 ? base : `${base} (${n})`);
+      }
+    });
   }
   return names;
 }
