@@ -203,9 +203,7 @@ export function FilterPill({
                   if (!multi) setOpen(false);
                 }}
               >
-                <span className="ins-fmenu-check" aria-hidden>
-                  {on && <CheckIcon size={13} />}
-                </span>
+
                 {o.label}
               </button>
             );
@@ -264,11 +262,7 @@ export function NavPill({ counts }: { counts: LibraryCounts | null }) {
         <div className="ins-popover ins-fmenu" role="menu" aria-label="Content type" onKeyDown={onMenuKeyDown}>
           {items.map((item) => {
             const on = item.key === active?.key;
-            const check = (
-              <span className="ins-fmenu-check" aria-hidden>
-                {on && <CheckIcon size={13} />}
-              </span>
-            );
+
             // The page you're already on isn't a navigation target — closing
             // the menu is the whole action, so it stays on this page instead
             // of round-tripping through the router for a same-route no-op.
@@ -282,7 +276,6 @@ export function NavPill({ counts }: { counts: LibraryCounts | null }) {
                   className="ins-fmenu-item is-selected"
                   onClick={() => setOpen(false)}
                 >
-                  {check}
                   {item.label}
                   {item.count !== undefined && <span className="ins-fmenu-count">{formatCount(item.count)}</span>}
                 </button>
@@ -302,7 +295,6 @@ export function NavPill({ counts }: { counts: LibraryCounts | null }) {
                 className="ins-fmenu-item"
                 onClick={() => setOpen(false)}
               >
-                {check}
                 {item.label}
                 {item.count !== undefined && <span className="ins-fmenu-count">{formatCount(item.count)}</span>}
               </Link>
@@ -362,9 +354,7 @@ export function SortPill<S extends string>({
                 setOpen(false);
               }}
             >
-              <span className="ins-fmenu-check" aria-hidden>
-                {o.value === value && <CheckIcon size={13} />}
-              </span>
+
               {o.label}
             </button>
           ))}

@@ -11,6 +11,7 @@ import { LineSkeleton } from './Skeletons';
 import { useToast } from './Toast';
 import { useAsync } from './useAsync';
 import { useLibrary } from './useLibrary';
+import { SaveButton } from './SaveButton';
 
 /**
  * "Extract UI" — the components an analyzer detected in this screen.
@@ -30,7 +31,7 @@ export function ExtractionPanel({
 }) {
   const { data, loading } = useAsync(() => inspirationsApi.analyze(screen.id), `extract:${screen.id}`);
   const { show } = useToast();
-  const { isSaved, toggleSaved } = useLibrary();
+  const { collectionsContaining } = useLibrary();
   const [selected, setSelected] = useState<DetectedComponent | null>(null);
 
   const analysis = data?.analysis ?? null;
@@ -147,13 +148,7 @@ export function ExtractionPanel({
           <button type="button" className="ins-btn ins-btn--sm" onClick={() => copy(JSON.stringify(selected, null, 2), selected.label)}>
             <CopyIcon size={13} /> Copy
           </button>
-          <button
-            type="button"
-            className={`ins-btn ins-btn--sm ${isSaved('component', componentId) ? 'is-active' : ''}`}
-            onClick={() => show(toggleSaved('component', componentId) ? `${selected.label} saved` : 'Removed')}
-          >
-            <BookmarkIcon size={13} filled={isSaved('component', componentId)} /> Save
-          </button>
+          <SaveButton type="component" id={componentId} variant="pill" className="ins-btn--sm" label="Save" />
           <button type="button" className="ins-btn ins-btn--sm" onClick={exportJson}>
             <DownloadIcon size={13} /> Export
           </button>

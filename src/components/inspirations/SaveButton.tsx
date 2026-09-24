@@ -1,12 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import type { MouseEvent } from 'react';
+import { type MouseEvent, useState } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { SavedItemType } from '@/lib/inspirations/types';
-import { BookmarkIcon } from './Icons';
 import { useToast } from './Toast';
 import { useLibrary } from './useLibrary';
+import { FloatCollectionBar } from './FloatCollectionBar';
 
 /**
  * Save toggle used on cards, detail pages and panels. `icon` is the floating
@@ -25,47 +25,84 @@ export function SaveButton({
   className?: string;
   label?: string;
 }) {
-  const { isSaved, toggleSaved } = useLibrary();
+  const { collectionsContaining, toggleInCollection, deleteCollection } = useLibrary();
   const { show } = useToast();
   const router = useRouter();
-  const saved = isSaved(type, id);
+  const [floatOpen, setFloatOpen] = useState(false);
+  const [floatRemovedOpen, setFloatRemovedOpen] = useState(false);
+  const saved = collectionsContaining(type, id).length > 0;
 
   const onClick = (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const nowSaved = toggleSaved(type, id);
-    show(
-      nowSaved ? 'Saved' : 'Removed from saved',
-      nowSaved ? { label: 'View', onClick: () => router.push(INSPIRATIONS_ROUTES.collections) } : undefined,
-    );
+    
+    if (saved) {
+      const collections = collectionsContaining(type, id);
+      collections.forEach(c => {
+        toggleInCollection(c.id, { type, id });
+        if (c.items.length === 1) deleteCollection(c.id);
+      });
+      setFloatRemovedOpen(true);
+      setTimeout(() => setFloatRemovedOpen(false), 1600);
+    } else {
+      setFloatOpen(true);
+    }
   };
 
   const text = label ?? (saved ? 'Saved' : 'Save');
 
+  const floats = (
+    <>
+      {floatOpen && (
+        <FloatCollectionBar
+          items={[{ type, id }]}
+          onClose={() => setFloatOpen(false)}
+          onSaved={() => setFloatOpen(false)}
+        />
+      )}
+      {floatRemovedOpen && (
+        <div className="ins-float-collection" role="status" aria-live="polite">
+          <div className="ins-float-collection-success">
+            <span className="ins-float-collection-success-check" aria-hidden>
+              <span />
+            </span>
+            Removed from collection
+          </div>
+        </div>
+      )}
+    </>
+  );
+
   if (variant === 'icon') {
     return (
-      <button
-        type="button"
-        className={`ins-iconbtn ${saved ? 'is-active' : ''} ${className}`}
-        aria-label={saved ? 'Remove from saved' : 'Save'}
-        aria-pressed={saved}
-        title={saved ? 'Saved' : 'Save'}
-        onClick={onClick}
-      >
-        <BookmarkIcon filled={saved} size={15} />
-      </button>
+      <>
+        <button
+          type="button"
+          className={`ins-iconbtn ${saved ? 'is-active' : ''} ${className}`}
+          aria-label={saved ? 'Remove from saved' : 'Save'}
+          aria-pressed={saved}
+          title={saved ? 'Saved' : 'Save'}
+          onClick={onClick}
+        >
+          <img src={`/ASSET/Icons/Motvin/${saved ? 'saved.svg' : 'unsaved.svg'}`} alt="" width={16} height={16} />
+        </button>
+        {floats}
+      </>
     );
   }
 
   return (
-    <button
-      type="button"
-      className={`ins-btn ${variant === 'pill' ? 'ins-btn--pill' : ''} ${saved ? 'is-active' : ''} ${className}`}
-      aria-pressed={saved}
-      onClick={onClick}
-    >
-      <BookmarkIcon filled={saved} size={15} />
-      <span>{text}</span>
-    </button>
+    <>
+      <button
+        type="button"
+        className={`ins-btn ${variant === 'pill' ? 'ins-btn--pill' : ''} ${saved ? 'is-active' : ''} ${className}`}
+        aria-pressed={saved}
+        onClick={onClick}
+      >
+        <img src={`/ASSET/Icons/Motvin/${saved ? 'saved.svg' : 'unsaved.svg'}`} alt="" width={16} height={16} />
+        <span>{text}</span>
+      </button>
+      {floats}
+    </>
   );
 }

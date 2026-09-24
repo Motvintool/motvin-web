@@ -19,6 +19,7 @@ export function CollectionMenu({
   open: controlledOpen,
   onOpenChange,
   hideTrigger = false,
+  customTrigger,
 }: {
   type: SavedItemType;
   id: string;
@@ -28,6 +29,7 @@ export function CollectionMenu({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   hideTrigger?: boolean;
+  customTrigger?: (isOpen: boolean, isSaved: boolean, toggle: (e: React.MouseEvent) => void) => React.ReactNode;
 }) {
   const { collections, collectionsContaining, createCollection, toggleInCollection } = useLibrary();
   const { show } = useToast();
@@ -87,7 +89,9 @@ export function CollectionMenu({
 
   return (
     <div className={`ins-popwrap ${className}`} ref={rootRef} onClick={(e) => e.stopPropagation()}>
-      {!hideTrigger && (variant === 'icon' ? (
+      {customTrigger ? (
+        customTrigger(open, inside.size > 0, toggle)
+      ) : !hideTrigger && (variant === 'icon' ? (
         <button type="button" className={`ins-iconbtn ${inside.size ? 'is-active' : ''}`} aria-label="Add to collection" aria-expanded={open} aria-haspopup="menu" title="Add to collection" onClick={toggle}>
           <PlusIcon size={15} />
         </button>

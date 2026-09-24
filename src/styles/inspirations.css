@@ -475,6 +475,8 @@ body {
   flex: none;
   border-radius: 9999px;
   background: #f2f2f2;
+  border: none;
+  cursor: pointer;
 }
 
 .ins-header-audio-icon,
@@ -1466,41 +1468,61 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   height: 20px;
 }
 
-.ins-fmenu {
+.ins-popover.ins-fmenu {
   min-width: 220px;
-  max-height: 340px;
+  max-height: 236px;
   overflow-y: auto;
   z-index: 200;
+  background: #ffffff;
+  -webkit-backdrop-filter: blur(6px);
+  border: 7px solid #F0F0F0;
+  border-radius: 24px;
+  box-shadow: 0px 12px 80px 0px rgba(0, 0, 0, 0.08);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ins-popover.ins-fmenu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ins-popover.ins-fmenu::-webkit-scrollbar-track {
+  margin-block: 16px;
+}
+
+.ins-popover.ins-fmenu::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
 }
 
 .ins-fmenu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 16px;
   width: 100%;
-  padding: 9px 10px;
+  padding: 9.5px 12px;
   border: 0;
-  border-radius: 8px;
+  border-left: 2px solid transparent;
+  border-radius: 12px;
   background: transparent;
-  color: var(--ins-text);
-  font-size: 15px;
+  color: #000c;
+  font-family: var(--font-outfit), sans-serif;
+  font-size: 16px;
   text-align: left;
-  transition: background var(--ins-fast) var(--ins-ease);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease;
 }
 
 .ins-fmenu-item:hover {
-  background: var(--ins-tag);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .ins-fmenu-item.is-selected {
-  font-weight: 600;
-}
-
-.ins-fmenu-check {
-  display: inline-flex;
-  justify-content: center;
-  width: 16px;
-  flex: none;
+  background: rgba(0, 0, 0, 0.04);
 }
 
 /* Content-type switcher: reads as the row's anchor, so it carries the most
@@ -1513,7 +1535,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
 .ins-fmenu-count {
   margin-left: auto;
   color: var(--ins-muted);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .ins-badge {
@@ -1734,10 +1756,12 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   top: calc(100% + 6px);
   z-index: 45;
   min-width: 240px;
-  background: var(--ins-card);
-  border: 1px solid var(--ins-border);
-  border-radius: 10px;
-  box-shadow: var(--effect-popover-shadow);
+  background: #ffffff;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border: 7px solid #F0F0F0;
+  border-radius: 24px;
+  box-shadow: 0px 12px 80px 0px rgba(0, 0, 0, 0.08);
   padding: 6px;
   animation: insPop 140ms var(--ins-ease);
 }
@@ -1775,20 +1799,38 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   overflow-y: auto;
 }
 
+.ins-popover-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ins-popover-list::-webkit-scrollbar-track {
+  margin-block: 16px;
+}
+
+.ins-popover-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
 .ins-popover-item {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 8px 10px;
-  border-radius: 6px;
+  gap: 16px;
+  padding: 9.5px 12px;
+  border-radius: 12px;
   font-size: 16px;
   text-align: left;
-  color: var(--ins-text);
+  color: #000c;
+  background: transparent;
+  border: 0;
+  border-left: 2px solid transparent;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .ins-popover-item:hover {
-  background: var(--ins-hover);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .ins-popover-item-label {
@@ -3415,14 +3457,43 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
 .ins-masthead-actions {
   display: flex;
   align-items: center;
-  gap: var(--ins-space-3);
+  gap: 12px;
 }
 
-/* The overflow button is square, so it needs its height set explicitly to sit
-   on the same baseline as the pill buttons beside it. */
+.ins-btn--masthead-save {
+  background-color: #000 !important;
+  color: #fff !important;
+  border: 1px solid #000 !important;
+  border-radius: 100px !important;
+  padding: 16px 24px !important;
+  gap: 8px !important;
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 500 !important;
+  font-size: 16px !important;
+  height: auto !important;
+}
+
+.ins-btn--masthead-store {
+  background-color: #fff !important;
+  color: #000 !important;
+  border: 1px solid #ecedef !important;
+  border-radius: 100px !important;
+  padding: 16px 24px !important;
+  gap: 8px !important;
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 500 !important;
+  font-size: 16px !important;
+  height: auto !important;
+  text-decoration: none !important;
+}
+
 .ins-masthead-actions .ins-iconbtn {
-  width: 44px;
-  height: 44px;
+  width: 53px !important;
+  height: 53px !important;
+  background-color: #fff !important;
+  border: 1px solid #ecedef !important;
+  border-radius: 100px !important;
+  color: #000 !important;
 }
 
 /* ─── Rate / overflow menu ───────────────────────────────────────────────

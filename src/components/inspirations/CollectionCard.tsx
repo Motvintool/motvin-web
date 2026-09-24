@@ -76,7 +76,7 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
             className="ins-iconbtn ins-iconbtn--plain"
             aria-label="Delete collection"
             onClick={() => {
-              if (window.confirm(`Delete "${collection.name}"? Items stay saved.`)) deleteCollection(collection.id);
+              if (window.confirm(`Delete "${collection.name}"?`)) deleteCollection(collection.id);
             }}
           >
             <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={20} height={20} />

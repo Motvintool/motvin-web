@@ -10,7 +10,6 @@ import type { Collection, CollectionItem, SavedItem, SavedItemType } from './typ
  * become the sync points with the user's remote library.
  */
 
-const SAVED_KEY = 'motvin-inspirations-saved';
 const COLLECTIONS_KEY = 'motvin-inspirations-collections';
 const LOCAL_USER = 'local';
 
@@ -24,11 +23,10 @@ const LOCAL_USER = 'local';
 export const DEFAULT_COLLECTION_NAME = 'My Favourite Collection';
 
 export type LibraryState = {
-  saved: SavedItem[];
   collections: Collection[];
 };
 
-const EMPTY: LibraryState = { saved: [], collections: [] };
+const EMPTY: LibraryState = { collections: [] };
 
 let state: LibraryState = EMPTY;
 let hydrated = false;
@@ -48,9 +46,8 @@ function hydrate() {
   if (hydrated || typeof window === 'undefined') return;
   hydrated = true;
   try {
-    const saved = safeParse<SavedItem[]>(window.localStorage.getItem(SAVED_KEY), []);
     const collections = safeParse<Collection[]>(window.localStorage.getItem(COLLECTIONS_KEY), []);
-    state = { saved, collections };
+    state = { collections };
   } catch {
     state = EMPTY;
   }
@@ -58,7 +55,6 @@ function hydrate() {
 
 function persist() {
   try {
-    window.localStorage.setItem(SAVED_KEY, JSON.stringify(state.saved));
     window.localStorage.setItem(COLLECTIONS_KEY, JSON.stringify(state.collections));
   } catch {
     // Storage unavailable — in-memory state still applies for this visit.
@@ -120,7 +116,7 @@ export const libraryStore = {
     hydrate();
     listeners.add(listener);
     const onStorage = (e: StorageEvent) => {
-      if (e.key === SAVED_KEY || e.key === COLLECTIONS_KEY) {
+      if (e.key === COLLECTIONS_KEY) {
         hydrated = false;
         hydrate();
         listener();
@@ -142,47 +138,6 @@ export const libraryStore = {
     return EMPTY;
   },
 
-  isSaved(type: SavedItemType, id: string): boolean {
-    return state.saved.some((s) => s.type === type && s.id === id);
-  },
-
-  toggleSaved(type: SavedItemType, id: string): boolean {
-    hydrate();
-    const exists = libraryStore.isSaved(type, id);
-    const addedAt = new Date().toISOString();
-    // Mirrored into the default board in the same write — a bookmark that
-    // only lived in `saved` would be invisible anywhere in the UI now that
-    // Collections is the one place any of this renders.
-    const defaultCollection = getOrCreateCollectionByName(DEFAULT_COLLECTION_NAME);
-    state = {
-      ...state,
-      saved: exists
-        ? state.saved.filter((s) => !(s.type === type && s.id === id))
-        : [{ type, id, addedAt }, ...state.saved],
-      collections: state.collections.map((c) =>
-        c.id !== defaultCollection.id
-          ? c
-          : {
-              ...c,
-              items: exists
-                ? c.items.filter((i) => !(i.type === type && i.id === id))
-                : [{ type, id, addedAt }, ...c.items.filter((i) => !(i.type === type && i.id === id))],
-            },
-      ),
-    };
-    emit();
-    return !exists;
-  },
-
-  markViewed(type: SavedItemType, id: string) {
-    hydrate();
-    const idx = state.saved.findIndex((s) => s.type === type && s.id === id);
-    if (idx === -1) return;
-    const next = [...state.saved];
-    next[idx] = { ...next[idx], viewedAt: new Date().toISOString() };
-    state = { ...state, saved: next };
-    emit();
-  },
 
   createCollection(name: string): Collection {
     hydrate();

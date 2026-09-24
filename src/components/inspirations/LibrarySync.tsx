@@ -63,12 +63,7 @@ export function LibrarySync() {
 }
 
 function mergeLibraries(local: LibraryState, remote: RemoteLibrary): LibraryState {
-  const savedByKey = new Map<string, SavedItem>();
-  for (const item of [...remote.saved, ...local.saved]) {
-    const key = `${item.type}:${item.id}`;
-    const existing = savedByKey.get(key);
-    if (!existing || new Date(item.addedAt) > new Date(existing.addedAt)) savedByKey.set(key, item);
-  }
+
 
   const collectionsById = new Map<string, Collection>();
   for (const collection of [...remote.collections, ...local.collections]) {
@@ -79,9 +74,6 @@ function mergeLibraries(local: LibraryState, remote: RemoteLibrary): LibraryStat
   }
 
   return {
-    saved: Array.from(savedByKey.values()).sort(
-      (a, b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime(),
-    ),
     collections: Array.from(collectionsById.values()).sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     ),

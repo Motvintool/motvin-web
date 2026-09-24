@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { elementLabel, INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
@@ -8,13 +9,12 @@ import type { App, ElementKind, Flow, Pattern, Screen } from '@/lib/inspirations
 import { AppLogo } from '../AppLogo';
 import { AppMenu } from '../AppMenu';
 import { AppRating } from '../AppRating';
-import { CollectionMenu } from '../CollectionMenu';
+import { useLibrary } from '../useLibrary';
+import { FloatCollectionBar } from '../FloatCollectionBar';
 import { EmptyState } from '../EmptyState';
 import { FlowsBrowser } from '../FlowsBrowser';
-import { ArrowLeftIcon } from '../Icons';
+import { ArrowLeftIcon, ExternalIcon } from '../Icons';
 import { PatternCard } from '../PatternCard';
-
-import { SaveButton } from '../SaveButton';
 
 import { ScreenGrid } from '../ScreenGrid';
 
@@ -42,6 +42,26 @@ export function AppDetailView({
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const { collectionsContaining, toggleInCollection, deleteCollection } = useLibrary();
+  const [floatOpen, setFloatOpen] = useState(false);
+  const [floatRemovedOpen, setFloatRemovedOpen] = useState(false);
+  const saved = collectionsContaining('app', app.id).length > 0;
+
+  const handleSaveClick = () => {
+    if (saved) {
+      const collections = collectionsContaining('app', app.id);
+      collections.forEach(c => {
+        toggleInCollection(c.id, { type: 'app', id: app.id });
+        if (c.items.length === 1) {
+          deleteCollection(c.id);
+        }
+      });
+      setFloatRemovedOpen(true);
+      setTimeout(() => setFloatRemovedOpen(false), 1600);
+    } else {
+      setFloatOpen(true);
+    }
+  };
 
   const rawTab = params.get('tab');
   const tab: AppTab = TABS.some((t) => t.id === rawTab) ? (rawTab as AppTab) : 'screens';
@@ -111,13 +131,40 @@ export function AppDetailView({
         </div>
 
         <div className="ins-masthead-actions">
-          <SaveButton type="app" id={app.id} variant="button" />
-          <CollectionMenu type="app" id={app.id} variant="button" />
-          {/* Website moved into the menu — three named buttons plus an overflow
-              reads better than four competing for the same row. */}
+          <button
+            type="button"
+            className={`ins-btn ins-btn--masthead-save ${saved ? 'is-active' : ''}`}
+            onClick={handleSaveClick}
+          >
+            <img src={`/ASSET/Icons/Motvin/${saved ? 'saved.svg' : 'unsaved.svg'}`} alt="" width={16} height={16} />
+            <span>{saved ? 'Saved' : 'Save'}</span>
+          </button>
+          <a href={app.website || '#'} target="_blank" rel="noopener noreferrer" className="ins-btn ins-btn--masthead-store">
+            <img src="/ASSET/Icons/Motvin/view-apps.svg" alt="" width={16} height={16} />
+            <span>View in App Store</span>
+          </a>
           <AppMenu app={app} screens={screens} />
         </div>
       </header>
+
+      {floatOpen && (
+        <FloatCollectionBar
+          apps={[app]}
+          onClose={() => setFloatOpen(false)}
+          onSaved={() => setFloatOpen(false)}
+        />
+      )}
+
+      {floatRemovedOpen && (
+        <div className="ins-float-collection" role="status" aria-live="polite">
+          <div className="ins-float-collection-success">
+            <span className="ins-float-collection-success-check" aria-hidden>
+              <span />
+            </span>
+            Removed from collection
+          </div>
+        </div>
+      )}
 
       <div className="ins-tabbar ins-tabbar--counted" role="tablist" aria-label="App content">
         {TABS.map((t) => {

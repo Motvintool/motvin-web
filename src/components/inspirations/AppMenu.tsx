@@ -105,25 +105,11 @@ export function AppMenu({ app, screens }: { app: App; screens: Screen[] }) {
         onClick={toggle}
         disabled={busy}
       >
-        <MoreIcon size={16} />
+        <img src="/ASSET/Icons/Motvin/detail-menu.svg" alt="" width={16} height={16} />
       </button>
 
       {open && (
         <div className="ins-popover ins-appmenu-panel" role="menu">
-          {app.website && (
-            <a
-              className="ins-popover-item"
-              role="menuitem"
-              href={app.website}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setOpen(false)}
-            >
-              <ExternalIcon size={16} />
-              <span className="ins-popover-item-label">Visit website</span>
-            </a>
-          )}
-
           <button type="button" className="ins-popover-item" role="menuitem" onClick={copyLink}>
             <CopyIcon size={16} />
             <span className="ins-popover-item-label">Copy link</span>

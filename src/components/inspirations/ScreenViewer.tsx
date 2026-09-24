@@ -67,7 +67,6 @@ export function ScreenViewer({
   const pathname = usePathname();
   const params = useSearchParams();
   const { show } = useToast();
-  const { markViewed } = useLibrary();
   const [highlight, setHighlight] = useState<DetectedComponent | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -75,9 +74,7 @@ export function ScreenViewer({
   const tabParam = params.get('tab');
   const tab: Tab = TABS.some((t) => t.id === tabParam) ? (tabParam as Tab) : 'overview';
 
-  useEffect(() => {
-    markViewed('screen', screen.id);
-  }, [markViewed, screen.id]);
+
 
   const setTab = useCallback(
     (next: Tab) => {

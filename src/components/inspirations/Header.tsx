@@ -9,6 +9,7 @@ import { PLATFORMS } from '@/lib/inspirations/types';
 import { GlobalSearch } from './GlobalSearch';
 import { CloseIcon } from './Icons';
 import { ProfileMenu } from './ProfileMenu';
+import { AudioMenu } from './AudioMenu';
 
 const PLATFORM_ICON: Record<(typeof PLATFORMS)[number], string> = {
   ios: '/ASSET/Icons/Motvin/apple.svg',
@@ -135,9 +136,7 @@ export function Header() {
 
         <div className="ins-header-center">
           <GlobalSearch />
-          <span className="ins-header-audio" aria-hidden="true">
-            <img src="/ASSET/Icons/Motvin/music.svg" alt="" className="ins-header-audio-icon" width={20} height={20} />
-          </span>
+          <AudioMenu />
         </div>
 
         <div className="ins-header-right">

@@ -200,7 +200,7 @@ export function SavedView() {
           type="button"
           className="ins-collection-remove"
           onClick={() => {
-            if (window.confirm(`Remove "${collection.name}"? Items stay saved.`)) {
+            if (window.confirm(`Remove "${collection.name}"?`)) {
               deleteCollection(collection.id);
               router.push(INSPIRATIONS_ROUTES.collections);
             }

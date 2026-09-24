@@ -20,12 +20,11 @@ import type { Collection, SavedItem } from '../inspirations/types';
 import { firebaseConfig, isFirebaseConfigured } from './config';
 
 const COLLECTIONS_ROOT = 'collections';
-const SAVED_DOC = 'inspirationsSaved';
 const BOARDS_DOC = 'inspirationsBoards';
 
-export type RemoteLibrary = { saved: SavedItem[]; collections: Collection[] };
+export type RemoteLibrary = { collections: Collection[] };
 
-const EMPTY: RemoteLibrary = { saved: [], collections: [] };
+const EMPTY: RemoteLibrary = { collections: [] };
 
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
@@ -52,12 +51,10 @@ export async function readLibrary(uid: string): Promise<RemoteLibrary> {
   if (!firestore || !uid) return EMPTY;
 
   try {
-    const [savedSnap, boardsSnap] = await Promise.all([
-      getDoc(doc(firestore, 'users', uid, COLLECTIONS_ROOT, SAVED_DOC)),
+    const [boardsSnap] = await Promise.all([
       getDoc(doc(firestore, 'users', uid, COLLECTIONS_ROOT, BOARDS_DOC)),
     ]);
     return {
-      saved: toList<SavedItem>(savedSnap.exists() ? savedSnap.data().entries : []),
       collections: toList<Collection>(boardsSnap.exists() ? boardsSnap.data().entries : []),
     };
   } catch {
@@ -78,7 +75,6 @@ export async function writeLibrary(uid: string, state: RemoteLibrary): Promise<v
   if (!uid) throw new Error('Sign in to sync your saved items.');
 
   await Promise.all([
-    setDoc(doc(firestore, 'users', uid, COLLECTIONS_ROOT, SAVED_DOC), { uid, entries: state.saved }),
     setDoc(doc(firestore, 'users', uid, COLLECTIONS_ROOT, BOARDS_DOC), { uid, entries: state.collections }),
   ]);
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { DEFAULT_COLLECTION_NAME } from '@/lib/inspirations/store';
-import type { App, Screen } from '@/lib/inspirations/types';
+import type { App, Screen, SavedItemType } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { useLibrary } from './useLibrary';
 
@@ -32,12 +32,14 @@ export function FloatCollectionBar({
   apps,
   screens,
   screenApp,
+  items,
   onClose,
   onSaved,
 }: {
   apps?: App[];
   screens?: Screen[];
   screenApp?: App;
+  items?: { type: SavedItemType; id: string }[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -65,7 +67,9 @@ export function FloatCollectionBar({
     // pre-filled default name is meant to keep landing in the same board,
     // not spawn a fresh lookalike every time it's submitted unchanged.
     const collection = getOrCreateCollectionByName(trimmed);
-    if (screens) {
+    if (items) {
+      for (const item of items) toggleInCollection(collection.id, item);
+    } else if (screens) {
       for (const screen of screens) toggleInCollection(collection.id, { type: 'screen', id: screen.id });
     } else {
       for (const app of apps ?? []) toggleInCollection(collection.id, { type: 'app', id: app.id });

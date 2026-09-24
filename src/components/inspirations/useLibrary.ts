@@ -16,11 +16,6 @@ export function useLibrary() {
     libraryStore.getServerSnapshot,
   );
 
-  const isSaved = useCallback(
-    (type: SavedItemType, id: string) => state.saved.some((s) => s.type === type && s.id === id),
-    [state.saved],
-  );
-
   const collectionsContaining = useCallback(
     (type: SavedItemType, id: string) =>
       state.collections.filter((c) => c.items.some((i) => i.type === type && i.id === id)),
@@ -28,12 +23,8 @@ export function useLibrary() {
   );
 
   return {
-    saved: state.saved,
     collections: state.collections,
-    isSaved,
     collectionsContaining,
-    toggleSaved: libraryStore.toggleSaved,
-    markViewed: libraryStore.markViewed,
     createCollection: libraryStore.createCollection,
     getOrCreateCollectionByName: libraryStore.getOrCreateCollectionByName,
     renameCollection: libraryStore.renameCollection,
