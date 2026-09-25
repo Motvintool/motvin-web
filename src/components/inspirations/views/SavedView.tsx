@@ -1,5 +1,7 @@
 'use client';
 
+import { coverScreen } from '@/lib/inspirations/cover';
+
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState, type FormEvent } from 'react';
@@ -103,7 +105,7 @@ export function SavedView() {
   const savedApps = savedAppIds.map((id) => apps.get(id)).filter((app): app is App => Boolean(app));
   const { data: appPreviews, loading: appPreviewsLoading } = useAsync(async () => {
     const details = await Promise.all(savedApps.map((app) => inspirationsApi.getApp(app.id)));
-    return new Map(savedApps.map((app, index) => [app.id, details[index]?.screens[0] ?? null]));
+    return new Map(savedApps.map((app, index) => [app.id, coverScreen(details[index]?.screens ?? [])]));
   }, `saved-app-previews:${savedApps.map((app) => app.id).join(',')}`);
   const selectedApps = [...selected]
     .reverse()

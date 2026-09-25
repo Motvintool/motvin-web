@@ -89,6 +89,7 @@ export type AdminScreenFile = {
   appId: string;
   file: string;
   bytes: number;
+  mtime: number;
   width: number | null;
   height: number | null;
   sidecar: ScreenSidecar | null;
@@ -134,6 +135,7 @@ export type AdminFlowRecord = {
   category: string;
   platform: Platform;
   screenIds: string[];
+  parentId?: string | null;
 };
 
 export type AdminState = {
@@ -168,6 +170,17 @@ const CONTENT_TYPES: Record<string, string> = {
 function contentTypeFor(fileName: string): string {
   const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
   return CONTENT_TYPES[ext] ?? 'application/octet-stream';
+}
+
+/**
+ * The image URL for a stored file, versioned by its modification time. The
+ * backend serves screenshots as immutable for a week, and automatic capture
+ * writes a new frame to the same path, so without the version the admin page
+ * would keep showing whatever frame was there before.
+ */
+export function adminScreenImagePath(file: Pick<AdminScreenFile, 'platform' | 'appId' | 'file' | 'mtime'>): string {
+  const version = file.mtime ? `?v=${Math.floor(file.mtime / 1000).toString(36)}` : '';
+  return `/api/inspirations/screens/${file.platform}/${file.appId}/${file.file}${version}`;
 }
 
 /** Lower-cases and strips anything the backend's path rules would reject. */

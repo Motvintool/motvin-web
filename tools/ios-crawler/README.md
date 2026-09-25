@@ -58,7 +58,7 @@ read as a *timeline*, not a pile of frames ([`src/segment.js`](src/segment.js)):
 | every screen the UI held still on | runs of near-identical frames, merged across settling (a header drawing a beat late, a carousel advancing) |
 | splash, toasts, spinners shown only briefly | a short hold is kept when it sits between two settled screens and is not a blend of them |
 | dialogs, bottom sheets, toasts | a scrim (uniform darkening that keeps the picture underneath) with something drawn on it; or a compact change against an untouched screen |
-| loading and skeleton states | same chrome as the screen that followed, far less in it, gone quickly — published as "*X* — loading" (`--skip-loading` leaves them out) |
+| loading and skeleton states | same chrome as the screen that followed, far less in it, gone quickly — recognised so they are **left out** (`--keep-loading` publishes them as "*X* — loading") |
 | scrolled views | content shifted under fixed chrome; folded into the origin when the text barely changed |
 | revisits | the same screen seen again is one screen with a recorded return, not a duplicate |
 | system prompts iOS did not record | a scrim with nothing on it (iOS leaves permission alerts out of recordings) — dropped and counted |

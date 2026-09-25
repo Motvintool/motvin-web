@@ -192,6 +192,16 @@ export function publishCrawl(options) {
     .map((group) => ({ ...group, nodeIds: group.nodeIds.filter((id) => nodes.some((node) => node.id === id)) }))
     .filter((group) => group.nodeIds.length >= 1);
 
+  // A screen can sit in a flow and in one of that flow's child flows — an
+  // onboarding and the sign-in inside it. It is stored once, in the deepest
+  // flow that holds it, so the folder names the most specific journey; every
+  // flow that lists it still refers to it by id.
+  const depthOf = (group, seen = new Set()) => {
+    if (!group.parent || seen.has(group.name)) return 0;
+    seen.add(group.name);
+    const parent = flowGroups.find((candidate) => candidate.name === group.parent);
+    return parent ? depthOf(parent, seen) + 1 : 0;
+  };
   const usedFolders = new Set();
   for (const group of flowGroups) {
     let folder = safeName(group.name) || 'flow';
@@ -199,9 +209,17 @@ export function publishCrawl(options) {
     while (usedFolders.has(folder)) folder = `${safeName(group.name) || 'flow'}-${n++}`;
     usedFolders.add(folder);
     group.folder = folder;
-    if (!options.dryRun) mkdirSync(join(appDir, folder), { recursive: true });
-    group.nodeIds.forEach((nodeId, position) => {
-      placement.set(nodeId, { folder, position: position + 1, total: group.nodeIds.length, name: group.name });
+    group.depth = depthOf(group);
+  }
+  for (const group of flowGroups) {
+    const owned = group.nodeIds.filter((nodeId) => {
+      const deeper = flowGroups.find((other) => other !== group && other.depth > group.depth && other.nodeIds.includes(nodeId));
+      return !deeper;
+    });
+    if (!owned.length) continue;
+    if (!options.dryRun) mkdirSync(join(appDir, group.folder), { recursive: true });
+    owned.forEach((nodeId, position) => {
+      placement.set(nodeId, { folder: group.folder, position: position + 1, total: owned.length, name: group.name });
     });
   }
 
@@ -365,7 +383,9 @@ export function publishCrawl(options) {
       brief: Boolean(nodeCapture?.brief),
       atSeconds: nodeCapture?.start ?? null,
       holdSeconds: nodeCapture?.holdSeconds ?? null,
-      url: `/api/inspirations/screens/${platform}/${app.appId}/${fileName}`,
+      // Versioned the way the manifest builder versions it, so the admin
+      // page shows the frame just written rather than a cached earlier one.
+      url: `/api/inspirations/screens/${platform}/${app.appId}/${fileName}?v=${Math.floor(Date.now() / 1000).toString(36)}`,
     });
   }
 
@@ -424,6 +444,10 @@ export function publishCrawl(options) {
   if (flowGroups.length) {
     // The named journeys: each folder is one flow, its screens already in the
     // order they were walked.
+    const idOfGroup = new Map(flowGroups.map((group) => [group.name, `${app.appId}-${platform}-${group.folder}`]));
+    // Children before their parent would read backwards in the store; parents
+    // first, then children in walk order.
+    flowGroups.sort((a, b) => a.depth - b.depth || flowGroups.indexOf(a) - flowGroups.indexOf(b));
     for (const group of flowGroups) {
       const screenIds = group.nodeIds.map((nodeId) => screenIdByNode.get(nodeId)).filter(Boolean);
       if (screenIds.length < 2) continue; // The builder drops one-screen flows.
@@ -434,6 +458,9 @@ export function publishCrawl(options) {
         category: group.category,
         platform,
         screenIds,
+        // The flow this one branches from and returns to, when the recording
+        // showed one; the gallery nests it beneath that flow.
+        parentId: group.parent && idOfGroup.has(group.parent) ? idOfGroup.get(group.parent) : null,
       });
     }
   } else {

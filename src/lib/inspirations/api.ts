@@ -45,18 +45,34 @@ type CacheEntry = { data: unknown; timestamp: number };
 const cache = new Map<string, CacheEntry>();
 const pending = new Map<string, Promise<unknown>>();
 
+/**
+ * On the server this module lives for the life of the process, so a cached
+ * answer would be served to every visitor until its TTL ran out — and a screen
+ * published a moment ago would be missing from its app page for five minutes.
+ * Server renders therefore only de-duplicate within a couple of seconds and
+ * never let the platform's fetch cache hold the response either.
+ */
+const ON_SERVER = typeof window === 'undefined';
+const SERVER_TTL = 2_000;
+
+/** Drops everything cached, so the next read reflects a write that just happened. */
+export function invalidateInspirationsCache() {
+  cache.clear();
+  pending.clear();
+}
+
 async function request<T>(path: string, ttl: number, fallback: T): Promise<T> {
   const url = `${baseUrl()}${path}`;
 
   const cached = cache.get(url);
-  if (cached && Date.now() - cached.timestamp < ttl) return cached.data as T;
+  if (cached && Date.now() - cached.timestamp < (ON_SERVER ? Math.min(ttl, SERVER_TTL) : ttl)) return cached.data as T;
 
   const inFlight = pending.get(url);
   if (inFlight) return inFlight as Promise<T>;
 
   const promise = (async () => {
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, ON_SERVER ? { cache: 'no-store' } : undefined);
       if (res.status === 404) return fallback;
       if (!res.ok) throw new Error(`Inspirations API error: ${res.status}`);
       const envelope = (await res.json()) as { success: boolean; data: T; error?: string };
@@ -226,7 +242,7 @@ export const inspirationsApi = {
   /** Download URL for a screen. The backend refuses it for view-only material. */
   downloadUrl(screen: Screen): string {
     const base = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, '') ?? '';
-    return `${base}${screen.url}?download=1`;
+    return `${base}${screen.url}${screen.url.includes('?') ? '&' : '?'}download=1`;
   },
 
   /** Resolves a manifest-relative API path to an absolute URL. */

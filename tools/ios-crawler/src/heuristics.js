@@ -53,6 +53,13 @@ const LEGAL = /(by (clicking|continuing|signing|proceeding|tapping|creating)\b|p
 /** Words a title is never made of: navigation chrome and generic actions. */
 const NOT_A_TITLE = /^(skip|back|cancel|done|close|next|continue|edit|save|ok|got it|allow|don'?t allow|not now|<|›|x)$/i;
 
+/**
+ * A delivery app's header is a location picker, not a page title: "Address
+ * unavailable", "Deliver to Home", "Tap to add address". It sits where a
+ * title sits and reads the same on every tab, so it never names a screen.
+ */
+const LOCATION_WIDGET = /^(address (unavailable|not set)|no address|deliver(y|ing)? to\b|delivering (in|to)|current location|tap to add|add (an )?address|set your location\s*[›>]|home\s*[›>]|work\s*[›>]|other\s*[›>])/i;
+
 const CTA = /^(continue|get started|let'?s go|next|sign ?up|log ?in|sign ?in|create account|add to (cart|bag)|buy now|order now|shop now|book now|pay now|place order|subscribe|start( free)? trial|allow|enable|turn on|got it|done|save|apply|confirm|send|submit|try again|retry|go to home|explore|continue to \w+|continue with \w+)\b/i;
 
 const PROMO = /(\d{1,2}% ?off|deals?|offers?|trending|recommended|flat \d|save \d|free delivery|limited time|coupon)/i;
@@ -335,7 +342,11 @@ function titleFrom(lines, box = null) {
     if (text.length < 3 || text.length > 48) return false;
     if (/^\d{1,2}[:.]\d{2}$/.test(text)) return false; // the clock
     if (NOT_A_TITLE.test(text)) return false;
+    if (LOCATION_WIDGET.test(text)) return false;
     const letters = (text.match(/[a-z]/gi) || []).length;
+    // Shouting promo copy ("TIME TO BRING OUT THE") is a banner, not a name.
+    const upper = (text.match(/[A-Z]/g) || []).length;
+    if (letters >= 6 && upper / letters > 0.8) return false;
     return letters >= 3 && letters / text.length >= 0.6 && /[a-z]{3}/i.test(text);
   };
 
@@ -387,6 +398,8 @@ export function cleanTitle(text) {
     const cut = title.slice(0, 40);
     title = (cut.includes(' ') ? cut.slice(0, cut.lastIndexOf(' ')) : cut).trim();
   }
+  // A name starts with a capital, whatever case the type on screen used.
+  if (title) title = title.charAt(0).toUpperCase() + title.slice(1);
   return title || null;
 }
 
@@ -534,6 +547,13 @@ function nameFor(screenType, signals, context, fallbackName) {
   if (context.kind === 'scrolled' && context.scrolledFromName) {
     return `${context.scrolledFromName} — scrolled`;
   }
+  // A section's landing screen is named for the section — "Food home",
+  // "Calendar home" — the way a library reads a tab bar, rather than for
+  // whatever widget happens to sit in its header.
+  const section = signals.tabLabels[0];
+  if (['home', 'feed', 'category', 'dashboard'].includes(screenType) && section && !context.overlay) {
+    return `${section.charAt(0).toUpperCase()}${section.slice(1)} home`;
+  }
   if (title) return title;
   if (context.overlay && context.overlayOfName) return `${typeLabel(screenType)} over ${context.overlayOfName}`;
   return typeLabel(screenType) || fallbackName || 'Screen';
@@ -680,26 +700,48 @@ const FLOW_OF = {
 };
 
 /**
- * Groups screens into named flows by walking the capture in order.
+ * Groups screens into named flows by walking the capture in order, and works
+ * out which flows sit inside which.
  *
  * A flow is a consecutive run of screens belonging to the same journey, which
  * is what walking an app actually produces: a splash and some onboarding, then
- * a login, then browsing. Screens with no journey of their own join the run
- * they interrupt, and a run too short to be a flow is absorbed by its
+ * a login, then a section of the app. Screens with no journey of their own join
+ * the run they interrupt, and a run too short to be a flow is absorbed by its
  * neighbour — so every screen ends up somewhere and no flow has one screen in
  * it.
  *
- * @param {{screenType: string}[]} screens in capture order
- * @returns {{name: string, category: string, screens: number[]}[]}
+ * Two things make the result read like a library's flow tree rather than a
+ * list of screen types:
+ *
+ *   Sections are named for where they are. A browsing run inside a tab-based
+ *   app is named after the tab it is on ("Home", "Calendar", "Profile") when
+ *   the screens say so, not "Browsing".
+ *
+ *   Detours become children. Leaving a section for a few screens and coming
+ *   back to it — Calendar → Editing ovulation → Calendar — makes the detour a
+ *   child flow of the section, nested to any depth. Sections you never return
+ *   to stay at the top level, in the order they were walked.
+ *
+ * @param {{screenType: string, section?: string|null}[]} screens in capture order;
+ *   `section` is the tab label a screen sits under, when it has one
+ * @returns {{name: string, category: string, screens: number[], parent: string|null}[]}
  */
 export function groupFlowsLocally(screens) {
   if (screens.length < 2) return [];
 
   // Pass one: label each screen, carrying the previous label through the gaps.
+  // A discovery screen with a known section is labelled by that section; a
+  // discovery screen without one (a detail page, which has no tab bar) stays
+  // in the section it was opened from.
   const labels = [];
   let carried = null;
   for (const screen of screens) {
-    const entry = FLOW_OF[screen.screenType];
+    let entry = FLOW_OF[screen.screenType] ?? null;
+    if (entry && !['onboarding', 'authentication'].includes(entry[1])) {
+      const section = sectionName(screen.section);
+      if (section) entry = [section, entry[1]];
+      else if (entry[0] === 'Browsing' && carried && !['onboarding', 'authentication'].includes(carried[1])) entry = carried;
+    }
     if (entry) carried = entry;
     labels.push(entry ?? carried);
   }
@@ -716,7 +758,7 @@ export function groupFlowsLocally(screens) {
     const [name, category] = labels[i];
     const last = runs[runs.length - 1];
     if (last && last.name === name) last.screens.push(i);
-    else runs.push({ name, category, screens: [i] });
+    else runs.push({ name, category, screens: [i], parent: null });
   }
 
   // Pass three: absorb runs too short to stand alone into a neighbour, so no
@@ -727,11 +769,19 @@ export function groupFlowsLocally(screens) {
     if (runs[i].screens.length >= 2 || runs.length === 1) continue;
     const previous = runs[i - 1];
     const next = runs[i + 1];
-    const target = previous ?? next;
+    // A lone screen joins a neighbour of its own kind first — a single tab
+    // visited in passing belongs with the other sections, not with the
+    // onboarding that happened to precede it.
+    const kin = [previous, next].find((run) => run && run.category === runs[i].category);
+    const target = kin ?? previous ?? next;
     if (!target) continue;
     if (i === 0 && runs[i].name === 'Onboarding' && target.category === 'authentication') {
       target.name = 'Onboarding';
       target.category = 'onboarding';
+    }
+    // Two glimpsed sections joined together are a browse, not either section.
+    if (kin && target.name !== runs[i].name && target.category === 'discovery' && target.screens.length < 2) {
+      target.name = 'Browsing';
     }
     target.screens.push(...runs[i].screens);
     target.screens.sort((a, b) => a - b);
@@ -739,19 +789,117 @@ export function groupFlowsLocally(screens) {
     i--;
   }
 
-  // A journey visited twice (browse → checkout → browse) becomes one flow.
+  // Pass three and a half: everything before the app proper is the
+  // onboarding. A splash, a welcome, a sign-in, a paywall and a permission
+  // prompt walked in a row before the first section of the app are one
+  // journey to a library — "Onboarding" — and the tasks inside it become its
+  // children below.
+  const firstSection = runs.findIndex((run) => run.category === 'discovery');
+  const opening = firstSection === -1 ? runs.length : firstSection;
+  if (opening >= 2) {
+    const merged = {
+      name: 'Onboarding',
+      category: 'onboarding',
+      screens: runs.slice(0, opening).flatMap((run) => run.screens).sort((a, b) => a - b),
+      parent: null,
+    };
+    runs.splice(0, opening, merged);
+  }
+
+  // Pass four: detours. A run bracketed by two runs of the same journey is a
+  // child of that journey; the bracket closes over it and the search repeats,
+  // so a detour inside a detour nests correctly.
+  const flows = [];
+  let found = true;
+  while (found) {
+    found = false;
+    for (let i = 1; i < runs.length - 1; i++) {
+      if (runs[i - 1].name === runs[i + 1].name && runs[i].name !== runs[i - 1].name) {
+        flows.push({ ...runs[i], parent: runs[i - 1].name });
+        runs[i - 1].screens.push(...runs[i + 1].screens);
+        runs[i - 1].screens.sort((a, b) => a - b);
+        runs.splice(i, 2);
+        found = true;
+        break;
+      }
+    }
+  }
+  for (const run of runs) flows.push(run);
+
+  // A journey visited twice (browse → checkout → browse) becomes one flow,
+  // keeping the parent of its first appearance.
   const merged = new Map();
-  for (const run of runs) {
-    const existing = merged.get(run.name);
+  for (const flow of flows) {
+    const existing = merged.get(flow.name);
     if (existing) {
-      existing.screens.push(...run.screens);
+      existing.screens.push(...flow.screens);
       existing.screens.sort((a, b) => a - b);
     } else {
-      merged.set(run.name, { ...run });
+      merged.set(flow.name, { ...flow });
     }
   }
 
-  return [...merged.values()].filter((flow) => flow.screens.length >= 2);
+  // Walk order, parents before children; a parent that did not survive (too
+  // short, or itself merged away) leaves its child at the top level.
+  const result = [...merged.values()]
+    .filter((flow) => flow.screens.length >= 2)
+    .sort((a, b) => a.screens[0] - b.screens[0]);
+  const names = new Set(result.map((flow) => flow.name));
+  for (const flow of result) {
+    if (flow.parent && (!names.has(flow.parent) || flow.parent === flow.name)) flow.parent = null;
+  }
+
+  // Pass five: the tasks inside a flow. An onboarding is several journeys in
+  // a row — a welcome, a sign-in, a subscription, finishing a profile — and a
+  // library lists those beneath it: "Onboarding › Logging in". Each journey
+  // of two or more screens whose name differs from the flow's own becomes a
+  // child; the flow keeps every screen, so its strip still reads end to end,
+  // and single screens stay as its own leaves. Sections of the app are not
+  // split by their browsing screens — those are the section — only by the
+  // tasks that happen inside them (a checkout inside "Food").
+  const children = [];
+  for (const flow of result) {
+    const runs = [];
+    for (const index of flow.screens) {
+      const type = screens[index].screenType;
+      const entry = FLOW_OF[type] ?? null;
+      const journey = entry ? entry[0] : null;
+      const last = runs[runs.length - 1];
+      // A screen with no journey of its own — a form, a dialog, an empty
+      // state — belongs to the task before it. So does a screen of the same
+      // kind of task: a paywall, the payment after it and its confirmation
+      // are one subscription, named for how it began.
+      if (last && (journey === null || journey === last.name || (entry && entry[1] === last.category && last.category !== 'discovery'))) {
+        last.screens.push(index);
+      } else if (journey === null && !last) runs.push({ name: flow.name, category: flow.category, screens: [index] });
+      else runs.push({ name: journey, category: entry[1], screens: [index] });
+    }
+    const tasks = runs.filter(
+      (run) => run.screens.length >= 2 && run.name !== flow.name && run.name !== 'Browsing' && run.category !== 'discovery',
+    );
+    if (!tasks.length) continue;
+    for (const task of tasks) {
+      // Two runs of the same task inside one flow are one child.
+      const existing = children.find((child) => child.parent === flow.name && child.name === task.name);
+      if (existing) {
+        existing.screens.push(...task.screens);
+        existing.screens.sort((a, b) => a - b);
+      } else if (!names.has(task.name)) {
+        children.push({ name: task.name, category: task.category, screens: [...task.screens], parent: flow.name });
+      }
+    }
+  }
+  for (const child of children) names.add(child.name);
+
+  return [...result, ...children].sort((a, b) => a.screens[0] - b.screens[0] || (a.parent ? 1 : -1));
+}
+
+/** "food" → "Food"; junk that is not a word is no section at all. */
+function sectionName(label) {
+  if (!label || typeof label !== 'string') return null;
+  const clean = label.trim();
+  if (!/^[A-Za-z][A-Za-z' ]{1,13}$/.test(clean)) return null;
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
 }
 
 // ─── Report ──────────────────────────────────────────────────────────────────

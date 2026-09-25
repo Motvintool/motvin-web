@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
-import { adminApi, type AdminFlowRecord, type AdminScreenFile, type AdminState } from '@/lib/inspirations/admin';
+import { adminApi, type AdminFlowRecord, type AdminScreenFile, type AdminState, adminScreenImagePath } from '@/lib/inspirations/admin';
 import { PLATFORM_LABEL, SCREEN_TYPE_LABEL } from '@/lib/inspirations/taxonomy';
 import type { Platform, ScreenType } from '@/lib/inspirations/types';
 import { CloseIcon, PlusIcon, TrashIcon } from '../Icons';
@@ -38,7 +38,7 @@ function screenLabel(file: AdminScreenFile): string {
 function thumbUrl(file: AdminScreenFile): string | null {
   if (!file.published) return null;
   return inspirationsApi.mediaUrl(
-    `/api/inspirations/screens/${file.platform}/${file.appId}/${file.file}`,
+    adminScreenImagePath(file),
   );
 }
 

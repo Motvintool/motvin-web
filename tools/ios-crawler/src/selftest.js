@@ -490,14 +490,48 @@ export async function selfTest() {
     ].map((screenType) => ({ screenType }));
 
     const localFlows = groupFlowsLocally(walk);
-    check('journeys are named in plain words', localFlows.map((f) => f.name).join(' → ') === 'Onboarding → Logging in → Browsing → Checkout → Settings', localFlows.map((f) => f.name).join(' → '));
-    check('every screen lands in a flow', localFlows.flatMap((f) => f.screens).length === walk.length);
-    check('screens keep capture order inside a flow', localFlows[0].screens.join(',') === '0,1,2');
+    check('journeys are named in plain words', localFlows.filter((f) => !f.parent).map((f) => f.name).join(' → ') === 'Onboarding → Browsing → Checkout → Settings', localFlows.filter((f) => !f.parent).map((f) => f.name).join(' → '));
+    const topLevel = localFlows.filter((f) => !f.parent);
+    check('every screen lands in a top-level flow exactly once', topLevel.flatMap((f) => f.screens).sort((a, b) => a - b).join(',') === walk.map((_, i) => i).join(','), JSON.stringify(topLevel));
+    check('screens keep capture order inside a flow', topLevel[0].screens.join(',') === '0,1,2,3,4', topLevel[0].screens.join(','));
+    check('the sign-in inside the onboarding is its child', localFlows.some((f) => f.name === 'Logging in' && f.parent === 'Onboarding'));
     check('flow categories are ones the builder accepts', localFlows.every((f) => PUBLISHED_FLOW_CATEGORIES.includes(f.category)));
     check(
       'a screen with no journey of its own joins the run it interrupts',
       groupFlowsLocally(['login', 'login', 'form', 'login'].map((screenType) => ({ screenType })))[0].screens.length === 4,
     );
+    const tabbed = [
+      { screenType: 'home', section: 'Home' }, { screenType: 'feed', section: 'Home' },
+      { screenType: 'home', section: 'Calendar' }, { screenType: 'feed', section: 'Calendar' },
+      { screenType: 'detail' }, { screenType: 'form' }, // a detour with no tab bar
+      { screenType: 'feed', section: 'Calendar' }, { screenType: 'home', section: 'Calendar' },
+      { screenType: 'profile', section: 'Profile' }, { screenType: 'settings', section: 'Profile' },
+    ];
+    const tree = groupFlowsLocally(tabbed);
+    check('sections are named after their tab', tree.map((f) => f.name).join(' | ') === 'Home | Calendar | Profile', tree.map((f) => f.name).join(' | '));
+    check('a detour from a section returns to it as one flow', tree.find((f) => f.name === 'Calendar')?.screens.join(',') === '2,3,4,5,6,7', JSON.stringify(tree));
+    const detour = groupFlowsLocally([
+      { screenType: 'home', section: 'Calendar' }, { screenType: 'feed', section: 'Calendar' },
+      { screenType: 'search' }, { screenType: 'search_results' },
+      { screenType: 'feed', section: 'Calendar' }, { screenType: 'home', section: 'Calendar' },
+    ]);
+    check('a journey bracketed by a section is its child', detour.find((f) => f.name === 'Searching')?.parent === 'Calendar', JSON.stringify(detour));
+    check('the section itself stays at the top level', detour.find((f) => f.name === 'Calendar')?.parent === null);
+    const onboarding = groupFlowsLocally([
+      { screenType: 'splash' }, { screenType: 'onboarding' },
+      { screenType: 'login' }, { screenType: 'otp' },
+      { screenType: 'paywall' }, { screenType: 'payment' }, { screenType: 'confirmation' },
+      { screenType: 'form' }, { screenType: 'permission' },
+      { screenType: 'home', section: 'Home' }, { screenType: 'feed', section: 'Home' },
+    ]);
+    const onboardingFlow = onboarding.find((f) => f.name === 'Onboarding' && !f.parent);
+    check('an onboarding keeps every screen it walked', onboardingFlow?.screens.join(',') === '0,1,2,3,4,5,6,7,8', JSON.stringify(onboarding));
+    check(
+      'the tasks inside it become its children',
+      onboarding.filter((f) => f.parent === 'Onboarding').map((f) => `${f.name}:${f.screens.join('')}`).join(' | ') === 'Logging in:23 | Upgrading:4567',
+      JSON.stringify(onboarding.filter((f) => f.parent)),
+    );
+    check('a section after onboarding is a sibling, not a child', onboarding.find((f) => f.name === 'Home')?.parent === null);
     check(
       'one journey visited twice is one flow, not two',
       groupFlowsLocally(['home', 'feed', 'settings', 'settings', 'home', 'feed'].map((screenType) => ({ screenType })))
@@ -723,6 +757,11 @@ export async function selfTest() {
     check('a trailing chevron is stripped from a title', cleanTitle('Address Unavailable ›') === 'Address Unavailable');
     const first = classifyScreen([...tabBar, line('For you', 0.2, 0.04), ...Array.from({ length: 12 }, (_, i) => line(`Card ${i}`, 0.3 + i * 0.04))], ctx({ firstTabBarScreen: true }));
     check('the first tab-bar screen is home even when it is busy', first.screenType === 'home', first.screenType);
+    const sectioned = classifyScreen([line('Address Unavailable ›', 0.06, 0.02), line('Tap to add address', 0.09), ...tabBar, ...Array.from({ length: 12 }, (_, i) => line(`Dish ${i}`, 0.3 + i * 0.04))]);
+    check('a section screen is named for its tab, not its location widget', sectioned.name === 'Home home' || sectioned.name === 'Home', sectioned.name);
+    check('a location picker is never a title', classifyScreen([line('Deliver to Home ›', 0.06, 0.02), line('Fresh picks', 0.3, 0.04)]).name === 'Fresh picks');
+    check('a page about choosing a location keeps its own title', classifyScreen([line('Select your location', 0.07, 0.028), line('Search an area or address', 0.14)]).name === 'Select your location');
+    check('a title starts with a capital', cleanTitle('scenes') === 'Scenes');
     check('a state travels with the classification', classifyScreen([line('Search', 0.2)], ctx({ kind: 'loading', edge: 4 })).states.includes('loading'));
     check('a description is written from measured facts', /Login screen .*keyboard/.test(classifyScreen([line('Log in', 0.2, 0.04), line('Email', 0.3), line('Password', 0.4), ...keyboard]).description));
 

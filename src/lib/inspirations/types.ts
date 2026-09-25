@@ -195,6 +195,12 @@ export type Flow = {
   category: FlowCategory;
   platform: Platform;
   screenIds: string[];
+  /**
+   * The flow this one branches from and returns to — a detour from a section
+   * — or null at the top level. The app page draws the flows as a tree from
+   * this.
+   */
+  parentId?: string | null;
 };
 
 export type PatternCategory =

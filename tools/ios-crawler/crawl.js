@@ -71,8 +71,8 @@ ${bold('ingest options')}
   --min-hold <seconds>      how long a screen must hold still to count      ${dim('default 0.5')}
   --no-brief                drop screens shown for less than --min-hold even
                             when they are distinct (splash, toasts, spinners)
-  --skip-loading            leave pages still loading out of the library;
-                            by default they publish, labelled as loading states
+  --keep-loading            publish pages still loading too; by default they
+                            are left out of the library
   --data-dir <path>         Inspirations store
   --no-classify             skip analysis; file everything as "other"
   --dry-run                 report what would be written, write nothing
@@ -291,7 +291,7 @@ async function runIngest(flags) {
     minHoldSeconds: flags.minHold === undefined ? undefined : Number(flags.minHold),
     minRun: flags.minRun === undefined ? undefined : Number(flags.minRun),
     keepBrief: flags.brief !== false,
-    skipLoading: flags.skipLoading === true,
+    keepLoading: flags.keepLoading === true,
     dryRun: flags.dryRun === true,
     onProgress: flags.json
       ? (event) => process.stdout.write(`${PROGRESS_MARKER} ${JSON.stringify(event)}\n`)

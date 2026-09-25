@@ -363,17 +363,20 @@ export async function ingestFolder(options) {
             screenType: node.analysis.screenType,
             name: node.analysis.name,
             description: node.analysis.description,
+            // The tab a screen sits under names the section it belongs to.
+            section: node.analysis.signals?.tabLabels?.[0] ?? null,
           })),
           { backend: options.backend },
         );
         flowGroups = groups.map((group) => ({
           name: group.name,
           category: group.category,
+          parent: group.parent ?? null,
           nodeIds: group.screens.map((index) => ordered[index].id),
         }));
         log.heading('Flows');
         for (const group of flowGroups) {
-          log.ok(`${group.name} — ${group.nodeIds.length} screen(s)`);
+          log.ok(`${group.parent ? `${group.parent} › ` : ''}${group.name} — ${group.nodeIds.length} screen(s)`);
         }
       } catch (error) {
         log.warn(`could not group into flows — ${error.message.split('\n')[0]}`);
@@ -554,12 +557,12 @@ async function ingestTimeline({ timeline, frames, analyzer, graph, duplicates, e
       continue;
     }
 
-    // Loading states publish by default, labelled as such; --skip-loading
-    // leaves them out. They stay in the graph either way so the journey and
-    // the naming of what came after still read right.
-    if ((analysis.screenType === 'loading' || screen.kind === 'loading') && options.skipLoading === true) {
+    // A page still loading is a moment, not a design: it is left out of the
+    // library unless --keep-loading asks for it. It stays in the graph either
+    // way so the journey and the naming of what came after still read right.
+    if ((analysis.screenType === 'loading' || screen.kind === 'loading') && options.keepLoading !== true) {
       node.skipPublish = true;
-      node.skipReason = 'loading state — not published (--skip-loading)';
+      node.skipReason = 'loading state — not published (pass --keep-loading to include)';
       excluded.push({ file: fileName, name: analysis.name, reason: 'loading state' });
       log.blocked(`${node.id} ${clock(screen.start)} ${analysis.name} — loading state, not published`);
       continue;

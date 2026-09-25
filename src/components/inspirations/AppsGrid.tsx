@@ -1,5 +1,7 @@
 'use client';
 
+import { coverScreen } from '@/lib/inspirations/cover';
+
 import { inspirationsApi } from '@/lib/inspirations/api';
 import type { App } from '@/lib/inspirations/types';
 import { AppCard } from './AppCard';
@@ -40,7 +42,7 @@ export function AppsGrid({
     // AppCard shows one of the app's own screens on its card, the same as a
     // screen card — so each app needs its first screen alongside its record.
     const details = await Promise.all(apps.map((app) => inspirationsApi.getApp(app.id)));
-    return new Map(apps.map((app, i) => [app.id, details[i]?.screens[0] ?? null]));
+    return new Map(apps.map((app, i) => [app.id, coverScreen(details[i]?.screens ?? [])]));
   }, `apps-grid-previews:${key}`);
   const { selected, toggle, clear } = useAppSelection();
 

@@ -131,7 +131,7 @@ export async function POST(request: Request) {
   const fps = Number(params.get('fps') ?? 5);
   const minHold = Number(params.get('minHold') ?? 0.5);
   const keepBrief = params.get('brief') !== '0';
-  const skipLoading = params.get('loading') === '0';
+  const keepLoading = params.get('loading') === '1';
 
   // The video's own name is the last resort for naming the app, used when no
   // analyzer can identify it. A fixed temp name would make every such upload an
@@ -172,7 +172,7 @@ export async function POST(request: Request) {
     '--fps', String(fps),
     '--min-hold', String(minHold),
     ...(keepBrief ? [] : ['--no-brief']),
-    ...(skipLoading ? ['--skip-loading'] : []),
+    ...(keepLoading ? ['--keep-loading'] : []),
   ];
 
   const encoder = new TextEncoder();

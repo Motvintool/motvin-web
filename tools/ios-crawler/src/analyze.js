@@ -453,11 +453,14 @@ export async function identifyApp(imagePaths, options = {}) {
 const GROUP_SYSTEM = `You group screens from one app into user flows, the way a design reference library does. Return JSON only, no prose, no markdown fence:
 {
   "flows": [
-    { "name": "Onboarding", "category": one of ${PUBLISHED_FLOW_CATEGORIES.join('|')}, "screens": [0, 1, 2] }
+    { "name": "Onboarding", "category": one of ${PUBLISHED_FLOW_CATEGORIES.join('|')}, "screens": [0, 1, 2], "parent": null },
+    { "name": "Subscribing to premium", "category": "checkout", "screens": [3, 4], "parent": "Onboarding" }
   ]
 }
 
-A flow is one journey a person completes, named as a task in two or three words: "Onboarding", "Completing a profile", "Purchasing a ticket", "Filtering events", "Sending a message". Never name a flow after a screen type.
+A flow is one journey a person completes, named as a task in two or three words: "Onboarding", "Completing a profile", "Purchasing a ticket", "Filtering events", "Sending a message". Never name a flow after a screen type. A section of the app reached from its tab bar is named after the tab: "Home", "Calendar", "Profile".
+
+"parent" nests one flow inside another: when a journey starts from a screen of another flow and returns to it afterwards — opening a detail from the calendar and coming back — it is a child of that flow and "parent" is that flow's exact name. Sections the person never returned to, and the first flow, have "parent": null.
 
 Rules:
 - The screens arrive in the order they were captured. Keep that order inside each flow.
@@ -566,6 +569,7 @@ export function normaliseFlows(raw, screenCount) {
       name: String(flow.name || '').trim().slice(0, 60) || 'Flow',
       category: PUBLISHED_FLOW_CATEGORIES.includes(flow.category) ? flow.category : 'discovery',
       screens: indexes,
+      parent: typeof flow.parent === 'string' && flow.parent.trim() ? flow.parent.trim().slice(0, 60) : null,
     });
   }
 
@@ -594,10 +598,12 @@ export function normaliseFlows(raw, screenCount) {
       }
       for (const flow of flows) flow.screens.sort((a, b) => a - b);
     } else if (leftovers.length >= 2) {
-      flows.push({ name: 'Walkthrough', category: 'discovery', screens: leftovers });
+      flows.push({ name: 'Walkthrough', category: 'discovery', screens: leftovers, parent: null });
     }
   }
 
+  const names = new Set(flows.map((flow) => flow.name));
+  for (const flow of flows) if (flow.parent && (!names.has(flow.parent) || flow.parent === flow.name)) flow.parent = null;
   return flows;
 }
 

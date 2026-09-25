@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRef, useState, type DragEvent } from 'react';
 import { adminApi } from '@/lib/inspirations/admin';
-import { inspirationsApi } from '@/lib/inspirations/api';
+import { inspirationsApi, invalidateInspirationsCache } from '@/lib/inspirations/api';
 import { fineTypeLabel, screenStateLabel } from '@/lib/inspirations/taxonomy';
 import { getIdToken } from '@/lib/firebase/auth';
 import type { IngestEvent, IngestResult, IngestScreen } from '@/app/api/crawler/ingest/route';
@@ -170,6 +170,9 @@ export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: ()
       setResult(final);
       setProgress(null);
       setVideo(null);
+      // The gallery's own client cache would otherwise keep showing the
+      // library as it was before this upload.
+      invalidateInspirationsCache();
       await onIngested();
     } catch (err) {
       setError((err as Error).message);
@@ -201,8 +204,9 @@ export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: ()
       <p className="ins-field-hint">
         Record yourself using the app on a real device, then drop the video here. Walk at a normal
         pace and pause a moment on each screen. The recording is read as a timeline: every screen
-        that held still is kept — splash, prompts, loading and empty states, sheets and toasts
-        included — repeats are folded into one, and Google or Apple sign-in pages are left out.
+        that held still is kept — splash, prompts, empty states, sheets and toasts included —
+        repeats are folded into one, and pages still loading and Google or Apple sign-in pages are
+        left out.
         Which app it is, what each screen is called and the journeys they form are worked out from
         the screens themselves.
       </p>

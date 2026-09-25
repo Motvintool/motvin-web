@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
-import { adminApi, type AdminScreenFile, type AdminState, type ScreenSidecar } from '@/lib/inspirations/admin';
+import { adminApi, type AdminScreenFile, type AdminState, type ScreenSidecar, adminScreenImagePath } from '@/lib/inspirations/admin';
 import { PLATFORM_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from '@/lib/inspirations/taxonomy';
 import { SCREEN_TYPES, STYLES, type ScreenType, type Style } from '@/lib/inspirations/types';
 import { CheckIcon, PencilIcon, TrashIcon } from '../Icons';
@@ -87,7 +87,7 @@ function ScreenRow({
 
   const app = state.apps.find((a) => a.id === file.appId);
   const previewUrl = inspirationsApi.mediaUrl(
-    `/api/inspirations/screens/${file.platform}/${file.appId}/${file.file}`,
+    adminScreenImagePath(file),
   );
 
   const save = () => {
