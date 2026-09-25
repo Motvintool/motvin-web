@@ -1,14 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { memo } from 'react';
+import { memo, useState, type MouseEvent } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 
 import type { App, Screen } from '@/lib/inspirations/types';
 import { screenStateLabel } from '@/lib/inspirations/taxonomy';
 import { AppLogo } from './AppLogo';
+import { ScreenPreviewModal } from './ScreenPreviewModal';
 import { Screenshot } from './Screenshot';
 import { useSiblingCycle } from './useSiblingCycle';
+
+/** A plain left-click with no modifier opens the preview modal in place;
+ * anything else (middle-click, cmd/ctrl-click, shift-click) is the visitor
+ * asking for the real link behaviour (new tab, etc.), so it's left alone. */
+function isPlainClick(e: MouseEvent) {
+  return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+}
 
 const NAME_TAGLINE_SEPARATOR = ' — ';
 
@@ -65,6 +73,7 @@ function ScreenCardImpl({
   // never is — the fallback here is for the type, not a real null case.
   const shownScreen = activeScreen ?? screen;
   const href = INSPIRATIONS_ROUTES.screen(shownScreen);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const { title: appTitle, tagline: derivedTagline } = app ? splitAppName(app.name) : { title: '', tagline: null };
   const appDescription = app?.tagline || derivedTagline;
@@ -102,7 +111,17 @@ function ScreenCardImpl({
           </button>
         )}
         <div className="ins-card-inset">
-          <Link href={href} className="ins-card-link" aria-label={`${shownScreen.name}${app ? ` — ${app.name}` : ''}`} prefetch={index !== undefined && index < 10 ? undefined : false}>
+          <Link
+            href={href}
+            className="ins-card-link"
+            aria-label={`${shownScreen.name}${app ? ` — ${app.name}` : ''}`}
+            prefetch={index !== undefined && index < 10 ? undefined : false}
+            onClick={(e) => {
+              if (!isPlainClick(e)) return;
+              e.preventDefault();
+              setPreviewOpen(true);
+            }}
+          >
             <Screenshot screen={shownScreen} />
             {shownScreen.id === screen.id && textHighlights?.map((highlight, index) => (
               <span
@@ -151,10 +170,21 @@ function ScreenCardImpl({
               </div>
             </>
           ) : (
-            <Link href={href} className="ins-card-name">{shownScreen.name}</Link>
+            <Link
+              href={href}
+              className="ins-card-name"
+              onClick={(e) => {
+                if (!isPlainClick(e)) return;
+                e.preventDefault();
+                setPreviewOpen(true);
+              }}
+            >
+              {shownScreen.name}
+            </Link>
           )}
         </div>
       )}
+      {previewOpen && <ScreenPreviewModal screen={shownScreen} app={app ?? null} onClose={() => setPreviewOpen(false)} />}
     </article>
   );
 }

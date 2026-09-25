@@ -15,11 +15,13 @@ const HOVER_INTENT_MS = 60;
  * Other screens from the same app, fetched once per app and reused by every
  * card for it — a grid showing seven Airbnb screens should not issue seven
  * identical requests. Promise-memoized so concurrent hovers share the
- * in-flight fetch too, not just the resolved result.
+ * in-flight fetch too, not just the resolved result. Exported so
+ * ScreenPreviewModal can reuse the exact same cached fetch for its filmstrip
+ * instead of issuing a second, redundant request for an app already loaded.
  */
 const siblingsCache = new Map<string, Promise<Screen[]>>();
 
-function fetchSiblings(appId: string): Promise<Screen[]> {
+export function fetchSiblings(appId: string): Promise<Screen[]> {
   let cached = siblingsCache.get(appId);
   if (!cached) {
     cached = inspirationsApi

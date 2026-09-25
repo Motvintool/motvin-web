@@ -310,7 +310,7 @@ body {
 .ins-header-content {
   height: 100%;
   width: 100%;
-  padding: 0 80px;
+  padding: 0 70px;
   display: grid;
   grid-template-columns: 1fr minmax(0, 560px) 1fr;
   align-items: center;
@@ -927,7 +927,13 @@ body {
 
 .ins-main {
   width: 100%;
-  padding: 24px 80px 32px 80px;
+  padding: 24px 70px 32px 70px;
+}
+
+/* App detail page only (AppDetailView's outer element is .ins-masthead) —
+   every other /inspirations route keeps .ins-main's default 24px top. */
+.ins-main:has(> .ins-masthead) {
+  padding-top: 100px;
 }
 
 .ins-pagehead {
@@ -935,6 +941,7 @@ body {
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
+  padding: 0px 8px;
   margin-bottom: 32px;
 }
 
@@ -974,6 +981,7 @@ body {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
+  padding: 0px 8px;
   margin-bottom: 62px;
 }
 
@@ -1251,6 +1259,7 @@ body {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  padding: 0px 8px;
   margin: 0;
 }
 
@@ -1273,7 +1282,7 @@ body {
   z-index: 1;
   height: var(--ins-header-h, 82px);
   margin: 0;
-  padding: 0 80px;
+  padding: 0 70px;
   flex-wrap: nowrap;
   /* The header's own glass, carried by the bar itself so the blur is present
      even where it overhangs the header. */
@@ -2042,6 +2051,14 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   left: 0;
 }
 
+/* This trigger sits in the modal's own footer, near the bottom edge — the
+   shared .ins-popover's default top: 100%+6px would open the menu
+   downward, off (or clipped by) the modal. Opens upward instead. */
+.ins-screen-preview-foot .ins-popover {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
 .ins-popover-title {
   font-size: 16px;
   font-weight: 600;
@@ -2076,6 +2093,11 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 }
 
 .ins-popover-item {
+  /* <button> gets a border-box reset elsewhere in the app, but the
+     "Download" link here is an <a> — same class, same width: 100%, but
+     content-box by default adds its own padding on top and overflows the
+     popover on hover (the highlight visibly spills past the rounded edge). */
+  box-sizing: border-box;
   width: 100%;
   display: flex;
   align-items: center;
@@ -2212,7 +2234,10 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   width: 100%;
   aspect-ratio: 346 / 674;
   padding: 32px;
-  border-radius: 48px;
+  border-radius: 116px;
+  /* Same continuous "squircle" corner as .ins-screen-preview-shot, for
+     visual consistency between the preview modal and every card grid. */
+  corner-shape: squircle;
   overflow: hidden;
   background: #f5f5f5;
 }
@@ -2220,7 +2245,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 .ins-shot-panel .ins-card-shot {
   padding: 0;
   aspect-ratio: 282 / 611;
-  border-radius: 30px;
+  border-radius: 62px;
   background: transparent;
 }
 
@@ -2229,8 +2254,9 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 }
 
 .ins-shot-panel .ins-card-inset {
-  border: 1px solid rgba(11, 12, 14, 0.09);
-  border-radius: 30px;
+  border: 1px solid #eee;
+  border-radius: 62px;
+  corner-shape: squircle;
 }
 
 .ins-shot-panel .ins-card.is-selected .ins-card-inset {
@@ -2251,7 +2277,8 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: 24px;
+  border-radius: 62px;
+  corner-shape: squircle;
   overflow: hidden;
   background: #e5e5e5;
 }
@@ -2304,8 +2331,8 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
    pointer-events note below. */
 .ins-card-select-ring {
   position: absolute;
-  top: 26px;
-  left: 26px;
+  top: 16px;
+  left: 16px;
   z-index: 2;
   display: flex;
   align-items: center;
@@ -2320,6 +2347,14 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   pointer-events: none;
   cursor: pointer;
   transition: opacity var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease);
+}
+
+/* Explore page's AppCard grid only — its selection ring sits further in at
+   52px; ScreenCard's ring elsewhere (App Detail Screens tab, Screens
+   listing) stays at this rule's default 16px above. */
+.ins-explore-view .ins-card-select-ring {
+  top: 52px;
+  left: 52px;
 }
 
 /* Active state — stays visible and clickable without hovering, so a
@@ -2468,10 +2503,424 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   background: #4b4b4b;
 }
 
+/* Screen preview modal (Figma node 1163:51825, "screen-preview-modal") —
+   opened from a screen card in the Explore grid in place of navigating to
+   the full detail page. Renders inside .ins-search-overlay, the same
+   backdrop GlobalSearch's own modal uses. */
+.ins-screen-preview-modal {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  /* .ins-search-overlay already contributes its own 24px padding; this
+     accounts for that so the modal ends up 40px from the viewport edge in
+     total (24px overlay padding + 16px of centering slack from the extra
+     32px trimmed off each axis here), without changing the shared overlay
+     class other callers (GlobalSearch) also render behind. */
+  width: calc(100vw - 80px);
+  height: calc(100vh - 80px);
+}
+
+.ins-screen-preview-main,
+.ins-screen-preview-details {
+  background: #ffffff;
+  -webkit-backdrop-filter: blur(27.5px);
+  backdrop-filter: blur(27.5px);
+  border-radius: 24px;
+  overflow: hidden;
+}
+
+.ins-screen-preview-main {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ins-screen-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 76px;
+  padding: 0 16px 0 24px;
+  flex: none;
+}
+
+.ins-screen-preview-head-app {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.ins-screen-preview-head-logo {
+  border-radius: 10.4px;
+  flex: none;
+}
+
+.ins-screen-preview-head-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #121212;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ins-screen-preview-head-sep {
+  opacity: 0.5;
+}
+
+.ins-screen-preview-close {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: none;
+  border-radius: 9999px;
+  background: rgba(64, 64, 64, 0.06);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #141414;
+  cursor: pointer;
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-screen-preview-close:hover {
+  background: rgba(64, 64, 64, 0.12);
+}
+
+/* No background of its own — sits flush on .ins-screen-preview-main's own
+   surface, same as .ins-screen-preview-head does. */
+.ins-screen-preview-filmstrip-wrap {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+}
+
+.ins-screen-preview-filmstrip {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+.ins-screen-preview-filmstrip::-webkit-scrollbar {
+  display: none;
+}
+
+/* Figma's "single-screen" state (node 1163:53073, state=single-screen):
+   just the one screenshot, centered — vs. "multi-screen"'s full scrollable
+   row, which is .ins-screen-preview-filmstrip's own default. */
+.ins-screen-preview-filmstrip--single {
+  justify-content: center;
+  overflow-x: visible;
+}
+
+/* Height-constrained, width-auto: real screenshots vary in aspect ratio
+   more than Figma's own sample set did, so a fixed width *and* height
+   (Figma: 312×670) crops whichever screens don't happen to match that
+   ratio. Fixing the height and letting width follow each screen's own
+   aspect-ratio (set inline by Screenshot) shows the full screen, uncropped,
+   every time. */
+.ins-screen-preview-shot {
+  flex: none;
+  width: auto;
+  height: 100%;
+  max-height: 670px;
+  border: 1px solid #eee;
+  border-radius: 62px;
+  /* Plain border-radius is a constant-curvature circular arc — this is the
+     continuous, G2-smooth "squircle" corner iOS actually uses (visibly
+     rounder through the corner, flatter along the straight edges leading
+     into it). Unsupported browsers just keep the plain radius above; no
+     fallback needed. */
+  corner-shape: squircle;
+  overflow: hidden;
+}
+
+.ins-screen-preview-shot img {
+  /* Inline images (the default) reserve baseline descender space below
+     themselves — that's the hairline gap showing the border/background
+     through at the bottom edge. block removes it. */
+  display: block;
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.ins-screen-preview-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+}
+
+.ins-screen-preview-nav--prev {
+  left: 32px;
+}
+
+.ins-screen-preview-nav--next {
+  right: 32px;
+}
+
+/* .ins-card-control:disabled dims the whole button (background included) —
+   here only the arrow glyph itself should look disabled at the start/end
+   of the filmstrip, so the button's own background stays fully opaque. */
+.ins-screen-preview-nav:disabled {
+  opacity: 1;
+}
+
+.ins-screen-preview-nav:disabled img {
+  opacity: 0.4;
+}
+
+/* Matches Figma node 1163:50445 ("footer") exactly: the save/view-store
+   pair is the only child in normal flow, truly centered by the row's own
+   justify-content — the tag group and the show-all/more pair are
+   independently pinned via absolute positioning at the same left:24px /
+   right:32px offsets Figma uses, not derived from flex distribution. */
+.ins-screen-preview-foot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  border-radius: 0 0 24px 24px;
+  flex: none;
+}
+
+.ins-screen-preview-foot-tags {
+  position: absolute;
+  left: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ins-screen-preview-foot-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 20px;
+  border-radius: 100px;
+  background: rgba(64, 64, 64, 0.08);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  font-size: 16px;
+  font-weight: 500;
+  color: #141414;
+}
+
+.ins-screen-preview-foot-primary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ins-screen-preview-foot-secondary {
+  position: absolute;
+  right: 32px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ins-screen-preview-foot-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: auto;
+  padding: 14px 24px;
+  border-radius: 100px;
+  border: 1px solid #ccc;
+  background: transparent;
+  color: #141414;
+  font-size: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease), opacity var(--ins-fast) var(--ins-ease);
+}
+
+.ins-screen-preview-foot-btn:hover {
+  border-color: #b3b3b3;
+}
+
+.ins-screen-preview-foot-btn--save {
+  background: #000;
+  border-color: #000;
+  color: #fff;
+}
+
+.ins-screen-preview-foot-btn--save:hover {
+  opacity: 0.9;
+}
+
+.ins-screen-preview-foot-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 49px;
+  flex: none;
+  border-radius: 100px;
+  border: 1px solid #ccc;
+  background: transparent;
+  color: #141414;
+  cursor: pointer;
+  transition: border-color var(--ins-fast) var(--ins-ease);
+}
+
+.ins-screen-preview-foot-more:hover {
+  border-color: #b3b3b3;
+}
+
+@media (max-width: 640px) {
+  .ins-screen-preview-foot {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .ins-screen-preview-foot-tags,
+  .ins-screen-preview-foot-secondary {
+    position: static;
+    transform: none;
+    flex-wrap: wrap;
+  }
+}
+
+.ins-screen-preview-details {
+  flex: none;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Matches .ins-screen-preview-head's own height exactly, so the two panel
+   headers line up side by side instead of the details one running taller. */
+.ins-screen-preview-details-head {
+  display: flex;
+  align-items: center;
+  height: 76px;
+  padding: 0 16px 0 24px;
+  flex: none;
+}
+
+.ins-screen-preview-details-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  color: #141414;
+  line-height: 1;
+}
+
+/* All definition rows — including what used to be the separately-boxed
+   "Credit/Reuse/Captured" provenance group — are now direct children of
+   the body, flat, all sharing the exact same .ins-screen-preview-details-row
+   styling with no distinct grouping or gradient background. */
+.ins-screen-preview-details-body {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+/* Each row carries its own 10px vertical padding (matching Figma's
+   per-row py-10), which reads as unwanted top padding on the body as a
+   whole for the very first row ("App") — drop just that one row's top
+   half so the list starts flush under the header. */
+.ins-screen-preview-details-body > .ins-screen-preview-details-row:first-child {
+  padding-top: 0;
+}
+
+.ins-screen-preview-details-row {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+  width: 100%;
+  padding: 10px 20px;
+}
+
+.ins-screen-preview-details-term {
+  flex: none;
+  width: 90px;
+  font-size: 16px;
+  color: #8a8f9a;
+}
+
+.ins-screen-preview-details-value {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 16px;
+  color: #0b0c0e;
+}
+
+/* The four "linked" facts (App, Platform, Screen type, Industry) read as
+   dotted-underlined text in Figma, distinct from the plain values below
+   them (In recording, Style, Size, Credit, Reuse, Captured). */
+.ins-screen-preview-details-value--linked a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.ins-screen-preview-details-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ins-screen-preview-details-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border: 1px solid #ccc;
+  border-radius: 100px;
+  color: #6a5b5b;
+  font-size: 16px;
+  text-decoration: none;
+}
+
+@media (max-width: 900px) {
+  .ins-screen-preview-modal {
+    flex-direction: column;
+    width: calc(100vw - 32px);
+    height: calc(100vh - 32px);
+  }
+
+  .ins-screen-preview-details {
+    max-width: none;
+    flex: none;
+  }
+}
+
 /* Figma's "Section": a 48px mark beside a two-line text column (app name,
    then tagline), clear of the screenshot above it. */
 .ins-card-meta {
-  padding: 24px 0;
+  padding: 24px 16px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -3907,7 +4356,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   z-index: 1;
   height: var(--ins-header-h, 82px);
   margin: 0;
-  padding: 0 80px;
+  padding: 0 70px;
   background: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(16px);
   animation: insDockFade 420ms cubic-bezier(0.16, 1, 0.3, 1) 120ms backwards;
