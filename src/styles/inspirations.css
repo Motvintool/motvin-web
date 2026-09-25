@@ -927,7 +927,7 @@ body {
 
 .ins-main {
   width: 100%;
-  padding: 52px 80px 80px;
+  padding: 24px 80px 32px 80px;
 }
 
 .ins-pagehead {
@@ -1444,6 +1444,12 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   white-space: nowrap;
 }
 
+/* Outside-click dismiss target (see useDismiss in AppDetailView) — not a
+   real box, so its child stays a plain flex item of .ins-ftoolbar-right. */
+.ins-text-search-wrap {
+  display: contents;
+}
+
 /* "Text in Screenshot": an icon button that expands into an inline field in
    place, rather than opening a popover — there's nothing to pick from a
    list, just a query to type. */
@@ -1626,6 +1632,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   top: calc(100% + 6px);
   z-index: 45;
   width: 280px;
+  max-width: calc(100vw - 32px);
   background: #ffffff;
   border: 7px solid #F0F0F0;
   border-radius: 24px;
@@ -2334,6 +2341,10 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   transform: translateY(-1px) rotate(45deg);
 }
 
+/* Figma "Container (Explore Appshots)" (node 1014:9441) sizing/values —
+   139px tall, gradient 0 → 0.12, blur 16px — kept on their own layer (below)
+   rather than directly on this element, so the buttons/dots stay fully
+   opaque regardless of the fade. */
 .ins-card-hover-controls {
   position: absolute;
   right: 0;
@@ -2346,11 +2357,46 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   justify-content: center;
   gap: 48px;
   padding: 16px;
-  background: linear-gradient(to bottom, rgba(250, 250, 250, 0), rgba(250, 250, 250, 0.12));
-  backdrop-filter: blur(16px);
   opacity: 0;
-  transition: opacity var(--ins-fast) var(--ins-ease);
+  transform: translateY(12px);
+  transition: opacity 180ms var(--ins-ease), transform 180ms var(--ins-ease);
   pointer-events: none;
+  /* Without this, the browser only promotes this box (and its backdrop-filter
+     ::before) to its own compositor layer once the transition actually
+     starts — that promotion itself is the "jerk": the blur snapshot gets set
+     up on the animation's first frame instead of before it. Hinting ahead of
+     time makes the layer already exist when hover begins, so the transition
+     starts smooth immediately. */
+  will-change: opacity, transform;
+}
+
+/* The gradient strip, as its own layer behind the buttons/dots — kept off
+   the controls element itself so the buttons stay fully opaque rather than
+   picking up the strip's own semi-transparent gradient. Based on Figma node
+   1162:49485 ("Container (Explore Appshots)"): a transparent-to-solid-#fafafa
+   gradient — no blur, no mask, nothing else layered on it. */
+.ins-card-hover-controls::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: -1;
+  height: 330px;
+  /* No transform/transition of its own: .ins-card-hover-controls's own
+     translateY + opacity already move and fade its whole rendered box —
+     buttons, dots and this pseudo-element alike — as one composited layer,
+     so the gradient rises from the bottom in the exact same motion as the
+     buttons instead of running a separate, out-of-sync animation. */
+  /* This box's own bottom edge sits ~30px below the actual screenshot's
+     bottom edge (.ins-card-shot's padding forms the mat around it), so a
+     plain 0%-to-100% ramp across the full 370px only reaches ~90% opacity
+     by the time it gets to the screenshot's real bottom row — on a
+     dark/saturated screenshot that lingering 10% translucency still reads
+     as visible. Reaching solid #fafafa by 75% and holding it the rest of
+     the way guarantees the screenshot itself is fully covered well before
+     its bottom edge. */
+  background: linear-gradient(to bottom, #fafafa00 0%, #fafafa 75%, #fafafa 100%);
 }
 
 .ins-card:hover .ins-card-select-ring,
@@ -2358,6 +2404,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 .ins-card:hover .ins-card-hover-controls,
 .ins-card:has(:focus-visible) .ins-card-hover-controls {
   opacity: 1;
+  transform: translateY(0);
 }
 
 .ins-card:hover .ins-card-select-ring,
@@ -2374,7 +2421,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   flex: none;
   border: none;
   border-radius: 23.999px;
-  background: #f5f5f5;
+  background: #e5e5e5;
   color: #141414;
   cursor: pointer;
   /* .ins-card-hover-controls itself stays pointer-events: none so hovering
@@ -2388,8 +2435,13 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   background: #ececec;
 }
 
-.ins-card-control--prev {
-  color: rgba(20, 20, 20, 0.55);
+.ins-card-control:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ins-card-control:disabled:hover {
+  background: #e5e5e5;
 }
 
 .ins-card-dots {
@@ -3887,6 +3939,33 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 @media (max-width: 640px) {
   .ins-masthead-facts {
     gap: var(--ins-space-5);
+  }
+
+  /* At phone widths the tab list, category pill, text search and sort
+     together are wider than the screen — sharing one unwrapped flex line
+     squeezed the tab list itself down to 0px (a real bug: the app's own
+     navigation disappeared). Wrapping gives the tabs their own full-width
+     line first, with everything else flowing beneath it. */
+  .ins-tabbar-row {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+
+  .ins-tabbar-row.is-docked {
+    height: auto;
+    min-height: var(--ins-header-h, 82px);
+    padding: 12px 16px;
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+
+  .ins-tabbar--counted {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+
+  .ins-tabbar-logo {
+    margin-right: 10px;
   }
 }
 

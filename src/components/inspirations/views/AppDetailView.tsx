@@ -14,7 +14,14 @@ import { AppRating } from '../AppRating';
 import { useLibrary } from '../useLibrary';
 import { FloatCollectionBar } from '../FloatCollectionBar';
 import { EmptyState } from '../EmptyState';
-import { SortPill, useDismiss, useDockingRow, type SortOption } from '../FilterToolbar';
+import {
+  MENU_ITEM_SELECTOR,
+  onMenuKeyDown,
+  SortPill,
+  useDismiss,
+  useDockingRow,
+  type SortOption,
+} from '../FilterToolbar';
 import { buildTree, prune, FlowsBrowser, type Entry as FlowTreeEntry, type Node as FlowTreeNode } from '../FlowsBrowser';
 import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, CloseIcon, ExternalIcon, SearchIcon } from '../Icons';
 
@@ -76,6 +83,7 @@ function CheckboxFilterPill({
   const [query, setQuery] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const optionsRef = useRef<HTMLDivElement>(null);
   useDismiss(open, () => setOpen(false), ref);
 
   useEffect(() => {
@@ -138,9 +146,26 @@ function CheckboxFilterPill({
               onChange={(e) => setQuery(e.target.value)}
               placeholder={`Search ${label.toLowerCase()}...`}
               aria-label={`Search ${label.toLowerCase()}`}
+              onKeyDown={(e) => {
+                // Search stays focused first (so typing works immediately),
+                // but ArrowDown still hands off into the list, same as a
+                // combobox — otherwise arrow keys would just move the
+                // cursor in the text field instead of navigating options.
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  optionsRef.current?.querySelector<HTMLElement>(MENU_ITEM_SELECTOR)?.focus();
+                }
+              }}
             />
           </div>
-          <div className="ins-uielements-options" role="listbox" aria-label={label} aria-multiselectable="true">
+          <div
+            ref={optionsRef}
+            className="ins-uielements-options"
+            role="listbox"
+            aria-label={label}
+            aria-multiselectable="true"
+            onKeyDown={onMenuKeyDown}
+          >
             {filtered.length === 0 ? (
               <p className="ins-popover-empty">No matches</p>
             ) : (
@@ -200,6 +225,7 @@ function FlowTreePill({
   const [pending, setPending] = useState<string[]>(selected);
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const optionsRef = useRef<HTMLDivElement>(null);
   useDismiss(open, () => setOpen(false), ref);
 
   useEffect(() => {
@@ -260,7 +286,13 @@ function FlowTreePill({
     return (
       <li key={flow.id} className="ins-flowtree-node" style={{ '--depth': node.depth } as React.CSSProperties}>
         <div className={`ins-flowtree-row ${checked ? 'is-active' : ''} ${node.depth === 0 ? 'is-root' : ''}`}>
-          <button type="button" className="ins-flowtree-name ins-flowtree-checkbox-name" onClick={() => togglePending(flow.id)}>
+          <button
+            type="button"
+            role="option"
+            aria-selected={checked}
+            className="ins-flowtree-name ins-flowtree-checkbox-name"
+            onClick={() => togglePending(flow.id)}
+          >
             <span className={`ins-uielements-checkbox ${checked ? 'is-checked' : ''}`} aria-hidden="true">
               {checked && <CheckIcon size={12} strokeWidth={3} />}
             </span>
@@ -288,6 +320,7 @@ function FlowTreePill({
                   <div className="ins-flowtree-row is-leaf">
                     <Link
                       href={INSPIRATIONS_ROUTES.screen(item.screen!)}
+                      role="menuitem"
                       className="ins-flowtree-name ins-flowtree-leaf"
                       onClick={() => setOpen(false)}
                     >
@@ -352,9 +385,15 @@ function FlowTreePill({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search flows..."
               aria-label="Search flows"
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  optionsRef.current?.querySelector<HTMLElement>(MENU_ITEM_SELECTOR)?.focus();
+                }
+              }}
             />
           </div>
-          <div className="ins-uielements-options">
+          <div className="ins-uielements-options" ref={optionsRef} onKeyDown={onMenuKeyDown}>
             {visible.length === 0 ? (
               <p className="ins-popover-empty">No matching flows</p>
             ) : (
@@ -407,6 +446,7 @@ export function AppDetailView({
   const [textSearchOpen, setTextSearchOpen] = useState(false);
   const [textQuery, setTextQuery] = useState('');
   const [debouncedTextQuery, setDebouncedTextQuery] = useState('');
+  const textSearchRef = useRef<HTMLDivElement>(null);
   const saved = collectionsContaining('app', app.id).length > 0;
 
   // Same debounced hand-off as GlobalSearch's own suggestions — the OCR pass
@@ -416,6 +456,18 @@ export function AppDetailView({
     const t = window.setTimeout(() => setDebouncedTextQuery(textQuery), 400);
     return () => window.clearTimeout(t);
   }, [textQuery]);
+
+  // Collapses back to the icon on an outside click, same as every other
+  // pill's popover — but only when empty: a typed query is an applied
+  // filter, and hiding the one control that shows (and clears) it would
+  // strand the grid in a filtered state with no visible way back.
+  useDismiss(
+    textSearchOpen,
+    () => {
+      if (!textQuery.trim()) setTextSearchOpen(false);
+    },
+    textSearchRef,
+  );
 
   const textActive = debouncedTextQuery.trim().length > 0;
   const { data: textSearchData } = useAsync(
@@ -595,54 +647,57 @@ export function AppDetailView({
 
       {/* Right-aligned so the tab row carries both the navigation and the
           sort control for whichever screen grid is on view — same grouping
-          and gap the filter toolbar uses for its own right edge. */}
-      <div className="ins-ftoolbar-right">
-        {textSearchOpen ? (
-          <div className="ins-text-search">
-            <SearchIcon size={16} />
-            <input
-              type="text"
-              autoFocus
-              value={textQuery}
-              onChange={(e) => setTextQuery(e.target.value)}
-              placeholder="Search text in screenshot..."
-              aria-label="Search text in screenshot"
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
+          and gap the filter toolbar uses for its own right edge. The Flows
+          tab shows its own browser (FlowsBrowser), not a ScreenGrid —
+          neither the text search nor the sort control does anything there,
+          so neither renders there. */}
+      {tab !== 'flows' && (
+        <div className="ins-ftoolbar-right">
+          <div className="ins-text-search-wrap" ref={textSearchRef}>
+          {textSearchOpen ? (
+            <div className="ins-text-search">
+              <SearchIcon size={16} />
+              <input
+                type="text"
+                autoFocus
+                value={textQuery}
+                onChange={(e) => setTextQuery(e.target.value)}
+                placeholder="Search text in screenshot..."
+                aria-label="Search text in screenshot"
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setTextSearchOpen(false);
+                    setTextQuery('');
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="ins-text-search-close"
+                aria-label="Close text search"
+                onClick={() => {
                   setTextSearchOpen(false);
                   setTextQuery('');
-                }
-              }}
-            />
+                }}
+              >
+                <CloseIcon size={12} />
+              </button>
+            </div>
+          ) : (
             <button
               type="button"
-              className="ins-text-search-close"
-              aria-label="Close text search"
-              onClick={() => {
-                setTextSearchOpen(false);
-                setTextQuery('');
-              }}
+              className="ins-text-search-trigger"
+              aria-label="Search text in screenshot"
+              onClick={() => setTextSearchOpen(true)}
             >
-              <CloseIcon size={12} />
+              <img alt="" width={20} height={20} src="/ASSET/Icons/Motvin/text-in-screenshot.svg" />
             </button>
+          )}
           </div>
-        ) : (
-          <button
-            type="button"
-            className="ins-text-search-trigger"
-            aria-label="Search text in screenshot"
-            onClick={() => setTextSearchOpen(true)}
-          >
-            <img alt="" width={20} height={20} src="/ASSET/Icons/Motvin/text-in-screenshot.svg" />
-          </button>
-        )}
-        {(tab === 'screens' || tab === 'ui-elements' || tab === 'patterns') && (
-          <>
-            <span className="ins-ftoolbar-divider" aria-hidden="true" />
-            <SortPill value={sort} options={DETAIL_SORTS} onChange={setSort} />
-          </>
-        )}
-      </div>
+          <span className="ins-ftoolbar-divider" aria-hidden="true" />
+          <SortPill value={sort} options={DETAIL_SORTS} onChange={setSort} />
+        </div>
+      )}
     </div>
   );
 

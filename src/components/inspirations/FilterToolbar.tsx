@@ -72,10 +72,10 @@ export function useDismiss(open: boolean, close: () => void, ref: React.RefObjec
  * what's missing is getting keyboard focus INTO the list and moving it
  * around, which these two pieces add uniformly across all three menus.
  */
-const MENU_ITEM_SELECTOR = '[role="option"], [role="menuitem"]';
+export const MENU_ITEM_SELECTOR = '[role="option"], [role="menuitem"]';
 
 /** Moves focus to the selected option (or the first) the instant a menu opens. */
-function useAutoFocusMenu(open: boolean, ref: React.RefObject<HTMLDivElement | null>) {
+export function useAutoFocusMenu(open: boolean, ref: React.RefObject<HTMLDivElement | null>) {
   useEffect(() => {
     if (!open || !ref.current) return;
     const container = ref.current;
@@ -86,7 +86,7 @@ function useAutoFocusMenu(open: boolean, ref: React.RefObject<HTMLDivElement | n
 }
 
 /** Arrow/Home/End roving focus among an open menu's options. */
-function onMenuKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+export function onMenuKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
   const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR));
   if (items.length === 0) return;
   const at = items.indexOf(document.activeElement as HTMLElement);
@@ -107,7 +107,7 @@ function onMenuKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
 
 /** ArrowDown on a closed trigger opens its menu; useAutoFocusMenu takes it
  * from there once the popover mounts. */
-function onTriggerKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, open: boolean, setOpen: (open: boolean) => void) {
+export function onTriggerKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, open: boolean, setOpen: (open: boolean) => void) {
   if (e.key === 'ArrowDown' && !open) {
     e.preventDefault();
     setOpen(true);

@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { App, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
-import { ArrowLeftIcon, ArrowRightIcon } from './Icons';
 import { Screenshot } from './Screenshot';
 import { useSiblingCycle } from './useSiblingCycle';
 
@@ -80,8 +79,8 @@ export function AppCard({
         </div>
         {dotCount > 1 && (
           <div className="ins-card-hover-controls">
-            <button type="button" className="ins-card-control ins-card-control--prev" aria-label="Previous screen" onClick={step(-1)}>
-              <ArrowLeftIcon size={24} />
+            <button type="button" className="ins-card-control ins-card-control--prev" aria-label="Previous screen" onClick={step(-1)} disabled={activeIndex === 0}>
+              <img src="/ASSET/Icons/Motvin/previous-arrow.svg" alt="" width={24} height={18} />
             </button>
             <span className="ins-card-dots">
               {previewScreens!.map((s, i) => (
@@ -89,7 +88,7 @@ export function AppCard({
               ))}
             </span>
             <button type="button" className="ins-card-control" aria-label="Next screen" onClick={step(1)}>
-              <ArrowRightIcon size={24} />
+              <img src="/ASSET/Icons/Motvin/next-arrow.svg" alt="" width={24} height={18} />
             </button>
           </div>
         )}

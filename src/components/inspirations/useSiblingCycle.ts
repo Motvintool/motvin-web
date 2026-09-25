@@ -6,10 +6,10 @@ import { EMPTY_FILTERS } from '@/lib/inspirations/filters';
 import type { Screen } from '@/lib/inspirations/types';
 
 /** Dots get unreadable past a handful — Mobbin's own cards cap similarly. */
-const MAX_PREVIEW_SCREENS = 5;
+const MAX_PREVIEW_SCREENS = 4;
 /** Short delay before fetching siblings, so a cursor passing over the grid
  * on its way elsewhere doesn't fire a request for every card it crosses. */
-const HOVER_INTENT_MS = 150;
+const HOVER_INTENT_MS = 60;
 
 /**
  * Other screens from the same app, fetched once per app and reused by every
