@@ -1303,13 +1303,14 @@ body {
   transition: opacity 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
+body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabbar-row) {
   pointer-events: none;
   visibility: hidden;
   animation: insHeaderContentFadeOut 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.ins-header-content > .ins-ftoolbar {
+.ins-header-content > .ins-ftoolbar,
+.ins-header-content > .ins-tabbar-row {
   pointer-events: auto;
 }
 
@@ -1379,8 +1380,14 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   width: 1px;
   height: 26px;
   background: #d6d8dd;
-  margin: 0 8px;
+  margin: 0 24px;
   flex: none;
+}
+
+/* Tighter than the tab row's own divider — this one only separates the two
+   right-edge controls (text search, sort), not whole sections of the row. */
+.ins-ftoolbar-right .ins-ftoolbar-divider {
+  margin: 0 8px;
 }
 
 .ins-ftoolbar-context {
@@ -1435,6 +1442,76 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   font-weight: 400;
   line-height: normal;
   white-space: nowrap;
+}
+
+/* "Text in Screenshot": an icon button that expands into an inline field in
+   place, rather than opening a popover — there's nothing to pick from a
+   list, just a query to type. */
+.ins-text-search-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  color: var(--ins-muted);
+  flex: none;
+  transition: background var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease);
+}
+
+.ins-text-search-trigger:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--ins-text);
+}
+
+.ins-text-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 12px 0 16px;
+  border-radius: var(--ins-radius-pill);
+  border: 1px solid var(--ins-border);
+  background: var(--ins-card);
+  color: var(--ins-muted);
+}
+
+.ins-text-search input {
+  min-width: 200px;
+  border: 0;
+  outline: none;
+  background: none;
+  font-family: var(--font-outfit), sans-serif;
+  font-size: 14px;
+  color: var(--ins-text);
+}
+
+.ins-text-search input::placeholder {
+  color: var(--ins-muted);
+}
+
+/* Overrides the app-wide :focus-visible ring (inspirations.css:234) — the
+   pill's own border already shows where it is, same as the UI Elements
+   menu's own search field. */
+.ins-text-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.ins-text-search-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  color: var(--ins-muted);
+  flex: none;
+}
+
+.ins-text-search-close:hover {
+  color: var(--ins-text);
 }
 
 .ins-fsort {
@@ -1536,6 +1613,185 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   margin-left: auto;
   color: var(--ins-muted);
   font-size: 16px;
+}
+
+/* The UI Elements pill's own menu (Figma: "ui-elements-menu") — a search box
+   fixed above a scrolling checkbox list, rather than the plain scrolling
+   `.ins-popover.ins-fmenu` every other dimension uses. Same container look
+   (border, radius, shadow) as `.ins-popover`, but with the padding moved onto
+   its two children instead of the container itself, so the search row's
+   bottom border can run edge-to-edge. */
+.ins-uielements-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 45;
+  width: 280px;
+  background: #ffffff;
+  border: 7px solid #F0F0F0;
+  border-radius: 24px;
+  box-shadow: 0px 12px 80px 0px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: insPop 140ms var(--ins-ease);
+}
+
+.ins-uielements-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #eaeaea;
+  color: #7d7d7d;
+  flex: none;
+  transition: gap 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* Same collapse-on-type as .ins-search-modal-field's icon (this file, "is-
+   searching"): once there's text to show, the icon isn't adding information
+   any more, so it makes room for the query instead of just sitting there. */
+.ins-uielements-search svg {
+  flex: none;
+  width: 18px;
+  opacity: 1;
+  transform: translateX(0);
+  transition: width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 200ms ease-out, transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.ins-uielements-menu.is-searching .ins-uielements-search {
+  gap: 0;
+}
+
+.ins-uielements-menu.is-searching .ins-uielements-search svg {
+  width: 0;
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+.ins-uielements-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  font-family: var(--font-outfit), sans-serif;
+  font-size: 16px;
+  color: #000;
+}
+
+/* Overrides the app-wide :focus-visible ring (inspirations.css:234) — this
+   input's own border-bottom already shows where it is, and the ring read as
+   an error state against the menu's plain white card. */
+.ins-uielements-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.ins-uielements-search input::placeholder {
+  color: #7d7d7d;
+}
+
+.ins-uielements-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 6px;
+  max-height: 236px;
+  overflow-y: auto;
+}
+
+.ins-uielements-options::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ins-uielements-options::-webkit-scrollbar-track {
+  margin-block: 16px;
+}
+
+.ins-uielements-options::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+.ins-uielements-item-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.ins-uielements-checkbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: #ebebeb;
+  border: 1px solid #ebebeb;
+  color: #fff;
+  flex: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ins-uielements-checkbox.is-checked {
+  background: #000;
+  border-color: #000;
+}
+
+/* The Screens tab's own flow-filter pill menu reuses the exact same popover
+   chrome and search styling as the UI Elements/Patterns pills
+   (.ins-uielements-menu/-search/-options) — only the list inside
+   (.ins-flowtree) and its own footer (Clear/Apply) are specific to this
+   pill. The footer sits outside .ins-uielements-options' own scroll area,
+   since a multi-select needs to stay open across several checks — selecting
+   doesn't filter until Apply, so the footer has to stay reachable no matter
+   how far the tree is scrolled. */
+
+/* The checkbox lives inside the same button that used to just be the name,
+   so picking a flow (root or nested) toggles it into the pending selection
+   instead of jumping straight to filtering. */
+.ins-flowtree-checkbox-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ins-flowtree-menu-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #eaeaea;
+  flex: none;
+}
+
+.ins-flowtree-clear {
+  padding: 8px 10px;
+  border-radius: 999px;
+  color: var(--ins-muted);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.ins-flowtree-clear:hover {
+  color: var(--ins-text);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.ins-flowtree-apply {
+  padding: 9px 18px;
+  border-radius: 999px;
+  background: #000;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ins-flowtree-apply:hover {
+  opacity: 0.85;
 }
 
 .ins-badge {
@@ -3569,17 +3825,48 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   color: var(--ins-text);
 }
 
+/* Wraps the counted tabbar so the tab list's own overflow-x:auto (needed for
+   narrow widths) doesn't clip the Categories pill's popover: that container's
+   overflow-x implies overflow-y: auto too, which cropped the dropdown instead
+   of letting it float over the page. Only the tab buttons scroll here; the
+   divider, pill and "Showing N" sit outside that scroller as plain siblings,
+   so their popover is never inside a clipping ancestor. */
+.ins-tabbar-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--ins-space-5);
+}
+
+.ins-tabbar-logo {
+  margin-right: 20px;
+}
+
+/* Docks into the header on scroll — same mechanism and look as
+   .ins-ftoolbar's own dock (see useDockingRow and the .ins-ftoolbar rules
+   above), just wrapping the app-detail tabbar instead of the filter toolbar. */
+.ins-tabbar-row.is-docked-placeholder {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.ins-tabbar-row.is-docked {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  height: var(--ins-header-h, 82px);
+  margin: 0;
+  padding: 0 80px;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  animation: insDockFade 420ms cubic-bezier(0.16, 1, 0.3, 1) 120ms backwards;
+}
+
 /* Pushes the "Showing N" label to the far end of the tab row. */
 .ins-tabbar--counted {
   justify-content: flex-start;
-}
-
-.ins-tabbar-showing {
-  margin: 0 0 0 auto;
-  padding-left: var(--ins-space-4);
-  font-size: var(--ins-type-meta);
-  color: var(--ins-muted);
-  white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-bottom: 0;
 }
 
 @media (max-width: 780px) {
@@ -3600,10 +3887,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
 @media (max-width: 640px) {
   .ins-masthead-facts {
     gap: var(--ins-space-5);
-  }
-
-  .ins-tabbar-showing {
-    display: none;
   }
 }
 
@@ -6399,9 +6682,14 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   gap: 2px;
 }
 
+/* Every row's own expand/collapse arrow — root or nested — sits in the
+   row's far corner rather than crowding the checkbox and name; a row with
+   nothing but the name (a leaf, or a childless flow) is unaffected, since
+   space-between with a single child just leaves it at the start. */
 .ins-flowtree-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   padding-left: calc(var(--depth, 0) * 24px);
   border-radius: var(--ins-radius);
@@ -6481,8 +6769,3 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar) {
   color: var(--ins-text);
 }
 
-/* A child flow reads as a heading among the leaves around it. */
-.ins-flowtree-children .ins-flowtree-row:not(.is-leaf):not(.is-root) .ins-flowtree-name {
-  font-weight: 600;
-  color: var(--ins-sub);
-}

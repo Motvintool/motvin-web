@@ -48,7 +48,7 @@ export function isWebPlatform(platforms: string[]): boolean {
 
 type Option = { value: string; label: string };
 
-function useDismiss(open: boolean, close: () => void, ref: React.RefObject<HTMLDivElement | null>) {
+export function useDismiss(open: boolean, close: () => void, ref: React.RefObject<HTMLDivElement | null>) {
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
@@ -374,49 +374,22 @@ export function SortPill<S extends string>({
 }
 
 /**
- * The row itself: dimension pills on the left, "Showing N <unit>s" and any
- * `right` control (usually a SortPill) on the right edge. Pages whose
- * dimensions aren't ScreenFilters (Flows) compose this directly.
+ * Mobbin's dock: once a row scrolls up to meet the header, it moves INTO the
+ * header bar — the header's own content (logo, search, nav) fades out and
+ * the toolbar fades in where it was; scrolling back restores both. The
+ * anchor stays in flow holding the row's height so the page never jumps, and
+ * is also the scroll measurement target. Measured on scroll rather than via
+ * IntersectionObserver, whose callbacks stall in embedded webviews. Shared
+ * by every dockable row (ToolbarRow here, the app-detail tabbar row) so the
+ * scroll-tracking and portal target are computed once, the same way,
+ * everywhere it's used.
  */
-export function ToolbarRow({
-  children,
-  total,
-  unit = 'screen',
-  right,
-}: {
-  children: ReactNode;
-  total: number | null;
-  unit?: string;
-  right?: ReactNode;
-}) {
-  // Mobbin's dock: once the row scrolls up to meet the header, it moves INTO
-  // the header bar — the header's own content (logo, search, nav) fades out
-  // and the toolbar fades in where it was; scrolling back restores both. The
-  // anchor stays in flow holding the row's height so the gallery never jumps,
-  // and is also the scroll measurement target. Measured on scroll rather than
-  // via IntersectionObserver, whose callbacks stall in embedded webviews.
+export function useDockingRow() {
   const [docked, setDocked] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const inFlowRowHeightRef = useRef(0);
   const dockedRef = useRef(false);
-
-  // The docked bar's Apps/Web switcher — Mobbin's top-level split. "Web" sets
-  // ?platform=web (and the Platform pill hides, web having no sub-platforms);
-  // "Apps" clears it back to the mobile default, where the Platform pill
-  // offers iOS/Android.
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const activePlatforms = (searchParams.get('platform') ?? '').split(',').filter(Boolean);
-  const webMode = isWebPlatform(activePlatforms);
-  const setPlatformParam = (value: string | null) => {
-    const sp = new URLSearchParams(searchParams.toString());
-    if (value) sp.set('platform', value);
-    else sp.delete('platform');
-    const qs = sp.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  };
 
   useEffect(() => {
     const anchor = anchorRef.current;
@@ -468,6 +441,44 @@ export function ToolbarRow({
       document.body.classList.remove('ins-toolbar-docked');
     };
   }, [docked]);
+
+  return { docked, anchorRef, rowRef, headerContent };
+}
+
+/**
+ * The row itself: dimension pills on the left, "Showing N <unit>s" and any
+ * `right` control (usually a SortPill) on the right edge. Pages whose
+ * dimensions aren't ScreenFilters (Flows) compose this directly.
+ */
+export function ToolbarRow({
+  children,
+  total,
+  unit = 'screen',
+  right,
+}: {
+  children: ReactNode;
+  total: number | null;
+  unit?: string;
+  right?: ReactNode;
+}) {
+  const { docked, anchorRef, rowRef, headerContent } = useDockingRow();
+
+  // The docked bar's Apps/Web switcher — Mobbin's top-level split. "Web" sets
+  // ?platform=web (and the Platform pill hides, web having no sub-platforms);
+  // "Apps" clears it back to the mobile default, where the Platform pill
+  // offers iOS/Android.
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const activePlatforms = (searchParams.get('platform') ?? '').split(',').filter(Boolean);
+  const webMode = isWebPlatform(activePlatforms);
+  const setPlatformParam = (value: string | null) => {
+    const sp = new URLSearchParams(searchParams.toString());
+    if (value) sp.set('platform', value);
+    else sp.delete('platform');
+    const qs = sp.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
 
   const toolbar = (inHeader = false) => (
     <div

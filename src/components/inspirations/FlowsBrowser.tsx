@@ -26,16 +26,16 @@ import { Screenshot } from './Screenshot';
  * of them on every click works against that.
  */
 
-type Entry = { flow: Flow; screens: Screen[] };
+export type Entry = { flow: Flow; screens: Screen[] };
 
-type Node = { entry: Entry; children: Node[]; depth: number };
+export type Node = { entry: Entry; children: Node[]; depth: number };
 
 /**
  * Nests flows by `parentId`, keeping the order they were recorded in. A parent
  * that is missing from the list leaves its children at the top level rather
  * than losing them.
  */
-function buildTree(entries: Entry[]): Node[] {
+export function buildTree(entries: Entry[]): Node[] {
   const byId = new Map(entries.map((entry) => [entry.flow.id, entry]));
   const childrenOf = new Map<string | null, Entry[]>();
   for (const entry of entries) {
@@ -56,7 +56,7 @@ function flatten(nodes: Node[]): Node[] {
 }
 
 /** Keeps the nodes that match and every ancestor of a match, so a hit is never orphaned. */
-function prune(nodes: Node[], matches: (entry: Entry) => boolean): Node[] {
+export function prune(nodes: Node[], matches: (entry: Entry) => boolean): Node[] {
   return nodes
     .map((node) => {
       const children = prune(node.children, matches);
