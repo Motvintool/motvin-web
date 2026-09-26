@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useRef, useState, type DragEvent } from 'react';
 import { adminApi } from '@/lib/inspirations/admin';
 import { inspirationsApi, invalidateInspirationsCache } from '@/lib/inspirations/api';
@@ -8,6 +9,7 @@ import { fineTypeLabel, screenStateLabel } from '@/lib/inspirations/taxonomy';
 import { getIdToken } from '@/lib/firebase/auth';
 import type { IngestEvent, IngestResult, IngestScreen } from '@/app/api/crawler/ingest/route';
 import { CheckIcon, ExternalIcon, UploadIcon } from '../Icons';
+import { SCREEN_PARAM } from '../ScreenPreviewModal';
 
 /**
  * Turn a screen recording into screens. One action, no form.
@@ -437,8 +439,15 @@ function IngestSummary({
 function IngestShot({ screen, index }: { screen: IngestScreen; index: number }) {
   const src = inspirationsApi.mediaUrl(screen.url);
   const states = screen.states.filter((v) => v !== 'keyboard');
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const screenHref = (() => {
+    const sp = new URLSearchParams(searchParams.toString());
+    sp.set(SCREEN_PARAM, screen.screenId);
+    return `${pathname}?${sp.toString()}`;
+  })();
   return (
-    <Link href={`/inspirations/screen/${encodeURIComponent(screen.screenId)}`} className="ins-ingest-shot" title={screen.name}>
+    <Link href={screenHref} scroll={false} className="ins-ingest-shot" title={screen.name}>
       <span className="ins-ingest-shot-img">
         {src && <img src={src} alt="" loading="lazy" />}
         <span className="ins-ingest-shot-num">{index + 1}</span>

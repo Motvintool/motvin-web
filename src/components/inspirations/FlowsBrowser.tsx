@@ -4,10 +4,9 @@ import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { FLOW_PARAM } from './FlowPreview';
-import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { App, Flow, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
-import { ChevronDownIcon, PlayIcon, SearchIcon } from './Icons';
+import { ChevronDownIcon, PlayOutlineIcon, SearchIcon } from './Icons';
 import { Screenshot } from './Screenshot';
 
 /**
@@ -70,6 +69,7 @@ export function FlowsBrowser({ entries, apps }: { entries: Entry[]; apps: Map<st
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const params = useSearchParams();
 
   const tree = useMemo(() => buildTree(entries), [entries]);
 
@@ -146,7 +146,15 @@ export function FlowsBrowser({ entries, apps }: { entries: Entry[]; apps: Map<st
               ) : (
                 <li key={item.screen!.id} className="ins-flowtree-node" style={{ '--depth': node.depth + 1 } as React.CSSProperties}>
                   <div className="ins-flowtree-row is-leaf">
-                    <Link href={INSPIRATIONS_ROUTES.screen(item.screen!)} className="ins-flowtree-name ins-flowtree-leaf">
+                    <Link
+                      href={(() => {
+                        const sp = new URLSearchParams(params.toString());
+                        sp.set(FLOW_PARAM, flow.id);
+                        return `?${sp.toString()}`;
+                      })()}
+                      scroll={false}
+                      className="ins-flowtree-name ins-flowtree-leaf"
+                    >
                       {item.screen!.name}
                     </Link>
                   </div>
@@ -163,7 +171,7 @@ export function FlowsBrowser({ entries, apps }: { entries: Entry[]; apps: Map<st
     <div className="ins-flows-layout">
       <aside className="ins-flows-nav" aria-label="Flows">
         <div className="ins-flows-search">
-          <SearchIcon size={14} className="ins-flows-search-icon" />
+          <SearchIcon size={20} className="ins-flows-search-icon" />
           <input
             type="search"
             className="ins-flows-search-input"
@@ -231,44 +239,43 @@ function FlowRow({
   })();
 
   return (
-    <div ref={registerRef} className={`ins-flowrow ${active ? 'is-active' : ''}`}>
-      <div className="ins-flowrow-strip">
-        {screens.map((screen, index) => (
-          <Link
-            key={screen.id}
-            href={href}
-            scroll={false}
-            className="ins-flowrow-shot"
-            aria-label={`Step ${index + 1} of the ${flow.name} flow`}
-          >
-            <Screenshot screen={screen} />
-            <span className="ins-flowrow-step">{index + 1}</span>
-          </Link>
-        ))}
-        {screens.length === 0 && (
-          <p className="ins-muted ins-flowrow-missing">
-            This flow&rsquo;s screens are not published — check the licence and the build report.
-          </p>
-        )}
-      </div>
-
-      <div className="ins-flowrow-meta">
-        <Link href={href} scroll={false} className="ins-flowrow-title">
-          <span className="ins-flowrow-play" aria-hidden>
-            <PlayIcon size={13} />
+    <div ref={registerRef} className={`ins-flows-row ${active ? 'is-active' : ''}`}>
+      <div className="ins-flows-row-meta">
+        <Link href={href} scroll={false} className="ins-flows-row-title">
+          <span className="ins-flows-row-play" aria-hidden>
+            <PlayOutlineIcon size={16} />
           </span>
-          <span>
-            <span className="ins-flowrow-name">
-              {parent && <span className="ins-flowrow-parent">{parent.name} › </span>}
+          <span className="ins-flows-row-text">
+            <span className="ins-flows-row-name">
+              {parent && <span className="ins-flows-row-parent">{parent.name} › </span>}
               {flow.name}
             </span>
-            <span className="ins-flowrow-sub">
+            <span className="ins-flows-row-sub">
               {flow.screenIds.length} screen{flow.screenIds.length === 1 ? '' : 's'}
               {app ? ` · ${app.name}` : ''}
             </span>
           </span>
         </Link>
-        {app && <AppLogo app={app} size={26} />}
+        {app && <AppLogo app={app} size={40} className="ins-flows-row-logo" />}
+      </div>
+
+      <div className="ins-flows-row-strip">
+        {screens.map((screen, index) => (
+          <Link
+            key={screen.id}
+            href={href}
+            scroll={false}
+            className="ins-flows-row-shot"
+            aria-label={`Step ${index + 1} of the ${flow.name} flow`}
+          >
+            <Screenshot screen={screen} />
+          </Link>
+        ))}
+        {screens.length === 0 && (
+          <p className="ins-muted ins-flows-row-missing">
+            This flow&rsquo;s screens are not published — check the licence and the build report.
+          </p>
+        )}
       </div>
     </div>
   );

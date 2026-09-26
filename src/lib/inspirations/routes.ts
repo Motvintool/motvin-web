@@ -1,4 +1,4 @@
-import type { App, Flow, Pattern, Screen } from './types';
+import type { App, Pattern } from './types';
 
 /** Every Inspirations URL in one place so links never drift. */
 export const INSPIRATIONS_ROUTES = {
@@ -19,8 +19,6 @@ export const INSPIRATIONS_ROUTES = {
   collections: '/inspirations/collections',
   admin: '/inspirations/admin',
   app: (app: Pick<App, 'slug'>) => `/inspirations/app/${app.slug}`,
-  screen: (screen: Pick<Screen, 'id'>) => `/inspirations/screen/${screen.id}`,
-  flow: (flow: Pick<Flow, 'id'>) => `/inspirations/flow/${flow.id}`,
   pattern: (pattern: Pick<Pattern, 'slug'>) => `/inspirations/pattern/${pattern.slug}`,
   searchFor: (query: string, mode?: 'text') => `/inspirations/search?q=${encodeURIComponent(query)}${mode === 'text' ? '&mode=text' : ''}`,
   /** Hand-off into the existing Motvin icon library. */

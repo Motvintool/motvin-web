@@ -5,7 +5,6 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
-import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { elementLabel, INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { App, ElementKind, Flow, Pattern, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from '../AppLogo';
@@ -24,6 +23,7 @@ import {
 } from '../FilterToolbar';
 import { buildTree, prune, FlowsBrowser, type Entry as FlowTreeEntry, type Node as FlowTreeNode } from '../FlowsBrowser';
 import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, CloseIcon, ExternalIcon, SearchIcon } from '../Icons';
+import { SCREEN_PARAM } from '../ScreenPreviewModal';
 
 import { ScreenGrid } from '../ScreenGrid';
 import { ScreenGridSkeleton } from '../Skeletons';
@@ -223,6 +223,8 @@ function FlowTreePill({
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<string[]>(selected);
+  const params = useSearchParams();
+  const pathname = usePathname();
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
@@ -319,7 +321,12 @@ function FlowTreePill({
                 <li key={item.screen!.id} className="ins-flowtree-node" style={{ '--depth': node.depth + 1 } as React.CSSProperties}>
                   <div className="ins-flowtree-row is-leaf">
                     <Link
-                      href={INSPIRATIONS_ROUTES.screen(item.screen!)}
+                      href={(() => {
+                        const sp = new URLSearchParams(params.toString());
+                        sp.set(SCREEN_PARAM, item.screen!.id);
+                        return `${pathname}?${sp.toString()}`;
+                      })()}
+                      scroll={false}
                       role="menuitem"
                       className="ins-flowtree-name ins-flowtree-leaf"
                       onClick={() => setOpen(false)}

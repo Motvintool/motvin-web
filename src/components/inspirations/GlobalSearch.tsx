@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { EMPTY_FILTERS } from '@/lib/inspirations/filters';
@@ -10,7 +10,9 @@ import { suggestQueries, type SearchSuggestion } from '@/lib/inspirations/search
 import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { App, Flow, Industry, Platform, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
+import { FLOW_PARAM } from './FlowPreview';
 import { AndroidIcon, AppleIcon, CloseIcon, SearchIcon, WebIcon } from './Icons';
+import { SCREEN_PARAM } from './ScreenPreviewModal';
 
 const FIGMA_APP_ART = '/ASSET/search-modal/figma-02.png';
 /** Lives under the shared Motvin icon set (`/ASSET/Icons/Motvin/`), not
@@ -91,6 +93,22 @@ function loadRecentSearches(): RecentSearch[] {
 export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?: boolean; className?: string }) {
   const router = useRouter();
   const params = useSearchParams();
+  const pathname = usePathname();
+  /** Opens a screen in place via `?screen=<id>` (see SCREEN_PARAM in
+   * ScreenPreviewModal.tsx) rather than navigating to a standalone page, so
+   * picking a result doesn't leave whatever page the search was opened from. */
+  const screenPreviewHref = (screen: Pick<Screen, 'id'>) => {
+    const sp = new URLSearchParams(params.toString());
+    sp.set(SCREEN_PARAM, screen.id);
+    return `${pathname}?${sp.toString()}`;
+  };
+  /** Same, for a flow (see FLOW_PARAM in FlowPreview.tsx) — flows no longer
+   * have a standalone page, only this overlay. */
+  const flowPreviewHref = (flow: Pick<Flow, 'id'>) => {
+    const sp = new URLSearchParams(params.toString());
+    sp.set(FLOW_PARAM, flow.id);
+    return `${pathname}?${sp.toString()}`;
+  };
   const [value, setValue] = useState(params.get('q') ?? '');
   const [open, setOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
@@ -365,18 +383,18 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     section === 'top'
       ? [
           ...visibleTopApps.map((app) => ({ onActivate: () => { close(); router.push(INSPIRATIONS_ROUTES.app(app)); } })),
-          ...previewScreens.map((screen) => ({ onActivate: () => { close(); router.push(INSPIRATIONS_ROUTES.screen(screen)); } })),
+          ...previewScreens.map((screen) => ({ onActivate: () => { close(); router.push(screenPreviewHref(screen)); } })),
           ...previewElements.map((el) => ({ onActivate: () => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(el.kind)}`); } })),
-          ...previewFlows.map((flow) => ({ onActivate: () => { close(); router.push(INSPIRATIONS_ROUTES.flow(flow)); } })),
+          ...previewFlows.map((flow) => ({ onActivate: () => { close(); router.push(flowPreviewHref(flow)); } })),
         ]
       : section === 'categories'
       ? categories.map((c) => ({ onActivate: () => { close(); router.push(`${INSPIRATIONS_ROUTES.screens}?industry=${c.value}`); } }))
       : section === 'screens'
-        ? visibleScreens.map((s) => ({ onActivate: () => { close(); router.push(INSPIRATIONS_ROUTES.screen(s)); } }))
+        ? visibleScreens.map((s) => ({ onActivate: () => { close(); router.push(screenPreviewHref(s)); } }))
         : section === 'elements'
           ? elements.map((el) => ({ onActivate: () => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(el.kind)}`); } }))
           : section === 'flows'
-            ? visibleFlows.map((f) => ({ onActivate: () => { close(); router.push(INSPIRATIONS_ROUTES.flow(f)); } }))
+            ? visibleFlows.map((f) => ({ onActivate: () => { close(); router.push(flowPreviewHref(f)); } }))
             : [];
 
   handleKeyDownRef.current = (e: globalThis.KeyboardEvent | React.KeyboardEvent) => {
@@ -600,7 +618,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             className={`${index === 0 ? 'is-featured' : ''} ${active ? 'is-active' : ''}`}
                             onMouseEnter={() => setBrowseActive(itemIndex)}
                             onFocus={() => setBrowseActive(itemIndex)}
-                            onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.screen(screen)); }}
+                            onClick={() => { close(); router.push(screenPreviewHref(screen)); }}
                           >
                             <strong>{label}</strong>
                             <span className="ins-search-top-screen-preview" aria-hidden="true">
@@ -647,7 +665,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             className={active ? 'is-active' : ''}
                             onMouseEnter={() => setBrowseActive(itemIndex)}
                             onFocus={() => setBrowseActive(itemIndex)}
-                            onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.flow(flow)); }}
+                            onClick={() => { close(); router.push(flowPreviewHref(flow)); }}
                           >
                             <span><img src="/ASSET/search-modal/top-rated/flow.svg" alt="" width={20} height={20} /></span>{flow.name}
                           </button>
@@ -688,7 +706,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       className={index === browseActive ? 'is-active' : ''}
                       onMouseEnter={() => setBrowseActive(index)}
                       onFocus={() => setBrowseActive(index)}
-                      onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.screen(screen)); }}
+                      onClick={() => { close(); router.push(screenPreviewHref(screen)); }}
                     >
                       <strong>{screen.name}</strong>
                       <span>{screen.elements.length}</span>
@@ -727,7 +745,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       className={index === browseActive ? 'is-active' : ''}
                       onMouseEnter={() => setBrowseActive(index)}
                       onFocus={() => setBrowseActive(index)}
-                      onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.flow(flow)); }}
+                      onClick={() => { close(); router.push(flowPreviewHref(flow)); }}
                     >
                       <strong>{flow.name}</strong>
                       <span>{flow.screenIds.length}</span>

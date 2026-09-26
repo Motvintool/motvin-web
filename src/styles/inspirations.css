@@ -255,10 +255,6 @@ body {
   list-style: none;
 }
 
-.ins-spacer {
-  flex: 1;
-}
-
 .ins-muted {
   color: var(--ins-muted);
 }
@@ -288,15 +284,6 @@ body {
   backdrop-filter: blur(16px);
   border: none !important;
   box-shadow: none !important;
-}
-
-.ins-header--placeholder {
-  background: var(--ins-page);
-}
-
-.ins-header:has(.ins-drawer) {
-  z-index: 300;
-  backdrop-filter: none;
 }
 
 .ins-header-inner {
@@ -479,8 +466,7 @@ body {
   cursor: pointer;
 }
 
-.ins-header-audio-icon,
-.ins-header-menu-icon {
+.ins-header-audio-icon {
   display: block;
   flex: none;
 }
@@ -498,84 +484,6 @@ body {
   padding: 6px 6px 6px 0;
   background: linear-gradient(to left, #ececec, rgba(242, 242, 242, 0));
   border-radius: 0 9999px 9999px 0;
-}
-
-.ins-iconbtn--plain.ins-header-menu {
-  width: 40px;
-  height: 40px;
-  display: none;
-}
-
-/* Drawer (mobile menu) */
-.ins-drawer {
-  position: fixed;
-  inset: 0;
-  z-index: 300;
-}
-
-.ins-drawer-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-}
-
-.ins-drawer-panel {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(320px, 88vw);
-  background: var(--ins-page);
-  border-left: 1px solid var(--ins-border);
-  display: flex;
-  flex-direction: column;
-  animation: insSlideIn 200ms var(--ins-ease);
-}
-
-@keyframes insSlideIn {
-  from { transform: translateX(24px); opacity: 0; }
-  to { transform: none; opacity: 1; }
-}
-
-.ins-drawer-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: var(--ins-header-h);
-  padding: 0 16px;
-  border-bottom: 1px solid var(--ins-border);
-}
-
-.ins-drawer-title {
-  font-weight: 600;
-}
-
-.ins-drawer-nav {
-  padding: 8px 8px 24px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-.ins-drawer-label {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ins-muted);
-  padding: 16px 10px 6px;
-}
-
-.ins-drawer-link {
-  display: block;
-  padding: 9px 10px;
-  border-radius: 6px;
-  font-size: 16px;
-  color: var(--ins-text);
-}
-
-.ins-drawer-link:hover {
-  background: var(--ins-tag);
 }
 
 /* =========================================================
@@ -725,21 +633,6 @@ body {
   background: #fff;
 }
 
-.ins-search-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  z-index: 50;
-  background: var(--ins-card);
-  border: 1px solid var(--ins-border);
-  border-radius: 10px;
-  box-shadow: var(--effect-popover-shadow);
-  padding: 6px;
-  max-height: min(420px, 60vh);
-  overflow-y: auto;
-}
-
 /* Figma search modal, node 1076:50211. */
 .ins-search-overlay {
   position: fixed;
@@ -877,50 +770,6 @@ body {
 .ins-card-text-highlight { position: absolute; z-index: 2; border-radius: 3px; background: rgba(255, 220, 72, 0.4); transform: scale(1.15); pointer-events: none; }
 @media (max-width: 720px) { .ins-header-center .ins-search-modal, .ins-search-overlay .ins-search-modal { width: calc(100vw - 24px); height: min(700px, calc(100vh - 24px)); border-radius: 22px; } .ins-header-center .ins-search-modal.is-searching, .ins-search-overlay .ins-search-modal.is-searching { height: auto; max-height: calc(100vh - 24px); } .ins-search-modal-head { padding: 0 16px; } .ins-search-modal-field { margin-right: 98px; } .ins-search-modal-field input { width: 100%; max-width: none; } .ins-search-modal-platforms { right: 16px; gap: 10px; } .ins-search-modal-body.has-nav { display: grid; grid-template-columns: 1fr; } .ins-search-modal-nav { flex-direction: row; padding: 12px; overflow-x: auto; } .ins-search-modal-nav button { flex: none; padding: 0 16px; } .ins-search-modal-results { padding: 16px; } }
 
-.ins-search-menu-head {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ins-muted);
-  padding: 8px 10px 4px;
-}
-
-.ins-search-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  text-align: left;
-  font-size: 16px;
-}
-
-.ins-search-item.is-active,
-.ins-search-item:hover {
-  background: var(--ins-hover);
-}
-
-.ins-search-item-icon {
-  color: var(--ins-muted);
-  flex: none;
-}
-
-.ins-search-item-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ins-search-item-hint {
-  font-size: 16px;
-  color: var(--ins-muted);
-  white-space: nowrap;
-}
-
 /* =========================================================
    LAYOUT
    ========================================================= */
@@ -1046,7 +895,6 @@ body {
   font-weight: 500;
 }
 
-
 .ins-section-head {
   display: flex;
   align-items: center;
@@ -1066,12 +914,6 @@ body {
 
 .ins-tabpanel > .ins-section-title:first-child {
   margin-bottom: 12px;
-}
-
-.ins-section-foot {
-  display: flex;
-  justify-content: center;
-  padding: 20px 0 0;
 }
 
 .ins-results {
@@ -1225,10 +1067,6 @@ body {
   font-size: 16px;
 }
 
-.ins-chip--link:hover {
-  background: var(--ins-tag);
-}
-
 .ins-chip-count {
   font-size: 16px;
   color: inherit;
@@ -1328,7 +1166,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
     opacity: 0;
   }
 }
-
 
 .ins-fpill {
   display: inline-flex;
@@ -1619,10 +1456,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 
 /* Content-type switcher: reads as the row's anchor, so it carries the most
    visual weight of the unapplied pills. */
-.ins-fpill--nav {
-  font-weight: 700;
-  border-color: var(--ins-border-strong);
-}
 
 .ins-fmenu-count {
   margin-left: auto;
@@ -1810,21 +1643,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   opacity: 0.85;
 }
 
-.ins-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--ins-accent);
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1;
-}
-
 /* Option chip rows in the admin panels. */
 .ins-filter-options {
   display: flex;
@@ -1901,11 +1719,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   font-size: 16px;
 }
 
-.ins-btn--block {
-  width: 100%;
-  justify-content: flex-start;
-}
-
 .ins-btn--pill {
   border-radius: 999px;
 }
@@ -1946,12 +1759,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   border-color: transparent;
 }
 
-.ins-iconbtn--outline {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--ins-radius);
-}
-
 .ins-input {
   height: 32px;
   padding: 0 10px;
@@ -1968,54 +1775,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   outline: none;
   border-color: var(--ins-accent);
   box-shadow: 0 0 0 3px var(--ins-accent-subtle);
-}
-
-.ins-inline-form {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ins-inline-form .ins-input {
-  width: 220px;
-}
-
-.ins-select-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 10px 0 12px;
-  border: 1px solid var(--ins-border);
-  border-radius: var(--ins-radius);
-  background: var(--ins-card);
-  font-size: 16px;
-}
-
-.ins-select-label {
-  color: var(--ins-muted);
-}
-
-.ins-select {
-  appearance: none;
-  -webkit-appearance: none;
-  border: 0;
-  background: transparent;
-  padding-right: 18px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.ins-select:focus-visible {
-  box-shadow: none;
-}
-
-.ins-select-icon {
-  position: absolute;
-  right: 10px;
-  pointer-events: none;
-  color: var(--ins-muted);
 }
 
 .ins-popwrap {
@@ -2151,12 +1910,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   margin-top: 4px;
 }
 
-.ins-popover-divider {
-  height: 1px;
-  background: var(--ins-border);
-  margin: 6px 0;
-}
-
 .ins-theme-row {
   display: flex;
   gap: 6px;
@@ -2271,7 +2024,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 .ins-shot-panel .ins-card-hover-controls {
   display: none;
 }
-
 
 .ins-card-inset {
   position: relative;
@@ -2451,11 +2203,11 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 47.997px;
-  height: 47.997px;
+  width: 64px;
+  height: 64px;
   flex: none;
   border: none;
-  border-radius: 23.999px;
+  border-radius: 100px;
   background: #e5e5e5;
   color: #141414;
   cursor: pointer;
@@ -2550,7 +2302,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   align-items: center;
   justify-content: space-between;
   height: 76px;
-  padding: 0 16px 0 24px;
+  padding: 0 24px 0 16px;
   flex: none;
 }
 
@@ -2620,6 +2372,12 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   width: 100%;
   height: 100%;
   overflow-x: auto;
+  /* Without this, a lone overflow-x:auto makes overflow-y compute to auto
+     too (the CSS mixed-overflow rule) — and each shot's own 1px border
+     pushes it a couple px taller than this row, just enough scrollable
+     range for a vertical mouse-wheel scroll to nudge the whole strip up and
+     down instead of doing nothing. */
+  overflow-y: hidden;
   scroll-behavior: smooth;
   scrollbar-width: none;
 }
@@ -2647,6 +2405,14 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   width: auto;
   height: 100%;
   max-height: 670px;
+  /* This modal portals under a plain .ins-search-overlay wrapper, not
+     .ins-root/.ins-portal, so it misses the app's global border-box reset —
+     without this, the 1px border below is added on top of height:100%
+     (content-box), making the shot 2px taller than its row. That was
+     invisible while overflow-y was left to its implicit auto, but became a
+     clipped-off bottom stroke once overflow-y: hidden stopped it from
+     scrolling into view (see .ins-screen-preview-filmstrip). */
+  box-sizing: border-box;
   border: 1px solid #eee;
   border-radius: 62px;
   cursor: zoom-in;
@@ -2773,9 +2539,14 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 }
 
 .ins-screen-preview-foot-btn--save {
-  background: #000;
-  border-color: #000;
-  color: #fff;
+  /* !important because SaveButton adds the shared, higher-specificity
+     .ins-btn.is-active (background: var(--ins-tag), a near-transparent
+     tint) once saved — without it, that rule wins over this one and the
+     button's own text (white, from here, untouched by is-active) ends up
+     white-on-white and unreadable, whether saved or not. */
+  background: #000 !important;
+  border-color: #000 !important;
+  color: #fff !important;
 }
 
 .ins-screen-preview-foot-btn--save:hover {
@@ -2914,57 +2685,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   text-decoration: none;
 }
 
-/* "Similar screens" rail — the same neighbours ScreenViewer's "More like
-   this" tab gets from inspirationsApi.similar(), condensed into a horizontal
-   strip that fits the details panel instead of a full page grid. Clicking a
-   thumbnail re-points ?screen= at it (see openScreen in ScreenPreviewModal),
-   swapping the whole preview to that screen in place. */
-.ins-screen-preview-similar {
-  padding: 16px 20px 4px;
-  margin-top: 8px;
-  border-top: 1px solid #eee;
-}
-
-.ins-screen-preview-similar-title {
-  margin: 0 0 12px;
-  font-size: 16px;
-  font-weight: 500;
-  color: #0b0c0e;
-}
-
-.ins-screen-preview-similar-list {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  padding-bottom: 4px;
-}
-
-.ins-screen-preview-similar-item {
-  flex: none;
-  width: 72px;
-  aspect-ratio: 3 / 4;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid #eee;
-  padding: 0;
-  background: none;
-  cursor: pointer;
-  transition: border-color 150ms ease;
-}
-
-.ins-screen-preview-similar-item:hover {
-  border-color: #ccc;
-}
-
-.ins-screen-preview-similar-item :is(img, .ins-shot-missing) {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top center;
-  aspect-ratio: auto !important;
-}
-
 @media (max-width: 900px) {
   .ins-screen-preview-modal {
     flex-direction: column;
@@ -3039,11 +2759,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 
 .ins-card-name:hover {
   color: var(--ins-text);
-}
-
-.ins-card-sub {
-  font-size: 16px;
-  color: var(--ins-muted);
 }
 
 .ins-card--skeleton .ins-card-meta {
@@ -3255,7 +2970,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 
 .ins-flows-layout {
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: 310px minmax(0, 1fr);
   gap: 28px;
   align-items: start;
 }
@@ -3279,20 +2994,27 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 
 .ins-flows-search-icon {
   position: absolute;
-  left: 10px;
-  color: var(--ins-muted);
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #757575;
   pointer-events: none;
 }
 
+/* Figma node 1180:53630 ("Search Input - Search flows"). */
 .ins-flows-search-input {
   width: 100%;
-  padding: 8px 10px 8px 30px;
+  padding: 8px 10px 8px 40px;
   font: inherit;
   font-size: 16px;
   color: var(--ins-text);
-  background: var(--ins-card);
-  border: 1px solid var(--ins-border);
-  border-radius: var(--ins-radius-lg);
+  background: #f2f2f2;
+  border: 1px solid #f2f2f2;
+  border-radius: 100px;
+}
+
+.ins-flows-search-input::placeholder {
+  color: #757575;
 }
 
 .ins-flows-search-input:focus-visible {
@@ -3300,64 +3022,13 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   outline-offset: 1px;
 }
 
-.ins-flows-tree {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.ins-flows-group-btn {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 6px 4px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ins-text);
-  background: none;
-  border: 0;
-  cursor: pointer;
-}
-
 .ins-flows-chevron {
-  color: var(--ins-muted);
+  color: #363636;
   transition: transform 0.15s ease;
 }
 
 .ins-flows-chevron.is-collapsed {
   transform: rotate(-90deg);
-}
-
-.ins-flows-items {
-  display: flex;
-  flex-direction: column;
-  margin: 0 0 6px;
-  padding: 0 0 0 10px;
-  list-style: none;
-}
-
-.ins-flows-item {
-  width: 100%;
-  padding: 5px 8px;
-  font-size: 16px;
-  color: var(--ins-sub);
-  text-align: left;
-  background: none;
-  border: 0;
-  border-radius: var(--ins-radius);
-  cursor: pointer;
-}
-
-.ins-flows-item:hover {
-  color: var(--ins-text);
-  background: var(--ins-card-alt);
-}
-
-.ins-flows-item.is-active {
-  color: var(--ins-text);
-  font-weight: 600;
-  background: var(--ins-card-alt);
 }
 
 .ins-flows-nav-empty {
@@ -3372,17 +3043,10 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   min-width: 0;
 }
 
-.ins-flowrow {
-  scroll-margin-top: 16px;
-}
-
-.ins-flowrow.is-active .ins-flowrow-name {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-/* The screens run off the right edge on purpose: a journey is long, and
-   showing it cut off is what tells you it scrolls. */
+/* Shared by FlowList's ins-flowblock (the top-level "every flow" page) and,
+   historically, by this file's own flow row — kept under their original
+   names/values so FlowList's rendering stays exactly as it was regardless of
+   what ins-flows-row-* below does. */
 .ins-flowrow-strip {
   display: flex;
   gap: 12px;
@@ -3391,9 +3055,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   scroll-snap-type: x proximity;
 }
 
-/* Height is fixed and width follows, rather than the other way round: a row
-   has to stay scannable, and it keeps a portrait phone and a landscape web
-   capture sitting on the same baseline. */
 .ins-flowrow-shot {
   position: relative;
   flex: 0 0 auto;
@@ -3419,9 +3080,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   left: 8px;
   display: grid;
   place-items: center;
-  /* Sized for the 16px numeral now inside it — the badge was a tight 20px
-     circle built around 11px text, which the global font-size sweep would
-     otherwise have left visually cramped for two-digit steps (10, 11, …). */
   min-width: 24px;
   height: 24px;
   padding: 0 6px;
@@ -3445,48 +3103,135 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   font-size: 16px;
 }
 
-.ins-flowrow-meta {
+/* Figma node 1180:53708 ("Container", the Flows tab's own card): white,
+   bordered, rounded card — icon + name/count + app logo up top, the
+   step-by-step strip below. Classes are ins-flows-row-*, not ins-flowrow-* —
+   FlowList's ins-flowblock deliberately reuses ins-flowrow-strip/-shot/-step/
+   -missing specifically, so those four stay exactly as they were. */
+.ins-flows-row {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid var(--ins-border);
+  border-radius: 32px 32px 46px 46px;
+  background: var(--ins-card);
+  scroll-margin-top: 16px;
+}
+
+.ins-flows-row.is-active {
+  border-color: var(--ins-text);
+}
+
+.ins-flows-row.is-active .ins-flows-row-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The screens run off the right edge on purpose: a journey is long, and
+   showing it cut off is what tells you it scrolls. */
+.ins-flows-row-strip {
+  display: flex;
+  gap: 24px;
+  overflow-x: auto;
+  /* A lone overflow-x: auto makes overflow-y compute to auto too (the CSS
+     mixed-overflow rule) — see .ins-screen-preview-filmstrip for the bug
+     that let a stray vertical scroll range cause. */
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+/* Height follows Figma's own frame (527px) as closely as object-fit: contain
+   allows — width still follows rather than a fixed box with object-fit:
+   cover like Figma's flat sample screens use, because a journey here can mix
+   a portrait phone step with a landscape web one; hard-cropping to a
+   portrait box would slice the web step in half instead of just fitting
+   it. */
+.ins-flows-row-shot {
+  position: relative;
+  flex: 0 0 auto;
+  height: 527px;
+  overflow: hidden;
+  background: var(--ins-card);
+  border: 1px solid var(--ins-border);
+  border-radius: 52px;
+  corner-shape: squircle;
+  scroll-snap-align: start;
+}
+
+.ins-flows-row-shot .ins-shot-img,
+.ins-flows-row-shot .ins-shot-missing {
+  display: block;
+  width: auto;
+  height: 100%;
+  object-fit: contain;
+}
+
+.ins-flows-row-missing {
+  padding: 24px 0;
+  font-size: 16px;
+}
+
+.ins-flows-row-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 4px;
 }
 
-.ins-flowrow-title {
+.ins-flows-row-title {
   display: flex;
   align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
   gap: 10px;
   color: inherit;
   text-decoration: none;
 }
 
-.ins-flowrow-play {
+.ins-flows-row-play {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  flex: none;
+  width: 40px;
+  height: 40px;
   color: var(--ins-text);
   background: var(--ins-card);
-  border: 1px solid var(--ins-border);
+  border: 1.5px solid var(--ins-border);
   border-radius: 999px;
 }
 
-.ins-flowrow-title:hover .ins-flowrow-play {
+.ins-flows-row-title:hover .ins-flows-row-play {
   background: var(--ins-card-alt);
 }
 
-.ins-flowrow-name {
-  display: block;
+.ins-flows-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ins-flows-row-name {
+  overflow: hidden;
   font-size: 16px;
   font-weight: 600;
   color: var(--ins-text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.ins-flowrow-sub {
-  display: block;
+.ins-flows-row-sub {
+  overflow: hidden;
   font-size: 16px;
   color: var(--ins-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ins-flows-row-logo {
+  flex: none;
+  border-radius: 8.45px;
 }
 
 @media (max-width: 880px) {
@@ -3664,9 +3409,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 }
 
 .ins-pattern-thumb .ins-shot-img,
-.ins-pattern-thumb .ins-shot-missing,
-.ins-collection-thumb .ins-shot-img,
-.ins-collection-thumb .ins-shot-missing {
+.ins-pattern-thumb .ins-shot-missing {
   position: absolute;
   inset: 0;
   height: 100%;
@@ -3693,26 +3436,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 }
 
 /* Collections */
-.ins-collections-page {
-  padding-top: 38px;
-}
-
-.ins-collections-header,
-.ins-collections-heading,
-.ins-collections-actions {
-  display: flex;
-  align-items: center;
-}
-
-.ins-collections-header {
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.ins-collections-heading {
-  gap: 12px;
-  min-width: 0;
-}
 
 .ins-collections-back {
   display: flex;
@@ -4059,28 +3782,12 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   color: var(--ins-text);
 }
 
-.ins-detail-head,
-.ins-app-head {
+.ins-detail-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
   margin-bottom: 20px;
-}
-
-.ins-app-head {
-  align-items: center;
-}
-
-.ins-app-head-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.ins-app-tagline {
-  font-size: 16px;
-  color: var(--ins-sub);
-  margin-top: 6px;
 }
 
 /* ─── App masthead ───────────────────────────────────────────────────────
@@ -4316,75 +4023,13 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
    Both anchor a .ins-popover, which is absolutely positioned, so each needs
    its own positioning context. */
 
-.ins-rate,
 .ins-appmenu {
   position: relative;
   display: inline-flex;
 }
 
-.ins-rate-trigger-star {
-  display: inline-flex;
-  color: var(--ins-muted);
-}
-
-.ins-btn.is-rated .ins-rate-trigger-star {
-  color: #f5a623;
-}
-
-.ins-rate-panel,
 .ins-appmenu-panel {
   left: 0;
-}
-
-.ins-rate-panel {
-  min-width: 272px;
-  padding: var(--ins-space-3);
-}
-
-.ins-rate-stars {
-  display: flex;
-  gap: var(--ins-space-1);
-  margin: var(--ins-space-2) 0;
-}
-
-.ins-rate-star {
-  display: inline-flex;
-  padding: var(--ins-space-1);
-  border: 0;
-  background: none;
-  border-radius: var(--ins-radius);
-  color: var(--ins-border-strong);
-  cursor: pointer;
-  transition: color var(--ins-fast) var(--ins-ease), transform var(--ins-fast) var(--ins-ease);
-}
-
-/* Fills up to the hovered star rather than only the one under the cursor, so
-   the control shows the value it is about to set. */
-.ins-rate-star.is-on {
-  color: #f5a623;
-}
-
-.ins-rate-star:hover {
-  transform: scale(1.12);
-}
-
-.ins-rate-note {
-  margin: 0;
-  font-size: var(--ins-type-micro);
-  line-height: 1.45;
-  color: var(--ins-muted);
-}
-
-/* Scoped: the shared .ins-popover-title is a small uppercase eyebrow, which is
-   right for a list header but wrong for a question. */
-.ins-rate-panel .ins-popover-title {
-  margin: 0 0 var(--ins-space-1);
-  padding: 0;
-  font-size: var(--ins-type-meta);
-  font-weight: 600;
-  letter-spacing: normal;
-  text-transform: none;
-  color: var(--ins-text);
 }
 
 /* Wraps the counted tabbar so the tab list's own overflow-x:auto (needed for
@@ -4483,19 +4128,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   min-width: 0;
 }
 
-.ins-detail-app {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-
-.ins-detail-app:hover {
-  color: var(--ins-accent);
-}
-
 .ins-detail-title {
   font-family: var(--font-outfit), var(--font-inter), sans-serif;
   font-size: 24px;
@@ -4515,96 +4147,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   align-items: center;
   gap: 8px;
   flex: none;
-}
-
-.ins-screenview-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 24px;
-  align-items: start;
-  margin-bottom: 28px;
-}
-
-.ins-stage--detail {
-  display: flex;
-  justify-content: center;
-  padding: clamp(16px, 3vw, 40px);
-  border-radius: var(--ins-radius-lg);
-  background: var(--ins-card-alt);
-  border: 1px solid var(--ins-border);
-  min-height: 320px;
-}
-
-.ins-stage-shot {
-  position: relative;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid var(--ins-border);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
-  width: 100%;
-}
-
-.ins-stage-shot--detail {
-  max-width: 1040px;
-}
-
-.ins-screenview-body.is-mobile .ins-stage-shot--detail {
-  max-width: 360px;
-  border-radius: 22px;
-}
-
-.ins-highlight {
-  position: absolute;
-  border: 2px solid var(--ins-accent);
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--ins-accent) 14%, transparent);
-  pointer-events: none;
-  transition: all 200ms var(--ins-ease);
-}
-
-.ins-highlight-label {
-  position: absolute;
-  top: -22px;
-  left: -2px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-  background: var(--ins-accent);
-  padding: 2px 6px;
-  border-radius: 4px;
-  white-space: nowrap;
-}
-
-/* Opens ScreenLightbox. A separate button rather than making the whole shot
-   clickable — the Extract tab already uses hover on this same image to
-   surface detected components, so a full-image click target would compete
-   with that instead of adding a second, clearer way to view it larger. */
-.ins-stage-expand {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border: none;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--ins-card) 88%, transparent);
-  backdrop-filter: blur(6px);
-  color: var(--ins-text);
-  opacity: 0;
-  transition: opacity var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease);
-}
-
-.ins-stage-shot:hover .ins-stage-expand,
-.ins-stage-expand:focus-visible {
-  opacity: 1;
-}
-
-.ins-stage-expand:hover {
-  background: var(--ins-card);
 }
 
 .ins-lightbox {
@@ -4709,193 +4251,14 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   top: calc(var(--ins-header-h) + 20px);
 }
 
-.ins-info-list {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--ins-border);
-  border-radius: var(--ins-radius-lg);
-  background: var(--ins-card);
-  overflow: hidden;
-}
-
-.ins-info-row {
-  display: grid;
-  grid-template-columns: 96px 1fr;
-  gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--ins-border);
-  font-size: 16px;
-  align-items: start;
-}
-
-.ins-info-row:last-child {
-  border-bottom: 0;
-}
-
-.ins-info-row dt {
-  color: var(--ins-muted);
-}
-
 .ins-info-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
 }
 
-.ins-info-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 .ins-tabpanel {
   padding-top: 4px;
-}
-
-/* Flow viewer */
-.ins-flow-rail {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
-  overflow-x: auto;
-  padding: 14px;
-  margin-bottom: 20px;
-  border: 1px solid var(--ins-border);
-  border-radius: var(--ins-radius-lg);
-  background: var(--ins-card);
-}
-
-.ins-flow-rail-step {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: none;
-}
-
-.ins-flow-rail-btn {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 6px;
-  border-radius: 8px;
-  width: 150px;
-  text-align: left;
-  border: 1px solid transparent;
-  transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease);
-}
-
-.ins-flow-rail.is-mobile .ins-flow-rail-btn {
-  width: 96px;
-}
-
-.ins-flow-rail-btn:hover {
-  background: var(--ins-tag);
-}
-
-.ins-flow-rail-step.is-active .ins-flow-rail-btn {
-  border-color: var(--ins-text);
-}
-
-.ins-flow-rail-num {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ins-muted);
-}
-
-.ins-flow-rail-shot {
-  display: block;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid var(--ins-border);
-}
-
-.ins-flow-rail-name {
-  display: block;
-  /* A flex item's min-width defaults to its content's, not 0 — so without
-     this, a long screen name (e.g. "accounts.google.com") refuses to shrink
-     below its own unwrapped width and spills out of its 150px column into
-     the next step's caption instead of truncating. */
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 16px;
-  color: var(--ins-sub);
-}
-
-.ins-flow-rail-arrow {
-  color: var(--ins-muted);
-  padding-top: 30px;
-}
-
-.ins-flow-stage {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 40px;
-  gap: 16px;
-  align-items: center;
-}
-
-.ins-stage-nav {
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  border: 1px solid var(--ins-border);
-  background: var(--ins-card);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ins-text);
-}
-
-.ins-stage-nav:hover:not(:disabled) {
-  border-color: var(--ins-border-strong);
-}
-
-.ins-stage-nav:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.ins-stage-figure {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: clamp(16px, 3vw, 40px);
-  border-radius: var(--ins-radius-lg);
-  background: var(--ins-card-alt);
-  border: 1px solid var(--ins-border);
-}
-
-.ins-flow-stage .ins-stage-shot {
-  max-width: 960px;
-}
-
-.ins-flow-stage.is-mobile .ins-stage-shot {
-  max-width: 340px;
-  border-radius: 22px;
-}
-
-.ins-stage-caption {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 16px;
-}
-
-.ins-stage-step {
-  color: var(--ins-muted);
-}
-
-.ins-stage-name {
-  font-weight: 600;
-}
-
-.ins-stage-open {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--ins-sub);
 }
 
 /* Flow rows inside screen detail */
@@ -4912,49 +4275,9 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   padding: 14px;
 }
 
-.ins-flowrow-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.ins-flowrow-name {
-  font-weight: 600;
-}
-
-.ins-flowrow-steps {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-}
-
 .ins-flowrow-step {
   flex: none;
   width: 140px;
-}
-
-.ins-flowrow-link {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 6px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-}
-
-.ins-flowrow-step.is-current .ins-flowrow-link {
-  border-color: var(--ins-text);
-}
-
-.ins-flowrow-link:hover {
-  background: var(--ins-tag);
-}
-
-.ins-flowrow-num {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ins-muted);
 }
 
 .ins-flowrow-shot {
@@ -4962,237 +4285,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   border-radius: 6px;
   overflow: hidden;
   border: 1px solid var(--ins-border);
-}
-
-.ins-flowrow-label {
-  font-size: 16px;
-  color: var(--ins-sub);
-}
-
-/* =========================================================
-   ANALYSIS / EXTRACTION PANELS
-   ========================================================= */
-
-.ins-panel {
-  border: 1px solid var(--ins-border);
-  border-radius: var(--ins-radius-lg);
-  background: var(--ins-card);
-  padding: 16px 18px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.ins-panel-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ins-panel-title {
-  font-weight: 600;
-  font-size: 16px;
-}
-
-.ins-panel-hint {
-  font-size: 16px;
-  color: var(--ins-muted);
-}
-
-.ins-pulse {
-  animation: insPulse 1.2s ease-in-out infinite;
-}
-
-@keyframes insPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
-.ins-palette {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.ins-swatch {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 6px;
-  border: 1px solid var(--ins-border);
-  border-radius: 8px;
-  background: var(--ins-page);
-}
-
-.ins-swatch:hover {
-  border-color: var(--ins-border-strong);
-}
-
-.ins-swatch-color {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.ins-swatch-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  line-height: 1.2;
-}
-
-.ins-swatch-role {
-  font-size: 16px;
-  color: var(--ins-muted);
-}
-
-.ins-swatch-hex {
-  font-size: 16px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
-.ins-analysis-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px 24px;
-}
-
-.ins-analysis-block {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.ins-analysis-title {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ins-muted);
-}
-
-.ins-analysis-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 16px;
-  color: var(--ins-text);
-}
-
-.ins-analysis-list--kv li {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.ins-kv-key {
-  color: var(--ins-sub);
-}
-
-.ins-kv-val {
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-.ins-color-row {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  text-align: left;
-}
-
-.ins-color-row .ins-kv-key {
-  flex: 1;
-}
-
-.ins-color-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  flex: none;
-}
-
-.ins-detected {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.ins-detected-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 32px;
-  padding: 0 6px 0 12px;
-  border: 1px solid var(--ins-border);
-  border-radius: 8px;
-  background: var(--ins-page);
-  font-size: 16px;
-  font-weight: 500;
-  transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease);
-}
-
-.ins-detected-chip:hover {
-  border-color: var(--ins-border-strong);
-}
-
-.ins-detected-chip.is-active {
-  border-color: var(--ins-accent);
-  background: var(--ins-accent-subtle);
-}
-
-.ins-detected-count {
-  font-size: 16px;
-  color: var(--ins-muted);
-  background: var(--ins-tag);
-  padding: 2px 6px;
-  border-radius: 5px;
-}
-
-.ins-extract-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 8px;
-  background: var(--ins-page);
-  border: 1px solid var(--ins-border);
-}
-
-.ins-extract-cols {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-}
-
-.ins-iconhandoff {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 10px;
-  border: 1px solid var(--ins-border);
-  background: var(--ins-page);
-}
-
-.ins-iconhandoff-desc {
-  font-size: 16px;
-  color: var(--ins-sub);
-  margin-top: 4px;
-}
-
-.ins-iconhandoff-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.ins-iconhandoff > .ins-btn {
-  align-self: flex-start;
 }
 
 /* =========================================================
@@ -5625,13 +4717,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   opacity: 0.7;
 }
 
-.ins-float-collection-label {
-  color: #0b0c0e;
-  font-size: 16px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
 .ins-float-collection-selector {
   flex: 0 1 306px;
   width: 306px;
@@ -5777,56 +4862,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
     flex: 1 1 auto;
     width: auto;
   }
-}
-
-
-/* ── Provenance + honest-state styles ───────────────────── */
-
-/* Source block under the screen's facts: licence, credit, reuse. */
-.ins-info-list--source {
-  font-size: 16px;
-}
-
-.ins-info-list--source .ins-info-row {
-  padding: 8px 14px;
-}
-
-.ins-app-license {
-  font-size: 16px;
-  color: var(--ins-muted);
-  margin-top: 6px;
-}
-
-.ins-similar-basis {
-  font-size: 16px;
-}
-
-/* Panel copy for "not analyzed yet" and similar states. */
-.ins-panel-body {
-  font-size: 16px;
-  color: var(--ins-sub);
-  max-width: 62ch;
-}
-
-.ins-panel-note {
-  font-size: 16px;
-  color: var(--ins-muted);
-}
-
-.ins-panel-note code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 16px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--ins-tag);
-}
-
-/* Visual search is an entry point for a feature that is not wired up; it is
-   styled as inert so it never looks like a working control. */
-.ins-dropzone.is-inactive {
-  border-style: solid;
-  background: transparent;
-  color: var(--ins-sub);
 }
 
 /* =========================================================
@@ -5976,13 +5011,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 .ins-field-hint {
   font-size: 16px;
   color: var(--ins-muted);
-}
-
-.ins-textarea {
-  height: auto;
-  padding: 8px 10px;
-  line-height: 1.45;
-  resize: vertical;
 }
 
 .ins-checkline {
@@ -6154,54 +5182,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   background: var(--ins-page);
 }
 
-/* Flow builder */
-.ins-admin-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.ins-admin-step-pool {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.ins-admin-step-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  font-size: 16px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.ins-admin-step-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.ins-admin-step-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border: 1px solid var(--ins-border);
-  border-radius: var(--ins-radius);
-  background: var(--ins-page);
-  font-size: 16px;
-}
-
-.ins-admin-step-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* Inline "add an app" form on the Upload tab, so an empty library is not a
    dead end. */
 .ins-admin-inline-form {
@@ -6212,20 +5192,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   border: 1px dashed var(--ins-border-strong);
   border-radius: var(--ins-radius-lg);
   background: var(--ins-card);
-}
-
-/* One captured journey in the automatic-capture result: its name, then its
-   screens in the order they were walked. */
-.ins-admin-flowgroup {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 4px;
-  border-top: 1px solid var(--ins-border);
-}
-
-.ins-admin-flowgroup:first-of-type {
-  border-top: 0;
 }
 
 .ins-linkbtn {
@@ -6420,16 +5386,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   background: var(--ins-card-alt);
 }
 
-.ins-flow-hint {
-  font-size: 16px;
-  text-align: center;
-  padding-top: 14px;
-}
-
 /* Admin entry in the profile menu */
-.ins-popover-item--admin {
-  font-weight: 600;
-}
 
 .ins-popover-item-tag {
   margin-left: auto;
@@ -6457,263 +5414,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   }
 }
 
-/* =========================================================
-   FLOW PREVIEW OVERLAY
-   ========================================================= */
-
-.ins-preview {
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: clamp(12px, 3vw, 32px);
-}
-
-.ins-preview-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(8, 9, 12, 0.72);
-  backdrop-filter: blur(3px);
-  animation: insFade 140ms var(--ins-ease);
-}
-
-@keyframes insFade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.ins-preview-dialog {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: min(1100px, 100%);
-  max-height: 100%;
-  background: var(--ins-page);
-  border: 1px solid var(--ins-border);
-  border-radius: var(--ins-radius-lg);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
-  overflow: hidden;
-  animation: insPreviewIn 180ms var(--ins-ease);
-}
-
-@keyframes insPreviewIn {
-  from { opacity: 0; transform: translateY(12px) scale(0.99); }
-  to { opacity: 1; transform: none; }
-}
-
-.ins-preview-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--ins-border);
-  flex: none;
-}
-
-.ins-preview-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.ins-preview-title {
-  font-family: var(--font-outfit), var(--font-inter), sans-serif;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ins-preview-sub {
-  font-size: 16px;
-  color: var(--ins-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ins-preview-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-}
-
-.ins-preview-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 20px;
-}
-
-/* Stage: the current step, with the controls either side of it. */
-.ins-preview-stage {
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 48px;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 12px 8px;
-  background: var(--ins-card-alt);
-  flex: 1;
-  min-height: 0;
-}
-
-.ins-preview-figure {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 0;
-  height: 100%;
-}
-
-/* The stage takes whatever the header, caption and filmstrip leave, so a tall
-   phone screenshot is shown as large as the window allows instead of being
-   pinned to an arbitrary fraction of it. */
-.ins-preview-shot {
-  --ins-preview-max: calc(100vh - 340px);
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid var(--ins-border);
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.25);
-  max-height: var(--ins-preview-max);
-  display: flex;
-}
-
-.ins-preview-shot :is(img, .ins-shot-missing) {
-  max-height: var(--ins-preview-max);
-  width: auto;
-  max-width: 100%;
-  object-fit: contain;
-}
-
-.ins-preview-stage.is-mobile .ins-preview-shot {
-  border-radius: 20px;
-}
-
-.ins-preview-nav {
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  border: 1px solid var(--ins-border);
-  background: var(--ins-card);
-  color: var(--ins-text);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: border-color var(--ins-fast) var(--ins-ease), opacity var(--ins-fast) var(--ins-ease);
-}
-
-.ins-preview-nav:hover:not(:disabled) {
-  border-color: var(--ins-border-strong);
-}
-
-.ins-preview-nav:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-.ins-preview-caption {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 10px 14px;
-  background: var(--ins-card-alt);
-  font-size: 16px;
-  flex: none;
-}
-
-.ins-preview-step {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.ins-preview-name {
-  color: var(--ins-sub);
-}
-
-/* Filmstrip: the journey at a glance. */
-.ins-preview-strip {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 12px 14px;
-  border-top: 1px solid var(--ins-border);
-  background: var(--ins-page);
-  flex: none;
-  scrollbar-width: thin;
-}
-
-/* A pale screenshot on a pale strip has no edge of its own, so every tile
-   carries a border and only the colour changes when it is the current step. */
-.ins-preview-thumb {
-  position: relative;
-  display: block;
-  width: 72px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 2px solid var(--ins-border);
-  background: var(--ins-card-alt);
-  transition: border-color var(--ins-fast) var(--ins-ease), opacity var(--ins-fast) var(--ins-ease);
-  opacity: 0.65;
-}
-
-.ins-preview-thumb:hover {
-  opacity: 1;
-}
-
-.ins-preview-thumb.is-active {
-  border-color: var(--ins-accent);
-  opacity: 1;
-}
-
-.ins-preview-thumb-shot {
-  display: block;
-  aspect-ratio: 3 / 4;
-  overflow: hidden;
-}
-
-.ins-preview-thumb-shot :is(img, .ins-shot-missing) {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top center;
-  aspect-ratio: auto !important;
-}
-
-.ins-preview-thumb-num {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  z-index: 1;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 4px;
-  background: rgba(8, 9, 12, 0.72);
-  color: #fff;
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 16px;
-  text-align: center;
-}
-
-.ins-preview-hint {
-  padding: 0 14px 12px;
-  font-size: 16px;
-  color: var(--ins-muted);
-  text-align: center;
-  background: var(--ins-page);
-  flex: none;
-}
-
 /* The play affordance on a flow card, so it reads as "opens a preview". */
 .ins-flow-play {
   display: inline-flex;
@@ -6738,46 +5438,13 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 }
 
 @media (max-width: 759px) {
-  .ins-preview {
-    padding: 0;
-  }
-
-  .ins-preview-dialog {
-    width: 100%;
-    height: 100%;
-    max-height: 100%;
-    border-radius: 0;
-    border: 0;
-  }
-
-  .ins-preview-head {
-    flex-wrap: wrap;
-  }
 
   /* On a phone the side buttons eat the picture; the filmstrip and swipe do
      the stepping instead. */
-  .ins-preview-stage {
-    grid-template-columns: 1fr;
-  }
-
-  .ins-preview-nav {
-    display: none;
-  }
-
-  .ins-preview-shot {
-    --ins-preview-max: calc(100vh - 300px);
-  }
 
   .ins-flow-play {
     opacity: 1;
     transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ins-preview-backdrop,
-  .ins-preview-dialog {
-    animation: none;
   }
 }
 
@@ -6792,9 +5459,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .ins-analysis-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 1139px) {
@@ -6806,28 +5470,14 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .ins-screenview-body {
-    grid-template-columns: minmax(0, 1fr) 260px;
-  }
-
-  .ins-analysis-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 899px) {
-  .ins-screenview-body {
-    grid-template-columns: 1fr;
-  }
 
   .ins-info {
     position: static;
   }
 
-  .ins-info-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
 }
 
 @media (max-width: 759px) {
@@ -6844,10 +5494,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   .ins-platform-nav,
   .ins-header-action-links {
     display: none;
-  }
-
-  .ins-iconbtn--plain.ins-header-menu {
-    display: inline-flex;
   }
 
   .ins-app-grid,
@@ -6867,19 +5513,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   .ins-pagehead {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .ins-collections-page {
-    padding-top: 16px;
-  }
-
-  .ins-collections-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .ins-collections-actions .ins-btn--primary {
-    width: 100%;
   }
 
   .ins-collection-meta {
@@ -6930,30 +5563,13 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
     display: none;
   }
 
-  .ins-detail-head,
-  .ins-app-head {
+  .ins-detail-head {
     flex-direction: column;
     align-items: stretch;
   }
 
   .ins-detail-actions {
     flex-wrap: wrap;
-  }
-
-  .ins-extract-cols {
-    grid-template-columns: 1fr;
-  }
-
-  .ins-analysis-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .ins-flow-stage {
-    grid-template-columns: 1fr;
-  }
-
-  .ins-stage-nav {
-    display: none;
   }
 
   /* No hover on touch, so the selection ring needs to be reachable without
@@ -6975,13 +5591,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
     grid-template-columns: 1fr;
   }
 
-  .ins-analysis-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .ins-info-row {
-    grid-template-columns: 80px 1fr;
-  }
 }
 
 /* Motion */
@@ -6999,7 +5608,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
     transform: none;
   }
 }
-
 
 /* ─── Screen states ─────────────────────────────────────────────────────────
    The condition a screen was captured in: loading, empty, a sheet over it.
@@ -7038,13 +5646,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   white-space: nowrap;
 }
 
-.ins-state-badge--inline {
-  height: 20px;
-  font-size: 12px;
-  margin-left: 4px;
-  vertical-align: middle;
-}
-
 .ins-state-badge.is-loading { background: #eef2ff; color: #3730a3; }
 .ins-state-badge.is-empty { background: #f3f4f6; color: #374151; }
 .ins-state-badge.is-error { background: #fee2e2; color: #991b1b; }
@@ -7056,14 +5657,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 .ins-state-badge.is-permission { background: #ecfeff; color: #155e75; }
 .ins-state-badge.is-scrolled,
 .ins-state-badge.is-keyboard { background: #f8fafc; color: #475569; }
-
-.ins-detail-desc {
-  margin: 6px 0 0;
-  max-width: 62ch;
-  font-size: 16px;
-  line-height: 1.5;
-  color: var(--ins-sub);
-}
 
 /* ─── Automatic capture: live progress and the result ──────────────────── */
 .ins-ingest {
@@ -7317,8 +5910,9 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   min-width: 0;
   padding: 7px 8px;
   font-size: 17px;
+  font-weight: 500;
   line-height: 1.3;
-  color: var(--ins-sub);
+  color: #363636;
   text-align: left;
   background: none;
   border: 0;
@@ -7342,14 +5936,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 }
 
 /* Down when the branch is closed, up when it is open. */
-.ins-flowtree-chevron {
-  color: var(--ins-muted);
-  transition: transform 0.15s ease;
-}
-
-.ins-flowtree-chevron.is-open {
-  transform: rotate(180deg);
-}
 
 .ins-flowtree-toggle {
   display: inline-flex;
@@ -7358,7 +5944,8 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   width: 24px;
   height: 24px;
   padding: 0;
-  color: var(--ins-muted);
+  color: #363636;
+  font-weight: 500;
   background: none;
   border: 0;
   border-radius: 50%;
@@ -7370,7 +5957,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   background: var(--ins-card-alt);
 }
 
-.ins-flowrow-parent {
+.ins-flows-row-parent {
   color: var(--ins-muted);
   font-weight: 500;
 }

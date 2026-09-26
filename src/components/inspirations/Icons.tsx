@@ -107,6 +107,17 @@ export const ImageIcon = (p: IconProps) => (
 export const PlayIcon = (p: IconProps) => (
   <svg {...base(p)} fill="currentColor" stroke="none"><path d="M8 5.5v13l11-6.5z" /></svg>
 );
+/** Figma node 1183:54088 ("Frame") — the open-flow button's icon on the
+ * Flows tab's own flow row (node 1180:53708): an outlined play triangle,
+ * not PlayIcon's solid fill. */
+export const PlayOutlineIcon = (p: IconProps) => (
+  <svg {...base(p)} viewBox="0 0 16 16">
+    <path
+      strokeWidth={1.2}
+      d="M3.3332 3.33373C3.33313 3.09912 3.39497 2.86865 3.51246 2.66559C3.62995 2.46252 3.79894 2.29406 4.00237 2.17719C4.2058 2.06033 4.43646 1.99921 4.67106 2.00001C4.90567 2.0008 5.13591 2.06349 5.33854 2.18173L13.3365 6.84706C13.5384 6.96418 13.7059 7.13223 13.8225 7.3344C13.939 7.53657 14.0005 7.76579 14.0007 7.99915C14.0009 8.23252 13.9398 8.46184 13.8237 8.66422C13.7075 8.86659 13.5402 9.03493 13.3385 9.1524L5.33854 13.8191C5.13591 13.9373 4.90567 14 4.67106 14.0008C4.43646 14.0016 4.2058 13.9405 4.00237 13.8236C3.79894 13.7067 3.62995 13.5383 3.51246 13.3352C3.39497 13.1321 3.33313 12.9017 3.3332 12.6671V3.33373Z"
+    />
+  </svg>
+);
 export const PencilIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M4 20h4l10-10-4-4L4 16z" /><path d="m13 7 4 4" /></svg>
 );

@@ -18,6 +18,7 @@ import { BookmarkIcon, FolderIcon, PlusIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
 import { PatternCard } from '../PatternCard';
 import { ScreenGrid } from '../ScreenGrid';
+import { SCREEN_PARAM } from '../ScreenPreviewModal';
 import { useApps } from '../useApps';
 import { useAsync } from '../useAsync';
 import { useLibrary } from '../useLibrary';
@@ -329,9 +330,14 @@ export function SavedView() {
                         <Link
                           href={
                             screen
-                              ? `${INSPIRATIONS_ROUTES.screen(screen)}?tab=extract`
+                              ? (() => {
+                                  const sp = new URLSearchParams(params.toString());
+                                  sp.set(SCREEN_PARAM, screen.id);
+                                  return `${pathname}?${sp.toString()}`;
+                                })()
                               : `${INSPIRATIONS_ROUTES.uiElements}?kind=${kind}`
                           }
+                          scroll={false}
                           className="ins-element-row"
                         >
                           <span className="ins-element-name">{elementLabel(kind)}</span>

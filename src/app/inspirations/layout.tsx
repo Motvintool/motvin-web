@@ -17,8 +17,6 @@ import '@/styles/profile-menu.css';
  *   /inspirations/patterns        Pattern library
  *   /inspirations/search?q=       Natural-language search
  *   /inspirations/app/[slug]      App detail
- *   /inspirations/screen/[id]     Screen detail + Analyze / Extract tools
- *   /inspirations/flow/[id]       Flow viewer
  *   /inspirations/pattern/[slug]  Pattern examples
  *   /inspirations/collections     Saved items — everything bookmarked
  *                                 (?type=all) and organized boards
@@ -33,7 +31,7 @@ import '@/styles/profile-menu.css';
 
 export const metadata: Metadata = {
   title: 'Motvin Inspirations — Search UI screens, flows and patterns',
-  description: 'A visual search engine for product design. Find screens, study flows, analyze UI and extract components.',
+  description: 'A visual search engine for product design. Find screens, study flows and browse patterns.',
 };
 
 export default function InspirationsLayout({ children }: { children: ReactNode }) {

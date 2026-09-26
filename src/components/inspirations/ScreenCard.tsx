@@ -72,20 +72,23 @@ function ScreenCardImpl({
   // to cycle) so its return type is too, but ScreenCard's own `screen` prop
   // never is — the fallback here is for the type, not a real null case.
   const shownScreen = activeScreen ?? screen;
-  const href = INSPIRATIONS_ROUTES.screen(shownScreen);
 
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  /** Opens the preview in place by adding `?screen=<id>` to the current URL
-   * (see SCREEN_PARAM in ScreenPreviewModal.tsx) instead of local component
-   * state, so the preview is linkable, Back closes it, and the grid and its
-   * filters underneath survive. A modifier-clicked or middle-clicked card
-   * still falls through to `href`, the real standalone page, untouched. */
-  const openPreview = () => {
+  /** Adds `?screen=<id>` to the current URL (see SCREEN_PARAM in
+   * ScreenPreviewModal.tsx), so the preview is linkable, Back closes it, and
+   * the grid and its filters underneath survive. Used as both the card's
+   * real `href` (a modifier-clicked or middle-clicked card opens it in a new
+   * tab, still landing on the same overlay) and, for a plain click,
+   * `openPreview` pushes it in place without a full navigation. */
+  const href = (() => {
     const sp = new URLSearchParams(searchParams.toString());
     sp.set(SCREEN_PARAM, shownScreen.id);
-    router.push(`${pathname}?${sp.toString()}`, { scroll: false });
+    return `${pathname}?${sp.toString()}`;
+  })();
+  const openPreview = () => {
+    router.push(href, { scroll: false });
   };
 
   const { title: appTitle, tagline: derivedTagline } = app ? splitAppName(app.name) : { title: '', tagline: null };

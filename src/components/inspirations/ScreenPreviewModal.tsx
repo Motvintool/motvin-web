@@ -80,9 +80,9 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const [activeId, setActiveId] = useState(screenId);
   const [zoomScreen, setZoomScreen] = useState<Screen | null>(null);
 
-  // A different `?screen=` (a fresh open, or a click on a "Similar screens"
-  // thumbnail below) starts over rather than carrying across the last
-  // screen's filmstrip mode, scroll position or zoom state.
+  // A different `?screen=` (a fresh open, or a shared link) starts over
+  // rather than carrying across the last screen's filmstrip mode, scroll
+  // position or zoom state.
   const [seenId, setSeenId] = useState(screenId);
   if (seenId !== screenId) {
     setSeenId(screenId);
@@ -118,18 +118,6 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     else router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [params, pathname, router]);
 
-  /** Swaps the whole preview to a different screen in place — used by the
-   * "Similar screens" rail — by re-pointing the URL rather than closing and
-   * reopening, so Back still lands outside the preview, not on the last one. */
-  const openScreen = useCallback(
-    (id: string) => {
-      const sp = new URLSearchParams(params.toString());
-      sp.set(SCREEN_PARAM, id);
-      router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
-    },
-    [params, pathname, router],
-  );
-
   useEffect(() => {
     let cancelled = false;
     if (app) {
@@ -146,9 +134,6 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
       cancelled = true;
     };
   }, [app]);
-
-  const { data: similarData } = useAsync(() => inspirationsApi.similar(screenId, 10), `screen-preview-similar:${screenId}`);
-  const similarItems = (similarData?.items ?? []).filter((s) => s.id !== screenId);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -361,12 +346,15 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   app={app ?? undefined}
                   className="ins-screen-preview-foot-btn ins-screen-preview-foot-btn--save"
                 />
-                {app?.website && (
-                  <a className="ins-screen-preview-foot-btn" href={app.website} target="_blank" rel="noopener noreferrer">
-                    <img src="/ASSET/Icons/Motvin/view-apps.svg" alt="" width={18} height={16} />
-                    View in App Store
-                  </a>
-                )}
+                <a
+                  className="ins-screen-preview-foot-btn"
+                  href={app?.website || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <img src="/ASSET/Icons/Motvin/view-apps.svg" alt="" width={18} height={16} />
+                  View in App Store
+                </a>
               </div>
               <div className="ins-screen-preview-foot-secondary">
                 {screens.length > 1 && (
@@ -500,25 +488,6 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                       </Link>
                     ))}
                   </dd>
-                </div>
-              )}
-
-              {similarItems.length > 0 && (
-                <div className="ins-screen-preview-similar">
-                  <h3 className="ins-screen-preview-similar-title">Similar screens</h3>
-                  <div className="ins-screen-preview-similar-list">
-                    {similarItems.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        className="ins-screen-preview-similar-item"
-                        aria-label={`Open ${s.name}`}
-                        onClick={() => openScreen(s.id)}
-                      >
-                        <Screenshot screen={s} />
-                      </button>
-                    ))}
-                  </div>
                 </div>
               )}
             </div>
