@@ -4982,7 +4982,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: flex-start;
 }
 
 .ins-field {
@@ -5208,6 +5208,44 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 
 .ins-linkbtn:hover {
   color: var(--ins-text);
+}
+
+.ins-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 20px;
+  text-align: center;
+  border: 1px dashed var(--ins-border-strong);
+  border-radius: var(--ins-radius-lg);
+  background: var(--ins-card);
+  transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-dropzone.is-dragging {
+  border-color: var(--ins-accent);
+  background: var(--ins-accent-subtle);
+}
+
+.ins-dropzone-icon {
+  color: var(--ins-muted);
+}
+
+.ins-dropzone-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ins-dropzone-title {
+  font-weight: 600;
+  color: var(--ins-text);
+}
+
+.ins-dropzone-desc {
+  font-size: 16px;
+  color: var(--ins-sub);
 }
 
 .ins-dropzone .ins-btn:disabled {
