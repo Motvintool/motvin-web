@@ -595,7 +595,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             onFocus={() => setBrowseActive(itemIndex)}
                             onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.app(app)); }}
                           >
-                            <AppLogo app={app} size={82} />
+                            <AppLogo app={app} size={76} />
                             <strong>{app.name}</strong>
                           </button>
                         );

@@ -652,7 +652,7 @@ body {
   height: min(720px, calc(100vh - 40px));
   overflow: hidden;
   border-radius: 36px;
-  background: rgba(255, 255, 255, 0.80);
+  background: rgba(255, 255, 255, 0.95);
   box-shadow: none;
   backdrop-filter: blur(12px);
 }
@@ -684,8 +684,7 @@ body {
 .ins-search-chip-query { display: inline-flex; align-items: center; gap: 8px; height: 100%; padding: 0 8px 0 12px; color: inherit; font: inherit; }
 .ins-search-chip-icon { width: auto; max-width: 28px; height: 20px; border-radius: 0; object-fit: contain; }
 .ins-search-chip-icon[src$="figma-02.png"], .ins-search-chip-icon.is-app-logo { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; }
-.ins-search-chip-remove { display: inline-grid; place-items: center; width: 32px; height: 32px; margin-right: 8px; border-radius: 50%; color: #515151; opacity: 0; transition: opacity 120ms ease, background 120ms ease; }
-.ins-search-chip:hover .ins-search-chip-remove, .ins-search-chip:focus-within .ins-search-chip-remove { opacity: 1; }
+.ins-search-chip-remove { display: inline-grid; place-items: center; width: 32px; height: 32px; margin-right: 8px; border-radius: 50%; color: #515151; transition: background 120ms ease; }
 .ins-search-chip-remove:hover { background: rgba(0, 0, 0, 0.08); }
 .ins-search-modal-body { height: calc(100% - 154px); }
 .ins-search-modal-body.has-nav { display: grid; grid-template-columns: 260px minmax(0, 1fr); }
@@ -731,12 +730,69 @@ body {
 .ins-search-resource-list span { padding: 4px 10px; color: #4e4e4e; font-weight: 400; }
 .ins-search-top-rated { display: flex; flex-direction: column; gap: 24px; }
 .ins-search-top-section { display: flex; flex-direction: column; gap: 12px; width: 100%; }
-.ins-search-top-apps { display: flex; align-items: flex-start; gap: 8px; width: 100%; }
-.ins-search-top-apps button { display: grid; justify-items: center; gap: 8px; min-width: 0; color: #111; font-size: 16px; }
-.ins-search-top-apps button.is-active > .ins-app-logo, .ins-search-top-apps button:hover > .ins-app-logo { box-shadow: var(--ins-focus); }
-.ins-search-top-apps button > .ins-app-logo { width: 82px; height: 82px; border-radius: 20px; object-fit: cover; }
-.ins-search-top-apps button > .ins-app-logo--initials { display: grid; place-items: center; background: #e6e6e6; color: #111; font-size: 28px; }
-.ins-search-top-apps strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
+.ins-search-top-apps { display: flex; align-items: flex-start; gap: 16px; width: 100%; }
+.ins-search-top-apps button {
+  position: relative;
+  display: block;
+  width: 76px;
+  height: 76px;
+  border-radius: 20px 20px 0 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  /* Fix WebKit animation bug with overflow:hidden and border-radius */
+  transform: translateZ(0);
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  clip-path: inset(0 0 0 0 round 20px 20px 0 0);
+}
+.ins-search-top-apps button > .ins-app-logo {
+  display: block;
+  width: 76px;
+  height: 76px;
+  border-radius: 20px;
+  object-fit: cover;
+  transform: translate3d(0, 0, 0);
+  transition: transform 0.2s ease-out !important;
+}
+.ins-search-top-apps button > .ins-app-logo--initials {
+  display: grid;
+  place-items: center;
+  background: #e6e6e6;
+  color: #111;
+  font-size: 28px;
+  width: 76px;
+  height: 76px;
+  border-radius: 20px;
+  transform: translate3d(0, 0, 0);
+  transition: transform 0.2s ease-out !important;
+}
+.ins-search-top-apps strong {
+  position: absolute;
+  top: 84px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 400;
+  color: #000;
+  transform: translate3d(0, 0, 0);
+  transition: transform 0.2s ease-out !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ins-search-top-apps button:hover > .ins-app-logo,
+.ins-search-top-apps button:focus-visible > .ins-app-logo,
+.ins-search-top-apps button:hover > .ins-app-logo--initials,
+.ins-search-top-apps button:focus-visible > .ins-app-logo--initials {
+  transform: translate3d(0, -28px, 0);
+}
+.ins-search-top-apps button:hover > strong,
+.ins-search-top-apps button:focus-visible > strong {
+  transform: translate3d(0, -28px, 0);
+}
 .ins-search-top-heading { color: #313131; font-size: 16px; }
 .ins-search-top-screens { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .ins-search-top-screens button { position: relative; display: block; height: 166px; overflow: hidden; padding: 20px; border-radius: 16px; background: #e6e6e6; color: #1d1d1d; text-align: left; transition: background 160ms ease; }
