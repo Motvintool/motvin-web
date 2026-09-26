@@ -1,13 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { memo, useState, type MouseEvent } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { memo, type MouseEvent } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 
 import type { App, Screen } from '@/lib/inspirations/types';
-import { screenStateLabel } from '@/lib/inspirations/taxonomy';
 import { AppLogo } from './AppLogo';
-import { ScreenPreviewModal } from './ScreenPreviewModal';
+import { SCREEN_PARAM } from './ScreenPreviewModal';
 import { Screenshot } from './Screenshot';
 import { useSiblingCycle } from './useSiblingCycle';
 
@@ -73,7 +73,20 @@ function ScreenCardImpl({
   // never is — the fallback here is for the type, not a real null case.
   const shownScreen = activeScreen ?? screen;
   const href = INSPIRATIONS_ROUTES.screen(shownScreen);
-  const [previewOpen, setPreviewOpen] = useState(false);
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  /** Opens the preview in place by adding `?screen=<id>` to the current URL
+   * (see SCREEN_PARAM in ScreenPreviewModal.tsx) instead of local component
+   * state, so the preview is linkable, Back closes it, and the grid and its
+   * filters underneath survive. A modifier-clicked or middle-clicked card
+   * still falls through to `href`, the real standalone page, untouched. */
+  const openPreview = () => {
+    const sp = new URLSearchParams(searchParams.toString());
+    sp.set(SCREEN_PARAM, shownScreen.id);
+    router.push(`${pathname}?${sp.toString()}`, { scroll: false });
+  };
 
   const { title: appTitle, tagline: derivedTagline } = app ? splitAppName(app.name) : { title: '', tagline: null };
   const appDescription = app?.tagline || derivedTagline;
@@ -119,7 +132,7 @@ function ScreenCardImpl({
             onClick={(e) => {
               if (!isPlainClick(e)) return;
               e.preventDefault();
-              setPreviewOpen(true);
+              openPreview();
             }}
           >
             <Screenshot screen={shownScreen} />
@@ -133,16 +146,6 @@ function ScreenCardImpl({
             ))}
           </Link>
         </div>
-        {/* The condition the screen was captured in — loading, empty, a sheet
-            over it — read from the store, never inferred. A plain settled
-            screen has no badge, so the badge means something when it shows. */}
-        {shownScreen.states?.length > 0 && (
-          <span className="ins-card-states" aria-label={`State: ${shownScreen.states.map(screenStateLabel).join(', ')}`}>
-            {shownScreen.states.filter((v) => v !== 'keyboard' && v !== 'scrolled').slice(0, 2).map((v) => (
-              <span key={v} className={`ins-state-badge is-${v}`}>{screenStateLabel(v)}</span>
-            ))}
-          </span>
-        )}
         {dotCount > 1 && (
           <div className="ins-card-hover-controls">
             <button type="button" className="ins-card-control ins-card-control--prev" aria-label="Previous screen" onClick={step(-1)} disabled={activeIndex === 0}>
@@ -176,7 +179,7 @@ function ScreenCardImpl({
               onClick={(e) => {
                 if (!isPlainClick(e)) return;
                 e.preventDefault();
-                setPreviewOpen(true);
+                openPreview();
               }}
             >
               {shownScreen.name}
@@ -184,7 +187,6 @@ function ScreenCardImpl({
           )}
         </div>
       )}
-      {previewOpen && <ScreenPreviewModal screen={shownScreen} app={app ?? null} onClose={() => setPreviewOpen(false)} />}
     </article>
   );
 }

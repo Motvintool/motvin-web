@@ -4,6 +4,7 @@ import { Suspense, type ReactNode } from 'react';
 import { FlowPreview } from './FlowPreview';
 import { Header } from './Header';
 import { LibrarySync } from './LibrarySync';
+import { ScreenPreviewOverlay } from './ScreenPreviewModal';
 import { ToastProvider } from './Toast';
 
 function InspirationsHeaderSkeleton() {
@@ -52,6 +53,10 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
         {/* Reads ?flow= and renders over whatever page is showing. */}
         <Suspense fallback={null}>
           <FlowPreview />
+        </Suspense>
+        {/* Reads ?screen= and renders over whatever page is showing. */}
+        <Suspense fallback={null}>
+          <ScreenPreviewOverlay />
         </Suspense>
       </div>
     </ToastProvider>

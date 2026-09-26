@@ -1,9 +1,9 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { type MouseEvent, useState } from 'react';
+import { forwardRef, type MouseEvent, useState } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import type { SavedItemType } from '@/lib/inspirations/types';
+import type { App, SavedItemType } from '@/lib/inspirations/types';
 import { useToast } from './Toast';
 import { useLibrary } from './useLibrary';
 import { FloatCollectionBar } from './FloatCollectionBar';
@@ -11,20 +11,30 @@ import { FloatCollectionBar } from './FloatCollectionBar';
 /**
  * Save toggle used on cards, detail pages and panels. `icon` is the floating
  * card action; `button` and `pill` carry a label for detail pages.
+ *
+ * `app`, when given, is only for the float bar's logo stack (the same face
+ * ScreenGrid's bulk-select bar shows via `screenApp`) — a single Save here
+ * always saves the one `{type, id}` item regardless of it.
+ *
+ * Forwards its ref to the underlying `<button>` so callers that also wire up
+ * a keyboard shortcut (ScreenPreviewModal's `S`) can trigger the exact same
+ * click handler instead of duplicating the saved/unsaved branching.
  */
-export function SaveButton({
-  type,
-  id,
-  variant = 'icon',
-  className = '',
-  label,
-}: {
+export const SaveButton = forwardRef<HTMLButtonElement, {
   type: SavedItemType;
   id: string;
   variant?: 'icon' | 'button' | 'pill';
   className?: string;
   label?: string;
-}) {
+  app?: App;
+}>(function SaveButton({
+  type,
+  id,
+  variant = 'icon',
+  className = '',
+  label,
+  app,
+}, ref) {
   const { collectionsContaining, toggleInCollection, deleteCollection } = useLibrary();
   const { show } = useToast();
   const router = useRouter();
@@ -56,6 +66,7 @@ export function SaveButton({
       {floatOpen && (
         <FloatCollectionBar
           items={[{ type, id }]}
+          apps={app ? [app] : undefined}
           onClose={() => setFloatOpen(false)}
           onSaved={() => setFloatOpen(false)}
         />
@@ -77,6 +88,7 @@ export function SaveButton({
     return (
       <>
         <button
+          ref={ref}
           type="button"
           className={`ins-iconbtn ${saved ? 'is-active' : ''} ${className}`}
           aria-label={saved ? 'Remove from saved' : 'Save'}
@@ -94,6 +106,7 @@ export function SaveButton({
   return (
     <>
       <button
+        ref={ref}
         type="button"
         className={`ins-btn ${variant === 'pill' ? 'ins-btn--pill' : ''} ${saved ? 'is-active' : ''} ${className}`}
         aria-pressed={saved}
@@ -105,4 +118,4 @@ export function SaveButton({
       {floats}
     </>
   );
-}
+});

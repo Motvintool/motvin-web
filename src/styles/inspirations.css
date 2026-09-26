@@ -2529,6 +2529,15 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   overflow: hidden;
 }
 
+/* Shown in place of the two panes above while `?screen=<id>` is still being
+   resolved (a fresh/shared link, not a click from an already-loaded card). */
+.ins-screen-preview-modal--loading {
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border-radius: 24px;
+}
+
 .ins-screen-preview-main {
   flex: 1 1 0;
   min-width: 0;
@@ -2640,6 +2649,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   max-height: 670px;
   border: 1px solid #eee;
   border-radius: 62px;
+  cursor: zoom-in;
   /* Plain border-radius is a constant-curvature circular arc — this is the
      continuous, G2-smooth "squircle" corner iOS actually uses (visibly
      rounder through the corner, flatter along the straight edges leading
@@ -2902,6 +2912,57 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   color: #6a5b5b;
   font-size: 16px;
   text-decoration: none;
+}
+
+/* "Similar screens" rail — the same neighbours ScreenViewer's "More like
+   this" tab gets from inspirationsApi.similar(), condensed into a horizontal
+   strip that fits the details panel instead of a full page grid. Clicking a
+   thumbnail re-points ?screen= at it (see openScreen in ScreenPreviewModal),
+   swapping the whole preview to that screen in place. */
+.ins-screen-preview-similar {
+  padding: 16px 20px 4px;
+  margin-top: 8px;
+  border-top: 1px solid #eee;
+}
+
+.ins-screen-preview-similar-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #0b0c0e;
+}
+
+.ins-screen-preview-similar-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 4px;
+}
+
+.ins-screen-preview-similar-item {
+  flex: none;
+  width: 72px;
+  aspect-ratio: 3 / 4;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #eee;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  transition: border-color 150ms ease;
+}
+
+.ins-screen-preview-similar-item:hover {
+  border-color: #ccc;
+}
+
+.ins-screen-preview-similar-item :is(img, .ins-shot-missing) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  aspect-ratio: auto !important;
 }
 
 @media (max-width: 900px) {
@@ -4220,7 +4281,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   color: #fff !important;
   border: 1px solid #000 !important;
   border-radius: 100px !important;
-  padding: 16px 24px !important;
+  padding: 12px 24px !important;
   gap: 8px !important;
   font-family: 'Inter', sans-serif !important;
   font-weight: 500 !important;
@@ -4233,7 +4294,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   color: #000 !important;
   border: 1px solid #ecedef !important;
   border-radius: 100px !important;
-  padding: 16px 24px !important;
+  padding: 12px 24px !important;
   gap: 8px !important;
   font-family: 'Inter', sans-serif !important;
   font-weight: 500 !important;
@@ -4243,8 +4304,8 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 }
 
 .ins-masthead-actions .ins-iconbtn {
-  width: 53px !important;
-  height: 53px !important;
+  width: 49.2px !important;
+  height: 49.2px !important;
   background-color: #fff !important;
   border: 1px solid #ecedef !important;
   border-radius: 100px !important;
@@ -4549,15 +4610,27 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 .ins-lightbox {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  /* Above .ins-search-overlay's 100 — ScreenPreviewModal opens this over its
+     own screenshot to zoom in, so it needs to outrank that modal's backdrop,
+     not just the page behind it (where a plain 80 was enough before). */
+  z-index: 120;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  /* `safe` is the point: plain `center` leaves whichever side of the overflow
+     is "before" the container's start edge unreachable by scroll in most
+     engines once a zoomed shot no longer fits (you can scroll away from
+     center but never back past it to the true top). `safe center` centers
+     normally at rest and only falls back to start-aligned — fully
+     scrollable — once the content actually overflows. */
+  align-items: safe center;
+  justify-content: safe center;
   padding: clamp(16px, 4vw, 48px);
+  /* A zoomed shot can grow past the viewport — scroll the whole overlay
+     rather than clipping it or panning with a custom drag. */
+  overflow: auto;
 }
 
 .ins-lightbox-backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: rgba(8, 9, 12, 0.86);
   backdrop-filter: blur(3px);
@@ -4566,20 +4639,31 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 
 .ins-lightbox-dialog {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   max-width: 100%;
-  max-height: 100%;
   animation: insPreviewIn 180ms var(--ins-ease);
 }
 
 .ins-lightbox-shot {
   max-width: 100%;
   max-height: calc(100vh - 96px);
-  border-radius: var(--ins-radius-lg);
+  border-radius: 92px;
+  /* Same continuous "squircle" corner as .ins-screen-preview-shot, rather
+     than a plain constant-curvature radius — unsupported browsers just keep
+     the radius above with no fallback needed. */
+  corner-shape: squircle;
   overflow: hidden;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  cursor: zoom-in;
+  /* Zoom grows this box's own real size (not a `transform: scale()` on its
+     content), so a fixed-px border-radius stays a constant 92px at either
+     size instead of visually stretching along with it. */
+  transition: max-width 200ms var(--ins-ease), max-height 200ms var(--ins-ease);
+}
+
+.ins-lightbox-shot.is-zoomed {
+  max-width: 125%;
+  max-height: calc((100vh - 96px) * 1.25);
+  cursor: zoom-out;
 }
 
 .ins-lightbox-shot img {
@@ -4589,6 +4673,11 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   width: auto;
   height: auto;
   object-fit: contain;
+  user-select: none;
+}
+
+.ins-lightbox-shot.is-zoomed img {
+  max-height: calc((100vh - 96px) * 1.25);
 }
 
 .ins-lightbox-close {

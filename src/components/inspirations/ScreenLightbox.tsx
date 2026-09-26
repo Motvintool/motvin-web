@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import type { Screen } from '@/lib/inspirations/types';
 import { CloseIcon } from './Icons';
@@ -8,11 +8,20 @@ import { Screenshot } from './Screenshot';
 
 /**
  * Full-screen enlarged view of a single screenshot, opened from the "expand"
- * button on the screen detail page's own hero image.
+ * button on the screen detail page's own hero image (and from clicking a
+ * shot inside ScreenPreviewModal).
  *
  * Same overlay conventions as FlowPreview.tsx (portal, backdrop, Escape,
  * focus trap, body scroll lock) minus the step/filmstrip machinery — there's
  * one image here, not a sequence, so there's nothing to page between.
+ *
+ * Zoom is a plain click toggle to a fixed 125%, not a variable +/- control —
+ * there's only one screenshot to look at, so "how much bigger" doesn't need
+ * to be a decision. Growing the frame itself (rather than a CSS `transform:
+ * scale()` on its content) keeps its corner radius a literal, constant 92px
+ * at either size instead of visually stretching with it; panning around a
+ * zoomed shot that no longer fits the viewport is then just the overlay's
+ * own native scroll, not a custom drag.
  */
 
 /** The mounted flag never changes after hydration, so nothing to subscribe to. */
@@ -23,6 +32,7 @@ function subscribeNever() {
 export function ScreenLightbox({ screen, onClose }: { screen: Screen; onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const [zoomed, setZoomed] = useState(false);
 
   // Portals need a document, so the overlay renders on the client only.
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
@@ -58,7 +68,12 @@ export function ScreenLightbox({ screen, onClose }: { screen: Screen; onClose: (
         <button ref={closeRef} type="button" className="ins-lightbox-close" aria-label="Close" onClick={onClose}>
           <CloseIcon size={18} />
         </button>
-        <div className="ins-lightbox-shot">
+
+        <div
+          className={`ins-lightbox-shot ${zoomed ? 'is-zoomed' : ''}`}
+          onClick={() => setZoomed((z) => !z)}
+          title={zoomed ? 'Click to zoom out' : 'Click to zoom in'}
+        >
           <Screenshot screen={screen} priority />
         </div>
       </div>

@@ -32,6 +32,9 @@ export const BookmarkIcon = ({ filled, ...p }: IconProps & { filled?: boolean })
 export const PlusIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M12 5v14M5 12h14" /></svg>
 );
+export const MinusIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M5 12h14" /></svg>
+);
 export const MoreIcon = (p: IconProps) => (
   <svg {...base(p)} fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>
 );
