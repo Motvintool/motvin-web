@@ -103,7 +103,7 @@ export function AudioMenu() {
       
       <button
         type="button"
-        className={`ins-header-audio ${open || playing ? 'is-active' : ''}`}
+        className={`ins-header-action-link ${open || playing ? 'is-active' : ''}`}
         aria-label="Tune In"
         aria-expanded={open}
         aria-haspopup="menu"
@@ -112,7 +112,7 @@ export function AudioMenu() {
         {playing ? (
            <AudioBarsIcon size={18} stroke="#111" />
         ) : (
-           <img src="/ASSET/Icons/Motvin/music.svg" alt="" className="ins-header-audio-icon" width={18} height={18} />
+           <img src="/ASSET/Icons/Motvin/music.svg" alt="" width={18} height={18} />
         )}
       </button>
 

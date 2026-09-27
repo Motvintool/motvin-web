@@ -136,7 +136,13 @@ export function Header() {
 
         <div className="ins-header-center">
           <GlobalSearch />
-          <AudioMenu />
+          <Link href="/icons" className="ins-header-try-icons" aria-label="Try Icons">
+            <div className="ins-try-icons-img">
+               <img src="/ASSET/Images/Motvin/try-icon.png" alt="" />
+            </div>
+            <span className="ins-try-icons-text">Try Icons</span>
+            <span className="ins-try-icons-badge">New</span>
+          </Link>
         </div>
 
         <div className="ins-header-right">
@@ -149,11 +155,7 @@ export function Header() {
             >
               <img src="/ASSET/Icons/Motvin/save.svg" alt="" width={20} height={20} />
             </Link>
-            {/* Same-origin but deliberately a new tab, so leaving to read
-                release notes never loses whatever the visitor was browsing. */}
-            <a href="/updates/" className="ins-header-action-link" aria-label="Release notes" target="_blank" rel="noopener noreferrer">
-              <img src="/ASSET/Icons/Motvin/collection.svg" alt="" width={20} height={20} />
-            </a>
+            <AudioMenu />
           </div>
           <div className="ins-header-profile">
             <ProfileMenu />
