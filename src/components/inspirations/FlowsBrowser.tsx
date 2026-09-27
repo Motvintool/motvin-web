@@ -105,28 +105,22 @@ export function FlowsBrowser({ entries, apps }: { entries: Entry[]; apps: Map<st
   };
 
   /**
-   * A flow's rows beneath its name: its own screens as leaves and its child
-   * flows as branches, interleaved in walk order. A screen that a child flow
-   * also lists is shown once, under the child — the parent's strip still has
-   * it, but the tree names each screen in the most specific place it belongs.
+   * One journey in the rail: its name, a chevron when journeys branch from
+   * it, and those branches beneath. Screens are not listed here — a journey
+   * is the unit, and its screens are the strip on the right — so the rail
+   * reads as the app's map, the way a flow library's does.
    */
   const renderNode = (node: Node) => {
-    const { flow, screens } = node.entry;
+    const { flow } = node.entry;
     const hasChildren = node.children.length > 0;
     const isCollapsed = collapsed.has(flow.id) && !query.trim();
-    const inChild = new Set(node.children.flatMap((child) => child.entry.flow.screenIds));
-    const items: { at: number; screen?: Screen; child?: Node }[] = [
-      ...screens.filter((screen) => !inChild.has(screen.id)).map((screen) => ({ at: flow.screenIds.indexOf(screen.id), screen })),
-      ...node.children.map((child) => ({ at: flow.screenIds.indexOf(child.entry.flow.screenIds[0]), child })),
-    ].sort((a, b) => a.at - b.at);
-    const collapsible = items.length > 0 && node.depth === 0;
     return (
       <li key={flow.id} className="ins-flowtree-node" style={{ '--depth': node.depth } as React.CSSProperties}>
         <div className={`ins-flowtree-row ${selected === flow.id ? 'is-active' : ''} ${node.depth === 0 ? 'is-root' : ''}`}>
           <button type="button" className="ins-flowtree-name" onClick={() => jumpTo(flow.id)}>
             {flow.name}
           </button>
-          {(hasChildren || collapsible) && (
+          {hasChildren && (
             <button
               type="button"
               className="ins-flowtree-toggle"
@@ -138,31 +132,7 @@ export function FlowsBrowser({ entries, apps }: { entries: Entry[]; apps: Map<st
             </button>
           )}
         </div>
-        {!isCollapsed && items.length > 0 && (
-          <ul className="ins-flowtree-children">
-            {items.map((item) =>
-              item.child ? (
-                renderNode(item.child)
-              ) : (
-                <li key={item.screen!.id} className="ins-flowtree-node" style={{ '--depth': node.depth + 1 } as React.CSSProperties}>
-                  <div className="ins-flowtree-row is-leaf">
-                    <Link
-                      href={(() => {
-                        const sp = new URLSearchParams(params.toString());
-                        sp.set(FLOW_PARAM, flow.id);
-                        return `?${sp.toString()}`;
-                      })()}
-                      scroll={false}
-                      className="ins-flowtree-name ins-flowtree-leaf"
-                    >
-                      {item.screen!.name}
-                    </Link>
-                  </div>
-                </li>
-              ),
-            )}
-          </ul>
-        )}
+        {hasChildren && !isCollapsed && <ul className="ins-flowtree-children">{node.children.map(renderNode)}</ul>}
       </li>
     );
   };

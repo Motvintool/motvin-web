@@ -1,5 +1,7 @@
 'use client';
 
+import type { Screen } from '@/lib/inspirations/types';
+
 import Link from 'next/link';
 import { Suspense, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
@@ -35,7 +37,7 @@ function HoverPreview({ category, mousePos }: { category: { id: string, title: s
     return Promise.resolve({ items: [] } as any);
   }, `preview-screens-${category.id}-${category.title}`);
 
-  const { data: flowsScreensData } = useAsync(async () => {
+  const { data: flowsScreensData } = useAsync(async (): Promise<Screen[]> => {
     if (!isFlows) return [];
     const flows = await inspirationsApi.listFlows(category.id);
     if (!flows.length) return [];
@@ -51,9 +53,9 @@ function HoverPreview({ category, mousePos }: { category: { id: string, title: s
   }, []);
 
   const items = isFlows
-    ? (flowsScreensData || []).slice(0, 5).map(s => ({ type: 'screen', id: s.id, name: s.name, url: s.url, app: null }))
+    ? (flowsScreensData || []).slice(0, 5).map((s: Screen) => ({ type: 'screen', id: s.id, name: s.name, url: s.url, app: null }))
     : isScreens
-    ? (screensData?.items || []).slice(0, 5).map(s => ({ type: 'screen', id: s.id, name: s.name, url: s.url, app: null }))
+    ? (screensData?.items || []).slice(0, 5).map((s: Screen) => ({ type: 'screen', id: s.id, name: s.name, url: s.url, app: null }))
     : (appsData || []).slice(0, 5).map(a => ({ type: 'app', id: a.id, name: a.name, url: null, app: a }));
 
   if (items.length === 0) return null;

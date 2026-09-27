@@ -607,6 +607,67 @@ export function normaliseFlows(raw, screenCount) {
   return flows;
 }
 
+const NAME_SYSTEM = `You name user flows for a design-reference library, the way Mobbin does. Return JSON only, no prose, no markdown fence:
+{ "names": { "<journey id>": "<name>", ... } }
+
+Each journey is a real path someone walked in the app: it starts from the screen it was opened from and lists the screens that followed. Name it as the task the person was doing, in two to five words, present participle where it is an action: "Searching dishes & restaurants", "Adding a dish to cart", "Turning on veg mode filter", "Booking a table", "Editing profile", "Subscribing to Swiggy One". A journey that simply opens a feature is named for the feature as the app names it: "Offer Zone", "Eatlist", "Restaurant detail", "Bolt". A section reached from the tab bar keeps its tab name: "Food", "Instamart", "Profile". "Onboarding" stays "Onboarding".
+
+Never name a journey after a screen type ("Detail screen", "Form"). Never invent what you cannot see in the screen names and descriptions given. Keep every id; reuse the given name when nothing better is honest.`;
+
+/**
+ * Asks the model to rename a structural journey tree in task language.
+ *
+ * The tree — which journeys exist, what nests under what, which screens each
+ * has — is fixed by the walk and is not the model's to change. Only the names
+ * are: the heuristics can say "Searching Food" or "Paan Corner detail"; a model
+ * that has read the screens can say "Searching dishes & restaurants".
+ *
+ * @param {{name: string, parent: string|null, nodeIds: string[]}[]} journeys
+ * @param {import('./graph.js').ScreenGraph} graph
+ */
+export async function nameJourneys(journeys, graph, options = {}) {
+  const backend = pickBackend(options.backend);
+  if (backend === 'local' || !journeys.length) return journeys;
+
+  const listing = journeys
+    .map((journey, index) => {
+      const steps = journey.nodeIds
+        .map((id) => graph.get(id))
+        .filter(Boolean)
+        .map((node) => `${node.analysis.name} [${node.analysis.screenType}]${node.analysis.description ? ` — ${node.analysis.description}` : ''}`);
+      return `${index}: "${journey.name}"${journey.parent ? ` (inside "${journey.parent}")` : ' (top level)'}\n   ${steps.join('\n   ')}`;
+    })
+    .join('\n\n');
+  const instruction = `Here is the flow tree read off a recording of one app, with each journey's screens in order:\n\n${listing}\n\nName each journey by its index.`;
+
+  let reply;
+  if (backend === 'api') {
+    reply = await callApiText(NAME_SYSTEM, instruction);
+  } else {
+    const result = await run('claude', ['-p', `${NAME_SYSTEM}\n\n${instruction}`, '--output-format', 'json'], { timeout: 180_000 });
+    let envelope = null;
+    try {
+      envelope = JSON.parse(result.stdout);
+    } catch {
+      // Handled below.
+    }
+    if (envelope?.is_error) throw new Error(`claude CLI: ${envelope.result || 'error'}`);
+    if (result.failed) throw new Error(`claude CLI failed: ${result.stderr.trim() || `exit ${result.code}`}`);
+    reply = envelope?.result ?? result.stdout;
+  }
+
+  const raw = extractJson(reply);
+  const names = raw && typeof raw.names === 'object' ? raw.names : {};
+  const renamed = journeys.map((journey, index) => {
+    const proposed = String(names[String(index)] ?? '').trim().slice(0, 60);
+    return { ...journey, name: proposed || journey.name };
+  });
+  // Parents are referenced by name; a renamed parent takes its children along.
+  const byOld = new Map(journeys.map((journey, index) => [journey.name, renamed[index].name]));
+  for (const journey of renamed) if (journey.parent) journey.parent = byOld.get(journey.parent) ?? journey.parent;
+  return renamed;
+}
+
 /**
  * Analyses one screenshot.
  *

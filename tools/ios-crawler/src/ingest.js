@@ -33,7 +33,8 @@ import { extractFrames } from './frames.js';
 import { fingerprint, fingerprintFromThumb, jaccard, THUMB } from './hash.js';
 import { ScreenGraph } from './graph.js';
 import { segmentRecording } from './segment.js';
-import { analyseScreen, groupIntoFlows, identifyApp, pickBackend } from './analyze.js';
+import { analyseScreen, groupIntoFlows, identifyApp, nameJourneys, pickBackend } from './analyze.js';
+import { buildJourneys } from './journeys.js';
 import { isBlockingScreen, isExternalAuthScreen } from './safety.js';
 import { publishCrawl, resolveDataDir, safeName } from './publish.js';
 import { readText } from './ocr.js';
@@ -269,6 +270,8 @@ export async function ingestFolder(options) {
   let identified = null;
   let captureInfo = null;
   let timeline = null;
+  /** Every screen the recording showed, in order, revisits included. */
+  let visits = null;
 
   try {
     // One --from for both sources: a folder of screenshots, or a recording.
@@ -303,7 +306,7 @@ export async function ingestFolder(options) {
         throw new Error('no frame held still long enough to be a screen — try a slower walk through the app');
       }
 
-      await ingestTimeline({ timeline, frames, analyzer, graph, duplicates, excluded, options, captureInfo });
+      visits = await ingestTimeline({ timeline, frames, analyzer, graph, duplicates, excluded, options, captureInfo });
     } else {
       const files = listImages(source);
       if (!files.length) {
@@ -355,7 +358,30 @@ export async function ingestFolder(options) {
     // so the journey reads straight through them.
     const ordered = [...graph.nodes.values()].filter((node) => !node.skipPublish);
     let flowGroups = [];
-    if (analyzer.usable && ordered.length >= 2) {
+    if (visits && analyzer.usable && ordered.length >= 1) {
+      // A recording says how the person moved, so the tree comes from the
+      // walk itself: sections, the journeys opened from them, the journeys
+      // opened from those. A model, when there is one, only renames.
+      report(options, 'flows', 'Reading the journeys off the walk');
+      let journeys = buildJourneys(visits);
+      if (pickBackend(options.backend) !== 'local') {
+        try {
+          journeys = await nameJourneys(journeys, graph, { backend: options.backend });
+        } catch (error) {
+          log.warn(`could not name the journeys with the model — ${error.message.split('\n')[0]}; keeping the names read off the screens`);
+        }
+      }
+      flowGroups = journeys.map((journey) => ({
+        name: journey.name,
+        category: journey.category,
+        parent: journey.parent,
+        nodeIds: journey.nodeIds,
+      }));
+      log.heading('Flows');
+      for (const group of flowGroups) {
+        log.ok(`${group.parent ? `${group.parent} › ` : ''}${group.name} — ${group.nodeIds.length} screen(s)`);
+      }
+    } else if (analyzer.usable && ordered.length >= 2) {
       report(options, 'flows', 'Grouping the screens into journeys');
       try {
         const groups = await groupIntoFlows(
@@ -622,6 +648,12 @@ async function ingestTimeline({ timeline, frames, analyzer, graph, duplicates, e
   }
 
   if (captureInfo) captureInfo.excluded = excluded.length;
+
+  // The walk, screen by screen, returns included — what the flow tree is
+  // built from.
+  return timeline.screens
+    .map((screen) => ({ screen, node: nodeByScreen.get(screen.revisitOf ?? screen.id) ?? null }))
+    .filter((visit) => visit.node);
 }
 
 /** The folder path: files in name order, deduplicated on pixels alone. */

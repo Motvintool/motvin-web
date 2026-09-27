@@ -24,6 +24,7 @@ import { ingestFolder, selectStableFrames, slugify, _internals } from './ingest.
 import { parseIdbElements } from './device.js';
 import { buildSections, classifyScreen, cleanTitle, groupFlowsLocally, guessBrand } from './heuristics.js';
 import { segmentRecording } from './segment.js';
+import { buildJourneys, journeyName } from './journeys.js';
 import { isExternalAuthScreen } from './safety.js';
 import { dominantColors, fingerprintFromThumb, THUMB } from './hash.js';
 
@@ -780,6 +781,44 @@ export async function selfTest() {
       loading.skipReason = 'loading state — not published';
       const out = publishCrawl({ graph: g, dataDir: loadStore, dryRun: true, app: { appId: 'load-app', name: 'Load App', industry: 'food' } });
       check('a loading state marked for skipping is left out and reported', out.screens.length === 1 && out.skipped[0]?.screenType === 'loading');
+    }
+
+    log.heading('Journeys from the walk');
+    {
+      let n = 0;
+      const mk = (screenType, name, tabs = [], extra = {}) => ({
+        id: `j${++n}`,
+        analysis: { screenType, name, signals: { tabLabels: tabs, title: name, headline: null, ctas: [] }, tags: [], description: '' },
+        ...extra,
+      });
+      const splash = mk('splash', 'Splash screen');
+      const login = mk('login', 'Log in');
+      const otp = mk('otp', 'Verify');
+      const foodHome = mk('home', 'Food home', ['Food', 'Bolt', 'Reorder']);
+      const search = mk('search', 'Search for dishes');
+      const results = mk('search_results', 'Results');
+      const restaurant = mk('product_detail', 'Paan Corner');
+      const cart = mk('cart', 'Cart');
+      const filterSheet = mk('bottom_sheet', 'Filter', [], { capture: { overlay: { kind: 'bottom_sheet' } } });
+      const instaHome = mk('feed', 'Instamart home', ['Instamart', 'Categories']);
+      const profile = mk('profile', 'Profile');
+      const editProfile = mk('form', 'Edit name and email');
+      const loading = mk('loading', 'Loading', [], { skipPublish: true });
+      const walk = [splash, login, otp, foodHome, search, results, foodHome, restaurant, cart, restaurant, foodHome, filterSheet, foodHome, loading, instaHome, profile, editProfile, profile]
+        .map((node) => ({ node }));
+      const tree = buildJourneys(walk);
+      const byName = new Map(tree.map((journey) => [journey.name, journey]));
+      const shape = tree.map((j) => `${j.parent ? `${j.parent} › ` : ''}${j.name}`).join(' | ');
+      check('the opening walk is one onboarding with its sign-in as a child', byName.get('Onboarding')?.nodeIds.length === 3 && byName.get('Logging in')?.parent === 'Onboarding', shape);
+      check('a tab screen opens a section', byName.get('Food')?.section === true && byName.get('Food')?.parent === null, shape);
+      check('leaving a section and coming back is a journey under it, starting where it began', byName.get('Searching Food')?.parent === 'Food' && byName.get('Searching Food')?.nodeIds.join(',') === 'j4,j5,j6', shape);
+      check('going deeper and returning nests a journey under the detail', byName.get('Adding to cart')?.parent === 'Paan Corner detail' && byName.get('Paan Corner detail')?.parent === 'Food', shape);
+      check('a sheet over the section is a one-step journey under it, named for its task', byName.get('Filtering Food')?.parent === 'Food' && byName.get('Filtering Food')?.nodeIds.length === 2, shape);
+      check('a second tab is a second section', byName.get('Instamart')?.section === true, shape);
+      check('a profile screen is a section wherever it was reached from', byName.get('Profile')?.parent === null && byName.get('Editing profile')?.parent === 'Profile', shape);
+      check('loading states are transparent to the tree', !tree.some((j) => j.nodeIds.includes(loading.id)));
+      check('no screen appears in two journeys at the same level', tree.every((j) => new Set(j.nodeIds).size === j.nodeIds.length));
+      check('a permission prompt is named for what it asks', journeyName(mk('permission', 'Allow location', [], { analysis: { screenType: 'permission', name: 'Allow', signals: { title: 'Allow "Swiggy" to use your location?', headline: null, ctas: [], tabLabels: [] }, tags: [], description: '' } })) === 'Allowing location access');
     }
 
     log.heading('Brand from the screens');

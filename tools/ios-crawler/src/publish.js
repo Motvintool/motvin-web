@@ -192,10 +192,11 @@ export function publishCrawl(options) {
     .map((group) => ({ ...group, nodeIds: group.nodeIds.filter((id) => nodes.some((node) => node.id === id)) }))
     .filter((group) => group.nodeIds.length >= 1);
 
-  // A screen can sit in a flow and in one of that flow's child flows — an
-  // onboarding and the sign-in inside it. It is stored once, in the deepest
-  // flow that holds it, so the folder names the most specific journey; every
-  // flow that lists it still refers to it by id.
+  // A screen can sit in a flow and in one of that flow's child flows — a
+  // section screen is also the first step of every journey opened from it. It
+  // is stored once, in the shallowest flow that holds it, so the folder names
+  // where it lives in the app; every flow that lists it still refers to it by
+  // id.
   const depthOf = (group, seen = new Set()) => {
     if (!group.parent || seen.has(group.name)) return 0;
     seen.add(group.name);
@@ -213,8 +214,9 @@ export function publishCrawl(options) {
   }
   for (const group of flowGroups) {
     const owned = group.nodeIds.filter((nodeId) => {
-      const deeper = flowGroups.find((other) => other !== group && other.depth > group.depth && other.nodeIds.includes(nodeId));
-      return !deeper;
+      const shallower = flowGroups.find((other) => other !== group && other.depth < group.depth && other.nodeIds.includes(nodeId));
+      const earlier = flowGroups.find((other) => other !== group && other.depth === group.depth && flowGroups.indexOf(other) < flowGroups.indexOf(group) && other.nodeIds.includes(nodeId));
+      return !shallower && !earlier;
     });
     if (!owned.length) continue;
     if (!options.dryRun) mkdirSync(join(appDir, group.folder), { recursive: true });
@@ -450,7 +452,7 @@ export function publishCrawl(options) {
     flowGroups.sort((a, b) => a.depth - b.depth || flowGroups.indexOf(a) - flowGroups.indexOf(b));
     for (const group of flowGroups) {
       const screenIds = group.nodeIds.map((nodeId) => screenIdByNode.get(nodeId)).filter(Boolean);
-      if (screenIds.length < 2) continue; // The builder drops one-screen flows.
+      if (!screenIds.length) continue;
       flows.push({
         id: `${app.appId}-${platform}-${group.folder}`,
         appId: app.appId,
