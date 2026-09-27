@@ -6,8 +6,7 @@ import { FLOW_PARAM } from './FlowPreview';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { App, Flow, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
-import { ChevronRightIcon } from './Icons';
-import { SaveButton } from './SaveButton';
+import { PlayOutlineIcon } from './Icons';
 import { Screenshot } from './Screenshot';
 
 /**
@@ -45,60 +44,41 @@ function FlowBlock({ entry, app }: { entry: Entry; app?: App }) {
   })();
 
   return (
-    <section className="ins-flowblock" aria-label={`${flow.name} flow`}>
-      <header className="ins-flowblock-head">
-        {app && <AppLogo app={app} size={38} className="ins-flowblock-logo" />}
+    <div className="ins-flows-row">
+      <div className="ins-flows-row-meta">
+        <Link href={previewHref} scroll={false} className="ins-flows-row-title">
+          <span className="ins-flows-row-play" aria-hidden>
+            <PlayOutlineIcon size={16} />
+          </span>
+          <span className="ins-flows-row-text">
+            <span className="ins-flows-row-name">{flow.name}</span>
+            <span className="ins-flows-row-sub">
+              {steps} {steps === 1 ? 'screen' : 'screens'}
+              {app ? ` · ${app.name}` : ''}
+            </span>
+          </span>
+        </Link>
+        {app && <AppLogo app={app} size={40} className="ins-flows-row-logo" />}
+      </div>
 
-        <div className="ins-flowblock-titles">
-          <h2 className="ins-flowblock-title">
-            {app && (
-              <>
-                <Link href={INSPIRATIONS_ROUTES.app(app)} className="ins-flowblock-app">
-                  {app.name}
-                </Link>
-                <span className="ins-flowblock-slash" aria-hidden>
-                  /
-                </span>
-              </>
-            )}
-            <Link href={previewHref} scroll={false} className="ins-flowblock-flow">
-              {flow.name}
-            </Link>
-          </h2>
-          <p className="ins-flowblock-count">
-            {steps} {steps === 1 ? 'Screen' : 'Screens'}
-          </p>
-        </div>
-
-        <div className="ins-flowblock-actions">
-          <SaveButton type="flow" id={flow.id} variant="button" label="Save" />
-          {app && (
-            <Link href={INSPIRATIONS_ROUTES.app(app)} className="ins-btn ins-btn--ghost ins-btn--sm">
-              View App <ChevronRightIcon size={13} />
-            </Link>
-          )}
-        </div>
-      </header>
-
-      <div className="ins-flowrow-strip">
+      <div className="ins-flows-row-strip">
         {screens.map((screen, index) => (
           <Link
             key={screen.id}
             href={previewHref}
             scroll={false}
-            className="ins-flowrow-shot"
+            className="ins-flows-row-shot"
             aria-label={`Step ${index + 1} of the ${flow.name} flow`}
           >
             <Screenshot screen={screen} />
-            <span className="ins-flowrow-step">{index + 1}</span>
           </Link>
         ))}
         {screens.length === 0 && (
-          <p className="ins-muted ins-flowrow-missing">
+          <p className="ins-muted ins-flows-row-missing">
             This flow&rsquo;s screens are not published yet.
           </p>
         )}
       </div>
-    </section>
+    </div>
   );
 }

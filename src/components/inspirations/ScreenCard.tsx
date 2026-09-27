@@ -2,14 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { memo, type MouseEvent } from 'react';
+import { memo, useState, type MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 
 import type { App, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { SCREEN_PARAM } from './ScreenPreviewModal';
 import { Screenshot } from './Screenshot';
-import { useSiblingCycle } from './useSiblingCycle';
+import { useToast } from './Toast';
+import { inspirationsApi } from '@/lib/inspirations/api';
 
 /** A plain left-click with no modifier opens the preview modal in place;
  * anything else (middle-click, cmd/ctrl-click, shift-click) is the visitor
@@ -67,11 +69,38 @@ function ScreenCardImpl({
   textHighlights?: Array<{ left: number; top: number; width: number; height: number }>;
   onRemove?: () => void;
 }) {
-  const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step } = useSiblingCycle(screen);
-  // useSiblingCycle's `screen` param is nullable (AppCard may have no preview
-  // to cycle) so its return type is too, but ScreenCard's own `screen` prop
-  // never is — the fallback here is for the type, not a real null case.
-  const shownScreen = activeScreen ?? screen;
+  const shownScreen = screen;
+  const { show: showToast } = useToast();
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const src = inspirationsApi.mediaUrl(shownScreen.url);
+      if (!src) throw new Error('No source');
+      const response = await fetch(src);
+      const blob = await response.blob();
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1600);
+      } else {
+        showToast('Copying not supported');
+      }
+    } catch (error) {
+      console.error('Failed to copy', error);
+      showToast('Failed to copy');
+    }
+  };
+
+  const handleSave = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!selected) {
+      onToggleSelect?.();
+    }
+  };
 
   const router = useRouter();
   const pathname = usePathname();
@@ -95,7 +124,7 @@ function ScreenCardImpl({
   const appDescription = app?.tagline || derivedTagline;
 
   return (
-    <article className={`ins-card ${selected ? 'is-selected' : ''}`} data-id={screen.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
+    <article className={`ins-card ${selected ? 'is-selected' : ''}`} data-id={screen.id} role="listitem">
       <div className="ins-card-shot">
         {selectable && (
           <button
@@ -149,21 +178,21 @@ function ScreenCardImpl({
             ))}
           </Link>
         </div>
-        {dotCount > 1 && (
-          <div className="ins-card-hover-controls">
-            <button type="button" className="ins-card-control ins-card-control--prev" aria-label="Previous screen" onClick={step(-1)} disabled={activeIndex === 0}>
-              <img src="/ASSET/Icons/Motvin/previous-arrow.svg" alt="" width={24} height={18} />
-            </button>
-            <span className="ins-card-dots">
-              {previewScreens!.map((s, i) => (
-                <span key={s.id} className={i === activeIndex ? 'is-active' : ''} />
-              ))}
-            </span>
-            <button type="button" className="ins-card-control" aria-label="Next screen" onClick={step(1)}>
-              <img src="/ASSET/Icons/Motvin/next-arrow.svg" alt="" width={24} height={18} />
-            </button>
+        <div className="ins-card-hover-footer">
+          {app && (
+            <div className="ins-card-hover-app">
+              <AppLogo app={app} size={48} className="ins-card-hover-logo" />
+              <div className="ins-card-hover-app-text">
+                <p className="ins-card-hover-title">{appTitle}</p>
+                {appDescription && <p className="ins-card-hover-tagline">{appDescription}</p>}
+              </div>
+            </div>
+          )}
+          <div className="ins-card-hover-actions">
+            <button type="button" className="ins-btn-save" onClick={handleSave}>{selected ? 'Saved' : 'Save'}</button>
+            <button type="button" className="ins-btn-copy" onClick={handleCopy}>Copy</button>
           </div>
-        )}
+        </div>
       </div>
       {showMeta && (
         <div className="ins-card-meta">
@@ -189,6 +218,17 @@ function ScreenCardImpl({
             </Link>
           )}
         </div>
+      )}
+      {copied && typeof document !== 'undefined' && createPortal(
+        <div className="ins-float-collection" role="status" aria-live="polite">
+          <div className="ins-float-collection-success">
+            <span className="ins-float-collection-success-check" aria-hidden>
+              <span />
+            </span>
+            Copied as png
+          </div>
+        </div>,
+        document.body
       )}
     </article>
   );

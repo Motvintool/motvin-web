@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, Outfit, Pacifico } from 'next/font/google';
+import { Inter, Outfit, Pacifico, Manrope } from 'next/font/google';
 import { AuthModalProvider } from '@/components/shared/AuthModal';
 import { AuthProvider } from '@/components/shared/AuthProvider';
 import { BANNER_RESERVE_SCRIPT } from '@/components/library/ProductBanner';
@@ -31,6 +31,13 @@ const pacifico = Pacifico({
   display: 'swap',
 });
 
+const manrope = Manrope({
+  variable: '--font-manrope',
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'Motvin: The creative toolkit for websites, colors, icons, AI, and more.',
   icons: {
@@ -40,7 +47,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="en" className={`${outfit.variable} ${inter.variable} ${pacifico.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${outfit.variable} ${inter.variable} ${pacifico.variable} ${manrope.variable}`} suppressHydrationWarning>
       <head>
         {/* Sets data-theme on <html> before first paint to avoid a flash of the
             wrong theme. Must stay blocking and must run before any stylesheet. */}
