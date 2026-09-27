@@ -32,7 +32,7 @@
 */
 
 .ins-root {
-  --ins-max: 1600px;
+  --ins-max: 1760px;
   --ins-gutter: clamp(20px, 3vw, 56px);
   --ins-gap: 24px;
   --ins-header-h: 82px;
@@ -289,6 +289,8 @@ body {
 .ins-header-inner {
   height: 100%;
   width: 100%;
+  max-width: var(--ins-max);
+  margin: 0 auto;
   position: relative;
   border: none !important;
   box-shadow: none !important;
@@ -878,6 +880,8 @@ body {
 
 .ins-main {
   width: 100%;
+  max-width: var(--ins-max);
+  margin: 0 auto;
   padding: 24px 70px 32px 70px;
 }
 
