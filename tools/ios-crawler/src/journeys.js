@@ -80,12 +80,14 @@ export function buildJourneys(visits, options = {}) {
   if (!steps.length) return [];
 
   const journeys = [];
-  const nameCount = new Map();
+  let sequence = 0;
+  /**
+   * A journey is identified by a key, not its name: two walks of the same
+   * journey keep the same name side by side, as a flow library shows them.
+   * `parent` holds the parent's key.
+   */
   const make = (name, category, parent, section = false) => {
-    const base = name || 'Journey';
-    const count = (nameCount.get(`${parent ?? ''}|${base.toLowerCase()}`) ?? 0) + 1;
-    nameCount.set(`${parent ?? ''}|${base.toLowerCase()}`, count);
-    const journey = { name: count === 1 ? base : `${base} (${count})`, category, nodeIds: [], parent, section };
+    const journey = { key: `f${++sequence}`, name: name || 'Journey', category, nodeIds: [], parent: parent ? parent.key : null, section };
     journeys.push(journey);
     return journey;
   };
@@ -100,8 +102,19 @@ export function buildJourneys(visits, options = {}) {
     const onboarding = make('Onboarding', 'onboarding', null, true);
     for (const node of opening) add(onboarding, node);
     for (const task of onboardingTasks(opening)) {
-      const child = make(task.name, task.category, onboarding.name);
+      const child = make(task.name, task.category, onboarding);
       for (const node of task.nodes) add(child, node);
+    }
+  }
+
+  // What the app calls its sections: every label in a section-switcher chip
+  // row, across all screens. A journey landing on a screen titled by one of
+  // these is a section, not a sub-flow.
+  const context = { hubs: new Set() };
+  for (const node of steps) {
+    for (const chip of node.analysis?.signals?.chipLabels ?? []) {
+      const label = String(chip).trim();
+      if (/^[A-Za-z][A-Za-z' &]{1,15}$/.test(label)) context.hubs.add(label.toLowerCase());
     }
   }
 
@@ -142,7 +155,7 @@ export function buildJourneys(visits, options = {}) {
         // Went deeper from this screen and came back: the part after it is a
         // journey of its own, anchored here.
         const firstNew = steps.find((candidate) => candidate.id === tail[0]);
-        const child = make(journeyName(firstNew, node), flowCategoryFor(firstNew?.analysis?.screenType), journey.name);
+        const child = make(journeyName(firstNew, node, actions.get(`${node.id}->${tail[0]}`) ?? null, context), flowCategoryFor(firstNew?.analysis?.screenType), journey);
         add(child, node);
         for (const id of tail) child.nodeIds.push(id);
         journey.nodeIds.length = at + 1;
@@ -150,7 +163,7 @@ export function buildJourneys(visits, options = {}) {
         // Came back to a section screen that has no tab bar of its own (a
         // sub-page of the section): the excursion after it is a child.
         const firstNew = steps.find((candidate) => candidate.id === tail[0]);
-        const child = make(journeyName(firstNew, node), flowCategoryFor(firstNew?.analysis?.screenType), journey.name);
+        const child = make(journeyName(firstNew, node, actions.get(`${node.id}->${tail[0]}`) ?? null, context), flowCategoryFor(firstNew?.analysis?.screenType), journey);
         add(child, node);
         for (const id of tail) child.nodeIds.push(id);
         journey.nodeIds.length = at + 1;
@@ -180,12 +193,64 @@ export function buildJourneys(visits, options = {}) {
       const anchorId = open.nodeIds[open.nodeIds.length - 1];
       const anchor = steps.find((candidate) => candidate.id === anchorId) ?? null;
       const action = anchor ? actions.get(`${anchor.id}->${node.id}`) ?? null : null;
-      const child = make(journeyName(node, anchor, action), flowCategoryFor(type), open.name);
+      // A hub the app itself lists as a section — a chip in its section
+      // switcher — is a section, however it was reached.
+      const hubTitle = cleanTitle(node.analysis?.signals?.title ?? '') || null;
+      if (hubTitle && context.hubs.has(hubTitle.toLowerCase())) {
+        const root = openRoot(hubTitle);
+        add(root, node);
+        continue;
+      }
+      const child = make(journeyName(node, anchor, action, context), flowCategoryFor(type), open);
       if (anchor) add(child, anchor);
       add(child, node);
       stack.push(child);
     } else {
       add(open, node);
+    }
+  }
+
+  // A task opened from two different sections belongs to the app, not to
+  // either section: "Adding a delivery address" from Food and from Instamart
+  // is one top-level journey.
+  const byKey = new Map(journeys.map((journey) => [journey.key, journey]));
+  const parentsOf = new Map();
+  for (const journey of journeys) {
+    if (!journey.parent) continue;
+    const parent = byKey.get(journey.parent);
+    if (!parent || !parent.section) continue;
+    const list = parentsOf.get(journey.name.toLowerCase()) ?? new Set();
+    list.add(parent.key);
+    parentsOf.set(journey.name.toLowerCase(), list);
+  }
+  // Only a task is promoted — a verb phrase, or a journey that is not
+  // browsing. A feature that exists in two sections ("Reorder" in Food and
+  // in Instamart) stays in each and is qualified by section below.
+  const isTask = (journey) => /^[A-Z][a-z]+ing\b/.test(journey.name) || !['discovery'].includes(journey.category);
+  for (const journey of journeys) {
+    if (journey.parent && isTask(journey) && (parentsOf.get(journey.name.toLowerCase())?.size ?? 0) >= 2) {
+      journey.parent = null;
+      journey.section = true;
+    }
+  }
+
+  // The same name in two different places says where it is: "Reorder
+  // (Instamart)", "Restaurant detail (Dineout)". Repeats under one parent
+  // keep the plain name side by side.
+  const groups = new Map();
+  for (const journey of journeys) {
+    const list = groups.get(journey.name.toLowerCase()) ?? [];
+    list.push(journey);
+    groups.set(journey.name.toLowerCase(), list);
+  }
+  for (const list of groups.values()) {
+    const parents = new Set(list.map((journey) => journey.parent ?? ''));
+    if (parents.size < 2) continue;
+    const first = list[0].parent ?? '';
+    for (const journey of list) {
+      if ((journey.parent ?? '') === first) continue;
+      const parent = journey.parent ? byKey.get(journey.parent) : null;
+      if (parent) journey.name = `${journey.name} (${parent.name})`;
     }
   }
 
@@ -234,8 +299,14 @@ function onboardingTasks(nodes) {
 /** The name of an authentication or purchase task from its first screen. */
 function taskName(node) {
   const type = node.analysis?.screenType;
+  const name = String(node.analysis?.name ?? '');
   if (type === 'signup') return 'Creating an account';
-  if (type === 'login' || type === 'otp') return 'Logging in';
+  if (type === 'otp') return 'Verifying OTP';
+  if (type === 'login') {
+    if (/phone/i.test(name)) return 'Entering phone number';
+    if (/email/i.test(name)) return 'Logging in with email';
+    return 'Logging in';
+  }
   if (type === 'paywall') return 'Subscribing';
   if (type === 'payment' || type === 'checkout' || type === 'cart') return 'Placing an order';
   return labelFor(type);
@@ -249,19 +320,73 @@ function taskName(node) {
  * signing in, filtering, allowing a permission — and the screen's own title
  * otherwise, which is how the app itself names the feature.
  */
-export function journeyName(node, anchor = null, action = null) {
+/** Base verbs a tapped label can start with, and their present participle. */
+const PARTICIPLE = {
+  add: 'Adding', apply: 'Applying', book: 'Booking', buy: 'Buying', call: 'Calling', cancel: 'Cancelling',
+  change: 'Changing', chat: 'Chatting', check: 'Checking', choose: 'Choosing', complete: 'Completing',
+  contact: 'Contacting', create: 'Creating', delete: 'Deleting', disable: 'Disabling', edit: 'Editing',
+  enable: 'Enabling', explore: 'Exploring', filter: 'Filtering', get: 'Getting', hide: 'Hiding',
+  invite: 'Inviting', join: 'Joining', link: 'Linking', log: 'Logging', manage: 'Managing', order: 'Ordering',
+  pay: 'Paying', rate: 'Rating', record: 'Recording', redeem: 'Redeeming', remove: 'Removing',
+  reorder: 'Reordering', report: 'Reporting', request: 'Requesting', reset: 'Resetting', save: 'Saving',
+  schedule: 'Scheduling', search: 'Searching', see: 'Viewing', select: 'Selecting', send: 'Sending',
+  set: 'Setting', share: 'Sharing', show: 'Showing', sign: 'Signing', sort: 'Sorting', start: 'Starting',
+  subscribe: 'Subscribing', switch: 'Switching', track: 'Tracking', try: 'Trying', turn: 'Turning',
+  unlock: 'Unlocking', update: 'Updating', upgrade: 'Upgrading', use: 'Using', verify: 'Verifying',
+  view: 'Viewing', watch: 'Watching', write: 'Writing',
+};
+
+/**
+ * "Add balance" → "Adding balance"; "Turn on Veg Mode" → "Turning on veg
+ * mode"; "Hide restaurant" → "Hiding a restaurant". A label that does not
+ * begin with a verb is not a task and returns null.
+ */
+export function taskPhrase(label) {
+  const words = String(label || '').trim().replace(/\s+/g, ' ').split(' ');
+  if (words.length < 2 || words.length > 6) return null;
+  const verb = words[0].toLowerCase();
+  const participle = PARTICIPLE[verb];
+  if (!participle) return null;
+  const rest = words.slice(1).map((word) => (/^[A-Z]{2,}$/.test(word) ? word : word.toLowerCase())).join(' ');
+  // A bare noun after the verb reads better with an article: "Hiding a
+  // restaurant", "Reporting an issue"; a phrase already carrying one, or a
+  // plural, is left alone.
+  const needsArticle = words.length === 2 && !/^(a|an|the|your|my|all|to|on|off|in|up|out|now|more)$/i.test(rest) && !/s$/i.test(rest) && !/^(balance|money|cash|account|profile|language|payment|settings|location|address|feedback)$/i.test(rest);
+  const article = needsArticle ? (/^[aeiou]/i.test(rest) ? 'an ' : 'a ') : '';
+  return `${participle} ${article}${rest}`.trim();
+}
+
+/** What kind of thing a detail page is about, from the words on it. */
+function entityOf(text, anchorSection) {
+  if (/(menu|dishes?|cuisine|restaurant|delivery in|veg|for two|order now|mins?\b.*km)/.test(text)) return 'Restaurant';
+  if (/(add to cart|in stock|brand|pack of|\bqty\b|units?|grocer|instamart)/.test(text)) return 'Product';
+  if (/(event|tickets?|venue|lineup|gates? open|dandiya|concert|show)/.test(text)) return 'Event';
+  if (/(hotel|check[- ]?in|rooms?|nights?|guests?)/.test(text)) return 'Hotel';
+  if (/(recipe|ingredients|servings)/.test(text)) return 'Recipe';
+  if (/(episode|season|watch now|trailer)/.test(text)) return 'Title';
+  if (/(job|apply now|salary)/.test(text)) return 'Job';
+  if (anchorSection && /dine|food|eat/i.test(anchorSection)) return 'Restaurant';
+  if (anchorSection && /mart|shop|store|grocer/i.test(anchorSection)) return 'Product';
+  return null;
+}
+
+export function journeyName(node, anchor = null, action = null, context = { hubs: new Set() }) {
   if (!node) return 'Journey';
   const analysis = node.analysis ?? {};
   const type = analysis.screenType;
   const signals = analysis.signals ?? {};
-  const text = `${signals.title ?? ''} ${signals.headline ?? ''} ${(signals.ctas ?? []).join(' ')} ${(analysis.tags ?? []).join(' ')} ${analysis.description ?? ''}`.toLowerCase();
+  const name = String(analysis.name ?? '');
+  const text = `${name} ${signals.title ?? ''} ${signals.headline ?? ''} ${(signals.ctas ?? []).join(' ')} ${(analysis.tags ?? []).join(' ')} ${analysis.description ?? ''}`.toLowerCase();
   const anchorSection = anchor ? sectionOf(anchor) : null;
   const title = cleanTitle(signals.title ?? '') || null;
   const overlay = node.capture?.overlay?.kind ?? null;
+  const typed = action && action.kind === 'type' && action.label ? action.label : null;
+  const tapped = action && action.kind === 'tap' && action.label ? cleanTitle(action.label) : null;
 
   switch (type) {
     case 'search':
     case 'search_results':
+      if (typed) return `Searching for “${typed}”`;
       return anchorSection ? `Searching ${anchorSection}` : 'Searching';
     case 'cart':
       return 'Adding to cart';
@@ -272,8 +397,11 @@ export function journeyName(node, anchor = null, action = null) {
     case 'paywall':
       return 'Subscribing';
     case 'login':
-    case 'otp':
+      if (/phone/i.test(name)) return 'Logging in with phone number';
+      if (/email/i.test(name)) return 'Logging in with email';
       return 'Logging in';
+    case 'otp':
+      return 'Verifying OTP';
     case 'signup':
       return 'Creating an account';
     case 'permission':
@@ -287,43 +415,66 @@ export function journeyName(node, anchor = null, action = null) {
     case 'calendar':
       return 'Choosing a date';
     case 'product_detail':
-      return title ? `${title} detail` : 'Item detail';
-    case 'detail':
-      return title ?? 'Detail';
+    case 'detail': {
+      // A library names detail pages by what they are about, not by the
+      // particular item: "Restaurant detail", "Product detail", "Event detail".
+      const entity = entityOf(text, anchorSection);
+      if (entity) return `${entity} detail`;
+      const taskFromTap = tapped ? taskPhrase(tapped) : null;
+      if (taskFromTap) return taskFromTap;
+      return title ? `${title} detail` : 'Detail';
+    }
     case 'form':
       if (/address|pincode|zip|flat|landmark|street/.test(text)) return 'Adding a delivery address';
-      if (/name|email|phone|birthday|date of birth/.test(text)) return 'Editing profile';
-      return title ?? 'Filling in a form';
+      if (tapped && taskPhrase(tapped)) return taskPhrase(tapped);
+      if (/name|email|phone|birthday|date of birth|profile/.test(text)) return 'Editing profile';
+      return title ? `Filling in ${title}` : 'Filling in a form';
     case 'settings':
-      return 'Settings';
+      return 'Opening settings';
     case 'profile':
-      return 'Profile';
+      return 'Viewing profile';
     case 'messages':
-      return /support|help|agent/.test(text) ? 'Chatting with support' : 'Messages';
+      return /support|help|agent/.test(text) ? 'Chatting with support' : 'Reading messages';
     case 'notifications':
-      return 'Notifications';
+      return 'Checking notifications';
     case 'empty_state':
+      if (/location picker/i.test(name)) return 'Choosing a location';
+      return title ? `Opening ${title}` : 'Reaching an empty state';
     case 'error':
+      return 'Hitting an error';
     case 'confirmation':
-      return title ?? labelFor(type);
+      return /order/i.test(name) ? 'Completing an order' : /payment/i.test(name) ? 'Completing a payment' : 'Completing the task';
+    case 'coach_mark':
+      return /welcome/i.test(name) ? 'Dismissing the welcome tip' : 'Reading a feature tip';
     default:
       break;
   }
 
-  if (overlay || ['dialog', 'bottom_sheet', 'toast', 'coach_mark'].includes(type)) {
+  // What was tapped, when it names a task: "Add balance" → "Adding balance",
+  // "Turn on Veg Mode" → "Turning on veg mode".
+  const tappedTask = tapped ? taskPhrase(tapped) : null;
+
+  if (overlay || ['dialog', 'bottom_sheet', 'toast'].includes(type)) {
+    if (/veg mode|veg only|pure veg/.test(text) || /veg/i.test(tapped ?? '')) return 'Turning on veg mode';
+    if (tappedTask) return tappedTask;
     if (/filter|sort by/.test(text)) return anchorSection ? `Filtering ${anchorSection}` : 'Filtering';
-    if (/veg mode|veg only|pure veg/.test(text)) return 'Turning on veg mode';
     if (/language/.test(text)) return 'Changing language';
     if (/report/.test(text)) return 'Reporting an issue';
     if (/share/.test(text)) return 'Sharing';
     if (/log ?out|sign ?out/.test(text)) return 'Logging out';
     if (/delete/.test(text)) return 'Deleting';
-    if (title) return title;
-    return anchor?.analysis?.name ? `${anchor.analysis.name} options` : labelFor(type);
+    if (title) return `Opening ${title}`;
+    if (tapped) return `Opening ${tapped}`;
+    return anchor?.analysis?.name ? `Opening ${anchor.analysis.name} options` : 'Opening a sheet';
   }
 
-  // What was tapped to get here names the feature when the screen itself does
-  // not: a row labelled "Offer Zone" opening a page with no title.
-  const tapped = action && action.kind === 'tap' && action.label ? cleanTitle(action.label) : null;
-  return title ?? tapped ?? cleanTitle(analysis.name ?? '') ?? labelFor(type);
+  // A feature screen: the task the tapped label names when it names one, else
+  // the app's own title for it — "Offer Zone", "Eatlist", "Bolt" — the way the
+  // app lists its features. A section's own pages are browsed.
+  if (tappedTask) return tappedTask;
+  if (title) return title;
+  if (tapped) return tapped;
+  if (['home', 'feed', 'category', 'dashboard'].includes(type)) return anchorSection ? `Browsing ${anchorSection}` : 'Browsing';
+  const fallback = cleanTitle(name);
+  return fallback ? `Opening ${fallback}` : `Opening ${labelFor(type).toLowerCase()}`;
 }

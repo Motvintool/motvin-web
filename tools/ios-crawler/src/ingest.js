@@ -372,7 +372,9 @@ export async function ingestFolder(options) {
           log.warn(`could not name the journeys with the model — ${error.message.split('\n')[0]}; keeping the names read off the screens`);
         }
       }
+      const nameOfKey = new Map(journeys.map((journey) => [journey.key, journey.name]));
       flowGroups = journeys.map((journey) => ({
+        key: journey.key,
         name: journey.name,
         category: journey.category,
         parent: journey.parent,
@@ -381,7 +383,7 @@ export async function ingestFolder(options) {
       }));
       log.heading('Flows');
       for (const group of flowGroups) {
-        log.ok(`${group.parent ? `${group.parent} › ` : ''}${group.name} — ${group.nodeIds.length} screen(s)`);
+        log.ok(`${group.parent ? `${nameOfKey.get(group.parent) ?? group.parent} › ` : ''}${group.name} — ${group.nodeIds.length} screen(s)`);
       }
     } else if (analyzer.usable && ordered.length >= 2) {
       report(options, 'flows', 'Grouping the screens into journeys');

@@ -635,7 +635,8 @@ export async function nameJourneys(journeys, graph, options = {}) {
         .map((id) => graph.get(id))
         .filter(Boolean)
         .map((node) => `${node.analysis.name} [${node.analysis.screenType}]${node.analysis.description ? ` — ${node.analysis.description}` : ''}`);
-      return `${index}: "${journey.name}"${journey.parent ? ` (inside "${journey.parent}")` : ' (top level)'}\n   ${steps.join('\n   ')}`;
+      const parentName = journey.parent ? journeys.find((candidate) => (candidate.key ?? candidate.name) === journey.parent)?.name ?? journey.parent : null;
+      return `${index}: "${journey.name}"${parentName ? ` (inside "${parentName}")` : ' (top level)'}\n   ${steps.join('\n   ')}`;
     })
     .join('\n\n');
   const instruction = `Here is the flow tree read off a recording of one app, with each journey's screens in order:\n\n${listing}\n\nName each journey by its index.`;
@@ -662,9 +663,12 @@ export async function nameJourneys(journeys, graph, options = {}) {
     const proposed = String(names[String(index)] ?? '').trim().slice(0, 60);
     return { ...journey, name: proposed || journey.name };
   });
-  // Parents are referenced by name; a renamed parent takes its children along.
-  const byOld = new Map(journeys.map((journey, index) => [journey.name, renamed[index].name]));
-  for (const journey of renamed) if (journey.parent) journey.parent = byOld.get(journey.parent) ?? journey.parent;
+  // Parents referenced by key stay put; parents referenced by name follow the
+  // rename.
+  if (!journeys.every((journey) => journey.key)) {
+    const byOld = new Map(journeys.map((journey, index) => [journey.name, renamed[index].name]));
+    for (const journey of renamed) if (journey.parent) journey.parent = byOld.get(journey.parent) ?? journey.parent;
+  }
   return renamed;
 }
 

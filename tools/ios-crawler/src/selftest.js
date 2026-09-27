@@ -24,7 +24,7 @@ import { ingestFolder, selectStableFrames, slugify, _internals } from './ingest.
 import { parseIdbElements } from './device.js';
 import { buildSections, classifyScreen, cleanTitle, groupFlowsLocally, guessBrand } from './heuristics.js';
 import { segmentRecording } from './segment.js';
-import { buildJourneys, journeyName } from './journeys.js';
+import { buildJourneys, journeyName, taskPhrase } from './journeys.js';
 import { describeAction, actionPhrase } from './actions.js';
 import { isExternalAuthScreen } from './safety.js';
 import { dominantColors, fingerprintFromThumb, THUMB } from './hash.js';
@@ -762,7 +762,7 @@ export async function selfTest() {
     const sectioned = classifyScreen([line('Address Unavailable ›', 0.06, 0.02), line('Tap to add address', 0.09), ...tabBar, ...Array.from({ length: 12 }, (_, i) => line(`Dish ${i}`, 0.3 + i * 0.04))]);
     check('a section screen is named for its tab, not its location widget', sectioned.name === 'Home home' || sectioned.name === 'Home', sectioned.name);
     check('a location picker is never a title', classifyScreen([line('Deliver to Home ›', 0.06, 0.02), line('Fresh picks', 0.3, 0.04)]).name === 'Fresh picks');
-    check('a page about choosing a location keeps its own title', classifyScreen([line('Select your location', 0.07, 0.028), line('Search an area or address', 0.14)]).name === 'Select your location');
+    check('a page about choosing a location is a location picker', classifyScreen([line('Select your location', 0.07, 0.028), line('Search an area or address', 0.14)]).name === 'Location picker');
     check('a title starts with a capital', cleanTitle('scenes') === 'Scenes');
     check('a state travels with the classification', classifyScreen([line('Search', 0.2)], ctx({ kind: 'loading', edge: 4 })).states.includes('loading'));
     check('a description is written from measured facts', /Login screen .*keyboard/.test(classifyScreen([line('Log in', 0.2, 0.04), line('Email', 0.3), line('Password', 0.4), ...keyboard]).description));
@@ -798,7 +798,7 @@ export async function selfTest() {
       const foodHome = mk('home', 'Food home', ['Food', 'Bolt', 'Reorder']);
       const search = mk('search', 'Search for dishes');
       const results = mk('search_results', 'Results');
-      const restaurant = mk('product_detail', 'Paan Corner');
+      const restaurant = mk('product_detail', 'Paan Corner', [], { analysis: { screenType: 'product_detail', name: 'Paan Corner', signals: { tabLabels: [], title: 'Paan Corner', headline: 'Menu', ctas: ['Add'] }, tags: ['restaurant'], description: '' } });
       const cart = mk('cart', 'Cart');
       const filterSheet = mk('bottom_sheet', 'Filter', [], { capture: { overlay: { kind: 'bottom_sheet' } } });
       const instaHome = mk('feed', 'Instamart home', ['Instamart', 'Categories']);
@@ -809,14 +809,32 @@ export async function selfTest() {
         .map((node) => ({ node }));
       const tree = buildJourneys(walk);
       const byName = new Map(tree.map((journey) => [journey.name, journey]));
-      const shape = tree.map((j) => `${j.parent ? `${j.parent} › ` : ''}${j.name}`).join(' | ');
-      check('the opening walk is one onboarding with its sign-in as a child', byName.get('Onboarding')?.nodeIds.length === 3 && byName.get('Logging in')?.parent === 'Onboarding', shape);
+      const parentName = (journey) => (journey?.parent ? tree.find((candidate) => candidate.key === journey.parent)?.name ?? null : null);
+      const shape = tree.map((j) => `${parentName(j) ? `${parentName(j)} › ` : ''}${j.name}`).join(' | ');
+      check('the opening walk is one onboarding with its sign-in as a child', byName.get('Onboarding')?.nodeIds.length === 3 && parentName(byName.get('Logging in')) === 'Onboarding', shape);
       check('a tab screen opens a section', byName.get('Food')?.section === true && byName.get('Food')?.parent === null, shape);
-      check('leaving a section and coming back is a journey under it, starting where it began', byName.get('Searching Food')?.parent === 'Food' && byName.get('Searching Food')?.nodeIds.join(',') === 'j4,j5,j6', shape);
-      check('going deeper and returning nests a journey under the detail', byName.get('Adding to cart')?.parent === 'Paan Corner detail' && byName.get('Paan Corner detail')?.parent === 'Food', shape);
-      check('a sheet over the section is a one-step journey under it, named for its task', byName.get('Filtering Food')?.parent === 'Food' && byName.get('Filtering Food')?.nodeIds.length === 2, shape);
+      check('leaving a section and coming back is a journey under it, starting where it began', parentName(byName.get('Searching Food')) === 'Food' && byName.get('Searching Food')?.nodeIds.join(',') === 'j4,j5,j6', shape);
+      check('a detail page is named by what it is about', byName.has('Restaurant detail'), shape);
+      check('going deeper and returning nests a journey under the detail', parentName(byName.get('Adding to cart')) === 'Restaurant detail' && parentName(byName.get('Restaurant detail')) === 'Food', shape);
+      check('a sheet over the section is a one-step journey under it, named for its task', parentName(byName.get('Filtering Food')) === 'Food' && byName.get('Filtering Food')?.nodeIds.length === 2, shape);
       check('a second tab is a second section', byName.get('Instamart')?.section === true, shape);
-      check('a profile screen is a section wherever it was reached from', byName.get('Profile')?.parent === null && byName.get('Editing profile')?.parent === 'Profile', shape);
+      check('a profile screen is a section wherever it was reached from', byName.get('Profile')?.parent === null && parentName(byName.get('Editing profile')) === 'Profile', shape);
+      check('two walks of one journey keep one name, side by side', (() => {
+        const twice = buildJourneys([foodHome, search, foodHome, search, results, foodHome].map((node) => ({ node })));
+        return twice.filter((j) => j.name === 'Searching Food').length === 2;
+      })(), '');
+      check('the same journey under two sections is qualified by section', (() => {
+        const reorderA = mk('feed', 'Reorder', [], { analysis: { screenType: 'feed', name: 'Reorder', signals: { tabLabels: [], title: 'Reorder', headline: null, ctas: [] }, tags: [], description: '' } });
+        const reorderB = mk('feed', 'Reorder', [], { analysis: { screenType: 'feed', name: 'Reorder', signals: { tabLabels: [], title: 'Reorder', headline: null, ctas: [] }, tags: [], description: '' } });
+        const t = buildJourneys([foodHome, reorderA, foodHome, instaHome, reorderB, instaHome].map((node) => ({ node })));
+        return t.some((j) => j.name === 'Reorder') && t.some((j) => j.name === 'Reorder (Instamart)');
+      })(), '');
+      check('a screen titled like a section-switcher chip is a section', (() => {
+        const chipHome = mk('home', 'Food home', ['Food', 'Bolt'], { analysis: { screenType: 'home', name: 'Food home', signals: { tabLabels: ['Food', 'Bolt'], chipLabels: ['Food', 'Instamart', 'Dineout', 'Scenes'], title: null, headline: null, ctas: [] }, tags: [], description: '' } });
+        const scenes = mk('feed', 'Scenes', [], { analysis: { screenType: 'feed', name: 'Scenes', signals: { tabLabels: [], title: 'Scenes', headline: null, ctas: [] }, tags: [], description: '' } });
+        const t = buildJourneys([chipHome, scenes].map((node) => ({ node })));
+        return t.find((j) => j.name === 'Scenes')?.parent === null;
+      })(), '');
       check('loading states are transparent to the tree', !tree.some((j) => j.nodeIds.includes(loading.id)));
       check('no screen appears in two journeys at the same level', tree.every((j) => new Set(j.nodeIds).size === j.nodeIds.length));
       check('a permission prompt is named for what it asks', journeyName(mk('permission', 'Allow location', [], { analysis: { screenType: 'permission', name: 'Allow', signals: { title: 'Allow "Swiggy" to use your location?', headline: null, ctas: [], tabLabels: [] }, tags: [], description: '' } })) === 'Allowing location access');
@@ -846,6 +864,24 @@ export async function selfTest() {
       const offersFlow = tree.find((j) => j.name === 'Offer Zone');
       check('a journey carries the action that led to each step', offersFlow?.steps?.[1]?.action?.label === 'Offer Zone' && offersFlow?.steps?.[0]?.action === null, JSON.stringify(offersFlow?.steps));
     }
+
+    log.heading('Names in plain English');
+    check('a phone sign-in is named for what it asks', classifyScreen([line('One app for food, grocery, dining &', 0.12, 0.026), line('Enter your number', 0.27), line('Mobile Number', 0.32), line('Continue', 0.48), ...keyboard]).name === 'Phone number entry');
+    check('a marketing tagline is never a name', classifyScreen([line('One app for food, grocery, dining &', 0.12, 0.03), line('Get started', 0.7)], ctx({ index: 1 })).name === 'Welcome');
+    check('a logged-out location picker says so', classifyScreen([line('Select your location', 0.07, 0.028), line('Search an area or address', 0.14), line("Looks like you're logged out", 0.5), line('Please log in to see saved addresses', 0.54)]).name === 'Location picker (logged out)');
+    check('a code entry is OTP verification', classifyScreen([line('Verify your number', 0.2, 0.04), line('Enter the 6-digit code', 0.3), line('Resend OTP', 0.6)]).name === 'OTP verification');
+    check('an order confirmation is “Order placed”', classifyScreen([line('Thank you!', 0.3, 0.05), line('Your order is on its way', 0.4)]).name === 'Order placed');
+    check('a filter sheet is named as a sheet', classifyScreen([line('Filter', 0.6, 0.03), line('Sort by', 0.66), line('Veg only', 0.72)], ctx({ overlay: { kind: 'bottom_sheet', dimmed: false, box: { y: 0.55, h: 0.45 } } })).name === 'Filter sheet');
+    check('a feature screen keeps its own title', classifyScreen([line('Offer Zone', 0.07, 0.03), line('Flat 50% off on your first order', 0.3), ...Array.from({ length: 8 }, (_, i) => line(`Deal ${i}`, 0.4 + i * 0.05))]).name === 'Offer Zone');
+    check('a section screen is still named for its tab', classifyScreen([...tabBar, line('Address Unavailable ›', 0.06, 0.02), ...Array.from({ length: 12 }, (_, i) => line(`Dish ${i}`, 0.3 + i * 0.04))]).name === 'Home home');
+    check('a phone sign-in journey says how', journeyName({ analysis: { screenType: 'login', name: 'Phone number entry', signals: {} } }) === 'Logging in with phone number');
+    check('a feature journey is named for the feature', journeyName({ analysis: { screenType: 'feed', name: 'Scenes', signals: { title: 'Scenes' } } }) === 'Scenes');
+    check('a tapped verb label becomes a task', taskPhrase('Add balance') === 'Adding balance' && taskPhrase('Hide restaurant') === 'Hiding a restaurant' && taskPhrase('Turn on Veg Mode') === 'Turning on veg mode' && taskPhrase('Report an issue') === 'Reporting an issue');
+    check('a noun label is not a task', taskPhrase('Offer Zone') === null);
+    check('a journey opened by a verb label is that task', journeyName({ analysis: { screenType: 'other', name: 'Balance', signals: {} } }, null, { kind: 'tap', label: 'Add balance' }) === 'Adding balance');
+    check('a typed search names the query', journeyName({ analysis: { screenType: 'search_results', name: 'Search results', signals: {} } }, null, { kind: 'type', label: 'paneer' }) === 'Searching for “paneer”');
+    check('a welcome tip is dismissed', journeyName({ analysis: { screenType: 'coach_mark', name: 'Welcome tip', signals: {} } }) === 'Dismissing the welcome tip');
+    check('a detail journey is named by entity', journeyName({ analysis: { screenType: 'product_detail', name: 'Paan Corner', signals: { title: 'Paan Corner', headline: 'Menu' } } }) === 'Restaurant detail');
 
     log.heading('Brand from the screens');
     const brand = guessBrand([[line('Skip', 0.08), line('By clicking in, I accept the Privacy Policy', 0.55), line('Swiggy Terms of Use and Instamart Terms of Use', 0.58)]]);

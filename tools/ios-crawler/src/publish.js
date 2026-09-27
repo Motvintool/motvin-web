@@ -110,8 +110,12 @@ function uniqueNames(nodes) {
     // gets a running number instead; body text would read as a caption, not
     // a name.
     const labels = members.map((node) => {
-      const label = node.analysis?.signals?.tabLabels?.[0];
-      return label && label.toLowerCase() !== base.toLowerCase() && /^[A-Za-z][A-Za-z' ]{1,13}$/.test(label) ? label : null;
+      const tab = node.analysis?.signals?.tabLabels?.[0];
+      if (tab && tab.toLowerCase() !== base.toLowerCase() && /^[A-Za-z][A-Za-z' ]{1,13}$/.test(tab) && !base.toLowerCase().startsWith(tab.toLowerCase())) return tab;
+      // Failing a section, the state the screen was in tells siblings apart:
+      // "Cart · empty", "Food home · scrolled".
+      const state = (node.analysis?.states ?? []).find((v) => v !== 'keyboard');
+      return state ? state.replace(/-/g, ' ') : null;
     });
     const counts = new Map();
     for (const label of labels) if (label) counts.set(label.toLowerCase(), (counts.get(label.toLowerCase()) ?? 0) + 1);
@@ -197,10 +201,13 @@ export function publishCrawl(options) {
   // is stored once, in the shallowest flow that holds it, so the folder names
   // where it lives in the app; every flow that lists it still refers to it by
   // id.
+  // Groups are identified by key when the grouper gave one (names may repeat),
+  // by name otherwise.
+  const keyOf = (group) => group.key ?? group.name;
   const depthOf = (group, seen = new Set()) => {
-    if (!group.parent || seen.has(group.name)) return 0;
-    seen.add(group.name);
-    const parent = flowGroups.find((candidate) => candidate.name === group.parent);
+    if (!group.parent || seen.has(keyOf(group))) return 0;
+    seen.add(keyOf(group));
+    const parent = flowGroups.find((candidate) => keyOf(candidate) === group.parent);
     return parent ? depthOf(parent, seen) + 1 : 0;
   };
   const usedFolders = new Set();
@@ -446,7 +453,7 @@ export function publishCrawl(options) {
   if (flowGroups.length) {
     // The named journeys: each folder is one flow, its screens already in the
     // order they were walked.
-    const idOfGroup = new Map(flowGroups.map((group) => [group.name, `${app.appId}-${platform}-${group.folder}`]));
+    const idOfGroup = new Map(flowGroups.map((group) => [keyOf(group), `${app.appId}-${platform}-${group.folder}`]));
     // Children before their parent would read backwards in the store; parents
     // first, then children in walk order.
     flowGroups.sort((a, b) => a.depth - b.depth || flowGroups.indexOf(a) - flowGroups.indexOf(b));

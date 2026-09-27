@@ -537,23 +537,149 @@ function saturationOf(hex) {
   return max ? (max - min) / max : 0;
 }
 
+/**
+ * Marketing copy is never a name. A tagline is long, sells ("one app for",
+ * "in minutes", "the best"), shouts ("!"), or is a fragment cut mid-phrase
+ * ("…dining &"). A screen carrying one is named for what it is instead.
+ */
+const TAGLINE = /(one app for|everything you|in minutes|the best|anytime|anywhere|made easy|your (daily|one-stop)|welcome to|get started with|%|!)/i;
+const FRAGMENT_END = /(\b(and|or|for|the|with|to|of|in|on|at|a|an)|&|,|-)$/i;
+
+function isTagline(text) {
+  if (!text) return true;
+  if (text.length > 28) return true;
+  if (TAGLINE.test(text)) return true;
+  if (FRAGMENT_END.test(text.trim())) return true;
+  return false;
+}
+
+/** A page for choosing where you are, whatever the app calls it. */
+const LOCATION_PICKER = /(select (your )?location|search an area|use current location|choose (a |your )?location|set (your )?location|enter (your )?location|delivery location|pick (a |your )?location)/i;
+
+/** The flavour of a sign-in, from what the form asks for. */
+function loginFlavour(signals) {
+  const all = signals.all;
+  if (/(mobile number|phone number|enter your (mobile|phone)|\+\d{1,3}\b|send otp|get otp)/.test(all)) return 'phone';
+  if (/(email|password)/.test(all)) return 'email';
+  if (/(continue with (google|apple|facebook)|sign in with (google|apple|facebook))/.test(all)) return 'social';
+  return null;
+}
+
+/**
+ * The name a library gives a screen: what it is, in plain words.
+ *
+ * A screen that is a task — signing in, verifying a code, choosing a
+ * location, allowing a permission, filtering, paying — is named for the task,
+ * the same way for every app, so "Phone number entry" reads the same in a
+ * food app and a bank. A feature screen keeps the title the app gave it,
+ * cleaned. Marketing taglines, promo copy and cut-off fragments are never
+ * names, and a state (empty, logged out) is said in brackets.
+ */
 function nameFor(screenType, signals, context, fallbackName) {
+  const rawTitle = titleFrom(signals.lines, context.overlay?.box ?? null);
+  const title = rawTitle && !isTagline(rawTitle) ? rawTitle : null;
+  const text = signals.all;
+  const section = signals.tabLabels[0] ? `${signals.tabLabels[0].charAt(0).toUpperCase()}${signals.tabLabels[0].slice(1)}` : null;
+  const locationPicker = LOCATION_PICKER.test(text);
+
   if (screenType === 'splash') return 'Splash screen';
   if (screenType === 'external_auth') return 'External sign-in';
   if (screenType === 'loading' || context.kind === 'loading') {
     return context.loadingOfName ? `${context.loadingOfName} — loading` : 'Loading state';
   }
-  const title = titleFrom(signals.lines, context.overlay?.box ?? null);
-  if (context.kind === 'scrolled' && context.scrolledFromName) {
-    return `${context.scrolledFromName} — scrolled`;
+  if (context.kind === 'scrolled' && context.scrolledFromName) return `${context.scrolledFromName} — scrolled`;
+
+  switch (screenType) {
+    case 'login': {
+      const flavour = loginFlavour(signals);
+      if (flavour === 'phone') return 'Phone number entry';
+      if (flavour === 'email') return 'Sign in with email';
+      if (flavour === 'social') return 'Sign-in options';
+      return 'Sign in';
+    }
+    case 'otp':
+      return 'OTP verification';
+    case 'signup':
+      return 'Create account';
+    case 'permission':
+      if (/location/.test(text)) return 'Location permission';
+      if (/notification/.test(text)) return 'Notifications permission';
+      if (/camera|photo/.test(text)) return 'Camera permission';
+      if (/contact/.test(text)) return 'Contacts permission';
+      if (/track/.test(text)) return 'Tracking permission';
+      return 'Permission prompt';
+    case 'paywall':
+      return 'Subscription plans';
+    case 'payment':
+      return 'Payment method';
+    case 'checkout':
+      return 'Checkout';
+    case 'cart':
+      return 'Cart';
+    case 'search':
+      if (locationPicker) return 'Location picker';
+      return section ? `${section} search` : 'Search';
+    case 'search_results':
+      return 'Search results';
+    case 'empty_state': {
+      const base = locationPicker ? 'Location picker' : title ?? (section ? `${section} home` : 'Empty state');
+      if (/(logged out|log ?in to (see|view|continue)|sign ?in to)/.test(text)) return `${base} (logged out)`;
+      return base === 'Empty state' ? base : `${base} (empty)`;
+    }
+    case 'error':
+      if (/(no internet|no connection|offline)/.test(text)) return 'No connection';
+      return title ? `${title} (error)` : 'Error';
+    case 'confirmation':
+      if (/order/.test(text)) return 'Order placed';
+      if (/payment|paid/.test(text)) return 'Payment successful';
+      if (/booking|booked|reserved/.test(text)) return 'Booking confirmed';
+      if (/subscri/.test(text)) return 'Subscription active';
+      return title ?? 'Success';
+    case 'coach_mark':
+      return context.index <= 6 ? 'Welcome tip' : 'Feature tip';
+    case 'dialog':
+      return title ? `${title} dialog` : 'Dialog';
+    case 'bottom_sheet':
+      return title ? `${title} sheet` : 'Bottom sheet';
+    case 'toast':
+      return title ? `${title} toast` : 'Toast';
+    case 'map':
+      return locationPicker ? 'Location picker' : title ?? 'Map';
+    case 'calendar':
+      return title ?? 'Calendar';
+    case 'settings':
+      return title && /settings|account|preferences/i.test(title) ? title : 'Settings';
+    case 'profile':
+      return title && /profile|account/i.test(title) ? title : 'Profile';
+    case 'notifications':
+      return 'Notifications';
+    case 'messages':
+      return /support|help|agent/.test(text) ? 'Support chat' : title ?? 'Messages';
+    case 'player':
+      return title ?? 'Player';
+    case 'form':
+      if (locationPicker || /address|pincode|zip code|flat|landmark/.test(text)) return 'Address form';
+      if (/(full name|first name|last name|date of birth|birthday|edit profile)/.test(text)) return 'Profile form';
+      return title ? `${title} form` : 'Form';
+    case 'onboarding':
+      if (title) return title;
+      return context.index <= 2 ? 'Welcome' : 'Onboarding step';
+    case 'home':
+    case 'feed':
+    case 'category':
+    case 'dashboard':
+      if (section && !context.overlay) return `${section} home`;
+      if (locationPicker) return 'Location picker';
+      return title ?? (screenType === 'dashboard' ? 'Dashboard' : 'Home');
+    case 'product_detail':
+      return title ?? 'Item detail';
+    case 'detail':
+      return title ?? 'Detail';
+    default:
+      break;
   }
-  // A section's landing screen is named for the section — "Food home",
-  // "Calendar home" — the way a library reads a tab bar, rather than for
-  // whatever widget happens to sit in its header.
-  const section = signals.tabLabels[0];
-  if (['home', 'feed', 'category', 'dashboard'].includes(screenType) && section && !context.overlay) {
-    return `${section.charAt(0).toUpperCase()}${section.slice(1)} home`;
-  }
+
+  if (locationPicker) return 'Location picker';
   if (title) return title;
   if (context.overlay && context.overlayOfName) return `${typeLabel(screenType)} over ${context.overlayOfName}`;
   return typeLabel(screenType) || fallbackName || 'Screen';
