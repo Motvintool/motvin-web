@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { FLOW_PARAM } from './FlowPreview';
-import type { App, Flow, Screen } from '@/lib/inspirations/types';
+import { flowActionPhrase, type App, type Flow, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { ChevronDownIcon, PlayOutlineIcon, SearchIcon } from './Icons';
 import { Screenshot } from './Screenshot';
@@ -230,17 +230,23 @@ function FlowRow({
       </div>
 
       <div className="ins-flows-row-strip">
-        {screens.map((screen, index) => (
-          <Link
-            key={screen.id}
-            href={href}
-            scroll={false}
-            className="ins-flows-row-shot"
-            aria-label={`Step ${index + 1} of the ${flow.name} flow`}
-          >
-            <Screenshot screen={screen} />
-          </Link>
-        ))}
+        {screens.map((screen, index) => {
+          // The move that led to this step is kept in the data and read out to
+          // assistive tech; the strip itself shows only the screens.
+          const action = flow.steps?.find((step) => step.screenId === screen.id)?.action ?? null;
+          const phrase = index > 0 ? flowActionPhrase(action) : '';
+          return (
+            <Link
+              key={screen.id}
+              href={href}
+              scroll={false}
+              className="ins-flows-row-shot"
+              aria-label={`Step ${index + 1} of the ${flow.name} flow${phrase ? `, reached by ${phrase.toLowerCase()}` : ''}`}
+            >
+              <Screenshot screen={screen} />
+            </Link>
+          );
+        })}
         {screens.length === 0 && (
           <p className="ins-muted ins-flows-row-missing">
             This flow&rsquo;s screens are not published — check the licence and the build report.

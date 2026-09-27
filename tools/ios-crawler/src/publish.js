@@ -463,6 +463,15 @@ export function publishCrawl(options) {
         // The flow this one branches from and returns to, when the recording
         // showed one; the gallery nests it beneath that flow.
         parentId: group.parent && idOfGroup.has(group.parent) ? idOfGroup.get(group.parent) : null,
+        // Each step with the move that led to it — tap, type, switch tab,
+        // scroll, back, dismiss, wait — so the strip can show the journey
+        // rather than only its stops.
+        steps: (group.steps ?? group.nodeIds.map((nodeId) => ({ nodeId, action: null })))
+          .filter((step) => screenIdByNode.has(step.nodeId))
+          .map((step) => ({
+            screenId: screenIdByNode.get(step.nodeId),
+            action: step.action ? { kind: step.action.kind, label: step.action.label ?? null, basis: step.action.basis ?? null } : null,
+          })),
       });
     }
   } else {

@@ -201,7 +201,42 @@ export type Flow = {
    * this.
    */
   parentId?: string | null;
+  /**
+   * The recorded move that led to each step from the one before — what was
+   * tapped or typed, a tab switch, a scroll, a back, a dismissed sheet, a
+   * wait. Null on the first step and on flows built by hand.
+   */
+  steps?: FlowStep[];
 };
+
+export type FlowActionKind = 'tap' | 'type' | 'switch-tab' | 'scroll' | 'back' | 'dismiss' | 'wait' | 'open';
+
+export type FlowAction = { kind: FlowActionKind; label: string | null };
+
+export type FlowStep = { screenId: string; action: FlowAction | null };
+
+/** A short phrase for a step's action, as the strip connectors read it. */
+export function flowActionPhrase(action: FlowAction | null | undefined): string {
+  if (!action) return '';
+  switch (action.kind) {
+    case 'tap':
+      return action.label ? `Tap “${action.label}”` : 'Tap';
+    case 'type':
+      return action.label ? `Type “${action.label}”` : 'Type';
+    case 'switch-tab':
+      return action.label ? `Switch to ${action.label}` : 'Switch tab';
+    case 'scroll':
+      return 'Scroll';
+    case 'back':
+      return 'Back';
+    case 'dismiss':
+      return 'Dismiss';
+    case 'wait':
+      return action.label ? `Wait ${action.label}` : 'Wait';
+    default:
+      return action.label ? `Open ${action.label}` : 'Open';
+  }
+}
 
 export type PatternCategory =
   | 'Navigation'

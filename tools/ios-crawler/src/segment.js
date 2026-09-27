@@ -489,10 +489,29 @@ export function segmentRecording(thumbs, options) {
   // ─── Edges: the journey, with revisits resolved to the screen they repeat ──
   const edges = [];
   for (let i = 1; i < screens.length; i++) {
-    const from = canonical(screens[i - 1]);
-    const to = canonical(screens[i]);
+    const previous = screens[i - 1];
+    const next = screens[i];
+    const from = canonical(previous);
+    const to = canonical(next);
     if (from === to) continue;
-    edges.push({ from, to, atSeconds: screens[i].start });
+    // The press: the frame right after the hold, before the screen leaves,
+    // usually differs in one small region — the control redrawing under the
+    // finger. Kept as a box so the label under it can be read downstream.
+    let pressBox = null;
+    const last = previous.hold.end;
+    if (last + 1 < n) {
+      const box = changedBox(prints[last].gray, prints[last + 1].gray, width, height, 20);
+      if (box && box.w * box.h <= 0.2 && steps[last + 1] && steps[last + 1].label !== 'scroll') pressBox = box;
+    }
+    edges.push({
+      from,
+      to,
+      atSeconds: next.start,
+      pressBox,
+      revisit: Boolean(next.revisitOf),
+      dismissed: Boolean(previous.overlayOf && canonical(next) === previous.overlayOf),
+      scrolled: next.scrolledFrom === from,
+    });
   }
 
   for (const screen of screens) delete screen.hold;

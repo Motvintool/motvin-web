@@ -25,6 +25,7 @@ import { parseIdbElements } from './device.js';
 import { buildSections, classifyScreen, cleanTitle, groupFlowsLocally, guessBrand } from './heuristics.js';
 import { segmentRecording } from './segment.js';
 import { buildJourneys, journeyName } from './journeys.js';
+import { describeAction, actionPhrase } from './actions.js';
 import { isExternalAuthScreen } from './safety.js';
 import { dominantColors, fingerprintFromThumb, THUMB } from './hash.js';
 
@@ -819,6 +820,31 @@ export async function selfTest() {
       check('loading states are transparent to the tree', !tree.some((j) => j.nodeIds.includes(loading.id)));
       check('no screen appears in two journeys at the same level', tree.every((j) => new Set(j.nodeIds).size === j.nodeIds.length));
       check('a permission prompt is named for what it asks', journeyName(mk('permission', 'Allow location', [], { analysis: { screenType: 'permission', name: 'Allow', signals: { title: 'Allow "Swiggy" to use your location?', headline: null, ctas: [], tabLabels: [] }, tags: [], description: '' } })) === 'Allowing location access');
+    }
+
+    log.heading('Actions between screens');
+    {
+      const L = (text, x, y, w = 0.2, h = 0.02) => ({ text, x, y, w, h, confidence: 1 });
+      const home = { id: 'a1', timelineId: 'c1', analysis: { screenType: 'home', name: 'Food home', lines: [L('Food', 0.05, 0.94, 0.08, 0.012), L('Dineout', 0.5, 0.94, 0.1, 0.012), L('Offer Zone', 0.1, 0.4), L('Search for dishes', 0.1, 0.25)], signals: { tabLabels: ['Food', 'Bolt', 'Dineout'], title: null, headline: null } }, capture: {} };
+      const offers = { id: 'a2', timelineId: 'c2', analysis: { screenType: 'feed', name: 'Offer Zone', lines: [L('Offer Zone', 0.1, 0.07)], signals: { tabLabels: [], title: 'Offer Zone', headline: null } }, capture: {} };
+      const dineout = { id: 'a3', timelineId: 'c3', analysis: { screenType: 'feed', name: 'Dineout home', lines: [L('Dineout', 0.05, 0.94, 0.1, 0.012)], signals: { tabLabels: ['Dineout', 'Bites', 'Scenes'], title: null, headline: null } }, capture: {} };
+      const results = { id: 'a4', timelineId: 'c4', analysis: { screenType: 'search_results', name: 'Results', lines: [L('Search results for “paneer”', 0.1, 0.1, 0.5)], signals: { tabLabels: [], title: null, headline: null } }, capture: {} };
+      const sheet = { id: 'a5', timelineId: 'c5', analysis: { screenType: 'bottom_sheet', name: 'Filter', lines: [], signals: { tabLabels: [], title: 'Filter', headline: null } }, capture: { overlayOf: 'c1', overlay: { kind: 'bottom_sheet' } } };
+      const pressed = describeAction(home, offers, { pressBox: { x: 0.05, y: 0.39, w: 0.4, h: 0.04 } });
+      check('a press under a label is a tap on that label', pressed.kind === 'tap' && pressed.label === 'Offer Zone' && pressed.basis === 'press', JSON.stringify(pressed));
+      const matched = describeAction(home, offers, {});
+      check('without a press, the label that became the destination is the tap', matched.kind === 'tap' && matched.label === 'Offer Zone' && matched.basis === 'match', JSON.stringify(matched));
+      check('a different first tab is a tab switch', describeAction(home, dineout, {}).kind === 'switch-tab');
+      const typed = describeAction(home, results, {});
+      check('a query on the destination is typing', typed.kind === 'type' && typed.label === 'paneer', JSON.stringify(typed));
+      check('returning to a screen seen before is back', describeAction(offers, home, { revisit: true }).kind === 'back');
+      check('a sheet closing over its base is a dismiss', describeAction(sheet, home, { dismissed: true }).kind === 'dismiss');
+      check('actions read as short phrases', actionPhrase(pressed) === 'Tap “Offer Zone”' && actionPhrase({ kind: 'switch-tab', label: 'Dineout' }) === 'Switch to Dineout');
+      const walk = [home, offers, home].map((node) => ({ node }));
+      const acts = new Map([['a1->a2', pressed], ['a2->a1', { kind: 'back', label: 'Food home' }]]);
+      const tree = buildJourneys(walk, { actions: acts });
+      const offersFlow = tree.find((j) => j.name === 'Offer Zone');
+      check('a journey carries the action that led to each step', offersFlow?.steps?.[1]?.action?.label === 'Offer Zone' && offersFlow?.steps?.[0]?.action === null, JSON.stringify(offersFlow?.steps));
     }
 
     log.heading('Brand from the screens');

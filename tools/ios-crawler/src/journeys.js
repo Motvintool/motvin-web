@@ -71,7 +71,9 @@ const TRANSPARENT_TYPES = new Set(['loading', 'external_auth']);
  * @param {Visit[]} visits every screen the recording showed, in order, revisits included
  * @returns {Journey[]} parents before children, walk order
  */
-export function buildJourneys(visits) {
+export function buildJourneys(visits, options = {}) {
+  /** `${fromId}->${toId}` → what the person did to get there. */
+  const actions = options.actions ?? new Map();
   const steps = visits
     .map((visit) => visit.node)
     .filter((node) => node && !node.skipPublish && !TRANSPARENT_TYPES.has(node.analysis?.screenType));
@@ -177,13 +179,23 @@ export function buildJourneys(visits) {
       // section screen it was opened from.
       const anchorId = open.nodeIds[open.nodeIds.length - 1];
       const anchor = steps.find((candidate) => candidate.id === anchorId) ?? null;
-      const child = make(journeyName(node, anchor), flowCategoryFor(type), open.name);
+      const action = anchor ? actions.get(`${anchor.id}->${node.id}`) ?? null : null;
+      const child = make(journeyName(node, anchor, action), flowCategoryFor(type), open.name);
       if (anchor) add(child, anchor);
       add(child, node);
       stack.push(child);
     } else {
       add(open, node);
     }
+  }
+
+  // Each journey's steps, with the action that led to each one from the
+  // step before — the move the recording showed between those two screens.
+  for (const journey of journeys) {
+    journey.steps = journey.nodeIds.map((id, index) => ({
+      nodeId: id,
+      action: index === 0 ? null : actions.get(`${journey.nodeIds[index - 1]}->${id}`) ?? null,
+    }));
   }
 
   // Parents before children, in the order they were opened.
@@ -237,7 +249,7 @@ function taskName(node) {
  * signing in, filtering, allowing a permission — and the screen's own title
  * otherwise, which is how the app itself names the feature.
  */
-export function journeyName(node, anchor = null) {
+export function journeyName(node, anchor = null, action = null) {
   if (!node) return 'Journey';
   const analysis = node.analysis ?? {};
   const type = analysis.screenType;
@@ -310,5 +322,8 @@ export function journeyName(node, anchor = null) {
     return anchor?.analysis?.name ? `${anchor.analysis.name} options` : labelFor(type);
   }
 
-  return title ?? cleanTitle(analysis.name ?? '') ?? labelFor(type);
+  // What was tapped to get here names the feature when the screen itself does
+  // not: a row labelled "Offer Zone" opening a page with no title.
+  const tapped = action && action.kind === 'tap' && action.label ? cleanTitle(action.label) : null;
+  return title ?? tapped ?? cleanTitle(analysis.name ?? '') ?? labelFor(type);
 }

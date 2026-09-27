@@ -35,6 +35,7 @@ import { ScreenGraph } from './graph.js';
 import { segmentRecording } from './segment.js';
 import { analyseScreen, groupIntoFlows, identifyApp, nameJourneys, pickBackend } from './analyze.js';
 import { buildJourneys } from './journeys.js';
+import { actionPhrase, describeAction } from './actions.js';
 import { isBlockingScreen, isExternalAuthScreen } from './safety.js';
 import { publishCrawl, resolveDataDir, safeName } from './publish.js';
 import { readText } from './ocr.js';
@@ -363,7 +364,7 @@ export async function ingestFolder(options) {
       // walk itself: sections, the journeys opened from them, the journeys
       // opened from those. A model, when there is one, only renames.
       report(options, 'flows', 'Reading the journeys off the walk');
-      let journeys = buildJourneys(visits);
+      let journeys = buildJourneys(visits, { actions: graph.actions });
       if (pickBackend(options.backend) !== 'local') {
         try {
           journeys = await nameJourneys(journeys, graph, { backend: options.backend });
@@ -376,6 +377,7 @@ export async function ingestFolder(options) {
         category: journey.category,
         parent: journey.parent,
         nodeIds: journey.nodeIds,
+        steps: journey.steps,
       }));
       log.heading('Flows');
       for (const group of flowGroups) {
@@ -567,6 +569,7 @@ async function ingestTimeline({ timeline, frames, analyzer, graph, duplicates, e
       visits: screen.visits,
       colors: screen.colors,
     };
+    node.timelineId = screen.id;
     nodeByScreen.set(screen.id, node);
     nameByScreen.set(screen.id, analysis.name);
 
@@ -632,13 +635,19 @@ async function ingestTimeline({ timeline, frames, analyzer, graph, duplicates, e
     }
   }
 
-  // The journey: every step the recording took, including returns.
+  // The journey: every step the recording took, including returns, and what
+  // the person did to take it.
+  const actions = new Map();
   for (const edge of timeline.edges) {
     const from = nodeByScreen.get(edge.from);
     const to = nodeByScreen.get(edge.to);
     if (!from || !to || from === to) continue;
-    graph.connect(from.id, `t${edge.atSeconds}`, to.id, `at ${clock(edge.atSeconds)}`);
+    const action = describeAction(from, to, edge);
+    const key = `${from.id}->${to.id}`;
+    if (!actions.has(key)) actions.set(key, action);
+    graph.connect(from.id, `t${edge.atSeconds}`, to.id, actionPhrase(action) || `at ${clock(edge.atSeconds)}`);
   }
+  graph.actions = actions;
 
   // Revisits, as the graph understands them.
   for (const screen of timeline.screens) {
