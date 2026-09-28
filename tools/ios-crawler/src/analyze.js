@@ -108,7 +108,7 @@ export async function probeAnalyzer(preferred) {
     } catch (error) {
       return { usable: false, backend, reason: error.message.split('\n')[0] };
     }
-    return { usable: true, backend, reason: null, model: status.model, vision: status.vision, provider: status.provider };
+    return { usable: true, backend, reason: null, model: status.model, journeyModel: status.journeyModel ?? status.model, vision: status.vision, provider: status.provider };
   }
 
   if (backend === 'api') {
@@ -425,7 +425,7 @@ async function callApiMulti(imagePaths, system, text) {
  */
 export async function complete(backend, request) {
   if (backend === 'ai') {
-    return aiChat({ system: request.system, blocks: request.blocks, maxTokens: request.maxTokens ?? 3000 });
+    return aiChat({ system: request.system, blocks: request.blocks, maxTokens: request.maxTokens ?? 3000, model: request.model });
   }
   if (backend === 'api') {
     const response = await fetch(API_URL, {

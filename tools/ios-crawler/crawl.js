@@ -24,7 +24,7 @@ import { assertAuthorized } from './src/safety.js';
 import { publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
 import { classifyStored, ingestFolder, researchStored } from './src/ingest.js';
 import { pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
-import { AI_PROVIDERS, aiConfig, aiStatus, writeAiSettings } from './src/ai.js';
+import { AI_PROVIDERS, aiConfig, aiStatus, readAiSettings, writeAiSettings } from './src/ai.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -43,7 +43,7 @@ ${bold('Commands')}
                             a folder of screenshots → the store             ${dim('no Simulator needed')}
   classify --app-id <id>    analyse screens already stored                  ${dim('no Simulator needed')}
   ai                        which free AI is set up, and whether it answers   ${dim('--json for machines')}
-  research --app-id <id>    rewrite an app's flow names, summaries and screen
+  research --app-id <id>    rewrite an app's flow names, summaries and screen   ${dim('--only journeys|screens')}
                             content with the AI, from what is already stored ${dim('needs a model')}
 
 ${bold('run options')}
@@ -288,6 +288,8 @@ async function runIngest(flags) {
     backend = probe.backend;
     flags.__vision = probe.vision !== false;
     flags.__analyzerLabel = probe.backend === 'ai' ? `${probe.provider}/${probe.model}` : probe.backend;
+    flags.__journeyModel = probe.journeyModel ?? null;
+    if (probe.journeyModel && probe.journeyModel !== probe.model) log.info(`journey names: ${probe.journeyModel}`);
   } else {
     log.info('analyzer: off (--no-classify)');
   }
@@ -302,6 +304,7 @@ async function runIngest(flags) {
     backend,
     vision: flags.__vision,
     analyzerLabel: flags.__analyzerLabel,
+    journeyModel: flags.__journeyModel,
     fps: flags.fps === undefined ? undefined : Number(flags.fps),
     minHoldSeconds: flags.minHold === undefined ? undefined : Number(flags.minHold),
     minRun: flags.minRun === undefined ? undefined : Number(flags.minRun),
@@ -403,6 +406,7 @@ async function runAi(flags) {
       provider: flags.provider ?? current.provider,
       url: flags.url ?? (flags.provider ? AI_PROVIDERS.find((entry) => entry.id === flags.provider)?.url : current.url) ?? current.url,
       model: flags.model ?? current.model,
+      journeyModel: flags.journeyModel ?? readAiSettings().journeyModel ?? '',
       key: flags.key ?? current.key,
       enabled: flags.enabled !== false && flags.off !== true,
     };
@@ -419,6 +423,7 @@ async function runAi(flags) {
   log.info(`server: ${status.url} (${status.provider}, ${status.source === 'env' ? 'from the environment' : status.source === 'settings' ? 'chosen on the admin page' : 'the default'})`);
   if (!status.enabled) log.warn(status.reason);
   else if (status.usable) log.ok(`${status.model}${status.vision ? ' — reads screenshots' : ' — text only'}${status.connected ? '' : ' (server did not list its models)'}`);
+  if (status.usable && status.journeyModel && status.journeyModel !== status.model) log.info(`journey names: ${status.journeyModel} (a larger general model; set --journey-model or MOTVIN_AI_JOURNEY_MODEL to change)`);
   else log.error(status.reason);
   if (status.models.length) log.detail(`models: ${status.models.join(', ')}`);
   return status.usable || !status.enabled ? 0 : 1;
@@ -433,7 +438,7 @@ async function runResearch(flags) {
   const probe = await probeAnalyzer(backend);
   if (!probe.usable || backend === 'local') {
     log.error(`No model available — ${probe.reason ?? 'only the on-device rules are set up'}`);
-    log.raw(dim('  Start Ollama with a vision model (ollama pull gemma3:4b), or set MOTVIN_AI_URL / MOTVIN_AI_KEY.'));
+    log.raw(dim('  Start Ollama with a vision model (ollama pull qwen3-vl:2b), or set MOTVIN_AI_URL / MOTVIN_AI_KEY.'));
     return 1;
   }
   log.info(
@@ -441,6 +446,7 @@ async function runResearch(flags) {
       ? `analyzer: free AI — ${probe.provider} / ${probe.model}${probe.vision ? ' (reads screenshots)' : ' (text only)'}`
       : `analyzer: ${probe.backend} ✓`,
   );
+  if (probe.journeyModel && probe.journeyModel !== probe.model) log.info(`journey names: ${probe.journeyModel}`);
   const result = await researchStored({
     appId: flags.appId,
     platform: flags.platform,
@@ -448,7 +454,9 @@ async function runResearch(flags) {
     backend,
     vision: probe.vision !== false,
     analyzerLabel: probe.backend === 'ai' ? `${probe.provider}/${probe.model}` : probe.backend,
+    journeyModel: probe.journeyModel ?? null,
     dryRun: flags.dryRun === true,
+    only: flags.only === 'journeys' || flags.only === 'screens' ? flags.only : null,
   });
   log.raw('');
   log.info(`${result.flowsChanged} flow(s) and ${result.screensChanged} screen(s) rewritten${flags.dryRun ? dim(' (dry run — nothing written)') : ''}`);

@@ -188,7 +188,10 @@ function apply(job: ServerJob, event: IngestEvent) {
     if (event.screens !== undefined) job.screens = event.screens;
     if (event.stage === 'published' && event.result) job.interim = event.result;
   } else if (event.type === 'log') {
-    job.log.push(event.line);
+    // Stamped with the time since the run began, so "Show detail" doubles as
+    // a record of how long each step took.
+    const seconds = Math.max(0, Math.round((Date.now() - Date.parse(job.startedAt)) / 1000));
+    job.log.push(`[${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}] ${event.line}`);
     if (job.log.length > KEEP_LOG_LINES) job.log.splice(0, job.log.length - KEEP_LOG_LINES);
     const analyzer = event.line.match(/analyzer:\s*(.+)$/);
     if (analyzer) job.analyzer = analyzer[1].trim();

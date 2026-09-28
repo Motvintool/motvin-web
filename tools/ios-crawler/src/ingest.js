@@ -471,12 +471,17 @@ export async function ingestFolder(options) {
           app: resolvedApp,
           vision: options.vision !== false,
           analyzer: options.analyzerLabel ?? backend,
+          journeyModel: options.journeyModel ?? null,
           log: (message) => log.detail(message),
-          onBatch: (done, total, batch) =>
+          onBatch: (done, total, batch, phase) =>
             report(
               options,
               'research',
-              batch ? `AI is writing the flow content — screens ${done + 1}–${Math.min(done + batch, total)} of ${total}` : 'AI is saving the flow content',
+              phase === 'journeys'
+                ? 'AI is naming the journeys'
+                : phase === 'done'
+                  ? 'AI is saving the flow content'
+                  : `AI is writing screen content — screens ${done + 1}–${Math.min(done + batch, total)} of ${total}`,
               { done, total },
             ),
         });
@@ -1159,7 +1164,9 @@ export async function researchStored(options) {
     app,
     vision: options.vision !== false,
     analyzer: options.analyzerLabel ?? backend,
+    journeyModel: options.journeyModel ?? null,
     log: (message) => log.detail(message),
+    only: options.only ?? null,
   });
   log.info(`researcher: ${outcome.journeysRenamed} journey name(s), ${outcome.screensUpdated} screen(s) described in ${outcome.batches} call(s)`);
 

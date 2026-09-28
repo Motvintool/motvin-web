@@ -37,23 +37,31 @@ For every screen:
 9. Do not treat every screenshot as an independent flow.
 10. Do not create a flat list of screens.`;
 
-const OUTPUT_RULES = `
-You are given the journeys already grouped from a real recording of one app, in the order they were walked, with the screens in each. That grouping is fixed: keep every journey and every screen id exactly as given, and do not add, merge, split or reorder them.
+/** What both passes share: the grouping is fixed, the words are the job. */
+const SHARED_RULES = `
+You are given journeys already grouped from a real recording of one app, in the order they were walked, with the screens in each. That grouping is fixed: keep every journey and every screen id exactly as given, and do not add, merge, split or reorder them. Return JSON only — no prose, no markdown fence. Use keys and ids exactly as written in the input.
 
-Write the words. Return JSON only — no prose, no markdown fence — in exactly this shape:
-{
-  "journeys": { "<journey key exactly as given, e.g. J2 Food>": { "name": "...", "summary": "..." } },
-  "screens":  { "<screen id exactly as given, e.g. s004>": { "name": "...", "purpose": "...", "primaryAction": "...", "description": "..." } }
-}
-Use the journey keys and screen ids exactly as written in the input; a summary must describe that journey's own steps and nothing else.
+The names given in the input are machine guesses read off the screens' text and are often wrong — a dish, a brand, a banner, a fragment. Never repeat such a name. Always write your own name from what the screen is for and what the person does there. A product, dish, restaurant or brand name is never a journey name; a journey about one is "Restaurant detail", "Product detail" or the task done there. Only say what the screenshots and their text support; where you cannot tell, name a screen by its role (for example "Category listing", "Item detail") and do not guess.`;
 
-Journey names read like Mobbin's: the task in the person's own terms, two to six words, present participle when it is an action — "Searching dishes & restaurants", "Adding a dish to cart", "Turning on veg mode filter", "Booking a table", "Subscribing to Swiggy One", "Editing profile". A journey that opens a feature is named for the feature as the app names it — "Offer Zone", "Eatlist", "Restaurant detail". A top-level section keeps its tab name — "Food", "Instamart", "Profile" — and "Onboarding" stays "Onboarding". A summary is one sentence saying what the person does across the journey's steps.
+/** Pass one: the journey names, from the whole tree, no images. */
+const JOURNEY_RULES = `${SHARED_RULES}
 
-Screen names are short plain nouns a designer would file the screen under — "Phone number entry", "Restaurant detail", "Filter sheet", "Location picker (logged out)", "Order placed" — never the marketing line or a fragment of visible text. A purpose is one short sentence (under 15 words) on what the screen is for. The primary action is the one thing the person mostly does there, as a short imperative — "Enter mobile number", "Add to cart", "Apply filters" — or "" when there is none (a splash, a loading state). The description is one natural sentence (under 30 words) a person would write about the screen for a design library: what is shown, how it is laid out, what stands out. Be brief; every field is one line.
+Return exactly this shape — a flat map from each journey key given (J0, J1, …) to its new name, one line per journey, and nothing else:
+{ "journeys": { "J0": "Onboarding", "J1": "Food", "J2": "Searching dishes & restaurants", "J3": "Adding a dish to cart" } }
+Do not repeat the steps or the machine guesses from the input; the guess is there only to show which journey is meant, and it is usually wrong. Do not add keys that were not given. Every value is a name of two to six words.
 
-The names given in the input are machine guesses read off the screens' text and are often wrong — a dish, a brand, a banner, a fragment. Never repeat such a name. Always write your own name from what the screen is for and what the person does there. A product, dish, restaurant or brand name is never a journey name; a journey about one is "Restaurant detail", "Product detail" or the task done there.
+Journey names read like Mobbin's: the task in the person's own terms, starting with a verb ending in -ing whenever the person is doing something — "Searching dishes & restaurants", "Adding a dish to cart", "Turning on veg mode filter", "Booking a table", "Subscribing to Swiggy One", "Editing profile". A journey that opens a feature is named for the feature as the app names it — "Offer Zone", "Eatlist", "Restaurant detail". A journey inside a section is never named after the section it is in: a journey inside "Food" is the task done there, not "Food". A top-level section keeps its tab name — "Food", "Instamart", "Profile" — and "Onboarding" stays "Onboarding".`;
 
-Only say what the screenshots and their text support. Where you cannot tell what a screen is for, keep the description short rather than guess, and name it by its role (for example "Category listing", "Item detail").`;
+/** Pass two: the screens of one batch, with their images. */
+const SCREEN_RULES = `${SHARED_RULES}
+
+Return exactly this shape, one entry per screen id given, and nothing else:
+{ "screens": { "<screen id exactly as given, e.g. s004>": { "name": "...", "purpose": "...", "primaryAction": "..." } } }
+
+Screen names are short plain nouns a designer would file the screen under — "Phone number entry", "Restaurant detail", "Filter sheet", "Location picker (logged out)", "Order placed" — never the marketing line or a fragment of visible text. A purpose is one short sentence (under 15 words) on what the screen is for. The primary action is the one thing the person mostly does there, as a short imperative — "Enter mobile number", "Add to cart", "Apply filters" — or "" when there is none (a splash, a loading state). Write no descriptions and no other fields. Be brief; every field is one line.`;
+
+/** Kept for callers that build the old single prompt; the passes above are what runs. */
+const OUTPUT_RULES = `${JOURNEY_RULES}\n${SCREEN_RULES}`;
 
 /**
  * Serialises the tree for the model, with an [image N] marker per screen when
@@ -61,7 +69,7 @@ Only say what the screenshots and their text support. Where you cannot tell what
  *
  * @param {object[]} journeys  from buildJourneys, with keys
  * @param {import('./graph.js').ScreenGraph} graph
- * @param {{maxLines?: number, withImages?: boolean}} options
+ * @param {{maxLines?: number, withImages?: boolean, focus?: string[]}} options
  */
 export function describeTree(journeys, graph, options = {}) {
   const maxLines = options.maxLines ?? 30;
@@ -82,12 +90,7 @@ export function describeTree(journeys, graph, options = {}) {
       const analysis = node.analysis ?? {};
       // Text travels only for the screens this call is about; the rest of the
       // tree is there for context and needs only its names.
-      const text = !inFocus ? '' : (analysis.lines ?? [])
-        .filter((line) => line.y > 0.045)
-        .slice(0, maxLines)
-        .map((line) => String(line.text || '').trim())
-        .filter((t) => t.length > 1)
-        .join(' | ');
+      const text = !inFocus ? '' : screenText(analysis, maxLines);
       const arrived = step.action ? ` ← ${step.action.kind}${step.action.label ? ` "${step.action.label}"` : ''}` : '';
       lines.push(
         `  step ${position + 1}${imageIndex ? ` [image ${imageIndex}]` : ''}: id=${node.id} · "${analysis.name}" · type=${analysis.screenType}${(analysis.states ?? []).length ? ` · state=${analysis.states.join(',')}` : ''}${arrived}`,
@@ -100,24 +103,192 @@ export function describeTree(journeys, graph, options = {}) {
   return { text: lines.join('\n'), screenIds };
 }
 
+/**
+ * The tree at a glance, for naming the journeys: every journey with where it
+ * sits and its steps as names and the taps between them. No recognised text
+ * — a small model handed the text copies it back instead of naming things.
+ */
+export function describeJourneys(journeys, graph) {
+  const nameOfKey = new Map(journeys.map((journey) => [journey.key ?? journey.name, journey.name]));
+  const lines = [];
+  journeys.forEach((journey, index) => {
+    const parent = journey.parent ? nameOfKey.get(journey.parent) ?? journey.parent : null;
+    const steps = (journey.steps ?? journey.nodeIds.map((nodeId) => ({ nodeId, action: null })))
+      .map((step) => {
+        const node = graph.get(step.nodeId);
+        if (!node) return null;
+        const analysis = node.analysis ?? {};
+        const tap = step.action?.kind === 'tap' && step.action.label ? ` (after tapping "${step.action.label}")` : step.action?.kind === 'type' && step.action.label ? ` (after typing "${step.action.label}")` : '';
+        return `${analysis.name}${analysis.screenType && analysis.screenType !== 'other' ? ` [${analysis.screenType}]` : ''}${tap}`;
+      })
+      .filter(Boolean);
+    // Bare keys on purpose: a key that carried the guessed name came back as
+    // the answer, word for word. The guess is given separately, as a guess.
+    lines.push(`J${index} — ${parent ? `inside "${parent}"` : 'top-level section'} — machine guess "${journey.name}" — steps: ${steps.join(' → ')}`);
+  });
+  return lines.join('\n');
+}
+
+function screenText(analysis, maxLines) {
+  return (analysis.lines ?? [])
+    .filter((line) => line.y > 0.045)
+    .slice(0, maxLines)
+    .map((line) => String(line.text || '').trim())
+    .filter((t) => t.length > 1)
+    .join(' | ');
+}
+
+/**
+ * One batch of screens, and only those: each with the journey it sits in,
+ * its type and state, and its recognised text. Nothing else is listed, so a
+ * small model cannot wander off and rewrite the whole library in one reply.
+ */
+export function describeScreens(batch, journeys, graph, options = {}) {
+  const nameOfKey = new Map(journeys.map((journey) => [journey.key ?? journey.name, journey.name]));
+  const pathOf = (journey) => {
+    const parts = [journey.name];
+    let cursor = journey;
+    for (let guard = 0; cursor?.parent && guard < 6; guard++) {
+      cursor = journeys.find((candidate) => (candidate.key ?? candidate.name) === cursor.parent);
+      if (cursor) parts.unshift(cursor.name);
+    }
+    return parts.join(' › ');
+  };
+  const lines = [];
+  batch.forEach((node, index) => {
+    const analysis = node.analysis ?? {};
+    const home = journeys.find((journey) => journey.nodeIds.includes(node.id));
+    const text = screenText(analysis, options.maxLines ?? 30);
+    lines.push(
+      `${options.withImages ? `[image ${index + 1}] ` : ''}id=${node.id}${home ? ` · in "${pathOf(home)}"` : ''} · guessed name "${analysis.name}" · type=${analysis.screenType}${(analysis.states ?? []).length ? ` · state=${analysis.states.join(',')}` : ''}`,
+    );
+    if (text) lines.push(`   text: ${text.slice(0, 700)}`);
+  });
+  void nameOfKey;
+  return lines.join('\n');
+}
+
 /** The key a journey is referred to by in the exchange: index plus name, hard to mix up. */
 export function journeyKey(journey, index) {
   return `J${index} ${journey.name}`;
 }
 
 /**
- * Runs the researcher over a tree and applies what comes back.
+ * What can be read from a reply that was cut off mid-way: the complete
+ * entries before the cut. Every open string, object and array is closed
+ * after the last complete value, so `{"a": {"x": 1}, "b": {"y": "par` gives
+ * `{"a": {"x": 1}}`. Returns null when nothing complete is there.
+ */
+export function salvageJson(text) {
+  const raw = String(text ?? '');
+  const start = raw.indexOf('{');
+  if (start === -1) return null;
+  const stack = [];
+  let inString = false;
+  let escaped = false;
+  // Positions just after a complete value at each depth, so the cut can fall
+  // back to the last one.
+  let lastComplete = -1;
+  let lastCompleteDepth = 0;
+  for (let i = start; i < raw.length; i++) {
+    const char = raw[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') {
+        inString = false;
+        if (stack.length && stack[stack.length - 1].expect === 'value') {
+          lastComplete = i + 1;
+          lastCompleteDepth = stack.length;
+        }
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === '{' || char === '[') {
+      stack.push({ kind: char, expect: char === '{' ? 'key' : 'value' });
+      continue;
+    }
+    if (char === '}' || char === ']') {
+      stack.pop();
+      if (!stack.length) return safeParse(raw.slice(start, i + 1));
+      lastComplete = i + 1;
+      lastCompleteDepth = stack.length;
+      continue;
+    }
+    if (char === ':' && stack.length) stack[stack.length - 1].expect = 'value';
+    if (char === ',' && stack.length) stack[stack.length - 1].expect = stack[stack.length - 1].kind === '{' ? 'key' : 'value';
+    if (/[0-9a-z]/i.test(char) && stack.length && stack[stack.length - 1].expect === 'value') {
+      // A bare number/true/false/null: complete when the next char is not part of it.
+      const next = raw[i + 1];
+      if (next === undefined || !/[0-9a-z.+\-]/i.test(next)) {
+        lastComplete = i + 1;
+        lastCompleteDepth = stack.length;
+      }
+    }
+  }
+  if (lastComplete === -1) return null;
+  // Rebuild the closers for the depth at the cut.
+  let head = raw.slice(start, lastComplete);
+  const closers = [];
+  {
+    // Re-walk to find which brackets are open at lastComplete.
+    const open = [];
+    let str = false;
+    let esc = false;
+    for (let i = 0; i < head.length; i++) {
+      const c = head[i];
+      if (str) {
+        if (esc) esc = false;
+        else if (c === '\\') esc = true;
+        else if (c === '"') str = false;
+        continue;
+      }
+      if (c === '"') str = true;
+      else if (c === '{') open.push('}');
+      else if (c === '[') open.push(']');
+      else if (c === '}' || c === ']') open.pop();
+    }
+    closers.push(...open.reverse());
+  }
+  void lastCompleteDepth;
+  head = head.replace(/,\s*$/, '');
+  return safeParse(head + closers.join(''));
+}
+
+function safeParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Runs the researcher over a tree and applies what comes back, in two passes:
  *
- * `complete` is the model adapter: `({system, blocks}) => Promise<string>`,
- * where blocks are text and image parts. `encodeImage(path)` returns base64
- * PNG for a screenshot. Screens are sent in batches so a long recording does
- * not exceed a context window; each batch carries the whole tree as text and
- * the images of its own screens.
+ *   1. the journey names, from the whole tree as text — one short call;
+ *   2. the screens, six at a time with their images, each call seeing only
+ *      its own six.
+ *
+ * One call that asked for everything at once was the slow part: a small
+ * model would restart from the first screen every time and run out of room
+ * before it reached the six it was asked about. Splitting the job makes
+ * each reply short and impossible to get wrong in that way. A reply that is
+ * still cut off keeps its complete entries; only the screens it missed are
+ * asked again, in a smaller call.
+ *
+ * `complete` is the model adapter: `({system, blocks, maxTokens}) =>
+ * Promise<string>`, where blocks are text and image parts. `encodeImage(path)`
+ * returns base64 PNG for a screenshot.
  *
  * @returns {Promise<{journeysRenamed: number, screensUpdated: number, batches: number}>}
  */
 export async function researchTree(journeys, graph, options) {
-  const { complete, encodeImage, app, vision = true, batchSize = 6, extractJson, log, analyzer = 'ai', onBatch } = options;
+  const { complete, encodeImage, app, vision = true, batchSize = 6, extractJson, log, analyzer = 'ai', onBatch, only = null, journeyModel = null } = options;
   if (!journeys.length) return { journeysRenamed: 0, screensUpdated: 0, batches: 0 };
 
   const nodes = [];
@@ -127,24 +298,52 @@ export async function researchTree(journeys, graph, options) {
       if (node && !nodes.includes(node)) nodes.push(node);
     }
   }
+  const header = `App: ${app?.name ?? 'unknown'}${app?.industry ? ` (${app.industry})` : ''}.\n\n`;
+  const parse = (reply) => {
+    try {
+      return extractJson(reply);
+    } catch (error) {
+      const partial = salvageJson(reply);
+      if (partial) return partial;
+      throw error;
+    }
+  };
+  const debug = (reply) => {
+    if (process.env.MOTVIN_RESEARCH_DEBUG) process.stderr.write(`\n[researcher reply]\n${reply}\n`);
+  };
 
   const proposals = { journeys: {}, screens: {} };
-  // A queue rather than a fixed list: a batch whose reply came back cut off
-  // is split in two and tried again, so a long-winded model costs a second
-  // call, not the words for six screens.
-  const queue = [];
-  for (let i = 0; i < nodes.length; i += batchSize) queue.push(nodes.slice(i, i + batchSize));
-  const plannedCalls = queue.length;
   let calls = 0;
+
+  // ── Pass one: journey names ────────────────────────────────────────────────
+  if (only !== 'screens') {
+    log?.(`researcher: naming ${journeys.length} journey(s) from the tree${journeyModel ? ` with ${journeyModel}` : ''}`);
+    onBatch?.(0, nodes.length, 0, 'journeys');
+    try {
+      calls++;
+      const tree = describeJourneys(journeys, graph);
+      const reply = await complete({ system: `${BRIEF}\n${JOURNEY_RULES}`, blocks: [{ type: 'text', text: `${header}${tree}` }], maxTokens: 1200, ...(journeyModel ? { model: journeyModel } : {}) });
+      debug(reply);
+      const raw = parse(reply);
+      if (raw && typeof raw.journeys === 'object') Object.assign(proposals.journeys, raw.journeys);
+    } catch (error) {
+      log?.(`researcher: journey names failed — ${String(error.message).split('\n')[0]}; keeping the names read off the screens`);
+    }
+  }
+
+  // ── Pass two: screens, a batch at a time ─────────────────────────────────
+  const queue = [];
+  if (only !== 'journeys') for (let i = 0; i < nodes.length; i += batchSize) queue.push(nodes.slice(i, i + batchSize));
+  const planned = queue.length;
   let doneScreens = 0;
+  let screenCalls = 0;
 
   while (queue.length) {
     const batch = queue.shift();
-    const batchIndex = calls;
-    const batches = { length: Math.max(plannedCalls, calls + queue.length + 1) };
+    const total = Math.max(planned, screenCalls + queue.length + 1);
+    screenCalls++;
     calls++;
     const focus = batch.map((node) => node.id);
-    const tree = describeTree(journeys, graph, { withImages: vision, focus });
     const blocks = [];
     if (vision) {
       for (const node of batch) {
@@ -155,45 +354,47 @@ export async function researchTree(journeys, graph, options) {
         }
       }
     }
-    const header = `App: ${app?.name ?? 'unknown'}${app?.industry ? ` (${app.industry})` : ''}.\n\n`;
-    const scope =
-      batches.length > 1
-        ? `This is batch ${batchIndex + 1} of ${batches.length}. ${vision ? `The images attached are, in order, the screens with ids: ${focus.join(', ')}.` : ''} Write "screens" entries for these ids: ${focus.join(', ')}. Write "journeys" entries for every journey.\n\n`
-        : vision
-          ? `The images attached are, in order, the screens marked [image N] below.\n\n`
-          : '';
-    blocks.push({ type: 'text', text: `${header}${scope}${tree.text}` });
+    const scope = `${vision ? `The images attached are, in order, the screens listed below. ` : ''}Write "screens" entries for exactly these ids and no others: ${focus.join(', ')}.\n\n`;
+    blocks.push({ type: 'text', text: `${header}${scope}${describeScreens(batch, journeys, graph, { withImages: vision })}` });
 
-    log?.(`researcher: batch ${batchIndex + 1}/${batches.length} — ${batch.length} screen(s)${vision ? ' with images' : ' from text'}`);
-    onBatch?.(doneScreens, nodes.length, batch.length);
+    log?.(`researcher: batch ${screenCalls}/${total} — ${batch.length} screen(s)${vision ? ' with images' : ' from text'}`);
+    onBatch?.(doneScreens, nodes.length, batch.length, 'screens');
     let raw = null;
     try {
-      // Six screens of names, purposes, actions and descriptions plus every
-      // journey's line run to a few thousand tokens; a tight budget cuts the
-      // JSON mid-object and loses the whole batch.
-      const reply = await complete({ system: `${BRIEF}\n${OUTPUT_RULES}`, blocks, maxTokens: 6000 });
-      if (process.env.MOTVIN_RESEARCH_DEBUG) process.stderr.write(`\n[researcher reply]\n${reply}\n`);
-      raw = extractJson(reply);
+      // Six names, purposes and actions run to a few hundred tokens; the
+      // budget leaves room for a talkative model without inviting an essay.
+      const reply = await complete({ system: `${BRIEF}\n${SCREEN_RULES}`, blocks, maxTokens: 1800 });
+      debug(reply);
+      raw = parse(reply);
     } catch (error) {
-      // One bad batch — a truncated reply, a timeout — costs that batch's
-      // words, not the run.
-      log?.(`researcher: batch ${batchIndex + 1} failed — ${String(error.message).split('\n')[0]}`);
-      if (batch.length > 1) {
-        const half = Math.ceil(batch.length / 2);
-        queue.unshift(batch.slice(0, half), batch.slice(half));
-        log?.(`researcher: retrying those ${batch.length} screen(s) as two smaller calls`);
-      } else {
-        doneScreens += batch.length;
-      }
-      continue;
+      log?.(`researcher: batch ${screenCalls} failed — ${String(error.message).split('\n')[0]}`);
+      raw = null;
     }
-    doneScreens += batch.length;
-    if (raw && typeof raw.journeys === 'object') Object.assign(proposals.journeys, raw.journeys);
+    const got = [];
     if (raw && typeof raw.screens === 'object') {
-      for (const id of focus) if (raw.screens[id]) proposals.screens[id] = raw.screens[id];
+      for (const id of focus) {
+        if (raw.screens[id] && typeof raw.screens[id] === 'object') {
+          proposals.screens[id] = raw.screens[id];
+          got.push(id);
+        }
+      }
+    }
+    const missing = batch.filter((node) => !got.includes(node.id));
+    doneScreens += got.length;
+    if (missing.length && missing.length < batch.length) {
+      // The reply covered some of the six: only the rest go again.
+      queue.unshift(missing);
+      log?.(`researcher: ${got.length} of ${batch.length} came back; asking again for ${missing.length}`);
+    } else if (missing.length && batch.length > 1) {
+      const half = Math.ceil(batch.length / 2);
+      queue.unshift(batch.slice(0, half), batch.slice(half));
+      log?.(`researcher: retrying those ${batch.length} screen(s) as two smaller calls`);
+    } else if (missing.length) {
+      // One screen, twice refused: it keeps the name read off the screen.
+      doneScreens += missing.length;
     }
   }
-  onBatch?.(nodes.length, nodes.length, 0);
+  onBatch?.(nodes.length, nodes.length, 0, 'done');
 
   const applied = applyProposals(journeys, graph, proposals);
   for (const id of Object.keys(proposals.screens)) {
@@ -219,6 +420,7 @@ export function applyProposals(journeys, graph, proposals) {
   let screensUpdated = 0;
 
   const nameOfKey = new Map(journeys.map((journey) => [journey.key ?? journey.name, journey.name]));
+  const sectionNames = new Set(journeys.filter((journey) => journey.section && !journey.parent).map((journey) => journey.name.toLowerCase()));
   // Words that belong to the app and keep their capitals in a name.
   const properNouns = new Set();
   for (const journey of journeys) {
@@ -230,7 +432,9 @@ export function applyProposals(journeys, graph, proposals) {
 
   journeys.forEach((journey, index) => {
     const entries = proposals.journeys ?? {};
-    const proposal = entries[journeyKey(journey, index)] ?? entries[String(index)] ?? entries[`J${index}`] ?? findByLooseKey(entries, index, journey.name);
+    let proposal = entries[journeyKey(journey, index)] ?? entries[String(index)] ?? entries[`J${index}`] ?? findByLooseKey(entries, index, journey.name);
+    // The flat shape: the value is the name itself.
+    if (typeof proposal === 'string') proposal = { name: proposal };
     if (!proposal || typeof proposal !== 'object') return;
 
     const parentName = journey.parent ? nameOfKey.get(journey.parent) ?? null : null;
@@ -238,11 +442,22 @@ export function applyProposals(journeys, graph, proposals) {
     // "Onboarding - Phone number entry" is the parent's name glued on; the
     // journey is the part after it.
     if (name && parentName) name = name.replace(new RegExp(`^${escapeRegExp(parentName)}\\s*[-–—:›>]\\s*`, 'i'), '').trim();
+    // "Instamart product search" inside Instamart says Instamart twice; the
+    // section is already the heading above it.
+    if (name && parentName) {
+      const bare = name.replace(new RegExp(`^${escapeRegExp(parentName)}\\s+`, 'i'), '').trim();
+      if (bare !== name && bare.split(' ').length >= 2) name = bare.charAt(0).toUpperCase() + bare.slice(1);
+    }
     name = sentenceCase(name, properNouns);
     // A section keeps its tab name and onboarding its own; the model names
     // the journeys inside them.
     const isSectionName = journey.section && journey.category === 'discovery';
-    if (name && name.split(' ').length <= 7 && !isSectionName && !/^onboarding$/i.test(journey.name)) {
+    // A journey named after the section it sits in, or after another
+    // section, is the model losing its place; that name is refused.
+    const echoesAPlace =
+      Boolean(journey.parent) &&
+      (name.toLowerCase() === (parentName ?? '').toLowerCase() || sectionNames.has(name.toLowerCase()) || /^onboarding$/i.test(name));
+    if (name && !echoesAPlace && name.split(' ').length <= 7 && !isSectionName && !/^onboarding$/i.test(journey.name)) {
       if (name.toLowerCase() !== journey.name.toLowerCase()) journeysRenamed++;
       journey.name = name;
     }

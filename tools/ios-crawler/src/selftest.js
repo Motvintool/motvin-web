@@ -26,8 +26,8 @@ import { buildSections, classifyScreen, cleanTitle, groupFlowsLocally, guessBran
 import { segmentRecording } from './segment.js';
 import { buildJourneys, journeyName, taskPhrase } from './journeys.js';
 import { describeAction, actionPhrase } from './actions.js';
-import { applyProposals, describeTree, researchTree, BRIEF } from './researcher.js';
-import { pickModel, supportsVision } from './ai.js';
+import { applyProposals, describeTree, researchTree, salvageJson, BRIEF } from './researcher.js';
+import { pickModel, supportsVision, ollamaReplyText, pickJourneyModel } from './ai.js';
 import { isExternalAuthScreen } from './safety.js';
 import { dominantColors, fingerprintFromThumb, THUMB } from './hash.js';
 
@@ -942,9 +942,12 @@ export async function selfTest() {
       const described = describeTree(tree, g, { withImages: true });
       check('the tree is described with ids and images the model can refer to', described.text.includes(`id=${b.id}`) && described.text.includes('[image 2]') && described.screenIds.length === 2, described.text.slice(0, 200));
       check('the brief goes to the model as written', BRIEF.startsWith('Analyze the uploaded app screenshots as a UX/UI researcher'));
-      check('a batch whose reply is cut off is retried as two smaller calls', await (async () => {
-        // Its own graph: four screens in one journey, so one call covers them
-        // all and a cut-off reply has something to split.
+      check('a cut-off reply keeps its complete entries', (() => {
+        const partial = salvageJson('{"screens": {"s1": {"name": "Splash screen", "purpose": "Opens the app", "primaryAction": ""}, "s2": {"name": "Phone entry", "purpose": "Lets the per');
+        return partial?.screens?.s1?.name === 'Splash screen' && partial.screens.s2?.name === 'Phone entry' && partial.screens.s2.purpose === undefined;
+      })(), '');
+      check('a reply with nothing complete salvages nothing', salvageJson('{"screens": {"s1": {"name": "Spl') === null && salvageJson('no json here') === null);
+      check('journeys are named in one text call, screens in image batches, and a cut-off batch is retried smaller', await (async () => {
         const g2 = new ScreenGraph();
         const ids = [];
         for (let i = 0; i < 4; i++) {
@@ -958,21 +961,34 @@ export async function selfTest() {
           vision: false,
           app: { name: 'Swiggy' },
           extractJson: (text) => JSON.parse(text),
-          complete: async ({ blocks }) => {
+          complete: async ({ system, blocks }) => {
             const text = blocks.map((block) => block.text ?? '').join(' ');
-            const focus = ids.filter((id) => new RegExp(`id=${id}\\b`).test(text) && (!/entries for these ids: ([^.]+)\./.test(text) || text.match(/entries for these ids: ([^.]+)\./)[1].split(', ').includes(id)));
+            if (/flat map from each journey key/.test(system)) {
+              calls.push('journeys');
+              return JSON.stringify({ journeys: { 'J0 Food': { name: 'Groceries' } } });
+            }
+            const focus = ids.filter((id) => new RegExp(`id=${id}\\b`).test(text));
             calls.push(focus.length);
-            if (calls.length === 1) return '{"journeys": {';
-            return JSON.stringify({ journeys: {}, screens: Object.fromEntries(focus.map((id) => [id, { name: 'Written name', description: 'A sentence.' }])) });
+            if (calls.length === 2) return '{"screens": {';
+            return JSON.stringify({ screens: Object.fromEntries(focus.map((id) => [id, { name: 'Written name', purpose: 'A purpose.' }])) });
           },
         });
-        return calls[0] === 4 && calls[1] === 2 && calls[2] === 2 && outcome.batches === 3 && outcome.screensUpdated === 4;
+        return calls[0] === 'journeys' && calls[1] === 4 && calls[2] === 2 && calls[3] === 2 && outcome.batches === 4 && outcome.screensUpdated === 4 && tree2[0].name === 'Food';
       })(), '');
       const outcome = applyProposals(tree, g, {
         journeys: { 'J0 Food': { name: 'Groceries', summary: 'x' }, 'J1 Searching Food': { name: 'Food - Searching Dishes & Restaurants', summary: 'The person opens search from the Food home and looks for a dish.' } },
         screens: { [b.id]: { name: 'Dish search', purpose: 'Lets the person find dishes and restaurants by name.', primaryAction: 'Type a dish name', description: 'A search field with recent searches beneath it and the keyboard open.' }, [a.id]: { name: '', description: '' } },
       });
       check('a section keeps its tab name whatever the model proposes', tree[0].name === 'Food');
+      check('a journey named after its own section is refused; a section prefix is dropped', (() => {
+        const t = [
+          { key: 'a', name: 'Food', category: 'discovery', parent: null, section: true, nodeIds: [a.id] },
+          { key: 'b', name: 'Opening a page', category: 'discovery', parent: 'a', section: false, nodeIds: [a.id, b.id] },
+          { key: 'c', name: 'Search', category: 'search', parent: 'a', section: false, nodeIds: [b.id] },
+        ];
+        applyProposals(t, g, { journeys: { 'J1 Opening a page': 'Food', 'J2 Search': 'Food product search' }, screens: {} });
+        return t[1].name === 'Opening a page' && t[2].name === 'Product search';
+      })(), '');
       check('a journey inside it takes the task name, parent prefix stripped and sentence-cased, and the summary', tree[1].name === 'Searching dishes & restaurants' && tree[1].summary?.startsWith('The person opens search'), tree[1].name);
       const shifted = applyProposals(tree, g, { journeys: { 'J1 Searching dishes & restaurants': { summary: 'The user explores the Instamart section for grocery and household items.' } }, screens: {} });
       check('a summary about a different journey is refused', tree[1].summary?.startsWith('The person opens search') && shifted.journeysRenamed === 0);
@@ -980,7 +996,11 @@ export async function selfTest() {
       check('an empty proposal leaves the heuristic name alone', g.get(a.id).analysis.name === 'Food home');
       check('what was changed is counted', outcome.journeysRenamed === 1 && outcome.screensUpdated === 1, JSON.stringify(outcome));
       check('a vision model is preferred over a code model', pickModel(['qwen2.5-coder:14b', 'gemma3:4b']) === 'gemma3:4b' && supportsVision('gemma3:4b') && !supportsVision('qwen2.5-coder:14b'));
+      check('the screen-reading family is preferred among vision models', pickModel(['gemma3:4b', 'qwen2.5-coder:14b', 'qwen3-vl:2b']) === 'qwen3-vl:2b');
       check('a configured model wins', pickModel(['gemma3:4b'], 'llava:13b') === 'llava:13b');
+      check('journeys go to the largest general model, never a coder, and stay put when nothing larger exists', pickJourneyModel(['qwen3-vl:2b', 'gemma3:4b', 'qwen2.5-coder:14b'], 'qwen3-vl:2b') === 'gemma3:4b' && pickJourneyModel(['qwen3-vl:2b'], 'qwen3-vl:2b') === 'qwen3-vl:2b' && pickJourneyModel(['gemma3:4b', 'llama3:70b'], 'gemma3:4b') === 'gemma3:4b');
+      check('an answer filed under thinking is still the answer', ollamaReplyText({ message: { content: '', thinking: '{"name":"Phone login"}' } }) === '{"name":"Phone login"}' && ollamaReplyText({ message: { content: 'x', thinking: 'y' } }) === 'x');
+      check('a chain of thought with no answer is not an answer', ollamaReplyText({ message: { content: '', thinking: 'Okay, the user wants me to think about this.' } }) === '');
     }
 
     log.heading('Brand from the screens');

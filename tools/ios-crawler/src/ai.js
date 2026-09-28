@@ -39,7 +39,7 @@ export const AI_SETTINGS_FILE = join(dirname(fileURLToPath(import.meta.url)), '.
 
 /** Ready-made servers, so choosing one is a click rather than a URL. */
 export const AI_PROVIDERS = [
-  { id: 'ollama', name: 'Ollama (this Mac)', url: AI_DEFAULT_URL, needsKey: false, hint: 'Free and offline. ollama pull gemma3:4b' },
+  { id: 'ollama', name: 'Ollama (this Mac)', url: AI_DEFAULT_URL, needsKey: false, hint: 'Free and offline. ollama pull qwen3-vl:2b' },
   { id: 'lm-studio', name: 'LM Studio (this Mac)', url: 'http://localhost:1234/v1', needsKey: false, hint: 'Free and offline. Load a vision model in LM Studio.' },
   { id: 'gemini', name: 'Google Gemini', url: 'https://generativelanguage.googleapis.com/v1beta/openai', needsKey: true, hint: 'Free tier. Key from aistudio.google.com', model: 'gemini-2.5-flash' },
   { id: 'groq', name: 'Groq', url: 'https://api.groq.com/openai/v1', needsKey: true, hint: 'Free tier. Key from console.groq.com', model: 'meta-llama/llama-4-scout-17b-16e-instruct' },
@@ -60,7 +60,7 @@ export function readAiSettings() {
 
 export function writeAiSettings(settings) {
   const clean = {};
-  for (const key of ['provider', 'url', 'model', 'key']) if (typeof settings[key] === 'string') clean[key] = settings[key].trim();
+  for (const key of ['provider', 'url', 'model', 'key', 'journeyModel']) if (typeof settings[key] === 'string' && settings[key].trim()) clean[key] = settings[key].trim();
   if (settings.enabled === false) clean.enabled = false;
   writeFileSync(AI_SETTINGS_FILE, `${JSON.stringify(clean, null, 2)}\n`);
   return clean;
@@ -125,11 +125,42 @@ export function supportsVision(model) {
  * — vision-capable first, never a code or embedding model unless nothing else
  * exists.
  */
+/** Vision models that read phone screens best, most preferred first. */
+const PREFERRED = [/qwen3-vl/i, /qwen2\.5-?vl/i, /gemma3/i, /llava/i];
+
 export function pickModel(models, configured = '') {
   if (configured) return configured;
   const usable = models.filter((name) => !NOT_FOR_THIS.test(name));
+  for (const pattern of PREFERRED) {
+    const hit = usable.find((name) => pattern.test(name));
+    if (hit) return hit;
+  }
   const vision = usable.find((name) => supportsVision(name));
   return vision ?? usable[0] ?? models[0] ?? null;
+}
+
+/** Billions of parameters, read off a model name ("gemma3:4b" → 4). */
+export function modelSize(name) {
+  const match = String(name).match(/(\d+(?:\.\d+)?)\s*b\b/i);
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * The model that names the journeys: one short text call over the whole
+ * tree, where judgement matters more than speed. A 2B vision model reads
+ * screens well but hands the section name back for every journey inside it,
+ * so when a larger general model is installed (up to ~15B, never a coder or
+ * embedding model) that one takes this call. The chosen model stays on the
+ * screens, where its speed pays off.
+ */
+export function pickJourneyModel(models, chosen) {
+  const own = modelSize(chosen) ?? 0;
+  const candidates = models
+    .filter((name) => !NOT_FOR_THIS.test(name) && name !== chosen)
+    .map((name) => ({ name, size: modelSize(name) ?? 0 }))
+    .filter((entry) => entry.size > own && entry.size >= 3 && entry.size <= 15)
+    .sort((a, b) => b.size - a.size);
+  return candidates[0]?.name ?? chosen;
 }
 
 /**
@@ -153,7 +184,7 @@ export async function aiStatus() {
       vision: false,
       reason:
         config.provider === 'ollama'
-          ? 'Ollama is not running or has no models — start it and run: ollama pull gemma3:4b'
+          ? 'Ollama is not running or has no models — start it and run: ollama pull qwen3-vl:2b'
           : `no models at ${config.url}`,
     };
   }
@@ -169,6 +200,7 @@ export async function aiStatus() {
     usable: true,
     connected,
     model,
+    journeyModel: process.env.MOTVIN_AI_JOURNEY_MODEL || readAiSettings().journeyModel || pickJourneyModel(models, model),
     vision: supportsVision(model),
     reason: connected ? null : `could not list models at ${config.url}; the chosen model will be tried as is`,
   };
@@ -240,6 +272,9 @@ async function ollamaChat(config, model, vision, request) {
       { role: 'system', content: request.system },
       { role: 'user', content: text, ...(images.length ? { images } : {}) },
     ],
+    // A reasoning model (Qwen3) would otherwise spend the whole token budget
+    // thinking out loud and hand back nothing; the answer is what is wanted.
+    think: false,
     options: {
       temperature: request.temperature ?? 0.2,
       num_ctx: request.contextTokens ?? 16384,
@@ -255,7 +290,25 @@ async function ollamaChat(config, model, vision, request) {
   });
   if (!response.ok) throw new Error(`ollama ${response.status}: ${(await response.text()).slice(0, 400)}`);
   const payload = await response.json();
-  const reply = payload.message?.content ?? '';
-  if (!String(reply).trim()) throw new Error('ollama returned an empty reply');
+  const reply = ollamaReplyText(payload);
+  if (!reply.trim()) throw new Error('ollama returned an empty reply');
   return reply;
+}
+
+/**
+ * The text of an Ollama reply. Some builds file a reasoning model's answer
+ * under `thinking` even with thinking switched off, so when `content` is
+ * empty the thinking text is the answer — provided it is one (JSON, or any
+ * text when JSON was not asked for) rather than a chain of thought.
+ */
+export function ollamaReplyText(payload) {
+  const message = payload?.message ?? {};
+  const content = String(message.content ?? '');
+  if (content.trim()) return content;
+  const thinking = String(message.thinking ?? '').trim();
+  if (!thinking) return '';
+  const first = thinking.indexOf('{');
+  const last = thinking.lastIndexOf('}');
+  if (first !== -1 && last > first) return thinking.slice(first, last + 1);
+  return '';
 }

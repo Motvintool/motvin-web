@@ -105,6 +105,8 @@ export type AiStatus = {
   usable: boolean;
   connected: boolean;
   model: string | null;
+  /** The model that names the journeys — a larger general model when one is installed. */
+  journeyModel?: string | null;
   vision: boolean;
   reason: string | null;
   providers: AiProvider[];

@@ -48,7 +48,10 @@ export function tone(status: AiStatus | null, loading: boolean): 'on' | 'warn' |
 export function statusLine(status: AiStatus | null, loading: boolean): string {
   if (!status) return loading ? 'Checking the AI…' : 'AI status unknown';
   if (!status.enabled) return 'AI is off — names come from the on-device rules';
-  if (status.usable && status.connected) return `Connected — ${status.model}${status.vision ? ' reads the screenshots' : ' works from the recognised text'}`;
+  if (status.usable && status.connected) {
+    const journeys = status.journeyModel && status.journeyModel !== status.model ? `; ${status.journeyModel} names the journeys` : '';
+    return `Connected — ${status.model}${status.vision ? ' reads the screenshots' : ' works from the recognised text'}${journeys}`;
+  }
   if (status.usable) return `${status.model} will be tried — ${status.reason ?? 'the server did not list its models'}`;
   return `Not connected — ${status.reason ?? 'no model answers'}`;
 }

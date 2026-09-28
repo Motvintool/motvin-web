@@ -139,7 +139,7 @@ in [`src/researcher.js`](src/researcher.js). That model can be free:
 
 | | Setup | Sees images |
 |---|---|---|
-| **Ollama** on this Mac | install Ollama, `ollama pull gemma3:4b`. Nothing else — it is picked up automatically | yes |
+| **Ollama** on this Mac | install Ollama, `ollama pull qwen3-vl:2b`. Nothing else — it is picked up automatically | yes |
 | Google Gemini free tier | key from AI Studio; `MOTVIN_AI_URL=https://generativelanguage.googleapis.com/v1beta/openai`, `MOTVIN_AI_MODEL=gemini-2.5-flash`, `MOTVIN_AI_KEY=…` | yes |
 | Groq free tier | `MOTVIN_AI_URL=https://api.groq.com/openai/v1`, a Llama 4 vision model, `MOTVIN_AI_KEY=…` | yes |
 | OpenRouter `:free` models | `MOTVIN_AI_URL=https://openrouter.ai/api/v1`, e.g. `qwen/qwen2.5-vl-72b-instruct:free`, `MOTVIN_AI_KEY=…` | yes |
