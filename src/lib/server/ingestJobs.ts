@@ -29,6 +29,8 @@ const KEEP_JOBS = 12;
 const KEEP_LOG_LINES = 160;
 
 type ServerJob = IngestJob & { workDir: string | null };
+/** Live processes, by job id — never persisted. */
+const children = new Map<string, import('node:child_process').ChildProcess>();
 
 type Store = { jobs: Map<string, ServerJob>; loaded: boolean };
 
@@ -111,9 +113,26 @@ export type StartJobInput = {
   title: string;
   sizeBytes: number | null;
   startedBy: string;
-  workDir: string;
+  workDir: string | null;
   args: string[];
+  /** What the run is: reading a recording, or rewriting an app's names. */
+  mode?: 'ingest' | 'research';
 };
+
+/** Ends a running job's process. The screens it published stay. */
+export function stopJob(id: string): boolean {
+  load();
+  const job = store.jobs.get(id);
+  const child = children.get(id);
+  if (!job || job.status !== 'running') return false;
+  job.error = 'Stopped by the admin.';
+  job.message = 'Stopped by the admin.';
+  job.status = 'failed';
+  job.finishedAt = new Date().toISOString();
+  persist();
+  if (child) child.kill('SIGTERM');
+  return true;
+}
 
 /**
  * Starts the crawler on a recording already on disk and returns the job at
@@ -131,8 +150,9 @@ export function startJob(input: StartJobInput): IngestJob {
     startedAt: new Date().toISOString(),
     finishedAt: null,
     status: 'running',
-    stage: 'extract',
-    message: 'Reading the recording',
+    stage: input.mode === 'research' ? 'research' : 'extract',
+    message: input.mode === 'research' ? 'Reading the stored screens' : 'Reading the recording',
+    mode: input.mode ?? 'ingest',
     done: null,
     total: null,
     frames: null,
@@ -150,13 +170,14 @@ export function startJob(input: StartJobInput): IngestJob {
   trim();
   persist();
 
-  runCrawler(input.args, (event) => apply(job, event))
+  runCrawler(input.args, (event) => apply(job, event), input.mode ?? 'ingest', (child) => children.set(id, child))
     .then((outcome) => {
+      if (job.status === 'failed') return; // stopped by the admin meanwhile
       if (outcome.ok) {
         job.result = outcome.data;
         job.status = 'done';
         job.stage = 'done';
-        job.message = `${outcome.data.app.name} — ${outcome.data.ingested} screens in ${outcome.data.flows.length} flows`;
+        job.message = outcome.data ? `${outcome.data.app.name} — ${outcome.data.ingested} screens in ${outcome.data.flows.length} flows` : `${input.title} — finished`;
       } else {
         job.status = 'failed';
         job.error = outcome.message;
@@ -169,7 +190,8 @@ export function startJob(input: StartJobInput): IngestJob {
       job.message = error.message;
     })
     .finally(async () => {
-      job.finishedAt = new Date().toISOString();
+      children.delete(id);
+      job.finishedAt = job.finishedAt ?? new Date().toISOString();
       persist();
       if (job.workDir) await rm(job.workDir, { recursive: true, force: true }).catch(() => undefined);
       job.workDir = null;
@@ -211,7 +233,9 @@ function apply(job: ServerJob, event: IngestEvent) {
 function runCrawler(
   args: string[],
   send: (event: IngestEvent) => void,
-): Promise<{ ok: true; data: IngestResult } | { ok: false; message: string }> {
+  mode: 'ingest' | 'research' = 'ingest',
+  onSpawn?: (child: import('node:child_process').ChildProcess) => void,
+): Promise<{ ok: true; data: IngestResult | null } | { ok: false; message: string }> {
   const script = join(process.cwd(), 'tools', 'ios-crawler', 'crawl.js');
 
   return new Promise((resolve) => {
@@ -219,6 +243,7 @@ function runCrawler(
       cwd: join(process.cwd(), 'tools', 'ios-crawler'),
       env: { ...process.env, NO_COLOR: '1' },
     });
+    onSpawn?.(child);
 
     let result: IngestResult | null = null;
     let resultError: string | null = null;
@@ -271,6 +296,8 @@ function runCrawler(
       if (buffer.trim()) handleLine(buffer);
       if (result) return resolve({ ok: true, data: result });
       if (resultError) return resolve({ ok: false, message: resultError });
+      // A names rewrite prints no result line; a clean exit is the result.
+      if (mode === 'research' && code === 0) return resolve({ ok: true, data: null });
       resolve({
         ok: false,
         message: humanLines.filter(Boolean).slice(-4).join(' — ') || `The crawler exited with code ${code}.`,

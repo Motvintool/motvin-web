@@ -1,6 +1,6 @@
 import type { AiStatus, IngestJob } from '@/lib/inspirations/ingestJobs';
 import { INGEST_STAGES, stageIndex } from '@/lib/inspirations/ingestJobs';
-import { describeOp, isDestructive, labelFor, type AdminOp, type AssistantAction } from '@/lib/inspirations/assistantActions';
+import { describeOp, isDestructive, labelFor, type AdminOp, type AssistantAction, type Expect } from '@/lib/inspirations/assistantActions';
 import { askModel, cachedAiStatus } from '@/lib/server/ai';
 import { backendBase } from '@/lib/server/adminAuth';
 import { listJobs } from '@/lib/server/ingestJobs';
@@ -22,15 +22,46 @@ import { listJobs } from '@/lib/server/ingestJobs';
  * about the runs stands in.
  */
 
-export type AssistantAnswer = { text: string; source: 'rules' | 'ai'; actions: AssistantAction[]; model?: string; streamed?: boolean };
+export type AssistantAnswer = {
+  text: string;
+  source: 'rules' | 'ai';
+  actions: AssistantAction[];
+  model?: string;
+  streamed?: boolean;
+  /** What to take the admin's next message as; null clears an earlier one. */
+  expect?: Expect | null;
+};
 
 export type HistoryLine = { role: 'user' | 'assistant'; text: string };
 
 type Counts = { screens?: number; apps?: number; flows?: number; patterns?: number };
 type StateApp = { id: string; name: string; tagline?: string; industry?: string; website?: string; logo?: string };
-type StateFlow = { id: string; appId: string; name: string; platform?: string };
-type StateFile = { appId: string; platform: string; file: string; published?: boolean; sidecar?: { name?: string } | null };
-type LibraryState = { counts?: Counts; apps?: StateApp[]; flows?: StateFlow[]; files?: StateFile[]; vocabulary?: { industries?: string[] } };
+type StateFlow = { id: string; appId: string; name: string; platform?: string; parentId?: string | null; screenIds?: string[] };
+type StateFile = { id?: string; appId: string; platform: string; file: string; published?: boolean; sidecar?: { name?: string; tags?: string[] } | null };
+type LibraryState = {
+  counts?: Counts;
+  apps?: StateApp[];
+  flows?: StateFlow[];
+  files?: StateFile[];
+  sources?: Record<string, { status?: string }>;
+  vocabulary?: { industries?: string[]; screenTypes?: string[]; flowCategories?: string[]; reviewStatuses?: string[] };
+};
+
+/** Pages the assistant can send the admin to. */
+const PAGES: Record<string, string> = {
+  explore: '/inspirations',
+  home: '/inspirations',
+  gallery: '/inspirations',
+  apps: '/inspirations/apps',
+  screens: '/inspirations/screens',
+  'ui elements': '/inspirations/ui-elements',
+  elements: '/inspirations/ui-elements',
+  flows: '/inspirations/flows',
+  patterns: '/inspirations/patterns',
+  collections: '/inspirations/collections',
+  saved: '/inspirations/collections',
+  admin: '/inspirations/admin',
+};
 
 /** Seconds a batch of six screens takes the local model, from measured runs. */
 const SECONDS_PER_SCREEN = 2.5;
@@ -159,10 +190,38 @@ const OP_SCHEMA = `"op": null, or exactly one of:
   {"kind": "delete-screen", "app": "<app name>", "screen": "<screen name>"}
   {"kind": "rename-flow", "app": "<app name or null>", "flow": "<current flow name>", "to": "<new name>"}
   {"kind": "delete-flow", "app": "<app name or null>", "flow": "<flow name>"}
+  {"kind": "set-screen-type", "app": "<app name>", "screen": "<screen name>", "to": "<screen type from the allowed list>"}
+  {"kind": "set-flow-category", "app": "<app name or null>", "flow": "<flow name>", "to": "<flow category from the allowed list>"}
+  {"kind": "set-screen-tags", "app": "<app name>", "screen": "<screen name>", "tags": ["..."], "mode": "add" | "replace"}
+  {"kind": "set-screen-description", "app": "<app name>", "screen": "<screen name>", "to": "<description>"}
+  {"kind": "add-to-flow", "app": "<app name>", "flow": "<flow name>", "screens": ["<screen name>", ...]}
+  {"kind": "remove-from-flow", "app": "<app name>", "flow": "<flow name>", "screens": ["<screen name>", ...]}
+  {"kind": "create-flow", "app": "<app name>", "to": "<new flow name>", "category": "<flow category or null>", "screens": ["<screen name>", ...]}
+  {"kind": "set-flow-parent", "app": "<app name or null>", "flow": "<flow name>", "parent": "<parent flow name, or null for top level>"}
+  {"kind": "set-source-status", "app": "<app name>", "to": "pending" | "review" | "approved" | "rejected"}
+  {"kind": "stop-run"}
+  {"kind": "research-app", "app": "<app name>"}
+  {"kind": "set-ai", "model": "<model name or null>", "enabled": true | false | null}
+  {"kind": "add-screen", "app": "<app name>"}
   {"kind": "upload"}
-  {"kind": "open", "app": "<app name>"}`;
+  {"kind": "open", "app": "<app name or null>", "page": "<explore|apps|screens|ui elements|flows|patterns|collections|admin, or null>"}`;
 
-type ParsedOp = { kind?: string; app?: string | null; fields?: Record<string, unknown>; screen?: string; flow?: string; to?: string };
+type ParsedOp = {
+  kind?: string;
+  app?: string | null;
+  fields?: Record<string, unknown>;
+  screen?: string;
+  flow?: string;
+  to?: string;
+  tags?: unknown;
+  mode?: string;
+  screens?: unknown;
+  category?: string | null;
+  parent?: string | null;
+  page?: string | null;
+  model?: string | null;
+  enabled?: boolean | null;
+};
 
 /** A value the model wrapped in quotes of its own is the value without them. */
 function unquote(value: string): string {
@@ -200,23 +259,130 @@ function validateOp(
   op: ParsedOp,
   state: LibraryState | null,
   mentioned: StateApp[],
-  grounding: { saidByAdmin: string; askedToInvent: boolean } = { saidByAdmin: '', askedToInvent: true },
-): { action?: AssistantAction; note?: string } {
+  grounding: { saidByAdmin: string; askedToInvent: boolean; fallbackApp?: string | null; jobs?: IngestJob[]; ai?: AiStatus | null } = { saidByAdmin: '', askedToInvent: true },
+): { action?: AssistantAction; note?: string; settled?: boolean; missingApp?: boolean } {
   const apps = state?.apps ?? [];
+  const names = (value: unknown): string[] => (Array.isArray(value) ? value.map((entry) => String(entry).trim()).filter(Boolean) : typeof value === 'string' && value.trim() ? value.split(/,|\band\b/).map((entry) => entry.trim()).filter(Boolean) : []);
+  const screensNamed = (appId: string, wanted: string[]) => {
+    const found: StateFile[] = [];
+    const missing: string[] = [];
+    for (const name of wanted) {
+      const screen = findScreen(state, appId, name);
+      if (screen && screen.id) found.push(screen);
+      else missing.push(name);
+    }
+    return { found, missing };
+  };
   const confirm = (real: AdminOp, extra?: { screens?: number; flows?: number }) => ({
     action: { type: 'confirm' as const, op: real, label: labelFor(real), destructive: isDestructive(real) },
     note: describeOp(real, extra),
   });
-  const app = findApp(state, op.app ?? mentioned[0]?.name);
-  const noApp = { note: apps.length ? `Which app do you mean? The library has ${apps.map((entry) => entry.name).join(', ')}.` : 'The library has no apps yet.' };
+  // An app the reader named must exist; only when it named none does the
+  // conversation's app stand in. Silently retargeting another app is the
+  // one thing this must never do.
+  const named = typeof op.app === 'string' && op.app.trim() && !/^(this|that|it|the app|app|null)$/i.test(op.app.trim()) ? op.app.trim() : null;
+  const app = named ? findApp(state, named) : findApp(state, mentioned[0]?.name) ?? (grounding.fallbackApp ? findApp(state, grounding.fallbackApp) : null);
+  const noApp = {
+    note: named && !app
+      ? `There’s no app called “${named}” in the library${apps.length ? ` — it has ${apps.map((entry) => entry.name).join(', ')}` : ''}.`
+      : apps.length
+        ? `Which app do you mean? The library has ${apps.map((entry) => entry.name).join(', ')}.`
+        : 'The library has no apps yet.',
+    missingApp: Boolean(named && !app),
+  };
 
   switch (op.kind) {
     case 'rebuild':
       return confirm({ kind: 'rebuild' });
     case 'upload':
       return { action: { type: 'upload' } };
-    case 'open':
+    case 'open': {
+      const page = op.page ? PAGES[norm(op.page)] : null;
+      if (page) return { action: { type: 'open', href: page, label: `Open ${norm(op.page!)}` } };
       return app ? { action: { type: 'open', href: appHref(app.id), label: `Open ${app.name}` } } : noApp;
+    }
+    case 'add-screen':
+      return app ? confirm({ kind: 'add-screen', appId: app.id, name: app.name }) : noApp;
+    case 'research-app':
+      return app ? confirm({ kind: 'research-app', appId: app.id, name: app.name }) : noApp;
+    case 'stop-run': {
+      const running = (grounding.jobs ?? []).find((job) => job.status === 'running' || job.status === 'uploading');
+      if (!running) return { note: 'Nothing is running right now, so there is nothing to stop.', settled: true };
+      return confirm({ kind: 'stop-run', jobId: running.id, title: running.title });
+    }
+    case 'set-ai': {
+      if (op.enabled === false) return confirm({ kind: 'set-ai', enabled: false });
+      const model = typeof op.model === 'string' ? op.model.trim() : '';
+      if (!model) return op.enabled === true ? confirm({ kind: 'set-ai', enabled: true }) : { note: `Which model? The server lists ${(grounding.ai?.models ?? []).join(', ') || 'no models'}.` };
+      const listed = grounding.ai?.models ?? [];
+      const match = listed.find((entry) => entry.toLowerCase() === model.toLowerCase()) ?? listed.find((entry) => entry.toLowerCase().startsWith(model.toLowerCase()));
+      if (!match) return { note: `“${model}” is not a model the server lists — it has ${listed.join(', ') || 'none'}.` };
+      return confirm({ kind: 'set-ai', chatModel: match, enabled: true });
+    }
+    case 'set-source-status': {
+      if (!app) return noApp;
+      const statuses = state?.vocabulary?.reviewStatuses ?? ['pending', 'review', 'approved', 'rejected'];
+      const wanted = norm(String(op.to ?? '')).replace(/^(in )?review$/, 'review').replace(/^approve[d]?$/, 'approved').replace(/^reject(ed)?$/, 'rejected');
+      const match = statuses.find((entry) => entry === wanted) as 'pending' | 'review' | 'approved' | 'rejected' | undefined;
+      if (!match) return { note: `A source status is one of ${statuses.join(', ')}.` };
+      const current = state?.sources?.[app.id]?.status;
+      if (current === match) return { note: `${app.name} is already marked ${match}.`, settled: true };
+      return confirm({ kind: 'set-source-status', appId: app.id, name: app.name, status: match });
+    }
+    case 'set-screen-tags':
+    case 'set-screen-description': {
+      if (!app) return noApp;
+      const screen = findScreen(state, app.id, op.screen);
+      if (!screen) return { note: `I can’t find a screen called “${op.screen ?? ''}” in ${app.name}.` };
+      if (op.kind === 'set-screen-description') {
+        const description = unquote(String(op.to ?? '')).slice(0, 600);
+        if (!description || !grounded(description, grounding.saidByAdmin, grounding.askedToInvent)) return {};
+        return confirm({ kind: 'set-screen-description', platform: screen.platform, appId: app.id, file: screen.file, name: screenName(screen), description });
+      }
+      const tags = [...new Set(names(op.tags).map((tag) => tag.toLowerCase().replace(/[^a-z0-9 &-]/g, '').trim()).filter(Boolean))].slice(0, 12);
+      if (!tags.length) return {};
+      return confirm({ kind: 'set-screen-tags', platform: screen.platform, appId: app.id, file: screen.file, name: screenName(screen), tags, mode: op.mode === 'replace' ? 'replace' : 'add' });
+    }
+    case 'add-to-flow':
+    case 'remove-from-flow': {
+      const owner = app;
+      const flow = findFlow(state, owner?.id ?? null, op.flow);
+      if (!flow) return { note: `I can’t find a flow called “${op.flow ?? ''}”${owner ? ` in ${owner.name}` : ''}.` };
+      const wantedScreens = names(op.screens).length ? names(op.screens) : op.screen ? [String(op.screen)] : [];
+      const { found, missing } = screensNamed(flow.appId, wantedScreens);
+      if (!found.length) return { note: missing.length ? `I can’t find ${missing.map((name) => `“${name}”`).join(', ')} among ${flow.appId}’s screens.` : 'Which screens?' };
+      const ids = found.map((screen) => screen.id!);
+      const nameList = found.map(screenName);
+      const already = (flow.screenIds ?? []).filter((id) => ids.includes(id));
+      if (op.kind === 'add-to-flow' && already.length === ids.length) return { note: `${nameList.map((name) => `“${name}”`).join(', ')} ${ids.length === 1 ? 'is' : 'are'} already in “${flow.name}”.`, settled: true };
+      if (op.kind === 'remove-from-flow' && !already.length) return { note: `${nameList.map((name) => `“${name}”`).join(', ')} ${ids.length === 1 ? 'is' : 'are'} not in “${flow.name}”.`, settled: true };
+      const real: AdminOp = op.kind === 'add-to-flow' ? { kind: 'add-to-flow', flowId: flow.id, flowName: flow.name, screenIds: ids, screenNames: nameList } : { kind: 'remove-from-flow', flowId: flow.id, flowName: flow.name, screenIds: ids, screenNames: nameList };
+      const result = confirm(real);
+      return missing.length ? { ...result, note: `${result.note} (I couldn’t find ${missing.map((name) => `“${name}”`).join(', ')}.)` } : result;
+    }
+    case 'create-flow': {
+      if (!app) return noApp;
+      const name = unquote(String(op.to ?? '')).slice(0, 80);
+      if (!name || !grounded(name, grounding.saidByAdmin, grounding.askedToInvent)) return {};
+      if (findFlow(state, app.id, name)?.name.toLowerCase() === name.toLowerCase()) return { note: `${app.name} already has a flow called “${name}”.`, settled: true };
+      const categories = state?.vocabulary?.flowCategories ?? [];
+      const category = categories.find((entry) => norm(entry) === norm(String(op.category ?? ''))) ?? (categories.includes('other') ? 'other' : categories[0] ?? 'other');
+      const { found } = screensNamed(app.id, names(op.screens).length ? names(op.screens) : op.screen ? [String(op.screen)] : []);
+      return confirm({ kind: 'create-flow', appId: app.id, appName: app.name, name, category, screenIds: found.map((screen) => screen.id!), screenNames: found.map(screenName) });
+    }
+    case 'set-flow-parent': {
+      const owner = op.app ? findApp(state, op.app) : mentioned[0] ?? null;
+      const flow = findFlow(state, owner?.id ?? null, op.flow);
+      if (!flow) return { note: `I can’t find a flow called “${op.flow ?? ''}”.` };
+      if (!op.parent || /^(none|null|top|top level|top-level|root)$/i.test(String(op.parent))) {
+        if (!flow.parentId) return { note: `“${flow.name}” is already top-level.`, settled: true };
+        return confirm({ kind: 'set-flow-parent', flowId: flow.id, name: flow.name, parentId: null, parentName: null });
+      }
+      const parent = findFlow(state, flow.appId, op.parent);
+      if (!parent || parent.id === flow.id) return { note: `I can’t find a flow called “${op.parent}” to nest under.` };
+      if (flow.parentId === parent.id) return { note: `“${flow.name}” is already under “${parent.name}”.`, settled: true };
+      return confirm({ kind: 'set-flow-parent', flowId: flow.id, name: flow.name, parentId: parent.id, parentName: parent.name });
+    }
     case 'remove-app':
       return app ? confirm({ kind: 'remove-app', appId: app.id, name: app.name }, countsFor(state, app.id)) : noApp;
     case 'set-logo':
@@ -234,9 +400,22 @@ function validateOp(
         if (!match) return { note: `“${fields.industry}” is not an industry the library knows — it has ${industries.join(', ')}.` };
         fields.industry = match;
       }
-      if (fields.website && !/^https?:\/\//i.test(fields.website)) fields.website = `https://${fields.website}`;
+      if (fields.website) {
+        // A link has to look like one; "https://App Store link" is the model filling a blank.
+        if (!/^(https?:\/\/)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(fields.website.trim())) delete fields.website;
+        else if (!/^https?:\/\//i.test(fields.website)) fields.website = `https://${fields.website}`;
+      }
       const current: Record<string, string | undefined> = { name: app.name, tagline: app.tagline, industry: app.industry, website: app.website };
-      for (const key of Object.keys(fields)) if ((current[key] ?? '').trim().toLowerCase() === fields[key].toLowerCase()) delete fields[key];
+      const unchanged: string[] = [];
+      for (const key of Object.keys(fields)) {
+        if ((current[key] ?? '').trim().toLowerCase() === fields[key].toLowerCase()) {
+          unchanged.push(key);
+          delete fields[key];
+        }
+      }
+      if (unchanged.length && !Object.keys(fields).length) {
+        return { note: `${app.name}’s ${unchanged.join(' and ')} already ${unchanged.length === 1 ? 'is' : 'are'} ${unchanged.map((key) => `“${current[key]}”`).join(' and ')} — nothing to change there.`, settled: true };
+      }
       // Industry is picked from a list; everything else must come from the admin.
       for (const key of Object.keys(fields)) {
         if (key === 'industry') continue;
@@ -244,6 +423,25 @@ function validateOp(
       }
       if (!Object.keys(fields).length) return {};
       return confirm({ kind: 'update-app', appId: app.id, name: app.name, fields });
+    }
+    case 'set-screen-type': {
+      if (!app) return noApp;
+      const screen = findScreen(state, app.id, op.screen);
+      if (!screen) return { note: `I can’t find a screen called “${op.screen ?? ''}” in ${app.name}.` };
+      const types = state?.vocabulary?.screenTypes ?? [];
+      const wanted = norm(String(op.to ?? '')).replace(/\s+/g, '_');
+      const match = types.find((entry) => entry === wanted || entry.replace(/_/g, ' ') === norm(String(op.to ?? '')));
+      if (!match) return { note: `“${op.to ?? ''}” is not a screen type the library knows — it has ${types.map((entry) => entry.replace(/_/g, ' ')).join(', ')}.` };
+      return confirm({ kind: 'set-screen-type', platform: screen.platform, appId: app.id, file: screen.file, name: screenName(screen), screenType: match });
+    }
+    case 'set-flow-category': {
+      const owner = op.app ? findApp(state, op.app) : mentioned[0] ?? null;
+      const flow = findFlow(state, owner?.id ?? null, op.flow);
+      if (!flow) return { note: `I can’t find a flow called “${op.flow ?? ''}”${owner ? ` in ${owner.name}` : ''}.` };
+      const categories = state?.vocabulary?.flowCategories ?? [];
+      const match = categories.find((entry) => norm(entry) === norm(String(op.to ?? '')));
+      if (!match) return { note: `“${op.to ?? ''}” is not a flow category the library knows — it has ${categories.join(', ')}.` };
+      return confirm({ kind: 'set-flow-category', flowId: flow.id, name: flow.name, category: match });
     }
     case 'rename-screen':
     case 'delete-screen': {
@@ -303,39 +501,179 @@ function isEcho(value: string): boolean {
   return words.length <= 3 && INVENT.test(value);
 }
 
-const INVENTOR = `You write one value for an app's field in a design-reference library, as JSON only: {"value": "..."}. A tagline is one short line in the app's own voice, under 60 characters, no trailing period, not a slogan already in use by the app. A name is the app's proper name. Write something fresh each time; never repeat an option the assistant already gave in the conversation.`;
+const INVENTOR = `You write one value for an app's field in a design-reference library, as JSON only: {"value": "..."}. A tagline is one short line in the app's own voice, under 60 characters, no trailing period, not a slogan already in use by the app. A name is the app's proper name. Write something fresh: the list "Already suggested" must not be repeated or lightly reworded.`;
+
+/** Values the assistant has already put forward, read off its earlier lines. */
+function alreadySuggested(history: HistoryLine[], lastOp: AdminOp | null): string[] {
+  const out = new Set<string>();
+  for (const line of history) if (line.role === 'assistant') for (const match of line.text.matchAll(/[“"]([^”"]{3,80})[”"]/g)) out.add(match[1].trim());
+  if (lastOp?.kind === 'update-app') for (const value of Object.values(lastOp.fields)) if (value) out.add(String(value));
+  return [...out];
+}
+
+/** A short "another one" that continues the last request rather than starting a new one. */
+const FOLLOW_UP = /^(?:(?:ok|okay|hmm|no|nah|yes|sure|please|and|so|then)[,\s]+)*(?:give me |show me |try |suggest |i want |can you (?:give|try|suggest) )?(?:another|again|one more|a different one|different one|different|something else|other options?|more options?|next|more|new one|a new one)(?: (?:one|please|text|tagline|name|option|options|suggestion|suggestions))?\s*[.!?]*$/i;
+
+/** A message that asks for something to be done, as opposed to asked. */
+const CHANGE_VERB = /\b(change|update|set|rename|call|delete|remove|drop|erase|add|make|mark|type|file|move|put|use|upload|open|show|rebuild|regenerate|rewrite|research|redo|keep|replace|edit|fix|switch|turn|assign|apply|save|publish|hide|give|approve|reject|review|stop|abort|kill|tag|label|describe|create|nest|group|take|go to|name it|this (is|as)|it (is|as))\b/i;
+const QUESTION = /^(how|what|which|where|when|why|who|is|are|do|does|did|can|could|should|will|would|tell me|explain|list|count)\b|\?\s*$/i;
+
+/** "I'll type my own", "let me write it", "I'll give you the text". */
+const OWN_VALUE = /^(?:(?:ok|okay|no)[,\s]+)?(?:i(?:'|’)?ll|i will|let me|i want to|i'd like to|i’d like to|can i)\s+(?:type|write|give|enter|send|share|provide)\b|\bmy own\b|\bi(?:'|’)ll (?:do|write) it\b/i;
+
+/**
+ * The value in a message that was written as an answer: quotes come off,
+ * and the words people wrap a value in — "use this", "set it to", "update
+ * this text" — are peeled away. What is left is the value, commas and all.
+ */
+function valueFromAnswer(question: string, field: Expect['field']): string {
+  let text = question.trim();
+  const quoted = [...text.matchAll(/[“"']([^”"']{1,160})[”"']/g)].map((match) => match[1].trim()).filter(Boolean);
+  if (quoted.length) text = quoted[quoted.length - 1];
+  text = text
+    .replace(/^(?:ok(?:ay)?[,.]?\s+)?(?:please\s+)?(?:use|set|make|put|update|change|try|go with|take)\s+(?:it\s+|this\s+|the\s+)?(?:to\s+|as\s+|text\s+|tagline\s+|name\s+)?(?:to\s+)?/i, '')
+    .replace(new RegExp(`^(?:the\\s+)?(?:new\\s+)?${field}\\s*(?:is|:|=|should be|to)\\s*`, 'i'), '')
+    .replace(/^(?:it(?:'|’)?s|its|it is|this is|here(?:'|’)?s|here is)\s+/i, '')
+    .replace(/\s*[,.]?\s*(?:update|set|use|apply|save|change)\s+(?:this|that|it)(?:\s+text|\s+as\s+(?:the\s+)?\w+|\s+now|\s+please)?\s*[.!]*$/i, '')
+    .replace(/\s*[,.]?\s*(?:please|thanks|thank you)\s*[.!]*$/i, '')
+    .replace(/\s*[,.]?\s*(?:as|for)\s+(?:the\s+)?(?:tagline|name|title|website|link)\s*[.!]*$/i, '')
+    .trim();
+  if (field === 'website') {
+    const url = text.match(/https?:\/\/\S+|[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/\S*)?/i);
+    return url ? url[0] : '';
+  }
+  return text.replace(/^[“"']+|[”"']+$/g, '').trim().slice(0, field === 'tagline' ? 160 : 120);
+}
+
+/** Words that back out of an offer. */
+const BACK_OUT = /^(?:(?:ok|okay|no|nah)[,\s]+)*(?:cancel(?: that| it)?|never ?mind|forget (?:it|that)|stop|don'?t(?: do (?:it|that))?|leave it|skip(?: it)?)\s*[.!?]*$/i;
+
+/**
+ * Whether the reader's operation is about what the admin actually wrote.
+ * A small model handed a long conversation will sometimes pick an
+ * operation out of thin air — renaming a screen nobody mentioned — and
+ * that must never reach the Confirm button.
+ */
+function relevant(op: ParsedOp, question: string, continuing: boolean): boolean {
+  const q = norm(question);
+  const has = (...words: string[]) => words.some((word) => q.includes(word));
+  switch (op.kind) {
+    case 'rename-screen':
+    case 'delete-screen':
+    case 'set-screen-type':
+      return has('screen', 'screenshot', 'image', 'page') || (Boolean(op.screen) && q.includes(norm(op.screen!)));
+    case 'rename-flow':
+    case 'delete-flow':
+    case 'set-flow-category':
+    case 'set-flow-parent':
+    case 'add-to-flow':
+    case 'remove-from-flow':
+    case 'create-flow':
+      return has('flow', 'journey', 'section', 'group') || (Boolean(op.flow) && q.includes(norm(op.flow!)));
+    case 'set-screen-tags':
+    case 'set-screen-description':
+      return has('tag', 'label', 'describ', 'description', 'screen');
+    case 'set-source-status':
+      return has('approve', 'reject', 'review', 'pending', 'status', 'publish', 'source', 'rights');
+    case 'stop-run':
+      return has('stop', 'cancel', 'abort', 'kill', 'end') && has('run', 'upload', 'ingest', 'job', 'process', 'it');
+    case 'research-app':
+      return has('rewrite', 'rename', 'regenerate', 'research', 'ai', 'names', 'redo', 'again', 'better');
+    case 'set-ai':
+      return has('model', 'ai', 'ollama', 'gemma', 'qwen', 'llama', 'turn');
+    case 'add-screen':
+      return has('screen', 'screenshot', 'image', 'this', 'picture');
+    case 'remove-app':
+      return has('remove', 'delete', 'drop', 'get rid', 'erase');
+    case 'set-logo':
+      return has('logo', 'icon', 'image', 'picture', 'this');
+    case 'rebuild':
+      return has('rebuild', 'index', 'manifest', 'regenerate', 'refresh');
+    case 'open':
+      return has('open', 'show', 'go to', 'take me', 'link', 'page');
+    case 'update-app':
+      return continuing || has('tagline', 'name', 'title', 'website', 'link', 'url', 'store', 'industry', 'category', 'description', 'change', 'update', 'set', 'rename', 'call', 'keep', 'make', 'edit');
+    default:
+      return true;
+  }
+}
 
 /** What a done-claim from the speaker becomes: an offer, since nothing has happened yet. */
 const BASE_VERB: Record<string, string> = {
   updated: 'update', set: 'set', changed: 'change', renamed: 'rename', removed: 'remove', deleted: 'delete', added: 'add', saved: 'save', uploaded: 'upload',
+  marked: 'mark', created: 'create', tagged: 'tag', approved: 'approve', rejected: 'reject', nested: 'nest', filed: 'file', stopped: 'stop', started: 'start', moved: 'move', turned: 'turn', switched: 'switch', described: 'describe', retyped: 'retype', initiated: 'start', launched: 'start', queued: 'queue', triggered: 'start', kicked: 'start',
   updating: 'update', setting: 'set', changing: 'change', renaming: 'rename', removing: 'remove', deleting: 'delete', adding: 'add', saving: 'save', uploading: 'upload',
+  marking: 'mark', creating: 'create', tagging: 'tag', approving: 'approve', rejecting: 'reject', nesting: 'nest', filing: 'file', stopping: 'stop', starting: 'start', moving: 'move', turning: 'turn', switching: 'switch', describing: 'describe', opening: 'open', running: 'run', rewriting: 'rewrite',
 };
+const PAST = 'updated|set|changed|renamed|removed|deleted|added|saved|uploaded|marked|created|tagged|approved|rejected|nested|filed|stopped|started|moved|turned|switched|described|retyped|initiated|launched|queued|triggered|kicked';
+const ING = 'updating|setting|changing|renaming|removing|deleting|adding|saving|uploading|marking|creating|tagging|approving|rejecting|nesting|filing|stopping|starting|moving|turning|switching|describing|opening|running|rewriting';
 function unclaim(text: string): string {
   const base = (verb: string) => BASE_VERB[verb.toLowerCase()] ?? verb;
   return text
-    .replace(/\b(I[’']ve|I have|I) (just |now )?(updated|set|changed|renamed|removed|deleted|added|saved|uploaded)\b/gi, (_, _i, _adv, verb: string) => `I can ${base(verb)}`)
-    .replace(/\bI[’']m (now )?(updating|setting|changing|renaming|removing|deleting|adding|saving|uploading)\b/gi, (_, _adv, verb: string) => `I can ${base(verb)}`)
-    .replace(/(^|[.!?]\s+)(just |now |okay, |ok, )?(updating|setting|changing|renaming|removing|deleting)\b/gi, (_, lead: string, _adv, verb: string) => `${lead}I can ${base(verb)}`)
-    .replace(/\b(has|have) been (updated|set|changed|renamed|removed|deleted|saved|uploaded)\b/gi, (_, _aux, verb: string) => `will be ${verb} once you confirm`)
+    .replace(new RegExp(`\\b(I[’']ve|I have|I) (just |now )?(${PAST})\\b`, 'gi'), (_, _i, _adv, verb: string) => `I can ${base(verb)}`)
+    .replace(new RegExp(`\\bI[’']m (now )?(${ING})\\b`, 'gi'), (_, _adv, verb: string) => `I can ${base(verb)}`)
+    .replace(new RegExp(`(^|[.!?]\\s+)(just |now |okay,? |ok,? )(${ING})\\b`, 'gi'), (_, lead: string, _adv, verb: string) => `${lead}I can ${base(verb)}`)
+    .replace(new RegExp(`\\b(has|have) been (${PAST})\\b`, 'gi'), (_, _aux, verb: string) => `will be ${verb} once you confirm`)
     .replace(/\bis now (set|updated|changed) to\b/gi, 'will be set to')
     .replace(/\b(is|are) (now )?(updated|set|changed|renamed|removed|deleted)\b(?! once)/gi, (_, aux: string, _adv, verb: string) => `will be ${verb} once you confirm`);
 }
 
 /** Stage one: what, if anything, is the admin asking to change? JSON, short, unstreamed. */
 const READER = `You read one message from the admin of a design-reference library and decide whether it asks for a change to the library. Return JSON only: {"op": …} where ${OP_SCHEMA}
-Rules: op is null for questions, chat, thanks, or a bare "yes"/"confirm"/"ok". Adding a new app to the library is done by uploading a screen recording of it, so "add an app", "new app", "add another app" is {"kind": "upload"} — never ask which existing app. Use app, screen and flow names exactly as in the facts. Put values (a tagline, a name, a link) in the op only when the admin actually wrote them, or asked you to make one up ("suggest", "your wish", "another") — then write a good one (a tagline: one line in the app's voice, under 60 characters). Never invent a link. If a value is missing, still return the op with "fields": {} (or no "to"), so the assistant knows what to ask for. Use the recent conversation: "make it X" after a request about a tagline means that tagline.`;
+Rules: op is null for questions, chat, thanks, or a bare "yes"/"confirm"/"ok". Only return an op for what THIS message asks — never pick a screen, flow or app the admin did not mention in it. Adding a new app to the library is done by uploading a screen recording of it, so "add an app", "new app", "add another app" is {"kind": "upload"} — never ask which existing app. "Keep the name Swiggy", "the name should stay Swiggy", "set the name to X", "call it X" are update-app with fields.name. "Stop the run/upload" is stop-run. "Rewrite/regenerate the names for X with AI" is research-app. "Use model M for chat", "turn the AI off/on" is set-ai. "Approve X", "mark X as reviewed/rejected" is set-source-status. "Add screens A and B to flow F", "move A into F" is add-to-flow; "take A out of F" is remove-from-flow; "create a flow F with A, B" is create-flow; "put flow F under G" is set-flow-parent. "Tag the splash screen as onboarding, brand" is set-screen-tags. "Open the flows page" is open with page. Use app, screen and flow names exactly as in the facts. Put values (a tagline, a name, a link) in the op only when the admin actually wrote them, or asked you to make one up ("suggest", "your wish", "another") — then write a good one (a tagline: one line in the app's voice, under 60 characters). Never invent a link. If a value is missing, still return the op with "fields": {} (or no "to"), so the assistant knows what to ask for. Use the recent conversation: "make it X" after a request about a tagline means that tagline.`;
 
 /** Stage two: the assistant's own words, streamed as plain text. */
 const PERSONA = `You are the Motvin assistant: the helper inside Motvin Inspirations, a design-reference library like Mobbin. You talk with the library's admin the way a sharp, friendly colleague would — warm, brief, specific, plain English, no markdown, never stiff or repetitive; if the same thing comes up twice, say it differently and add something useful. Use the facts you are given; never invent apps, screens, flows, runs, links or numbers.
 
-You cannot change anything yourself. Each turn you are told what the assistant is offering the admin (a change with a Confirm button), or what it still needs, or that nothing is being changed. Speak to exactly that: if there is an offer, describe it in your words as something that will happen when they confirm — never as done — and end by inviting them to confirm; if something is missing, ask for that one thing; if nothing is being changed, just answer or chat. When asked for ideas — a tagline, a name — give two or three good options in one breath. Two or three sentences at most.`;
+Do not greet or say "Hi there" unless it is the very first message of the conversation; just answer. If the admin only says hello, say hello back in one line and ask what they'd like to do — do not recite the facts unless asked. The facts are for answering questions, not for announcing. You cannot change anything yourself. Each turn you are told what the assistant is offering the admin (a change with a Confirm button), or what it still needs, or that nothing is being changed. Speak to exactly that: if there is an offer, describe it in your words as something that will happen when they confirm — never as done — and end by inviting them to confirm; if something is missing, ask for that one thing; if nothing is being changed, just answer or chat. When asked for ideas — a tagline, a name — give two or three good options as a short bulleted list. You may use **bold** for the thing being changed, and "- " bullets only when listing suggested taglines or names — never to restate an offer; no headings, no tables, no code, and never write a URL or a path (the admin gets a button for links). Two or three sentences at most, plus a list when it helps.`;
 
 export async function answerQuestion(
-  input: { question: string; authorization: string | null; history?: HistoryLine[]; pending?: string | null; heldImage?: string | null },
+  input: { question: string; authorization: string | null; history?: HistoryLine[]; pending?: string | null; heldImage?: string | null; lastOp?: AdminOp | null; expecting?: Expect | null },
   onToken?: (piece: string) => void,
 ): Promise<AssistantAnswer> {
   const question = input.question.trim();
   const history = (input.history ?? []).slice(-12);
+  const lastOp = input.lastOp ?? null;
+  let expecting = input.expecting ?? null;
+  // Quoted text, or "use this / go with …", right after an offer is the
+  // admin's own value for that offer's field.
+  if (!expecting && lastOp?.kind === 'update-app') {
+    const field = Object.keys(lastOp.fields).find((key) => key === 'tagline' || key === 'name' || key === 'website') as Expect['field'] | undefined;
+    const quoted = /[“"'][^”"']{2,}[”"']/.test(question);
+    const useThis = /^(?:(?:ok|okay|no)[,\s]+)?(?:use|go with|take|set it to|make it|put)\b/i.test(question) && !/\b(another|different|suggest|your)\b/i.test(question);
+    if (field && (quoted || useThis)) expecting = { kind: 'update-app', appId: lastOp.appId, app: lastOp.name, field };
+  }
+
+  // "I'll type my own" with nothing to type it for.
+  if (OWN_VALUE.test(question) && !(lastOp?.kind === 'update-app' || expecting)) {
+    const text = 'Sure. Which app and which field — for example “Swiggy tagline” — and then type the text.';
+    onToken?.(text);
+    return { source: 'rules', text, actions: [], streamed: false };
+  }
+  // "I'll type my own": say go ahead, and take the next message as the value.
+  if (OWN_VALUE.test(question) && (lastOp?.kind === 'update-app' || expecting)) {
+    const field = expecting?.field ?? ((Object.keys((lastOp as Extract<AdminOp, { kind: 'update-app' }>).fields)[0] as Expect['field'] | undefined) ?? 'tagline');
+    const app = expecting ? { id: expecting.appId, name: expecting.app } : { id: (lastOp as Extract<AdminOp, { kind: 'update-app' }>).appId, name: (lastOp as Extract<AdminOp, { kind: 'update-app' }>).name };
+    const text = `Sure — type the ${field} you want for ${app.name} and I’ll set it up for you to confirm. Whatever you write next is taken as the ${field}, word for word.`;
+    onToken?.(text);
+    return { source: 'rules', text, actions: [{ type: 'cancel' }], expect: { kind: 'update-app', appId: app.id, app: app.name, field }, streamed: false };
+  }
+
+  // A bare yes needs no model either. When an offer is waiting the dock
+  // settles it before asking here, so reaching this means the Confirm button
+  // is the way; with nothing waiting there is nothing to agree to.
+  if (/^(yes|y|yeah|yep|ok|okay|sure|confirm|do it|go ahead|proceed|update|done)\s*[.!]?$/i.test(question)) {
+    const text = input.pending ? `To go ahead with “${input.pending}”, press Confirm on it above — I only act on that button, or a typed yes while it is showing.` : 'Nothing is waiting for a yes right now. Tell me what you’d like to change, or ask me anything about the library.';
+    onToken?.(text);
+    return { source: 'rules', text, actions: input.pending ? [] : [{ type: 'reply', text: 'What can you do?' }], streamed: false };
+  }
+
+  // Backing out needs no model: the offer is dropped, and that is all.
+  if (BACK_OUT.test(question)) {
+    const text = input.pending ? `Okay — “${input.pending}” is off the table. Nothing changed.` : 'Okay, nothing to cancel — nothing was waiting. What would you like to do?';
+    onToken?.(text);
+    return { source: 'rules', text, actions: [{ type: 'cancel' }], streamed: false };
+  }
   const now = Date.now();
   const jobs = listJobs();
   const active = jobs.find((job) => job.status === 'running' || job.status === 'uploading') ?? null;
@@ -361,15 +699,29 @@ export async function answerQuestion(
     .map((app) => {
       const screens = [...new Set((state?.files ?? []).filter((file) => file.appId === app.id).map(screenName))];
       const flows = [...new Set((state?.flows ?? []).filter((flow) => flow.appId === app.id).map((flow) => flow.name))];
-      return `${app.name}: tagline “${app.tagline ?? ''}”, industry ${app.industry ?? '?'}, website/App Store link ${app.website ?? 'none'}, logo ${app.logo ? 'set' : 'none'}, ${screens.length} screens, ${flows.length} flows.\n  Screen names: ${screens.slice(0, 80).join(' | ') || 'none'}\n  Flow names: ${flows.slice(0, 60).join(' | ') || 'none'}`;
+      const totals = countsFor(state, app.id);
+      const flowLines = (state?.flows ?? [])
+        .filter((flow) => flow.appId === app.id)
+        .slice(0, 40)
+        .map((flow) => `${flow.name}${flow.parentId ? ` (under ${(state?.flows ?? []).find((entry) => entry.id === flow.parentId)?.name ?? '?'})` : ''}: ${(flow.screenIds ?? []).map((id) => screenName((state?.files ?? []).find((file) => file.id === id) ?? { appId: app.id, platform: 'ios', file: id })).join(', ') || 'no screens'}`);
+      return `${app.name}: tagline “${app.tagline ?? ''}”, industry ${app.industry ?? '?'}, website/App Store link ${app.website ?? 'none'}, logo ${app.logo ? 'set' : 'none'}, source status ${state?.sources?.[app.id]?.status ?? 'unknown'}, ${totals.screens} screens, ${totals.flows} flows.\n  Screen names: ${screens.slice(0, 80).join(' | ') || 'none'}\n  Flows (with their screens): ${flowLines.join(' | ') || 'none'}${flows.length > 40 ? ' | …' : ''}`;
     })
     .join('\n');
   const counts = state?.counts ?? null;
+  const libraryFacts = [
+    `Apps: ${apps.map((app) => app.name).join(', ') || 'none yet'}.`,
+    `Editable app fields: name, tagline, industry (${(state?.vocabulary?.industries ?? []).join(', ')}), website. Screen types: ${(state?.vocabulary?.screenTypes ?? []).map((entry) => entry.replace(/_/g, ' ')).join(', ')}. Flow categories: ${(state?.vocabulary?.flowCategories ?? []).join(', ')}. Source statuses: pending, review, approved, rejected. Pages: ${Object.keys(PAGES).join(', ')}. AI models on the server: ${(ai?.models ?? []).join(', ') || 'none'}.`,
+    active ? `A run is in progress: “${active.title}”.` : 'No run is in progress.',
+    detail,
+    input.heldImage ? `The admin has dropped an image named “${input.heldImage}”; “this” means it.` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
   const facts = [
     `Today: ${new Date(now).toISOString().slice(0, 10)}.`,
     counts ? `Library: ${counts.screens ?? 0} screens, ${counts.apps ?? 0} apps, ${counts.flows ?? 0} flows, ${counts.patterns ?? 0} patterns.` : null,
-    `Apps: ${apps.map((app) => `${app.name}${app.tagline ? ` (“${app.tagline}”)` : ''}`).join('; ') || 'none yet'}.`,
-    `Editable app fields: name, tagline, industry (one of ${(state?.vocabulary?.industries ?? []).join(', ')}), website — the app's link, which is also what the “View in App Store” button opens.`,
+    `Apps: ${apps.map((app) => `${app.name} — ${countsFor(state, app.id).screens} screens, ${countsFor(state, app.id).flows} flows${app.tagline ? `, tagline “${app.tagline}”` : ''}`).join('; ') || 'none yet'}.`,
+    `Editable app fields: name, tagline, industry (one of ${(state?.vocabulary?.industries ?? []).join(', ')}), website — the app's link, which is also what the “View in App Store” button opens. Screens can be renamed, deleted or retyped (types: ${(state?.vocabulary?.screenTypes ?? []).map((entry) => entry.replace(/_/g, ' ')).join(', ')}); flows can be renamed, deleted or filed under a category (${(state?.vocabulary?.flowCategories ?? []).join(', ')}).`,
     detail,
     `AI: ${describeAi(ai)}.`,
     jobs.length ? `Runs, newest first:\n${jobs.slice(0, 4).map((job) => `- ${describeJob(job, now)}`).join('\n')}` : 'Runs: none since the server started.',
@@ -386,16 +738,46 @@ export async function answerQuestion(
   const bareYes = /^(yes|y|yeah|yep|ok|okay|sure|confirm|do it|go ahead|proceed|update|done)\s*[.!]?$/i.test(question);
   // Adding an app is always the same thing: a screen recording of it.
   const addingApp = /\b(add|create|new|another|upload|import|ingest)\b[^.?!]*\b(app|application|recording|video)\b|\bnew app\b/i.test(question) && !/\b(tagline|logo|website|link|screen|flow|name|industry)\b/i.test(question);
-  let parsedOp: ParsedOp | null = addingApp ? { kind: 'upload' } : null;
-  if (!bareYes && !addingApp) {
+  // "Another" after a suggested tagline means another tagline, not a new
+  // request — the last offer is repeated with a fresh value.
+  const followUp = FOLLOW_UP.test(question) && lastOp?.kind === 'update-app' && Object.keys(lastOp.fields).some((key) => key === 'tagline' || key === 'name');
+  // A bare value — a URL, a name in quotes — answers whatever the assistant just asked for.
+  const lastAssistantLine = [...history].reverse().find((line) => line.role === 'assistant');
+  const shortValue = !QUESTION.test(question) && question.split(/\s+/).length <= 8;
+  const answering = (Boolean(lastAssistantLine && /\?\s*$/.test(lastAssistantLine.text.trim())) && shortValue) || /^https?:\/\/\S+$/i.test(question) || /^[“"'][^”"']+[”"']$/.test(question);
+  // Only a message that asks for something to be done goes to the reader.
+  // A question or a remark is answered straight away, which also saves the
+  // reader's few seconds.
+  const wantsChange = CHANGE_VERB.test(question) && !(QUESTION.test(question) && !/\b(can you|could you|please|would you)\b/i.test(question));
+  // Re-running the AI names is a common ask with a clear shape; it does not
+  // need the reader.
+  const rewriteMatch = /\b(rewrite|regenerate|redo|re-?run|refresh|improve|fix)\b[^.?!]*\b(names?|titles?|labels?|content|flows?|journeys?|naming)\b/i.test(question) || /\b(research|ai names?)\b/i.test(question);
+  const rewriteApp = rewriteMatch ? (mentioned[0] ?? null) : null;
+  let parsedOp: ParsedOp | null = addingApp ? { kind: 'upload' } : rewriteMatch ? { kind: 'research-app', app: rewriteApp?.name ?? null } : null;
+  // The assistant asked for a value, and here it is: no reading, no guessing.
+  const answeringExpected = Boolean(expecting) && !bareYes && !addingApp && !FOLLOW_UP.test(question) && !(QUESTION.test(question) && !/[“"']/.test(question));
+  if (answeringExpected && expecting) {
+    const value = valueFromAnswer(question, expecting.field);
+    parsedOp = value ? { kind: 'update-app', app: expecting.app, fields: { [expecting.field]: value } } : null;
+    if (!value) {
+      const text = `I didn’t catch a ${expecting.field} in that. Type just the text you want — for example: Fresh food, fast.`;
+      onToken?.(text);
+      return { source: 'rules', text, actions: [], expect: expecting, streamed: false };
+    }
+  } else if (followUp && lastOp?.kind === 'update-app') {
+    parsedOp = { kind: 'update-app', app: lastOp.name, fields: Object.fromEntries(Object.keys(lastOp.fields).filter((key) => key === 'tagline' || key === 'name').map((key) => [key, ''])) };
+  } else if (!bareYes && !addingApp && !rewriteMatch && !answeringExpected && (wantsChange || answering)) {
     try {
-      const read = await askModel(READER, `Facts:\n${facts}\n\nConversation so far:\n${conversation}\n\nAdmin: ${question}`, 220, undefined, { raw: true });
+      const read = await askModel(READER, `Facts:\n${libraryFacts}\n\nConversation so far:\n${conversation.split('\n').slice(-6).join('\n')}\n\nAdmin: ${question}`, 220, undefined, { raw: true });
       parsedOp = read.text ? readOp(read.text) : null;
     } catch {
       parsedOp = null;
     }
+    if (parsedOp && !relevant(parsedOp, question, answering)) parsedOp = null;
   }
-  const askedToInvent = INVENT.test(adminWords);
+  // Only this message decides whether the assistant may make a value up.
+  const askedToInvent = followUp || INVENT.test(question);
+  const banned = alreadySuggested(history, lastOp);
   // A tagline asked for without a value gets a suggestion — that is what a
   // helpful colleague would do — and the admin can type their own instead.
   // A name is only invented when they ask for ideas. The reader often fills
@@ -410,44 +792,96 @@ export async function answerQuestion(
       const value = typeof fields[key] === 'string' ? unquote(fields[key] as string) : '';
       const wanted = key in fields || new RegExp(`\\b${key}`, 'i').test(question);
       if (!wanted) continue;
-      const usable = value && !isEcho(value) && norm(value) !== norm(current[key] ?? '') && grounded(value, adminWords, askedToInvent);
+      // Text in quotes is the value, exactly — the reader tends to stop at a comma.
+      const quotedNow = [...question.matchAll(/[“"']([^”"']{1,160})[”"']/g)].map((match) => match[1].trim()).filter(Boolean);
+      if (quotedNow.length === 1 && !/^https?:/i.test(quotedNow[0])) {
+        fields[key] = quotedNow[0];
+        continue;
+      }
+      let usable = value && !isEcho(value) && norm(value) !== norm(current[key] ?? '') && grounded(value, question, false);
+      if (!usable) {
+        // The reader left the field blank although the admin wrote the value
+        // — in quotes, or after "name/tagline (to|is|should be) …".
+        const quoted = [...question.matchAll(/[“"']([^”"']{1,80})[”"']/g)].map((match) => match[1].trim()).filter(Boolean);
+        const after = question.match(new RegExp(`\\b${key}\\b\\s*(?:text|to|is|as|should be|=|:)?\\s*(?:to\\s+)?(.{2,80}?)\\s*[.!]?$`, 'i'))?.[1]?.trim();
+        const said = quoted.length === 1 ? quoted[0] : after && !/^(text|name|tagline|to|is)$/i.test(after) ? unquote(after) : '';
+        if (said && !isEcho(said) && !/^(another|again|something|different|new)\b/i.test(said)) {
+          fields[key] = said;
+          usable = true;
+        }
+      }
       if (usable) continue;
-      if (key === 'name' && !askedToInvent) {
+      // A name is never made up unless the admin asks for ideas about the
+      // name itself; a tagline gets a suggestion whenever one is missing.
+      if (key === 'name' && !(askedToInvent && /\bname\b/i.test(question))) {
         delete fields[key];
         continue;
       }
-      try {
-        const made = await askModel(INVENTOR, `App: ${app?.name ?? parsedOp.app ?? ''}. Field: ${key}. Current ${key}: “${current[key] ?? ''}”. Facts:\n${facts}\n\nConversation so far:\n${conversation}\n\nAdmin: ${question}`, 80, undefined, { raw: true });
-        const value2 = made.text ? (readOpValue(made.text) ?? '') : '';
-        if (value2 && norm(value2) !== norm(current[key] ?? '')) {
-          fields[key] = value2;
-          invented = key;
-        } else delete fields[key];
-      } catch {
-        delete fields[key];
+      let value2 = '';
+      for (let attempt = 0; attempt < 2 && !value2; attempt++) {
+        try {
+          const made = await askModel(
+            INVENTOR,
+            `App: ${app?.name ?? parsedOp.app ?? ''}. Field: ${key}. Current ${key}: “${current[key] ?? ''}”.\nAlready suggested (do not reuse): ${banned.length ? banned.map((entry) => `“${entry}”`).join(', ') : 'none'}.\nFacts:\n${facts}\n\nAdmin: ${question}${attempt ? '\n\nThe previous attempt repeated an earlier suggestion. Write something clearly different in wording and angle.' : ''}`,
+            80,
+            undefined,
+            { raw: true },
+          );
+          const candidate = made.text ? (readOpValue(made.text) ?? '') : '';
+          const fresh = candidate && norm(candidate) !== norm(current[key] ?? '') && !banned.some((entry) => norm(entry) === norm(candidate));
+          if (fresh) value2 = candidate;
+        } catch {
+          break;
+        }
       }
+      if (value2) {
+        fields[key] = value2;
+        invented = key;
+      } else delete fields[key];
     }
     parsedOp.fields = fields;
   }
   let action: AssistantAction | undefined;
   let situation: string;
+  let settled = false;
+  let missingApp = false;
   if (bareYes) {
     situation = 'Nothing is waiting for confirmation, so there is nothing to confirm. Say so in a friendly way and ask what they would like to do.';
   } else if (parsedOp) {
-    const checked = validateOp(parsedOp, state, mentioned, { saidByAdmin: adminWords, askedToInvent: askedToInvent || invented !== null });
+    const checked = validateOp(parsedOp, state, mentioned, { saidByAdmin: adminWords, askedToInvent: askedToInvent || invented !== null, fallbackApp: lastOp && 'name' in lastOp ? lastOp.name : null, jobs, ai });
     if (checked.action) {
       action = checked.action;
+      const ownWords = checked.action.type === 'confirm' && checked.action.op.kind === 'update-app' && !invented;
       situation =
         checked.action.type === 'confirm'
-          ? `You are offering this change, which the admin sees with a Confirm button: ${checked.note ?? checked.action.label}${invented ? ` The ${invented} is your own suggestion, since they did not give one — present it as a suggestion, and say they can type their own instead.` : ''}`
+          ? `You are offering this change, which the admin sees with a Confirm button: ${checked.note ?? checked.action.label}${
+              invented
+                ? ` The ${invented} is your own suggestion, since they did not give one — present it as a suggestion (it is the one that will be set if they confirm), add one or two different alternatives as a short bulleted list, and say they can type their own instead. Do not repeat any earlier suggestion.`
+                : ownWords
+                  ? ' The value is the admin’s own words: repeat it exactly as given, offer no alternatives and no edits, and simply invite them to confirm.'
+                  : ''
+            }`
           : checked.action.type === 'open'
-            ? `You are handing the admin a link: ${checked.action.label}.`
+            ? `You are giving the admin a button that opens ${checked.action.label.replace(/^Open /, '')}. Say so in one short line — "Here’s …" — with nothing to confirm and no URL.`
             : `Adding an app to the library means uploading a screen recording of it; the app, its screens and its flows are all worked out from the video, and a free AI names them. You are showing the admin an "Upload a video" button now. In one or two sentences, tell them to record themselves walking through the app on the phone with screen recording on, pausing a moment on each screen, then drop the MOV or MP4 here. Do not ask which existing app they mean.`;
+    } else if (checked.missingApp) {
+      settled = true;
+      missingApp = true;
+      situation = `${checked.note} Say that plainly in one sentence, and mention that dropping a screen recording of it here would add it. Do not ask for details about the app.`;
+    } else if (checked.settled) {
+      settled = true;
+      situation = `Nothing needs changing: ${checked.note} Say so briefly${input.pending && parsedOp.kind === 'update-app' ? `, and mention that the earlier offer (“${input.pending}”) is dropped` : ''}.`;
     } else {
       situation = `The admin asked for a change but it cannot be offered yet, because something is missing. ${checked.note ?? missingValueQuestion(parsedOp, state, mentioned)} Ask for exactly that, in your own words. Do not ask whether they want to keep anything as it is.`;
     }
   } else {
-    situation = 'No change is being made this turn. Just answer, help, or chat.';
+    situation = /^(how are you|how(?:'|’)s it going|how do you do|what(?:'|’)s up|how are things|you ok|are you ok)\b/i.test(question)
+      ? 'Small talk. Reply in one warm, human line and ask what they would like to do. Do not mention the library, numbers or models.'
+      : QUESTION.test(question)
+      ? 'This is a question. Answer it directly from the facts above, in one or two sentences, with the actual numbers or names. No change is involved, and there is no need to say so.'
+      : /^(thanks|thank you|thx|cheers|great|nice|cool|perfect|awesome)\b/i.test(question)
+        ? 'The admin is thanking you or approving. Reply in one short, warm line and offer to help with anything else. Do not greet.'
+        : 'This is a remark or a chat message, not a request for a change. Reply naturally, briefly, from the facts if they apply.';
   }
 
   // Stage two: say it.
@@ -461,18 +895,61 @@ export async function answerQuestion(
     return { source: 'rules', text, actions: action ? [action] : [] };
   }
   let text = unclaim((raw.text ?? '').trim()) || (action ? `${situation.replace(/^You are offering[^:]*: /, '')} Press Confirm, or say yes.` : 'Sorry — I lost my thread there. Could you say that once more?');
+  // A link the admin did not type and the facts do not hold is made up; the
+  // Open button carries the real one.
+  // Placeholders like "[link to job monitoring]" are the model reaching for a button it does not have.
+  text = text.replace(/\s*(?:—|-|:|at|here)?\s*\[[^\]]{2,60}\]\s*[.,]?/g, '').replace(/\s{2,}/g, ' ').trim();
+  const known = `${adminWords}\n${facts}`.toLowerCase();
+  text = text.replace(/\s*(?:—|-|:|at)?\s*https?:\/\/[^\s)”"]+/gi, (url) => (known.includes(url.trim().replace(/^[—\-:\s]+|^at\s+/i, '').toLowerCase()) ? url : '')).replace(/\s{2,}/g, ' ').trim();
+  // A greeting every turn reads like a form letter, and the stage directions
+  // are for the model, not the admin.
+  if (history.length) text = text.replace(/^(hi|hello|hey)( there| again)?[!,.]\s*/i, '');
+  text = text
+    .replace(/^(okay|ok)[,.!]?\s+i[’']m ready[.!]?\s*/i, '')
+    .replace(/(^|\n)\s*(nothing is being changed( this turn)?|no change is (being made|involved)( this turn)?)[.!]?\s*/gi, '$1')
+    .trim()
+    .replace(/^\w/, (char) => char.toUpperCase());
   if (action && action.type === 'confirm' && !/confirm/i.test(text)) text = `${text} Confirm and it’s set.`;
-  if (!action && PROMISES.test(text)) {
+  // Asked for a change, offered nothing, yet the words say it happened: that
+  // is the model inventing an outcome. Replace it with the truth.
+  if (!action && !settled && wantsChange && !text.includes('?') && /\b(has|have|is|are|’s|'s)\s+(now\s+)?(finished|complete|completed|done|been (updated|renamed|changed|set))\b|\bare now:|\bis now:|\bI can (update|set|change|rename|remove|delete|run|rewrite|mark|create)\b/i.test(text)) {
+    text = `I couldn’t turn that into a change I can make. Tell me the app and what to change — for example “rewrite Airbnb’s names with AI”, “approve Airbnb” or “change Airbnb’s tagline to …”.`;
+    onToken?.(`\n${text}`);
+  } else if (!action && !settled && !text.includes('?') && PROMISES.test(text)) {
     // A promise with nothing behind it: ask for what is missing instead.
     const ask = missingValueQuestion(parsedOp, state, mentioned);
     text = `${text.replace(PROMISES, '').replace(/\s{2,}/g, ' ').trim()} ${ask}`.trim();
     onToken?.(` ${ask}`);
   }
-  return { source: 'ai', text, actions: action ? [action] : [], model: raw.model, streamed: raw.streamed === true };
+  const actions: AssistantAction[] = action ? [action] : [];
+  if (settled && input.pending && parsedOp?.kind === 'update-app') actions.push({ type: 'cancel' });
+  if (missingApp) actions.push({ type: 'upload' });
+  // Asked for a value? Then the next message is that value.
+  let expect: Expect | null = null;
+  if (!action && !settled && parsedOp?.kind === 'update-app') {
+    const app = findApp(state, parsedOp.app ?? mentioned[0]?.name);
+    const field = (Object.keys(parsedOp.fields ?? {})[0] as Expect['field'] | undefined) ?? (/\bwebsite|link|url|store\b/i.test(question) ? 'website' : /\bname\b/i.test(question) ? 'name' : 'tagline');
+    if (app && ['tagline', 'name', 'website'].includes(field)) expect = { kind: 'update-app', appId: app.id, app: app.name, field };
+  }
+  if (!settled) for (const reply of quickReplies(action, parsedOp, invented, bareYes)) actions.push({ type: 'reply', text: reply });
+  return { source: 'ai', text, actions, model: raw.model, streamed: raw.streamed === true, expect };
+}
+
+/** Likely next messages, offered as chips under the reply. */
+function quickReplies(action: AssistantAction | undefined, op: ParsedOp | null, invented: string | null, bareYes: boolean): string[] {
+  if (bareYes) return ['What can you do?', 'How is the last run?'];
+  if (action?.type === 'confirm') {
+    if (invented) return ['Suggest another', 'I’ll type my own'];
+    return action.destructive ? [] : ['Cancel that'];
+  }
+  if (action?.type === 'upload') return ['What should I record?'];
+  if (op?.kind === 'update-app' && op.fields && ('tagline' in op.fields || 'name' in op.fields) && !('website' in op.fields)) return ['Suggest one for me'];
+  return [];
 }
 
 /** Sentences that sound like an offer the admin could confirm, or a claim that it happened. */
-const PROMISES = /\b(confirm(ing)? (and|if|it)[^.!?]*[.!?]?|here[’']s (one|the update)[^.!?]*[.!?]?|it[’']s set[.!?]?|updating [^.!?]*[.!?]?|I can (update|set|change|rename|remove|delete)[^.!?]*[.!?]?|will be (set|updated|changed) [^.!?]*[.!?]?)/gi;
+const SENTENCE = String.raw`(?:[^.!?]|\.(?=\S))*[.!?]?`;
+const PROMISES = new RegExp(String.raw`\b(confirm(ing)? (and|if|it)${SENTENCE}|here[’']s (one|the update)${SENTENCE}|it[’']s set[.!?]?|I can (update|set|change|rename|remove|delete)${SENTENCE}|will be (set|updated|changed)${SENTENCE})`, 'gi');
 
 /** The value in the inventor's reply. */
 function readOpValue(text: string): string | null {

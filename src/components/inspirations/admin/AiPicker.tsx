@@ -19,7 +19,7 @@ import { CheckIcon, ChevronDownIcon, SparklesIcon } from '../Icons';
 
 const OFF = 'off';
 
-type Form = { provider: string; url: string; model: string; key: string; enabled: boolean };
+type Form = { provider: string; url: string; model: string; key: string; enabled: boolean; chatModel: string };
 
 function providerIdOf(status: AiStatus): string {
   if (!status.enabled) return OFF;
@@ -34,6 +34,7 @@ function formFrom(status: AiStatus): Form {
     model: status.configuredModel ?? status.model ?? '',
     key: '',
     enabled: status.enabled,
+    chatModel: status.chatModel && status.chatModel !== status.journeyModel ? status.chatModel : '',
   };
 }
 
@@ -133,6 +134,7 @@ export function AiPicker({ admin, align = 'left' }: { admin: boolean; align?: 'l
         url: form.provider === OFF ? status?.configuredUrl ?? '' : form.url,
         model: form.provider === OFF ? form.model : form.model,
         key: form.key || undefined,
+        chatModel: form.chatModel || undefined,
         enabled: form.provider !== OFF,
       });
       setNote(statusLine(next, false));
@@ -243,6 +245,20 @@ export function AiPicker({ admin, align = 'left' }: { admin: boolean; align?: 'l
                       />
                     )}
                   </label>
+                  {listed.length > 1 && (
+                    <label className="ins-field">
+                      <span className="ins-field-label">Chat &amp; journey names</span>
+                      <select className="ins-input" value={listed.includes(form.chatModel) ? form.chatModel : ''} onChange={(e) => setForm({ ...form, chatModel: e.target.value })}>
+                        <option value="">Automatic ({status?.journeyModel ?? status?.model ?? 'largest general model'})</option>
+                        {listed.map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="ins-field-hint">The model that talks in the assistant and names journeys. A larger general model reads better; the screen model above stays on the screenshots.</span>
+                    </label>
+                  )}
                   {(chosen?.needsKey || form.provider === 'custom') && (
                     <label className="ins-field">
                       <span className="ins-field-label">API key{chosen?.needsKey ? '' : ' (if the server needs one)'}</span>

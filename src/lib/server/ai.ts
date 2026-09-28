@@ -18,7 +18,7 @@ import type { AiSettingsInput, AiStatus } from '@/lib/inspirations/ingestJobs';
 const CRAWLER_DIR = join(process.cwd(), 'tools', 'ios-crawler');
 const SETTINGS_FILE = join(CRAWLER_DIR, '.ai-settings.json');
 
-type Saved = { provider?: string; url?: string; model?: string; key?: string; enabled?: boolean };
+type Saved = { provider?: string; url?: string; model?: string; key?: string; enabled?: boolean; chatModel?: string; journeyModel?: string };
 
 export function readSettings(): Saved {
   if (!existsSync(SETTINGS_FILE)) return {};
@@ -39,6 +39,8 @@ export function writeSettings(input: AiSettingsInput): Saved {
     // back, so the page cannot resend it.
     key: input.key?.trim() ? input.key.trim() : current.key ?? '',
     enabled: input.enabled !== false,
+    ...(current.journeyModel ? { journeyModel: current.journeyModel } : {}),
+    ...(input.chatModel?.trim() ? { chatModel: input.chatModel.trim() } : {}),
   };
   if (!next.key) delete next.key;
   writeFileSync(SETTINGS_FILE, `${JSON.stringify(next, null, 2)}\n`);

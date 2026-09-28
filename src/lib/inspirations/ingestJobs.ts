@@ -2,9 +2,9 @@
 
 import { useEffect, useSyncExternalStore } from 'react';
 import { getIdToken } from '@/lib/firebase/auth';
-import { adminApi } from '@/lib/inspirations/admin';
-import { doneText, type AssistantAction, type ConfirmAction } from '@/lib/inspirations/assistantActions';
-import type { Platform } from '@/lib/inspirations/types';
+import { adminApi, type ScreenSidecar } from '@/lib/inspirations/admin';
+import { doneText, type AdminOp, type AssistantAction, type ConfirmAction, type Expect } from '@/lib/inspirations/assistantActions';
+import type { Platform, ScreenType } from '@/lib/inspirations/types';
 import { invalidateInspirationsCache } from '@/lib/inspirations/api';
 
 /**
@@ -74,6 +74,8 @@ export type IngestJob = {
   id: string;
   /** The recording's file name, which is what the person will recognise it by. */
   title: string;
+  /** Reading a recording, or rewriting an app's names with the AI. */
+  mode?: 'ingest' | 'research';
   sizeBytes: number | null;
   startedBy: string;
   startedAt: string;
@@ -111,6 +113,8 @@ export type AiStatus = {
   model: string | null;
   /** The model that names the journeys — a larger general model when one is installed. */
   journeyModel?: string | null;
+  /** The model behind the assistant's chat. */
+  chatModel?: string | null;
   vision: boolean;
   reason: string | null;
   providers: AiProvider[];
@@ -124,6 +128,8 @@ export type AiSettingsInput = {
   model: string;
   /** Omitted or empty keeps the key already saved. */
   key?: string;
+  /** The model that talks in the assistant and names journeys; empty means automatic. */
+  chatModel?: string;
   enabled: boolean;
 };
 
@@ -246,7 +252,22 @@ export function refreshIngestJobs(): Promise<void> {
   return fetchJobs().then(schedule);
 }
 
-export type StartIngestOptions = { keepLoading?: boolean; fps?: number };
+export type StartIngestOptions = { keepLoading?: boolean; fps?: number; platform?: 'ios' | 'android' | 'web' };
+
+export const PLATFORM_CHOICES: { id: 'ios' | 'android' | 'web'; label: string }[] = [
+  { id: 'ios', label: 'iOS' },
+  { id: 'android', label: 'Android' },
+  { id: 'web', label: 'Web' },
+];
+
+/** The platform named in a message, if any. */
+export function platformIn(text: string): 'ios' | 'android' | 'web' | null {
+  const t = text.toLowerCase();
+  if (/\b(ios|iphone|ipad|apple)\b/.test(t)) return 'ios';
+  if (/\b(android|pixel|samsung|galaxy)\b/.test(t)) return 'android';
+  if (/\b(web|website|browser|desktop|chrome|safari)\b/.test(t)) return 'web';
+  return null;
+}
 
 /**
  * Uploads a recording and starts its run. The upload itself is shown as a
@@ -292,6 +313,7 @@ export function startIngest(video: File, startedBy: string, options: StartIngest
       const query = new URLSearchParams({ ext: extensionOf(video), name: video.name });
       if (options.keepLoading) query.set('loading', '1');
       if (options.fps) query.set('fps', String(options.fps));
+      query.set('platform', options.platform ?? 'ios');
 
       // XMLHttpRequest, for one reason: fetch cannot report upload progress.
       const xhr = new XMLHttpRequest();
@@ -485,15 +507,69 @@ type ChatSnapshot = {
   pending: ConfirmAction | null;
   /** An image dropped on the dock, kept until it is used as a logo. */
   heldImage: { name: string; size: number } | null;
+  /** A recording dropped on the dock, waiting to be told its platform. */
+  heldVideo: { name: string; size: number } | null;
+  /** What the assistant asked to be told next — the next message is that value. */
+  expecting: Expect | null;
 };
-let chat: ChatSnapshot = { messages: [], pending: null, heldImage: null };
+let chat: ChatSnapshot = { messages: [], pending: null, heldImage: null, heldVideo: null, expecting: null };
 let heldFile: File | null = null;
+let heldVideoFile: File | null = null;
 const chatListeners = new Set<() => void>();
-const CHAT_EMPTY: ChatSnapshot = { messages: [], pending: null, heldImage: null };
+const CHAT_EMPTY: ChatSnapshot = { messages: [], pending: null, heldImage: null, heldVideo: null, expecting: null };
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let loaded = false;
 
 function emitChat(next: ChatSnapshot) {
   chat = next;
   for (const listener of chatListeners) listener();
+  scheduleSave();
+}
+
+/**
+ * The conversation is kept on the server (one admin, one conversation), so
+ * a refresh or a second tab picks it up where it was. Saved a moment after
+ * each settled change; a message still being typed out is not saved yet.
+ */
+function scheduleSave() {
+  if (!loaded || typeof window === 'undefined') return;
+  if (chat.messages.some((message) => message.pending)) return;
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    void (async () => {
+      try {
+        await fetch('/api/crawler/assistant/history', {
+          method: 'PUT',
+          headers: await authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ messages: chat.messages.slice(-200), pending: chat.pending, expecting: chat.expecting }),
+        });
+      } catch {
+        // Kept in memory; the next change tries again.
+      }
+    })();
+  }, 600);
+}
+
+/** Loads the saved conversation once the admin is known. */
+export async function loadAssistantChat(): Promise<void> {
+  if (loaded) return;
+  try {
+    const res = await fetch('/api/crawler/assistant/history', { headers: await authHeaders(), cache: 'no-store' });
+    if (res.ok) {
+      const stored = (await res.json()) as { messages?: ChatMessage[]; pending?: ConfirmAction | null; expecting?: Expect | null };
+      const messages = Array.isArray(stored.messages) ? stored.messages.filter((message) => message && message.id && message.role && typeof message.text === 'string').map((message) => ({ ...message, pending: false })) : [];
+      // What happened in this tab before the load finished comes after.
+      const seen = new Set(messages.map((message) => message.id));
+      chat = { ...chat, messages: [...messages, ...chat.messages.filter((message) => !seen.has(message.id))], pending: chat.pending ?? stored.pending ?? null, expecting: chat.expecting ?? stored.expecting ?? null };
+      for (const listener of chatListeners) listener();
+    }
+  } catch {
+    // Offline or signed out: the conversation starts empty here.
+  } finally {
+    loaded = true;
+  }
 }
 
 function subscribeChat(listener: () => void) {
@@ -536,7 +612,7 @@ function typeOut(id: string, text: string, done: Partial<ChatMessage>): Promise<
 
 type AssistantEvent =
   | { type: 'token'; text: string }
-  | { type: 'done'; text: string; source: 'rules' | 'ai'; actions: AssistantAction[]; model?: string; streamed?: boolean }
+  | { type: 'done'; text: string; source: 'rules' | 'ai'; actions: AssistantAction[]; model?: string; streamed?: boolean; expect?: Expect | null }
   | { type: 'error'; message: string };
 
 /**
@@ -560,7 +636,7 @@ export async function askAssistant(question: string): Promise<ChatMessage> {
     const res = await fetch('/api/crawler/assistant', {
       method: 'POST',
       headers: await authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ question: trimmed, history, pending: chat.pending?.label ?? null, heldImage: heldFile?.name ?? null }),
+      body: JSON.stringify({ question: trimmed, history, pending: chat.pending?.label ?? null, heldImage: heldFile?.name ?? null, lastOp: lastOfferedOp(), expecting: chat.expecting }),
     });
     if (!res.ok || !res.body) {
       const payload = (await res.json().catch(() => ({}))) as { message?: string };
@@ -609,16 +685,32 @@ export async function askAssistant(question: string): Promise<ChatMessage> {
   } else {
     await typeOut(pending.id, settled.text, { actions: settled.actions ?? [], source: settled.source });
   }
-  // An offered operation waits for a yes — typed or pressed.
+  // An offered operation waits for a yes — typed or pressed; a cancel drops it.
   if (settled.type === 'done') {
+    const cancelled = (settled.actions ?? []).some((action) => action.type === 'cancel');
     const offered = (settled.actions ?? []).find((action): action is ConfirmAction => action.type === 'confirm') ?? null;
-    emitChat({ ...chat, pending: offered });
+    // `expect` undefined keeps what was there; null clears it; an object sets it.
+    emitChat({ ...chat, pending: cancelled ? null : offered, expecting: settled.expect === undefined ? (offered ? null : chat.expecting) : settled.expect });
   }
   return chat.messages.find((message) => message.id === pending.id) ?? pending;
 }
 
 const YES = /^(yes|y|yeah|yep|ok|okay|sure|confirm|do it|go ahead|proceed|yes remove|yes delete|remove it|delete it|apply|save)\b/i;
 const NO = /^(no|nope|cancel|stop|don't|dont|never mind|nevermind|forget it)\b/i;
+
+/** The operation offered most recently, answered or not — what "another" refers to. */
+export function lastOfferedOp(): AdminOp | null {
+  for (let i = chat.messages.length - 1; i >= 0; i--) {
+    const confirm = chat.messages[i].actions?.find((action): action is ConfirmAction => action.type === 'confirm');
+    if (confirm) return confirm.op;
+  }
+  return null;
+}
+
+/** The operation waiting for a yes right now. */
+export function getPending(): ConfirmAction | null {
+  return chat.pending;
+}
 
 /** Whether a typed line answers the operation that is waiting. */
 export function answersPending(text: string): 'yes' | 'no' | null {
@@ -630,9 +722,12 @@ export function answersPending(text: string): 'yes' | 'no' | null {
 }
 
 export function cancelPending() {
-  if (!chat.pending) return;
+  if (!chat.pending) {
+    if (chat.expecting) emitChat({ ...chat, expecting: null });
+    return;
+  }
   const label = chat.pending.label;
-  emitChat({ ...chat, pending: null });
+  emitChat({ ...chat, pending: null, expecting: null });
   assistantSays(`Cancelled — “${label}” was not done. Nothing changed.`);
 }
 
@@ -651,6 +746,21 @@ export function releaseImage() {
   emitChat({ ...chat, heldImage: null });
 }
 
+/** Keeps a recording until the admin says which platform it is from. */
+export function holdVideo(file: File) {
+  heldVideoFile = file;
+  emitChat({ ...chat, heldVideo: { name: file.name, size: file.size } });
+}
+
+export function heldVideoFileNow(): File | null {
+  return heldVideoFile;
+}
+
+export function releaseVideo() {
+  heldVideoFile = null;
+  emitChat({ ...chat, heldVideo: null });
+}
+
 function tellAdminChanged() {
   invalidateInspirationsCache();
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('motvin:admin-changed'));
@@ -663,7 +773,7 @@ function tellAdminChanged() {
  */
 export async function performAction(action: ConfirmAction, image?: File | null): Promise<'done' | 'needs-image' | 'failed'> {
   const { op } = action;
-  if (op.kind === 'set-logo' && !(image ?? heldFile)) return 'needs-image';
+  if ((op.kind === 'set-logo' || op.kind === 'add-screen') && !(image ?? heldFile)) return 'needs-image';
   emitChat({ ...chat, pending: null });
   const working: ChatMessage = { id: `a-${Date.now().toString(36)}`, role: 'assistant', text: `${action.label}…`, at: new Date().toISOString(), pending: true };
   append(working);
@@ -715,6 +825,85 @@ export async function performAction(action: ConfirmAction, image?: File | null):
       case 'delete-flow':
         await adminApi.deleteFlow(op.flowId);
         break;
+      case 'set-screen-type': {
+        const state = await adminApi.getState();
+        const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === op.file);
+        await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), screenType: op.screenType as ScreenType });
+        break;
+      }
+      case 'set-flow-category': {
+        const state = await adminApi.getState();
+        const flow = state.flows.find((entry) => entry.id === op.flowId);
+        if (!flow) throw new Error('That flow is no longer in the library.');
+        await adminApi.saveFlow({ ...flow, category: op.category });
+        break;
+      }
+      case 'set-screen-tags': {
+        const state = await adminApi.getState();
+        const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === op.file);
+        const existing = file?.sidecar?.tags ?? [];
+        const tags = op.mode === 'replace' ? op.tags : [...new Set([...existing, ...op.tags])];
+        await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), tags });
+        break;
+      }
+      case 'set-screen-description': {
+        const state = await adminApi.getState();
+        const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === op.file);
+        await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), description: op.description } as ScreenSidecar);
+        break;
+      }
+      case 'add-to-flow':
+      case 'remove-from-flow': {
+        const state = await adminApi.getState();
+        const flow = state.flows.find((entry) => entry.id === op.flowId);
+        if (!flow) throw new Error('That flow is no longer in the library.');
+        const screenIds = op.kind === 'add-to-flow' ? [...new Set([...flow.screenIds, ...op.screenIds])] : flow.screenIds.filter((id) => !op.screenIds.includes(id));
+        await adminApi.saveFlow({ ...flow, screenIds });
+        break;
+      }
+      case 'create-flow': {
+        const slug = op.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'flow';
+        await adminApi.saveFlow({ id: `${op.appId}-ios-${slug}`, appId: op.appId, name: op.name, category: op.category, platform: 'ios' as Platform, screenIds: op.screenIds, parentId: null });
+        break;
+      }
+      case 'set-flow-parent': {
+        const state = await adminApi.getState();
+        const flow = state.flows.find((entry) => entry.id === op.flowId);
+        if (!flow) throw new Error('That flow is no longer in the library.');
+        await adminApi.saveFlow({ ...flow, parentId: op.parentId });
+        break;
+      }
+      case 'set-source-status': {
+        const state = await adminApi.getState();
+        await adminApi.saveSource(op.appId, { ...(state.sources[op.appId] ?? {}), status: op.status });
+        break;
+      }
+      case 'stop-run': {
+        const res = await fetch(`/api/crawler/jobs/${encodeURIComponent(op.jobId)}?stop=1`, { method: 'DELETE', headers: await authHeaders() });
+        if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { message?: string }).message ?? `Could not stop the run (${res.status}).`);
+        void refreshIngestJobs();
+        break;
+      }
+      case 'research-app': {
+        const res = await fetch('/api/crawler/research', { method: 'POST', headers: await authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ appId: op.appId, name: op.name }) });
+        if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { message?: string }).message ?? `Could not start the rewrite (${res.status}).`);
+        void refreshIngestJobs();
+        break;
+      }
+      case 'set-ai': {
+        const current = aiSnapshot.status ?? (await refreshAiStatus());
+        if (!current) throw new Error('The AI status could not be read.');
+        const provider = current.providers.find((entry) => entry.id === current.provider)?.id ?? 'custom';
+        await saveAiSettings({ provider, url: current.configuredUrl, model: current.configuredModel ?? '', chatModel: op.chatModel ?? undefined, enabled: op.enabled !== false });
+        break;
+      }
+      case 'add-screen': {
+        const file = image ?? heldFile!;
+        await adminApi.uploadScreen('ios' as Platform, op.appId, file.name, file);
+        releaseImage();
+        done = `“${file.name}” is now a screen of ${op.name}.`;
+        break;
+      }
     }
     patchMessage(working.id, { pending: false, text: done, actions: [] });
     tellAdminChanged();
@@ -723,6 +912,22 @@ export async function performAction(action: ConfirmAction, image?: File | null):
     patchMessage(working.id, { pending: false, text: `That did not go through: ${(error as Error).message}`, actions: [] });
     return 'failed';
   }
+}
+
+/** Offers an operation for the admin to confirm — the way the server does, but from the page. */
+export function offerAction(text: string, action: ConfirmAction) {
+  append({ id: `a-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`, role: 'assistant', text, at: new Date().toISOString(), actions: [action] });
+  emitChat({ ...chat, pending: action });
+}
+
+/** Asks whether to stop a running job; the answer is a Confirm or a typed yes. */
+export function offerStop(job: IngestJob) {
+  offerAction(`Stop “${job.title}”? The screens it has already published stay; the rest of the run is abandoned.`, {
+    type: 'confirm',
+    op: { kind: 'stop-run', jobId: job.id, title: job.title },
+    label: `Stop “${job.title}”`,
+    destructive: true,
+  });
 }
 
 /** A line the assistant says on its own — after an upload starts, for one. */
@@ -735,7 +940,13 @@ export function adminSays(text: string) {
   append({ id: `u-${Date.now().toString(36)}`, role: 'user', text, at: new Date().toISOString() });
 }
 
-export function clearAssistantChat() {
+export async function clearAssistantChat() {
   heldFile = null;
-  emitChat({ messages: [], pending: null, heldImage: null });
+  heldVideoFile = null;
+  emitChat({ messages: [], pending: null, heldImage: null, heldVideo: null, expecting: null });
+  try {
+    await fetch('/api/crawler/assistant/history', { method: 'DELETE', headers: await authHeaders() });
+  } catch {
+    // The empty conversation is saved on the next change anyway.
+  }
 }

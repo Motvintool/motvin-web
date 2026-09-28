@@ -46,6 +46,8 @@ export async function POST(request: Request) {
   const minHold = Number(params.get('minHold') ?? 0.5);
   const keepBrief = params.get('brief') !== '0';
   const keepLoading = params.get('loading') === '1';
+  const platform = (params.get('platform') ?? 'ios').trim().toLowerCase();
+  if (!['ios', 'android', 'web'].includes(platform)) return fail('platform must be ios, android or web.', 400);
 
   // The video's own name is the last resort for naming the app, used when no
   // analyzer can identify it. A fixed temp name would make every such upload an
@@ -87,6 +89,7 @@ export async function POST(request: Request) {
     '--json',
     '--fps', String(fps),
     '--min-hold', String(minHold),
+    '--platform', platform,
     ...(keepBrief ? [] : ['--no-brief']),
     ...(keepLoading ? ['--keep-loading'] : []),
   ];

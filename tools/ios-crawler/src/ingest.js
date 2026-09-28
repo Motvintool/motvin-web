@@ -368,6 +368,14 @@ export async function ingestFolder(options) {
           : `app: ${identity.name} (${identity.appId})${dim(' — named after the recording; rename it in Apps')}`,
       );
     }
+    // The platform is the admin's call — a recording does not say whether it
+    // is an iPhone, an Android phone or a browser — and it decides where the
+    // screens live: screens/<platform>/<app>.
+    if (options.platform) {
+      if (!['ios', 'android', 'web'].includes(options.platform)) throw new Error(`platform must be ios, android or web, not "${options.platform}"`);
+      resolvedApp = { ...resolvedApp, platform: options.platform };
+    }
+    if (!resolvedApp.platform) resolvedApp = { ...resolvedApp, platform: 'ios' };
 
     // Grouping runs on the finished descriptions, so it can see a journey
     // across several screens rather than judging each one alone. Screens that

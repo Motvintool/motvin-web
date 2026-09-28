@@ -312,6 +312,7 @@ async function runIngest(flags) {
     minRun: flags.minRun === undefined ? undefined : Number(flags.minRun),
     keepBrief: flags.brief !== false,
     keepLoading: flags.keepLoading === true,
+    platform: flags.platform,
     dryRun: flags.dryRun === true,
     onProgress: flags.json
       ? (event) => process.stdout.write(`${PROGRESS_MARKER} ${JSON.stringify(event)}\n`)

@@ -10,6 +10,7 @@ import {
   dismissIngestJob,
   isActive,
   megabytes,
+  PLATFORM_CHOICES,
   stageIndex,
   startIngest,
   useIngestJobs,
@@ -48,6 +49,7 @@ export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: ()
   const { jobs, error: listError } = useIngestJobs(admin);
 
   const [video, setVideo] = useState<File | null>(null);
+  const [platform, setPlatform] = useState<'ios' | 'android' | 'web'>('ios');
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logoState, setLogoState] = useState<'idle' | 'saving' | 'done'>('idle');
@@ -93,7 +95,7 @@ export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: ()
     setError(null);
     setLogoState('idle');
     try {
-      await startIngest(video, user.email);
+      await startIngest(video, user.email, { platform });
       setVideo(null);
     } catch (err) {
       setError((err as Error).message);
@@ -165,6 +167,21 @@ export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: ()
       </div>
 
       <div className="ins-admin-actions">
+        <div className="ins-segmented" role="radiogroup" aria-label="Platform">
+          {PLATFORM_CHOICES.map((choice) => (
+            <button
+              key={choice.id}
+              type="button"
+              role="radio"
+              aria-checked={platform === choice.id}
+              className={`ins-segmented-item ${platform === choice.id ? 'is-active' : ''}`}
+              onClick={() => setPlatform(choice.id)}
+              disabled={running}
+            >
+              {choice.label}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
           className="ins-btn ins-btn--primary"

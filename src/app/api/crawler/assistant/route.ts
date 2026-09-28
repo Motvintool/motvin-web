@@ -1,4 +1,5 @@
 import { fail, verifyAdmin } from '@/lib/server/adminAuth';
+import type { AdminOp, Expect } from '@/lib/inspirations/assistantActions';
 import { answerQuestion, type HistoryLine } from '@/lib/server/assistant';
 
 /**
@@ -15,7 +16,7 @@ import { answerQuestion, type HistoryLine } from '@/lib/server/assistant';
 export async function POST(request: Request) {
   const admin = await verifyAdmin(request);
   if (!admin) return fail('This account may not administer the library.', 403);
-  let body: { question?: string; history?: HistoryLine[]; pending?: string | null; heldImage?: string | null };
+  let body: { question?: string; history?: HistoryLine[]; pending?: string | null; heldImage?: string | null; lastOp?: AdminOp | null; expecting?: Expect | null };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -41,7 +42,9 @@ export async function POST(request: Request) {
         : [];
       const pending = typeof body.pending === 'string' ? body.pending.slice(0, 120) : null;
       const heldImage = typeof body.heldImage === 'string' ? body.heldImage.slice(0, 120) : null;
-      answerQuestion({ question, authorization, history, pending, heldImage }, (piece) => send({ type: 'token', text: piece }))
+      const lastOp = body.lastOp && typeof body.lastOp === 'object' && typeof body.lastOp.kind === 'string' ? body.lastOp : null;
+      const expecting = body.expecting && typeof body.expecting === 'object' && body.expecting.kind === 'update-app' && typeof body.expecting.appId === 'string' ? body.expecting : null;
+      answerQuestion({ question, authorization, history, pending, heldImage, lastOp, expecting }, (piece) => send({ type: 'token', text: piece }))
         .then((answer) => send({ type: 'done', ...answer }))
         .catch((error: Error) => send({ type: 'error', message: error.message }))
         .finally(() => {

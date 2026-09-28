@@ -248,7 +248,9 @@ export const adminApi = {
     fileName: string,
     meta: ScreenSidecar,
   ): Promise<{ id: string; report: BuildReport }> {
-    const res = await fetch(`${baseUrl()}/screens/${platform}/${appId}/${fileName}/meta`, {
+    // A screen inside a flow folder is "flow/3.png": one path segment to the
+    // backend, so the slash travels encoded.
+    const res = await fetch(`${baseUrl()}/screens/${platform}/${appId}/${encodeURIComponent(fileName)}/meta`, {
       method: 'PUT',
       headers: await authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(meta),
@@ -257,7 +259,7 @@ export const adminApi = {
   },
 
   async deleteScreen(platform: Platform, appId: string, fileName: string): Promise<{ report: BuildReport }> {
-    const res = await fetch(`${baseUrl()}/screens/${platform}/${appId}/${fileName}`, {
+    const res = await fetch(`${baseUrl()}/screens/${platform}/${appId}/${encodeURIComponent(fileName)}`, {
       method: 'DELETE',
       headers: await authHeaders(),
     });
