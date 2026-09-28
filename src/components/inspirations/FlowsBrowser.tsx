@@ -224,6 +224,7 @@ function FlowRow({
               {flow.screenIds.length} screen{flow.screenIds.length === 1 ? '' : 's'}
               {app ? ` · ${app.name}` : ''}
             </span>
+            {flow.summary && <span className="ins-flows-row-summary">{flow.summary}</span>}
           </span>
         </Link>
         {app && <AppLogo app={app} size={40} className="ins-flows-row-logo" />}

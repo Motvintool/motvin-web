@@ -29,15 +29,17 @@ import { basename, extname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { run } from './exec.js';
 import { log, dim } from './log.js';
-import { extractFrames } from './frames.js';
+import { extractFramesAt, extractThumbs } from './frames.js';
 import { fingerprint, fingerprintFromThumb, jaccard, THUMB } from './hash.js';
 import { ScreenGraph } from './graph.js';
 import { segmentRecording } from './segment.js';
-import { analyseScreen, groupIntoFlows, identifyApp, nameJourneys, pickBackend } from './analyze.js';
+import { analyseScreen, complete, encodeForModel, groupIntoFlows, identifyApp, pickBackend } from './analyze.js';
+import { researchTree } from './researcher.js';
+import { extractJson } from './analyze.js';
 import { buildJourneys } from './journeys.js';
 import { actionPhrase, describeAction } from './actions.js';
 import { isBlockingScreen, isExternalAuthScreen } from './safety.js';
-import { publishCrawl, resolveDataDir, safeName } from './publish.js';
+import { publishCrawl, rebuildManifest, resolveDataDir, safeName, updatePublishedContent } from './publish.js';
 import { readText } from './ocr.js';
 import { filterStyles, isPublishable, labelFor, publishedTypeFor, PUBLISHED_TYPES, stateFor } from './taxonomy.js';
 
@@ -111,12 +113,12 @@ function report(options, stage, message, extra = {}) {
  * most frames are worthless — mid-animation, mid-scroll, or the same screen
  * held for four seconds. `segmentRecording` is what sorts that out.
  */
-async function framesFromVideo(videoPath, stagingDir, fps) {
-  const extracted = await extractFrames(videoPath, join(stagingDir, 'frames'), fps);
+async function thumbsFromVideo(videoPath, stagingDir, fps) {
+  const extracted = await extractThumbs(videoPath, join(stagingDir, 'frames'), fps);
 
-  if (extracted.paths.length > MAX_FRAMES) {
+  if (extracted.count > MAX_FRAMES) {
     throw new Error(
-      `${extracted.paths.length} frames from ${basename(videoPath)} — too many to process. ` +
+      `${extracted.count} frames from ${basename(videoPath)} — too many to process. ` +
         `Trim the recording, or lower the rate with --fps ${Math.max(1, Math.floor(fps / 2))}.`,
     );
   }
@@ -271,6 +273,10 @@ export async function ingestFolder(options) {
   let identified = null;
   let captureInfo = null;
   let timeline = null;
+  /** What the researcher pass changed, when it ran. */
+  let researched = null;
+  /** The tree to hand the researcher once the screens are in the store. */
+  let pendingResearch = null;
   /** Every screen the recording showed, in order, revisits included. */
   let visits = null;
 
@@ -285,13 +291,23 @@ export async function ingestFolder(options) {
       log.detail(`extracting frames at ${fps}/second…`);
       report(options, 'extract', `Reading ${basename(source)} at ${fps} frames a second`);
 
-      const { paths: frames, thumbs, backend } = await framesFromVideo(source, staging, fps);
-      log.info(`${frames.length} frames (${backend})`);
-      report(options, 'extract', `${frames.length} frames read`, { frames: frames.length });
+      // Pass one reads every frame small; the segmenter picks the few that
+      // are screens; pass two reads only those at full size. A long recording
+      // costs megabytes of disk, not gigabytes.
+      const { thumbs, count, backend } = await thumbsFromVideo(source, staging, fps);
+      log.info(`${count} frames scanned (${backend})`);
+      report(options, 'extract', `${count} frames scanned`, { frames: count });
 
       const minHoldSeconds = options.minHoldSeconds ?? (options.minRun !== undefined ? options.minRun / fps : undefined);
       timeline = segmentRecording(thumbs, { fps, minHoldSeconds, keepBrief: options.keepBrief });
-      captureInfo = { source: basename(source), fps, frames: frames.length, durationSeconds: Math.round((frames.length / fps) * 10) / 10 };
+      captureInfo = { source: basename(source), fps, frames: count, durationSeconds: Math.round((count / fps) * 10) / 10 };
+
+      const wanted = timeline.screens.filter((screen) => !screen.revisitOf).map((screen) => screen.frame);
+      report(options, 'extract', `Reading ${wanted.length} screen frames at full size`, { frames: count });
+      const byIndex = await extractFramesAt(source, join(staging, 'frames'), fps, wanted);
+      const frames = [];
+      for (const [index, path] of byIndex) frames[index] = path;
+      if (!byIndex.size) throw new Error('none of the chosen frames could be read from the video');
 
       const distinct = timeline.screens.filter((screen) => !screen.revisitOf);
       const { dropped } = timeline;
@@ -364,18 +380,22 @@ export async function ingestFolder(options) {
       // walk itself: sections, the journeys opened from them, the journeys
       // opened from those. A model, when there is one, only renames.
       report(options, 'flows', 'Reading the journeys off the walk');
-      let journeys = buildJourneys(visits, { actions: graph.actions });
-      if (pickBackend(options.backend) !== 'local') {
-        try {
-          journeys = await nameJourneys(journeys, graph, { backend: options.backend });
-        } catch (error) {
-          log.warn(`could not name the journeys with the model — ${error.message.split('\n')[0]}; keeping the names read off the screens`);
-        }
-      }
+      // A tab bar is the one row that is on nearly every screen. Any bottom
+      // row of labels that appears on only one screen — a product carousel, a
+      // row of category chips near the bottom — is not one, and a screen that
+      // only has such a row is not a section. Cleared here, before the tree
+      // is built from sections.
+      validateTabBars([...graph.nodes.values()]);
+      const journeys = buildJourneys(visits, { actions: graph.actions });
+      // The researcher runs after the screens are published (below), so the
+      // library shows them at once and the model's words arrive a few
+      // minutes later rather than holding everything up.
+      pendingResearch = { journeys, backend: pickBackend(options.backend) };
       const nameOfKey = new Map(journeys.map((journey) => [journey.key, journey.name]));
       flowGroups = journeys.map((journey) => ({
         key: journey.key,
         name: journey.name,
+        summary: journey.summary ?? null,
         category: journey.category,
         parent: journey.parent,
         nodeIds: journey.nodeIds,
@@ -427,6 +447,47 @@ export async function ingestFolder(options) {
     for (const skip of result.skipped) {
       log.blocked(`${skip.name} — not published: ${skip.reason}`);
     }
+
+    // The screens are in. Say so now — with everything a caller needs to show
+    // them — then let the model write the content while they are on screen.
+    if (pendingResearch && pendingResearch.backend !== 'local' && !options.dryRun) {
+      await rebuildManifest(result.dataDir);
+      report(options, 'published', 'Screens are in the library; the AI is now writing the flow content', {
+        result: {
+          app: { id: resolvedApp.appId, name: resolvedApp.name, industry: resolvedApp.industry },
+          flows: result.flows.map((flow) => ({ id: flow.id, name: flow.name, category: flow.category, screenIds: flow.screenIds, parentId: flow.parentId ?? null, summary: flow.summary ?? null })),
+          screens: result.screens,
+          excluded,
+          skipped: result.skipped,
+          capture: captureInfo,
+        },
+      });
+      const { journeys, backend } = pendingResearch;
+      try {
+        const outcome = await researchTree(journeys, graph, {
+          complete: (request) => complete(backend, request),
+          encodeImage: encodeForModel,
+          extractJson,
+          app: resolvedApp,
+          vision: options.vision !== false,
+          analyzer: options.analyzerLabel ?? backend,
+          log: (message) => log.detail(message),
+          onBatch: (done, total) => report(options, 'research', `Writing flow content — screens ${done * 6 + 1}–${Math.min((done + 1) * 6, graph.size)} of ${graph.size}`, { done, total }),
+        });
+        for (const journey of journeys) {
+          const group = flowGroups.find((candidate) => candidate.key === journey.key);
+          if (group) {
+            group.name = journey.name;
+            group.summary = journey.summary ?? group.summary ?? null;
+          }
+        }
+        const written = updatePublishedContent({ dataDir: options.dataDir, app: resolvedApp, graph, written: result.screens, flows: result.flows, flowGroups });
+        log.info(`researcher: ${outcome.journeysRenamed} journey name(s), ${outcome.screensUpdated} screen(s) described in ${outcome.batches} call(s); ${written.screens} screen(s) and ${written.flows} flow(s) rewritten`);
+        researched = { ...outcome, ...written };
+      } catch (error) {
+        log.warn(`the researcher could not run — ${error.message.split('\n')[0]}; keeping the names read off the screens`);
+      }
+    }
     return {
       ...result,
       app: { id: resolvedApp.appId, name: resolvedApp.name, industry: resolvedApp.industry },
@@ -456,9 +517,10 @@ export async function ingestFolder(options) {
           }
         : null,
       analyzerUsable: analyzer.usable,
+      researched,
       // Which analyzer actually ran, so callers can say what the results are
-      // worth: "api" carries descriptions, "local" carries types and flow
-      // names only.
+      // worth: "api" and "ai" carry model-written content, "local" carries
+      // types and flow names from rules only.
       backend: analyzer.usable ? pickBackend(options.backend) : 'none',
     };
   } finally {
@@ -494,6 +556,10 @@ async function ingestTimeline({ timeline, frames, analyzer, graph, duplicates, e
   for (const [index, screen] of distinct.entries()) {
     const framePath = frames[screen.frame];
     const fileName = `frame ${screen.frame} at ${clock(screen.start)}`;
+    if (!framePath) {
+      log.warn(`${fileName} — could not be read from the video; skipped`);
+      continue;
+    }
     report(options, 'classify', `Reading screen ${index + 1} of ${distinct.length}`, { done: index, total: distinct.length });
 
     // The thumbnail already exists, so its hashes come for free and the text
@@ -738,6 +804,50 @@ function dropFromFlows(dataDir, screenId) {
   if (changed) writeFileSync(flowsFile, `${JSON.stringify(doc, null, 2)}\n`);
 }
 
+/**
+ * Drops tab bars that are not tab bars.
+ *
+ * The bottom row of recognised text is read as a tab bar, and on a home
+ * screen it is one. Scrolled deep into a feed, the bottom row is a product
+ * carousel — "Biryani", "MALAI KULFI", "Lay's" — and taking that as a tab
+ * bar invents a section per product. A real tab bar is the same three to
+ * five short labels on screen after screen, so recurrence is the test:
+ *
+ *   - a row of three or more distinct labels seen (with two shared) on
+ *     another screen is a tab bar;
+ *   - a row of two distinct labels is kept only as a degraded reading of a
+ *     recurring row that contains both — OCR missed an item;
+ *   - when the recording shows no recurring row at all (a short clip), a
+ *     single row shaped like a tab bar is trusted;
+ *   - everything else is cleared, and a screen typed "home" or "feed" on
+ *     the strength of it becomes a category page.
+ */
+export function validateTabBars(nodes) {
+  if (nodes.length < 3) return;
+  const lower = (label) => String(label).toLowerCase();
+  const rows = nodes.map((node) => ({ node, labels: [...new Set((node.analysis?.signals?.tabLabels ?? []).map(lower))] })).filter((entry) => entry.labels.length >= 1);
+  const shared = (a, b) => a.labels.filter((label) => b.labels.includes(label)).length;
+  const full = rows.filter((entry) => entry.labels.length >= 3);
+  const recurring = new Set(full.filter((entry) => full.some((other) => other !== entry && shared(entry, other) >= 2)));
+  const shaped = (entry) =>
+    entry.labels.length >= 3 && entry.labels.length <= 5 && entry.labels.every((label) => label.length <= 10 && label.split(' ').length <= 2);
+
+  for (const entry of rows) {
+    let keep = false;
+    if (recurring.has(entry)) keep = true;
+    else if (entry.labels.length === 2) keep = [...recurring].some((other) => shared(entry, other) === 2);
+    else if (!recurring.size) keep = shaped(entry);
+    if (keep) continue;
+
+    const analysis = entry.node.analysis;
+    analysis.signals.tabLabels = [];
+    analysis.signals.tabBar = false;
+    analysis.elements = (analysis.elements ?? []).filter((e) => e !== 'tab-bar');
+    if (['home', 'feed', 'dashboard'].includes(analysis.screenType)) analysis.screenType = 'category';
+    if (/ home$/.test(analysis.name)) analysis.name = analysis.name.replace(/ home$/, '');
+  }
+}
+
 /** Lower-cased words of the recognised text, for overlap comparisons. */
 function wordsOf(lines) {
   return [...new Set(lines.flatMap((line) => String(line.text || '').toLowerCase().split(/[^a-z0-9]+/)).filter((w) => w.length >= 3))];
@@ -964,6 +1074,153 @@ export async function classifyStored(options) {
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }
+}
+
+// ─── research ────────────────────────────────────────────────────────────────
+
+/**
+ * Re-runs the researcher over an app already in the store.
+ *
+ * The tree is rebuilt from flows.json (parents, steps, actions) and the
+ * screens from their stored files and sidecars — the text read again from
+ * the images — so a library captured before a model was available, or with a
+ * weaker one, gets its words rewritten without a new recording. Structure is
+ * not touched: this cannot fix a wrong section or a missing journey, only
+ * what things are called and how they are described.
+ *
+ * @param {{appId: string, platform?: string, dataDir?: string, backend?: string, vision?: boolean, dryRun?: boolean}} options
+ */
+export async function researchStored(options) {
+  const dataDir = resolveDataDir(options.dataDir);
+  const platform = options.platform || 'ios';
+  const appDir = join(dataDir, 'screens', platform, options.appId);
+  if (!existsSync(appDir)) throw new Error(`no screens stored at ${appDir}`);
+  const backend = pickBackend(options.backend);
+  if (backend === 'local' || backend === 'none') throw new Error('research needs a model backend — set up Ollama or MOTVIN_AI_URL, or pass --backend');
+
+  const flowsDoc = JSON.parse(readFileSync(join(dataDir, 'flows.json'), 'utf-8'));
+  const flows = (flowsDoc.flows || []).filter((flow) => flow.appId === options.appId && flow.platform === platform);
+  if (!flows.length) throw new Error(`no flows stored for ${options.appId}`);
+  const appsDoc = JSON.parse(readFileSync(join(dataDir, 'apps.json'), 'utf-8'));
+  const app = (appsDoc.apps || []).find((entry) => entry.id === options.appId) ?? { id: options.appId, name: options.appId };
+
+  // Screens, with their text read again.
+  const graph = new ScreenGraph();
+  const nodeByScreenId = new Map();
+  const files = [];
+  for (const entry of readdirSync(appDir, { withFileTypes: true })) {
+    if (entry.isFile() && READABLE.includes(extname(entry.name).toLowerCase())) files.push(entry.name);
+    else if (entry.isDirectory()) {
+      for (const inner of readdirSync(join(appDir, entry.name))) {
+        if (READABLE.includes(extname(inner).toLowerCase())) files.push(`${entry.name}/${inner}`);
+      }
+    }
+  }
+  log.heading(`Reading ${files.length} stored screen(s) of ${app.name}`);
+  for (const file of files) {
+    const withoutExt = file.slice(0, file.length - extname(file).length);
+    const screenId = `${options.appId}-${platform}-${withoutExt.split('/').join('-')}`;
+    const sidecarPath = join(appDir, `${withoutExt}.json`);
+    const sidecar = existsSync(sidecarPath) ? JSON.parse(readFileSync(sidecarPath, 'utf-8')) : {};
+    const imagePath = join(appDir, file);
+    const lines = await readText(imagePath).catch(() => []);
+    const analysis = classifyLines(lines, sidecar);
+    const node = graph.add({ fingerprint: { dhash: '', ahash: '' }, labels: wordsOf(lines), screenshot: imagePath, analysis });
+    node.screenId = screenId;
+    node.sidecarPath = sidecarPath;
+    node.sidecar = sidecar;
+    nodeByScreenId.set(screenId, node);
+  }
+
+  // The tree, from the store.
+  const journeys = flows.map((flow) => ({
+    key: flow.id,
+    name: flow.name,
+    category: flow.category,
+    parent: flow.parentId ?? null,
+    section: !flow.parentId,
+    nodeIds: flow.screenIds.map((id) => nodeByScreenId.get(id)?.id).filter(Boolean),
+    steps: (flow.steps ?? flow.screenIds.map((id) => ({ screenId: id, action: null })))
+      .map((step) => ({ nodeId: nodeByScreenId.get(step.screenId)?.id, action: step.action }))
+      .filter((step) => step.nodeId),
+  }));
+
+  log.heading('Researching');
+  const outcome = await researchTree(journeys, graph, {
+    complete: (request) => complete(backend, request),
+    encodeImage: encodeForModel,
+    extractJson,
+    app,
+    vision: options.vision !== false,
+    analyzer: options.analyzerLabel ?? backend,
+    log: (message) => log.detail(message),
+  });
+  log.info(`researcher: ${outcome.journeysRenamed} journey name(s), ${outcome.screensUpdated} screen(s) described in ${outcome.batches} call(s)`);
+
+  // Write back: flow names and summaries, screen names, descriptions,
+  // purposes and primary actions, and the analysis records' text.
+  let flowsChanged = 0;
+  for (const journey of journeys) {
+    const flow = flows.find((entry) => entry.id === journey.key);
+    if (!flow) continue;
+    if (flow.name !== journey.name || (journey.summary && flow.summary !== journey.summary)) flowsChanged++;
+    flow.name = journey.name;
+    if (journey.summary) flow.summary = journey.summary;
+    log.ok(`${flow.parentId ? '  ' : ''}${flow.name}${flow.summary ? dim(` — ${flow.summary}`) : ''}`);
+  }
+  let screensChanged = 0;
+  const analysisDir = join(dataDir, 'analysis');
+  for (const node of graph.nodes.values()) {
+    if (node.analysis.viaHeuristics !== false) continue;
+    screensChanged++;
+    const sidecar = {
+      ...node.sidecar,
+      name: node.analysis.name,
+      description: node.analysis.description || node.sidecar.description || '',
+      ...(node.analysis.purpose ? { purpose: node.analysis.purpose } : {}),
+      ...(node.analysis.primaryAction ? { primaryAction: node.analysis.primaryAction } : {}),
+    };
+    if (!options.dryRun) {
+      writeFileSync(node.sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+      const recordPath = join(analysisDir, `${node.screenId}.json`);
+      if (existsSync(recordPath)) {
+        const record = JSON.parse(readFileSync(recordPath, 'utf-8'));
+        record.name = sidecar.name;
+        record.description = sidecar.description;
+        record.purpose = node.analysis.purpose ?? record.purpose ?? null;
+        record.primary_action = node.analysis.primaryAction ?? record.primary_action ?? null;
+        record.analyzer = node.analysis.analyzer ?? record.analyzer;
+        record.analyzedAt = new Date().toISOString();
+        writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`);
+      }
+    }
+  }
+  if (!options.dryRun) writeFileSync(join(dataDir, 'flows.json'), `${JSON.stringify(flowsDoc, null, 2)}\n`);
+  return { dataDir, flowsChanged, screensChanged, outcome };
+}
+
+/** A stored screen's analysis, from its sidecar and freshly read text. */
+function classifyLines(lines, sidecar) {
+  return {
+    screenType: sidecar.fineType || sidecar.screenType || 'other',
+    name: sidecar.name || 'Screen',
+    description: sidecar.description || '',
+    tags: sidecar.tags || [],
+    elements: sidecar.elements || [],
+    style: sidecar.style || [],
+    states: sidecar.states || [],
+    lines,
+    signals: {
+      tabLabels: [],
+      chipLabels: [],
+      ctas: [],
+      title: null,
+      headline: null,
+      keyboard: false,
+      lineCount: lines.length,
+    },
+    viaHeuristics: true,
+  };
 }
 
 /** Exported for the self-test. */

@@ -43,7 +43,7 @@
  * start nor end a journey.
  */
 
-import { cleanTitle } from './heuristics.js';
+import { cleanTitle, looksLikeNavTitle } from './heuristics.js';
 import { flowCategoryFor, labelFor } from './taxonomy.js';
 
 /** Types that open a section of their own wherever they are reached from. */
@@ -107,16 +107,30 @@ export function buildJourneys(visits, options = {}) {
     }
   }
 
-  // What the app calls its sections: every label in a section-switcher chip
-  // row, across all screens. A journey landing on a screen titled by one of
-  // these is a section, not a sub-flow.
+  // What the app calls its sections: the labels of its section-switcher
+  // chip row. A journey landing on a screen titled by one of these is a
+  // section, not a sub-flow. Not every chip row is the switcher — a filter
+  // strip ("Pre-Book", "Offers") or a brand carousel sits in the same place
+  // on one screen — so a row counts only when it names a tab-bar section
+  // ("Food", "Dineout" …) or repeats on three screens, the way a switcher
+  // shown on every section page does.
   const context = { hubs: new Set() };
+  const sectionNames = new Set(steps.map((node) => sectionOf(node)?.toLowerCase()).filter(Boolean));
+  const seenOn = new Map();
+  const chipRows = [];
   for (const node of steps) {
-    for (const chip of node.analysis?.signals?.chipLabels ?? []) {
-      const label = String(chip).trim();
-      if (/^[A-Za-z][A-Za-z' &]{1,15}$/.test(label)) context.hubs.add(label.toLowerCase());
-    }
+    // Written the way an app writes a section name — "Food", "My corner",
+    // "Bites & more" — and not the way OCR misreads a product tile ("nOICE").
+    const labels = (node.analysis?.signals?.chipLabels ?? []).map((chip) => String(chip).trim()).filter((label) => /^[A-Z][a-z'&]+( [A-Za-z'&]+)?$/.test(label) && label.length <= 16);
+    if (!labels.length) continue;
+    chipRows.push(labels);
+    for (const label of new Set(labels.map((label) => label.toLowerCase()))) seenOn.set(label, (seenOn.get(label) ?? 0) + 1);
   }
+  for (const labels of chipRows) {
+    const lowered = labels.map((label) => label.toLowerCase());
+    if (lowered.some((label) => sectionNames.has(label))) for (const label of lowered) context.hubs.add(label);
+  }
+  for (const [label, count] of seenOn) if (count >= 3) context.hubs.add(label);
 
   // ─── 2–6. The app proper: a stack of open journeys ───────────────────────
   const roots = new Map(); // section name → journey
@@ -151,22 +165,20 @@ export function buildJourneys(visits, options = {}) {
       const journey = stack[depth];
       const at = journey.nodeIds.indexOf(node.id);
       const tail = journey.nodeIds.slice(at + 1);
-      if (tail.length && !journey.section) {
+      if (tail.length) {
         // Went deeper from this screen and came back: the part after it is a
-        // journey of its own, anchored here.
+        // journey of its own, anchored here. (For a section, this is the
+        // excursion from one of its sub-pages.) An excursion that would be
+        // named exactly as the journey it came from is the same journey
+        // continuing, so it stays where it is.
         const firstNew = steps.find((candidate) => candidate.id === tail[0]);
-        const child = make(journeyName(firstNew, node, actions.get(`${node.id}->${tail[0]}`) ?? null, context), flowCategoryFor(firstNew?.analysis?.screenType), journey);
-        add(child, node);
-        for (const id of tail) child.nodeIds.push(id);
-        journey.nodeIds.length = at + 1;
-      } else if (tail.length && journey.section) {
-        // Came back to a section screen that has no tab bar of its own (a
-        // sub-page of the section): the excursion after it is a child.
-        const firstNew = steps.find((candidate) => candidate.id === tail[0]);
-        const child = make(journeyName(firstNew, node, actions.get(`${node.id}->${tail[0]}`) ?? null, context), flowCategoryFor(firstNew?.analysis?.screenType), journey);
-        add(child, node);
-        for (const id of tail) child.nodeIds.push(id);
-        journey.nodeIds.length = at + 1;
+        const name = journeyName(firstNew, node, actions.get(`${node.id}->${tail[0]}`) ?? null, context);
+        if (name.toLowerCase() !== journey.name.toLowerCase()) {
+          const child = make(name, flowCategoryFor(firstNew?.analysis?.screenType), journey);
+          add(child, node);
+          for (const id of tail) child.nodeIds.push(id);
+          journey.nodeIds.length = at + 1;
+        }
       }
       continue;
     }
@@ -195,13 +207,22 @@ export function buildJourneys(visits, options = {}) {
       const action = anchor ? actions.get(`${anchor.id}->${node.id}`) ?? null : null;
       // A hub the app itself lists as a section — a chip in its section
       // switcher — is a section, however it was reached.
-      const hubTitle = cleanTitle(node.analysis?.signals?.title ?? '') || null;
-      if (hubTitle && context.hubs.has(hubTitle.toLowerCase())) {
+      const tappedLabel = action && action.kind === 'tap' && action.label ? cleanTitle(action.label) : null;
+      const hubTitle = [cleanTitle(node.analysis?.signals?.title ?? ''), tappedLabel, cleanTitle(node.analysis?.name ?? ''), hubMentioned(node, context.hubs)].find(
+        (candidate) => candidate && context.hubs.has(candidate.toLowerCase()),
+      );
+      if (hubTitle) {
         const root = openRoot(hubTitle);
         add(root, node);
         continue;
       }
-      const child = make(journeyName(node, anchor, action, context), flowCategoryFor(type), open);
+      const name = journeyName(node, anchor, action, context);
+      if (name.toLowerCase() === open.name.toLowerCase()) {
+        // Named for the place it is already in: the same journey continuing.
+        add(open, node);
+        continue;
+      }
+      const child = make(name, flowCategoryFor(type), open);
       if (anchor) add(child, anchor);
       add(child, node);
       stack.push(child);
@@ -250,7 +271,7 @@ export function buildJourneys(visits, options = {}) {
     for (const journey of list) {
       if ((journey.parent ?? '') === first) continue;
       const parent = journey.parent ? byKey.get(journey.parent) : null;
-      if (parent) journey.name = `${journey.name} (${parent.name})`;
+      if (parent && parent.name.toLowerCase() !== journey.name.toLowerCase()) journey.name = `${journey.name} (${parent.name})`;
     }
   }
 
@@ -265,6 +286,26 @@ export function buildJourneys(visits, options = {}) {
 
   // Parents before children, in the order they were opened.
   return journeys;
+}
+
+/**
+ * A section name written on the screen itself, away from the switcher row: a
+ * section page usually shows its own name somewhere — a header, a hero
+ * caption — even when the navigation bar holds a location widget instead.
+ * Lines sitting in the switcher row (two or more hub labels on one row) are
+ * skipped, since every page shows the whole row.
+ */
+function hubMentioned(node, hubs) {
+  const lines = node.analysis?.lines ?? [];
+  const hubLines = lines.filter((line) => hubs.has(String(line.text || '').trim().toLowerCase()));
+  for (const line of hubLines) {
+    const rowMates = hubLines.filter((other) => other !== line && Math.abs(other.y - line.y) < 0.02).length;
+    if (rowMates >= 1) continue;
+    if (line.y > 0.9) continue; // a tab bar item, not a heading
+    const text = String(line.text).trim();
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+  return null;
 }
 
 /** The tab a screen is on, when it has a tab bar. */
@@ -378,10 +419,14 @@ export function journeyName(node, anchor = null, action = null, context = { hubs
   const name = String(analysis.name ?? '');
   const text = `${name} ${signals.title ?? ''} ${signals.headline ?? ''} ${(signals.ctas ?? []).join(' ')} ${(analysis.tags ?? []).join(' ')} ${analysis.description ?? ''}`.toLowerCase();
   const anchorSection = anchor ? sectionOf(anchor) : null;
-  const title = cleanTitle(signals.title ?? '') || null;
+  // A title only counts when it reads like the name of a page; a dish, a
+  // brand or a shouted banner on the screen is not what the journey is.
+  const rawTitle = cleanTitle(signals.title ?? '') || null;
+  const title = rawTitle && looksLikeNavTitle(rawTitle) ? rawTitle : null;
   const overlay = node.capture?.overlay?.kind ?? null;
   const typed = action && action.kind === 'type' && action.label ? action.label : null;
-  const tapped = action && action.kind === 'tap' && action.label ? cleanTitle(action.label) : null;
+  const rawTapped = action && action.kind === 'tap' && action.label ? cleanTitle(action.label) : null;
+  const tapped = rawTapped && looksLikeNavTitle(rawTapped) ? rawTapped : null;
 
   switch (type) {
     case 'search':
@@ -470,11 +515,16 @@ export function journeyName(node, anchor = null, action = null, context = { hubs
 
   // A feature screen: the task the tapped label names when it names one, else
   // the app's own title for it — "Offer Zone", "Eatlist", "Bolt" — the way the
-  // app lists its features. A section's own pages are browsed.
+  // app lists its features. Without a real title, a generic name stands in
+  // for the model to replace; a dish or a brand never becomes a journey.
   if (tappedTask) return tappedTask;
   if (title) return title;
   if (tapped) return tapped;
-  if (['home', 'feed', 'category', 'dashboard'].includes(type)) return anchorSection ? `Browsing ${anchorSection}` : 'Browsing';
-  const fallback = cleanTitle(name);
-  return fallback ? `Opening ${fallback}` : `Opening ${labelFor(type).toLowerCase()}`;
+  if (['home', 'feed', 'category', 'dashboard'].includes(type)) {
+    if (signals.chips || type === 'category') return anchorSection ? `Browsing a category (${anchorSection})` : 'Browsing a category';
+    return anchorSection ? `Browsing ${anchorSection}` : 'Browsing';
+  }
+  const entity = entityOf(text, anchorSection);
+  if (entity) return `${entity} detail`;
+  return anchorSection ? `Opening a page (${anchorSection})` : 'Opening a page';
 }

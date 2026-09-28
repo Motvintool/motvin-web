@@ -161,6 +161,10 @@ export type Screen = {
   states: ScreenState[];
   /** One or two measured sentences about the screen. Empty when nothing was recorded. */
   description: string;
+  /** What the screen is for, when a researcher wrote it. */
+  purpose?: string | null;
+  /** The one thing a person mostly does here, as an imperative ("Add to cart"). */
+  primaryAction?: string | null;
   /** Facts about the moment of capture, when it came from a recording. */
   capture: ScreenCapture | null;
   industry: Industry;
@@ -207,6 +211,8 @@ export type Flow = {
    * wait. Null on the first step and on flows built by hand.
    */
   steps?: FlowStep[];
+  /** One sentence on what the person does across the journey, when written. */
+  summary?: string | null;
 };
 
 export type FlowActionKind = 'tap' | 'type' | 'switch-tab' | 'scroll' | 'back' | 'dismiss' | 'wait' | 'open';

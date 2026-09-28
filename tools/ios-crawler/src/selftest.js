@@ -20,12 +20,14 @@ import { actionSafety, assertAuthorized, isBlockingScreen } from './safety.js';
 import { extractJson, normaliseAnalysis, normaliseFlows } from './analyze.js';
 import { flowCategoryFor, publishedTypeFor, PUBLISHED_FLOW_CATEGORIES, PUBLISHED_TYPES, SCREEN_TYPES } from './taxonomy.js';
 import { publishCrawl, safeName } from './publish.js';
-import { ingestFolder, selectStableFrames, slugify, _internals } from './ingest.js';
+import { ingestFolder, selectStableFrames, slugify, _internals, validateTabBars } from './ingest.js';
 import { parseIdbElements } from './device.js';
 import { buildSections, classifyScreen, cleanTitle, groupFlowsLocally, guessBrand } from './heuristics.js';
 import { segmentRecording } from './segment.js';
 import { buildJourneys, journeyName, taskPhrase } from './journeys.js';
 import { describeAction, actionPhrase } from './actions.js';
+import { applyProposals, describeTree, BRIEF } from './researcher.js';
+import { pickModel, supportsVision } from './ai.js';
 import { isExternalAuthScreen } from './safety.js';
 import { dominantColors, fingerprintFromThumb, THUMB } from './hash.js';
 
@@ -835,9 +837,54 @@ export async function selfTest() {
         const t = buildJourneys([chipHome, scenes].map((node) => ({ node })));
         return t.find((j) => j.name === 'Scenes')?.parent === null;
       })(), '');
+      check('a one-off chip row (a filter strip) does not name a section', (() => {
+        const filtered = mk('feed', 'Dineout home', ['Dineout', 'Bites', 'Scenes'], { analysis: { screenType: 'feed', name: 'Dineout home', signals: { tabLabels: ['Dineout', 'Bites', 'Scenes'], chipLabels: ['Pre-Book', 'near me', 'Offers'], title: null, headline: null, ctas: [] }, tags: [], description: '' } });
+        const offers = mk('onboarding', 'Grocery, dining', [], { analysis: { screenType: 'onboarding', name: 'Grocery, dining', lines: [{ text: 'Offers', x: 0.1, y: 0.4, w: 0.1, h: 0.02 }], signals: { tabLabels: [], title: 'Grocery, dining', headline: null, ctas: [] }, tags: [], description: '' } });
+        const t = buildJourneys([filtered, offers].map((node) => ({ node })));
+        return !t.some((j) => j.name === 'Offers' && j.parent === null);
+      })(), '');
+      check('a chip misread from a product tile is not a section', (() => {
+        const insta = mk('home', 'Instamart home', ['Instamart', 'Categories', 'Red Bull'], { analysis: { screenType: 'home', name: 'Instamart home', signals: { tabLabels: ['Instamart', 'Categories', 'Red Bull'], chipLabels: ['Instamart', 'Food', 'nOICE', 'of the Lost'], title: null, headline: null, ctas: [] }, tags: [], description: '' } });
+        const book = mk('product_detail', 'Paulo Coelho', [], { analysis: { screenType: 'product_detail', name: 'Paulo Coelho', signals: { tabLabels: [], title: 'Oy Store', headline: null, ctas: [] }, tags: [], description: '' } });
+        const t = buildJourneys([insta, book].map((node) => ({ node })), { actions: new Map([[`${insta.id}->${book.id}`, { kind: 'tap', label: 'nOICE' }]]) });
+        return !t.some((j) => /noice/i.test(j.name)) && t.find((j) => j.name !== 'Instamart')?.parent === t.find((j) => j.name === 'Instamart')?.key;
+      })(), '');
+      check('a journey is never a child of one with its own name', (() => {
+        const deals = mk('feed', 'Deals On Your Favs', [], { analysis: { screenType: 'feed', name: 'Deals On Your Favs', signals: { tabLabels: [], title: 'Deals On Your Favs', headline: null, ctas: [] }, tags: [], description: '' } });
+        const more = mk('feed', 'Deals On Your Favs (2)', [], { analysis: { screenType: 'feed', name: 'Deals On Your Favs', signals: { tabLabels: [], title: 'Deals On Your Favs', headline: null, ctas: [] }, tags: [], description: '' } });
+        const t = buildJourneys([foodHome, deals, more, deals, more].map((node) => ({ node })));
+        const byKey = new Map(t.map((j) => [j.key, j]));
+        return t.every((j) => !j.parent || byKey.get(j.parent).name.toLowerCase() !== j.name.replace(/ \(.*\)$/, '').toLowerCase());
+      })(), '');
       check('loading states are transparent to the tree', !tree.some((j) => j.nodeIds.includes(loading.id)));
       check('no screen appears in two journeys at the same level', tree.every((j) => new Set(j.nodeIds).size === j.nodeIds.length));
       check('a permission prompt is named for what it asks', journeyName(mk('permission', 'Allow location', [], { analysis: { screenType: 'permission', name: 'Allow', signals: { title: 'Allow "Swiggy" to use your location?', headline: null, ctas: [], tabLabels: [] }, tags: [], description: '' } })) === 'Allowing location access');
+    }
+
+    log.heading('Tab bars that are not tab bars');
+    {
+      const node = (id, type, name, tabLabels) => ({ id, analysis: { screenType: type, name, signals: { tabLabels, tabBar: tabLabels.length >= 3 }, elements: tabLabels.length ? ['tab-bar'] : [] } });
+      const walk = [
+        node('t1', 'home', 'Food home', ['Food', 'Bolt', 'EatRight', 'Reorder']),
+        node('t2', 'feed', 'Food home', ['Food', 'Bolt', 'EatRight', 'Reorder']),
+        node('t3', 'feed', 'Dineout home', ['Dineout', 'Bites', 'My corner', 'Scenes']),
+        node('t4', 'feed', 'Dineout home', ['Dineout', 'Bites', 'Scenes']),
+        node('t5', 'feed', 'MALAI KULFI home', ['MALAI KULFI']),
+        node('t6', 'feed', 'Biryani home', ['Biryani', 'Biryani']),
+        node('t7', 'feed', 'Chinese home', ['Chinese', 'Chinese', 'Biryani']),
+        node('t8', 'feed', 'Instamart home', ['Scan it', 'Say it', 'Write it']),
+        node('t9', 'feed', 'Food home', ['Food', 'Reorder']),
+      ];
+      validateTabBars(walk);
+      const tabs = (id) => walk.find((n) => n.id === id).analysis.signals.tabLabels;
+      check('a recurring row is a tab bar', tabs('t1').length === 4 && tabs('t3').length === 4 && tabs('t4').length === 3);
+      check('a single label is never a tab bar', tabs('t5').length === 0 && walk[4].analysis.name === 'MALAI KULFI' && walk[4].analysis.screenType === 'category');
+      check('duplicates do not make two rows recur', tabs('t6').length === 0 && tabs('t7').length === 0);
+      check('a one-off row is not a tab bar when the app has a real one', tabs('t8').length === 0);
+      check('a degraded reading of a real row keeps its tab bar', tabs('t9').length === 2);
+      const clip = [node('c1', 'home', 'Home', ['Home', 'Search', 'Cart', 'Profile']), node('c2', 'feed', 'Results', []), node('c3', 'detail', 'Item', [])];
+      validateTabBars(clip);
+      check('a short clip trusts one well-shaped row', clip[0].analysis.signals.tabLabels.length === 4);
     }
 
     log.heading('Actions between screens');
@@ -882,6 +929,33 @@ export async function selfTest() {
     check('a typed search names the query', journeyName({ analysis: { screenType: 'search_results', name: 'Search results', signals: {} } }, null, { kind: 'type', label: 'paneer' }) === 'Searching for “paneer”');
     check('a welcome tip is dismissed', journeyName({ analysis: { screenType: 'coach_mark', name: 'Welcome tip', signals: {} } }) === 'Dismissing the welcome tip');
     check('a detail journey is named by entity', journeyName({ analysis: { screenType: 'product_detail', name: 'Paan Corner', signals: { title: 'Paan Corner', headline: 'Menu' } } }) === 'Restaurant detail');
+
+    log.heading('Researcher pass');
+    {
+      const g = new ScreenGraph();
+      const a = g.add({ fingerprint: printHome, labels: [], screenshot: home, analysis: { ...analysisFor('Food home', 'home'), lines: [{ text: 'Search for dishes', x: 0.1, y: 0.2, w: 0.5, h: 0.02 }], signals: { tabLabels: ['Food'] } } });
+      const b = g.add({ fingerprint: printSearch, labels: [], screenshot: search, analysis: { ...analysisFor('Food search', 'search'), lines: [], signals: {} } });
+      const tree = [
+        { key: 'f1', name: 'Food', category: 'discovery', parent: null, section: true, nodeIds: [a.id], steps: [{ nodeId: a.id, action: null }] },
+        { key: 'f2', name: 'Searching Food', category: 'search', parent: 'f1', section: false, nodeIds: [a.id, b.id], steps: [{ nodeId: a.id, action: null }, { nodeId: b.id, action: { kind: 'tap', label: 'Search for dishes' } }] },
+      ];
+      const described = describeTree(tree, g, { withImages: true });
+      check('the tree is described with ids and images the model can refer to', described.text.includes(`id=${b.id}`) && described.text.includes('[image 2]') && described.screenIds.length === 2, described.text.slice(0, 200));
+      check('the brief goes to the model as written', BRIEF.startsWith('Analyze the uploaded app screenshots as a UX/UI researcher'));
+      const outcome = applyProposals(tree, g, {
+        journeys: { 'J0 Food': { name: 'Groceries', summary: 'x' }, 'J1 Searching Food': { name: 'Food - Searching Dishes & Restaurants', summary: 'The person opens search from the Food home and looks for a dish.' } },
+        screens: { [b.id]: { name: 'Dish search', purpose: 'Lets the person find dishes and restaurants by name.', primaryAction: 'Type a dish name', description: 'A search field with recent searches beneath it and the keyboard open.' }, [a.id]: { name: '', description: '' } },
+      });
+      check('a section keeps its tab name whatever the model proposes', tree[0].name === 'Food');
+      check('a journey inside it takes the task name, parent prefix stripped and sentence-cased, and the summary', tree[1].name === 'Searching dishes & restaurants' && tree[1].summary?.startsWith('The person opens search'), tree[1].name);
+      const shifted = applyProposals(tree, g, { journeys: { 'J1 Searching dishes & restaurants': { summary: 'The user explores the Instamart section for grocery and household items.' } }, screens: {} });
+      check('a summary about a different journey is refused', tree[1].summary?.startsWith('The person opens search') && shifted.journeysRenamed === 0);
+      check('a screen takes name, purpose, action and description', g.get(b.id).analysis.name === 'Dish search' && g.get(b.id).analysis.primaryAction === 'Type a dish name' && g.get(b.id).analysis.viaHeuristics === false);
+      check('an empty proposal leaves the heuristic name alone', g.get(a.id).analysis.name === 'Food home');
+      check('what was changed is counted', outcome.journeysRenamed === 1 && outcome.screensUpdated === 1, JSON.stringify(outcome));
+      check('a vision model is preferred over a code model', pickModel(['qwen2.5-coder:14b', 'gemma3:4b']) === 'gemma3:4b' && supportsVision('gemma3:4b') && !supportsVision('qwen2.5-coder:14b'));
+      check('a configured model wins', pickModel(['gemma3:4b'], 'llava:13b') === 'llava:13b');
+    }
 
     log.heading('Brand from the screens');
     const brand = guessBrand([[line('Skip', 0.08), line('By clicking in, I accept the Privacy Policy', 0.55), line('Swiggy Terms of Use and Instamart Terms of Use', 0.58)]]);

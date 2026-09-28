@@ -22,8 +22,8 @@ import { Simulator } from './src/device.js';
 import { Crawler, DEFAULTS } from './src/crawler.js';
 import { assertAuthorized } from './src/safety.js';
 import { publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
-import { classifyStored, ingestFolder } from './src/ingest.js';
-import { pickBackend, probeAnalyzer } from './src/analyze.js';
+import { classifyStored, ingestFolder, researchStored } from './src/ingest.js';
+import { pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -41,6 +41,8 @@ ${bold('Commands')}
   ingest --app <file> --from <dir>
                             a folder of screenshots → the store             ${dim('no Simulator needed')}
   classify --app-id <id>    analyse screens already stored                  ${dim('no Simulator needed')}
+  research --app-id <id>    rewrite an app's flow names, summaries and screen
+                            content with the AI, from what is already stored ${dim('needs a model')}
 
 ${bold('run options')}
   --app <file>              app config JSON (see apps/example.json)          ${dim('required')}
@@ -51,9 +53,13 @@ ${bold('run options')}
   --max-actions <n>         taps to spend                    ${dim(`default ${DEFAULTS.maxActions}`)}
   --max-minutes <n>         wall-clock budget                ${dim(`default ${DEFAULTS.maxMinutes}`)}
   --max-depth <n>           navigation depth from launch     ${dim(`default ${DEFAULTS.maxDepth}`)}
-  --backend <auto|api|local|cli>
-                            auto  — api when ANTHROPIC_API_KEY is set, else local
-                            api   — best: real descriptions and flow names
+  --backend <auto|api|ai|local|cli>
+                            auto  — api with ANTHROPIC_API_KEY; else a free AI
+                                    (Ollama here, or MOTVIN_AI_URL/KEY); else local
+                            api   — the Anthropic API
+                            ai    — a free OpenAI-compatible model: Ollama, Gemini,
+                                    Groq, OpenRouter. Reads the screenshots and
+                                    writes flow names and screen content
                             local — on-device OCR + rules. No key, no network
                             cli   — the signed-in claude binary. Slow
   --data-dir <path>         Inspirations store   ${dim('default ../../motvin-backend/data/inspirations')}
@@ -257,7 +263,7 @@ async function runIngest(flags) {
   // Checked before the video is touched. Without an analyzer every screen
   // files as "other" and the flows collapse into one bucket, so the run is
   // stopped here rather than allowed to produce that.
-  const backend = flags.classify === false ? 'none' : flags.backend;
+  let backend = flags.classify === false ? 'none' : await resolveBackend(flags.backend);
   if (backend !== 'none') {
     const probe = await probeAnalyzer(backend);
     if (!probe.usable) {
@@ -272,9 +278,14 @@ async function runIngest(flags) {
     }
     log.info(
       probe.backend === 'local'
-        ? 'analyzer: on-device text recognition (no API key — types and flows from rules)'
-        : `analyzer: ${probe.backend} ✓`,
+        ? 'analyzer: on-device text recognition (no model — types and flows from rules)'
+        : probe.backend === 'ai'
+          ? `analyzer: free AI — ${probe.provider} / ${probe.model}${probe.vision ? ' (reads screenshots)' : ' (text only)'}`
+          : `analyzer: ${probe.backend} ✓`,
     );
+    backend = probe.backend;
+    flags.__vision = probe.vision !== false;
+    flags.__analyzerLabel = probe.backend === 'ai' ? `${probe.provider}/${probe.model}` : probe.backend;
   } else {
     log.info('analyzer: off (--no-classify)');
   }
@@ -286,7 +297,9 @@ async function runIngest(flags) {
       ? app.authorization
       : { permission: '', authorizedBy: flags.authorizedBy || '', grantedAt: new Date().toISOString().slice(0, 10) },
     dataDir: flags.dataDir,
-    backend: flags.classify === false ? 'none' : flags.backend,
+    backend,
+    vision: flags.__vision,
+    analyzerLabel: flags.__analyzerLabel,
     fps: flags.fps === undefined ? undefined : Number(flags.fps),
     minHoldSeconds: flags.minHold === undefined ? undefined : Number(flags.minHold),
     minRun: flags.minRun === undefined ? undefined : Number(flags.minRun),
@@ -322,7 +335,8 @@ async function runIngest(flags) {
         ingested: result.ingested,
         duplicates: result.duplicates.length,
         status: result.status,
-        classified: result.backend === 'api' || result.backend === 'cli',
+        classified: ['api', 'cli', 'ai'].includes(result.backend),
+        researched: result.researched ?? null,
         backend: result.backend,
         grouped: result.grouped,
         app: result.app,
@@ -375,6 +389,38 @@ async function runClassify(flags) {
   return result.failed ? 1 : 0;
 }
 
+async function runResearch(flags) {
+  if (!flags.appId) {
+    log.error('--app-id is required. See `node crawl.js` for usage.');
+    return 1;
+  }
+  const backend = await resolveBackend(flags.backend);
+  const probe = await probeAnalyzer(backend);
+  if (!probe.usable || backend === 'local') {
+    log.error(`No model available — ${probe.reason ?? 'only the on-device rules are set up'}`);
+    log.raw(dim('  Start Ollama with a vision model (ollama pull gemma3:4b), or set MOTVIN_AI_URL / MOTVIN_AI_KEY.'));
+    return 1;
+  }
+  log.info(
+    probe.backend === 'ai'
+      ? `analyzer: free AI — ${probe.provider} / ${probe.model}${probe.vision ? ' (reads screenshots)' : ' (text only)'}`
+      : `analyzer: ${probe.backend} ✓`,
+  );
+  const result = await researchStored({
+    appId: flags.appId,
+    platform: flags.platform,
+    dataDir: flags.dataDir,
+    backend,
+    vision: probe.vision !== false,
+    analyzerLabel: probe.backend === 'ai' ? `${probe.provider}/${probe.model}` : probe.backend,
+    dryRun: flags.dryRun === true,
+  });
+  log.raw('');
+  log.info(`${result.flowsChanged} flow(s) and ${result.screensChanged} screen(s) rewritten${flags.dryRun ? dim(' (dry run — nothing written)') : ''}`);
+  if (!flags.dryRun && (result.flowsChanged || result.screensChanged)) await rebuildManifest(result.dataDir);
+  return 0;
+}
+
 function reportGate() {
   log.raw('');
   log.ok('Published — the screens are live in the gallery.');
@@ -422,6 +468,8 @@ async function main() {
         return await runIngest(flags);
       case 'classify':
         return await runClassify(flags);
+      case 'research':
+        return await runResearch(flags);
       case 'where':
         log.info(resolveDataDir(flags.dataDir));
         return 0;

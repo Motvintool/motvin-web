@@ -336,7 +336,7 @@ const TAG_WORDS = [
  * punctuation), so a title has to survive looking like actual words, or the
  * screen is better off named after its type.
  */
-function titleFrom(lines, box = null) {
+function titleFrom(lines, box = null, options = {}) {
   const wordy = (line) => {
     const text = line.text;
     if (text.length < 3 || text.length > 48) return false;
@@ -360,15 +360,41 @@ function titleFrom(lines, box = null) {
   }
 
   const header = lines
-    .filter((line) => line.y > STATUS_BAR_BOTTOM && line.y < HEADER_BOTTOM && wordy(line))
+    .filter((line) => line.y > STATUS_BAR_BOTTOM && line.y < HEADER_BOTTOM && wordy(line) && looksLikeNavTitle(line.text))
     .sort((a, b) => b.h - a.h);
+  if (header[0]) return cleanTitle(header[0].text);
+  if (options?.headerOnly) return null;
+  // Below the header, only a proper headline counts — never a card label,
+  // a dish, a brand or a price.
   const headline = lines
-    .filter((line) => line.y > STATUS_BAR_BOTTOM && line.y < 0.55 && wordy(line))
+    .filter((line) => line.y > STATUS_BAR_BOTTOM && line.y < 0.5 && line.h >= 0.02 && wordy(line) && looksLikeNavTitle(line.text))
     .sort((a, b) => b.h - a.h);
-
-  const pick = header[0] ?? headline[0];
-  return pick ? cleanTitle(pick.text) : null;
+  return headline[0] ? cleanTitle(headline[0].text) : null;
 }
+
+/**
+ * Whether a line reads like the name of a page rather than a thing on it.
+ * Two to four plain words, not shouted, no trademark or price marks, no
+ * possessive brand ("Lay's"), and not a bare proper noun of one word unless
+ * it is an ordinary English word.
+ */
+export function looksLikeNavTitle(text) {
+  const t = String(text || '').trim();
+  if (t.length < 3 || t.length > 40) return false;
+  if (/[®™©%₹$€£!?]/.test(t)) return false;
+  if (/\d/.test(t)) return false;
+  const words = t.split(/\s+/);
+  if (words.length > 5) return false;
+  const letters = (t.match(/[A-Za-z]/g) || []).length;
+  const upper = (t.match(/[A-Z]/g) || []).length;
+  if (letters >= 5 && upper / letters > 0.7) return false; // MALAI KULFI
+  if (/'s\b/i.test(t) && words.length === 1) return false; // Lay's
+  if (words.length === 1 && !COMMON_PAGE_WORDS.test(t)) return false; // Dosa, Biryani, Surf
+  return true;
+}
+
+/** One-word page names that are real pages, not products. */
+const COMMON_PAGE_WORDS = /^(home|search|cart|checkout|orders?|profile|account|settings|favou?rites|wallet|rewards|offers?|deals?|notifications?|messages?|inbox|help|support|history|payments?|addresses|categories|explore|discover|feed|library|saved|bookmarks|wishlist|trending|nearby|map|calendar|scenes|dineout|instamart|food|bolt|reorder|eatlist|vouchers|refunds|membership|subscription|plans?|about|privacy|security|language|appearance|filters?|sort|menu|reviews?|gallery|photos|details?|summary|overview|dashboard|activity|stories|events?|tickets?|bookings?|reservations?)$/i;
 
 /** The largest wordy line in the body of the screen, below the header. */
 function headlineFrom(lines) {
@@ -670,9 +696,10 @@ function nameFor(screenType, signals, context, fallbackName) {
     case 'dashboard':
       if (section && !context.overlay) return `${section} home`;
       if (locationPicker) return 'Location picker';
-      return title ?? (screenType === 'dashboard' ? 'Dashboard' : 'Home');
+      if (title) return title;
+      return screenType === 'dashboard' ? 'Dashboard' : screenType === 'category' ? 'Category page' : signals.chips ? 'Category page' : 'Listing';
     case 'product_detail':
-      return title ?? 'Item detail';
+      return title && !signals.currency ? title : 'Item detail';
     case 'detail':
       return title ?? 'Detail';
     default:

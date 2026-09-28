@@ -125,6 +125,30 @@ node crawl.js doctor      # checks all of the below and prints the fix for each 
 | a video reader | pulling frames out of a screen recording | `ingest` from a video only | nothing — see below |
 | `ANTHROPIC_API_KEY` | best-quality classification | nothing — there is an offline fallback | see below |
 
+### How a recording is read
+
+Frames are read in two passes. The first pass turns every sampled frame (five a second by default) into a 32×64 thumbnail and nothing else; the segmenter finds the screens on those. The second pass decodes only the chosen frames at full size. A three-minute recording therefore costs a few megabytes of temporary disk, not the gigabyte-plus that writing every frame as a PNG would.
+
+## Free AI for flow content
+
+The structure of a flow tree comes from the recording. The *words* — journey
+names in the person's own terms ("Searching dishes & restaurants", "Turning on
+veg mode filter"), screen names, purposes, primary actions and descriptions —
+come from a model reading the screenshots, working to the UX-researcher brief
+in [`src/researcher.js`](src/researcher.js). That model can be free:
+
+| | Setup | Sees images |
+|---|---|---|
+| **Ollama** on this Mac | install Ollama, `ollama pull gemma3:4b`. Nothing else — it is picked up automatically | yes |
+| Google Gemini free tier | key from AI Studio; `MOTVIN_AI_URL=https://generativelanguage.googleapis.com/v1beta/openai`, `MOTVIN_AI_MODEL=gemini-2.5-flash`, `MOTVIN_AI_KEY=…` | yes |
+| Groq free tier | `MOTVIN_AI_URL=https://api.groq.com/openai/v1`, a Llama 4 vision model, `MOTVIN_AI_KEY=…` | yes |
+| OpenRouter `:free` models | `MOTVIN_AI_URL=https://openrouter.ai/api/v1`, e.g. `qwen/qwen2.5-vl-72b-instruct:free`, `MOTVIN_AI_KEY=…` | yes |
+
+Any server speaking the OpenAI chat protocol works ([`src/ai.js`](src/ai.js)).
+A text-only model still gets every screen's recognised text and writes the
+content from that. `--backend ai` forces it; `auto` uses it whenever it is
+there and no Anthropic key is set.
+
 ### Analyzers
 
 `--backend` picks how screens are understood. `auto` (the default) uses the API

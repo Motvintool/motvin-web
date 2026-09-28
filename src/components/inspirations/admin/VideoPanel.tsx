@@ -39,6 +39,8 @@ const STAGES: { id: string; label: string }[] = [
   { id: 'identify', label: 'Identifying the app' },
   { id: 'flows', label: 'Grouping journeys' },
   { id: 'publish', label: 'Publishing' },
+  { id: 'published', label: 'In the library' },
+  { id: 'research', label: 'Writing content (AI)' },
   { id: 'manifest', label: 'Rebuilding index' },
 ];
 
@@ -50,6 +52,29 @@ type Progress = {
   frames?: number;
   screens?: number;
 };
+
+/**
+ * The published screens arrive before the AI has written their content; the
+ * missing counts are filled with what is known so the summary can render.
+ */
+function interimResult(partial: Partial<IngestResult>): IngestResult {
+  return {
+    ingested: partial.screens?.length ?? 0,
+    duplicates: 0,
+    status: 'approved',
+    classified: true,
+    backend: 'ai',
+    grouped: (partial.flows?.length ?? 0) > 0,
+    app: partial.app ?? { id: '', name: '', industry: '' },
+    identified: null,
+    excluded: partial.excluded ?? [],
+    skipped: partial.skipped ?? [],
+    capture: partial.capture ?? null,
+    timeline: null,
+    flows: partial.flows ?? [],
+    screens: partial.screens ?? [],
+  };
+}
 
 function extensionOf(file: File): string {
   const dot = file.name.lastIndexOf('.');
@@ -160,7 +185,12 @@ export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: ()
       let final: IngestResult | null = null;
       let failure: string | null = null;
       await readEvents(res, (event) => {
-        if (event.type === 'progress') setProgress({ stage: event.stage, message: event.message, done: event.done, total: event.total, frames: event.frames, screens: event.screens });
+        if (event.type === 'progress') {
+          setProgress({ stage: event.stage, message: event.message, done: event.done, total: event.total, frames: event.frames, screens: event.screens });
+          // The screens land before the AI writes their content; show them
+          // straight away and let the names update when the run ends.
+          if (event.stage === 'published' && event.result) setResult(interimResult(event.result));
+        }
         else if (event.type === 'log') setLog((lines) => [...lines.slice(-79), event.line]);
         else if (event.type === 'result') final = event.data;
         else if (event.type === 'error') failure = event.message;
@@ -199,7 +229,9 @@ export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: ()
 
   const stageIndex = progress ? STAGES.findIndex((s) => s.id === progress.stage) : -1;
   const classifyFraction =
-    progress?.stage === 'classify' && progress.total ? Math.min(1, ((progress.done ?? 0) + 1) / progress.total) : null;
+    (progress?.stage === 'classify' || progress?.stage === 'research') && progress.total
+      ? Math.min(1, ((progress.done ?? 0) + 1) / progress.total)
+      : null;
 
   return (
     <div className="ins-admin-panel">
@@ -258,7 +290,12 @@ export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: ()
           {working ? <span className="ins-spinner" /> : <UploadIcon size={15} />}
           {working ? 'Finding screens…' : 'Find screens in this video'}
         </button>
-        {working && <span className="ins-muted">Keep the tab open. A three-minute recording takes about a minute.</span>}
+        {working && (
+          <span className="ins-muted">
+            Keep the tab open. Screens appear within a minute or two; the AI then writes the flow content, which
+            takes a few minutes more on a local model.
+          </span>
+        )}
       </div>
 
       {progress && (
@@ -284,6 +321,12 @@ export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: ()
             </button>
           </div>
           {showLog && log.length > 0 && <pre className="ins-ingest-log">{log.join('\n')}</pre>}
+          {progress.stage === 'research' && result && (
+            <p className="ins-field-hint">
+              The screens below are live already. Names and descriptions update when the AI finishes; you can leave
+              this page and they will still land.
+            </p>
+          )}
         </div>
       )}
 
@@ -373,11 +416,18 @@ function IngestSummary({
         </p>
       )}
 
+      {result.classified && result.backend === 'ai' && (
+        <p className="ins-admin-note">
+          Flow names, screen names and descriptions were written by a free AI model that read the
+          screenshots. Edit anything under <strong>Screens</strong> or <strong>Flows</strong>.
+        </p>
+      )}
       {!result.classified && (
         <p className="ins-admin-note">
           Names, types, states and journeys came from on-device text recognition and the recording&rsquo;s
-          own timeline. Set <code>ANTHROPIC_API_KEY</code> in <code>.env.local</code> for model-written
-          descriptions and journey names.
+          own timeline. For human-written flow content, install Ollama and run{' '}
+          <code>ollama pull gemma3:4b</code> (free, on this Mac), or set <code>MOTVIN_AI_URL</code> and{' '}
+          <code>MOTVIN_AI_KEY</code> in <code>.env.local</code> for a free Gemini, Groq or OpenRouter key.
         </p>
       )}
 

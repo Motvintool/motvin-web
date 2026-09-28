@@ -2,6 +2,8 @@
  * motvin-frames — pull frames out of a video using only what macOS already has.
  *
  *   motvin-frames <video> <output-dir> <fps> [thumb-width thumb-height]
+ *                 [--thumbs-only]      write only the thumbnails
+ *                 [--only i,j,k]       write only these frames (0-based), as PNG
  *
  * ffmpeg is the obvious tool for this and the crawler prefers it when present.
  * But installing it needs Homebrew, and on a managed Mac the Homebrew prefix
@@ -25,7 +27,11 @@
  * feed both reduce honestly.
  *
  * Frames are numbered from 1 so the caller can sort them by name and get
- * chronological order, matching ffmpeg's output convention exactly.
+ * chronological order, matching ffmpeg's output convention exactly. The
+ * number is the position on the sampling grid, not a count of files written,
+ * so a `--thumbs-only` pass and a later `--only` pass name the same frame the
+ * same way. That is how a long recording is read in two cheap passes instead
+ * of one that fills the disk with frames nobody keeps.
  */
 
 #import <AVFoundation/AVFoundation.h>
@@ -81,7 +87,7 @@ static BOOL WriteThumb(CGImageRef image, NSString *path, int width, int height) 
 int main(int argc, const char **argv) {
   @autoreleasepool {
     if (argc < 4) {
-      fprintf(stderr, "usage: motvin-frames <video> <output-dir> <fps> [thumb-width thumb-height]\n");
+      fprintf(stderr, "usage: motvin-frames <video> <output-dir> <fps> [thumb-width thumb-height] [--thumbs-only | --only i,j,k]\n");
       return 2;
     }
 
@@ -89,11 +95,23 @@ int main(int argc, const char **argv) {
     NSString *outputDir = [NSString stringWithUTF8String:argv[2]];
     double fps = atof(argv[3]);
     if (fps <= 0) fps = 2;
-    int thumbWidth = argc > 5 ? atoi(argv[4]) : 32;
-    int thumbHeight = argc > 5 ? atoi(argv[5]) : 64;
-    if (thumbWidth <= 0 || thumbHeight <= 0) {
-      thumbWidth = 32;
-      thumbHeight = 64;
+    int thumbWidth = 32;
+    int thumbHeight = 64;
+    BOOL thumbsOnly = NO;
+    NSMutableSet *only = nil;  // sampled-frame indexes (0-based) to write as PNG; nil = all
+    for (int i = 4; i < argc; i++) {
+      if (strcmp(argv[i], "--thumbs-only") == 0) {
+        thumbsOnly = YES;
+      } else if (strcmp(argv[i], "--only") == 0 && i + 1 < argc) {
+        only = [NSMutableSet set];
+        for (NSString *part in [[NSString stringWithUTF8String:argv[++i]] componentsSeparatedByString:@","]) {
+          if (part.length) [only addObject:@([part integerValue])];
+        }
+      } else if (i + 1 < argc && atoi(argv[i]) > 0 && atoi(argv[i + 1]) > 0 && thumbWidth == 32 && thumbHeight == 64 && strncmp(argv[i], "--", 2) != 0) {
+        thumbWidth = atoi(argv[i]);
+        thumbHeight = atoi(argv[i + 1]);
+        i++;
+      }
     }
 
     NSURL *url = [NSURL fileURLWithPath:videoPath];
@@ -127,10 +145,18 @@ int main(int argc, const char **argv) {
 
     int written = 0;
     int failed = 0;
+    int index = 0;
     double step = 1.0 / fps;
 
-    for (double t = 0; t < duration; t += step) {
+    // Frame numbering follows the sampling grid (index i is time i/fps), so a
+    // second pass asked for specific indexes lands on the same frames the
+    // thumbnails came from. Only requested frames are decoded at full size:
+    // seeking past the others is what makes a two-pass read cheap.
+    for (double t = 0; t < duration; t += step, index++) {
       @autoreleasepool {
+        BOOL wantPng = !thumbsOnly && (only == nil || [only containsObject:@(index)]);
+        BOOL wantThumb = only == nil;
+        if (!wantPng && !wantThumb) continue;
         CMTime time = CMTimeMakeWithSeconds(t, 600);
         NSError *error = nil;
         CGImageRef image = [generator copyCGImageAtTime:time actualTime:NULL error:&error];
@@ -140,10 +166,11 @@ int main(int argc, const char **argv) {
           failed++;
           continue;
         }
-        NSString *name = [NSString stringWithFormat:@"frame-%05d", written + 1];
+        NSString *name = [NSString stringWithFormat:@"frame-%05d", index + 1];
         NSString *base = [outputDir stringByAppendingPathComponent:name];
-        BOOL ok = WritePng(image, [base stringByAppendingPathExtension:@"png"]);
-        if (ok) ok = WriteThumb(image, [base stringByAppendingPathExtension:@"rgb"], thumbWidth, thumbHeight);
+        BOOL ok = YES;
+        if (wantPng) ok = WritePng(image, [base stringByAppendingPathExtension:@"png"]);
+        if (ok && wantThumb) ok = WriteThumb(image, [base stringByAppendingPathExtension:@"rgb"], thumbWidth, thumbHeight);
         CGImageRelease(image);
         if (ok) {
           written++;

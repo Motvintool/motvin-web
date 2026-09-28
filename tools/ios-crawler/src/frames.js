@@ -83,88 +83,105 @@ export async function buildFrameExtractor() {
 }
 
 /**
- * Writes frames from `videoPath` into `framesDir` at `fps` per second.
+ * Pass one: a thumbnail for every sampled frame, and nothing else.
  *
- * @returns {Promise<{paths: string[], thumbs: Buffer[], fps: number, backend: string}>}
- *   `thumbs[i]` is the raw RGB thumbnail of `paths[i]`.
+ * A three-minute recording at five frames a second is over a thousand frames;
+ * as PNGs that is more than a gigabyte, and all but a few dozen are thrown
+ * away by the segmenter. Thumbnails are a few kilobytes each, so this pass is
+ * quick and small whatever the length of the recording.
+ *
+ * @returns {Promise<{thumbs: Buffer[], count: number, fps: number, backend: string}>}
  */
-export async function extractFrames(videoPath, framesDir, fps) {
+export async function extractThumbs(videoPath, framesDir, fps) {
   mkdirSync(framesDir, { recursive: true });
-
   const backend = (await has('ffmpeg')) ? 'ffmpeg' : 'avfoundation';
-  if (backend === 'ffmpeg') {
-    // Two outputs from one decode: the frames, and every frame's thumbnail
-    // concatenated into a single raw file that is split below.
-    const result = await run(
-      'ffmpeg',
-      [
-        '-nostdin',
-        '-loglevel',
-        'error',
-        '-i',
-        videoPath,
-        '-vf',
-        `fps=${fps}`,
-        join(framesDir, 'frame-%05d.png'),
-        '-vf',
-        `fps=${fps},scale=${THUMB.width}:${THUMB.height}:flags=area,format=rgb24`,
-        '-f',
-        'rawvideo',
-        join(framesDir, 'thumbs.rgb'),
-      ],
-      { timeout: 900_000 },
-    );
-    if (result.failed) {
-      const reason = result.stderr.trim().split('\n').slice(-2).join(' ') || `exit ${result.code}`;
-      throw new Error(`ffmpeg could not read the video: ${reason}`);
-    }
-  } else {
-    const binary = await buildFrameExtractor();
-    const result = await run(binary, [videoPath, framesDir, String(fps), String(THUMB.width), String(THUMB.height)], {
-      timeout: 900_000,
-    });
-    if (result.failed) {
-      throw new Error(result.stderr.trim().split('\n')[0] || `frame reader exited ${result.code}`);
-    }
-  }
-
-  const paths = readdirSync(framesDir)
-    .filter((file) => /^frame-\d+\.png$/.test(file))
-    .sort()
-    .map((file) => join(framesDir, file));
-
-  if (!paths.length) throw new Error('no frames came out of the video');
-
-  const thumbs = readThumbs(framesDir, paths, backend);
-  return { paths, thumbs, fps, backend };
-}
-
-/**
- * Pairs each frame with its thumbnail.
- *
- * The AVFoundation reader writes one `.rgb` beside each frame; ffmpeg writes
- * them all into `thumbs.rgb` in frame order. Either way the result is one
- * buffer of THUMB.width × THUMB.height × 3 bytes per frame. A thumbnail that
- * cannot be found is an error rather than a gap: the segmenter compares
- * neighbours, and a missing neighbour would silently distort the timeline.
- */
-function readThumbs(framesDir, paths, backend) {
   const size = THUMB.width * THUMB.height * 3;
 
   if (backend === 'ffmpeg') {
+    const result = await run(
+      'ffmpeg',
+      ['-nostdin', '-loglevel', 'error', '-i', videoPath, '-vf', `fps=${fps},scale=${THUMB.width}:${THUMB.height}:flags=area,format=rgb24`, '-f', 'rawvideo', join(framesDir, 'thumbs.rgb')],
+      { timeout: 900_000 },
+    );
+    if (result.failed) {
+      throw new Error(`ffmpeg could not read the video: ${result.stderr.trim().split('\n').slice(-2).join(' ') || `exit ${result.code}`}`);
+    }
     const all = readFileSync(join(framesDir, 'thumbs.rgb'));
     const count = Math.floor(all.length / size);
-    if (count < paths.length) {
-      throw new Error(`ffmpeg produced ${paths.length} frames but only ${count} thumbnails`);
-    }
-    return paths.map((_, index) => all.subarray(index * size, (index + 1) * size));
+    if (!count) throw new Error('no frames came out of the video');
+    return { thumbs: Array.from({ length: count }, (_, i) => all.subarray(i * size, (i + 1) * size)), count, fps, backend };
   }
 
-  return paths.map((path) => {
-    const thumbPath = path.replace(/\.png$/, '.rgb');
-    if (!existsSync(thumbPath)) throw new Error(`thumbnail missing for ${path}`);
-    const thumb = readFileSync(thumbPath);
-    if (thumb.length !== size) throw new Error(`thumbnail for ${path} is ${thumb.length} bytes, expected ${size}`);
-    return thumb;
+  const binary = await buildFrameExtractor();
+  const result = await run(binary, [videoPath, framesDir, String(fps), String(THUMB.width), String(THUMB.height), '--thumbs-only'], { timeout: 900_000 });
+  if (result.failed) throw new Error(result.stderr.trim().split('\n')[0] || `frame reader exited ${result.code}`);
+  const files = readdirSync(framesDir).filter((file) => /^frame-\d+\.rgb$/.test(file)).sort();
+  if (!files.length) throw new Error('no frames came out of the video');
+  // Indexes are the sampling grid; a frame the reader could not decode leaves
+  // a gap, filled with its neighbour so the timeline keeps its clock.
+  const count = Number(files[files.length - 1].match(/\d+/)[0]);
+  const thumbs = [];
+  let last = null;
+  for (let i = 1; i <= count; i++) {
+    const path = join(framesDir, `frame-${String(i).padStart(5, '0')}.rgb`);
+    if (existsSync(path)) {
+      last = readFileSync(path);
+      if (last.length !== size) throw new Error(`thumbnail ${i} is ${last.length} bytes, expected ${size}`);
+    }
+    thumbs.push(last ?? Buffer.alloc(size));
+  }
+  return { thumbs, count, fps, backend };
+}
+
+/**
+ * Pass two: the chosen frames at full size, by their index on the same
+ * sampling grid.
+ *
+ * @param {number[]} indexes 0-based frame indexes
+ * @returns {Promise<Map<number, string>>} index → PNG path
+ */
+export async function extractFramesAt(videoPath, framesDir, fps, indexes) {
+  mkdirSync(framesDir, { recursive: true });
+  const wanted = [...new Set(indexes)].sort((a, b) => a - b);
+  const paths = new Map();
+  if (!wanted.length) return paths;
+  const backend = (await has('ffmpeg')) ? 'ffmpeg' : 'avfoundation';
+
+  if (backend === 'ffmpeg') {
+    for (const index of wanted) {
+      const out = join(framesDir, `frame-${String(index + 1).padStart(5, '0')}.png`);
+      const result = await run(
+        'ffmpeg',
+        ['-nostdin', '-loglevel', 'error', '-ss', String(index / fps), '-i', videoPath, '-frames:v', '1', '-y', out],
+        { timeout: 120_000 },
+      );
+      if (!result.failed && existsSync(out)) paths.set(index, out);
+    }
+    return paths;
+  }
+
+  const binary = await buildFrameExtractor();
+  const result = await run(binary, [videoPath, framesDir, String(fps), String(THUMB.width), String(THUMB.height), '--only', wanted.join(',')], {
+    timeout: 900_000,
   });
+  if (result.failed) throw new Error(result.stderr.trim().split('\n')[0] || `frame reader exited ${result.code}`);
+  for (const index of wanted) {
+    const out = join(framesDir, `frame-${String(index + 1).padStart(5, '0')}.png`);
+    if (existsSync(out)) paths.set(index, out);
+  }
+  return paths;
+}
+
+/**
+ * Both passes at once: every frame as a PNG with its thumbnail. Kept for
+ * callers that want the whole reel; the recording pipeline uses the two
+ * passes above so a long recording never fills the disk.
+ *
+ * @returns {Promise<{paths: string[], thumbs: Buffer[], fps: number, backend: string}>}
+ */
+export async function extractFrames(videoPath, framesDir, fps) {
+  const { thumbs, count } = await extractThumbs(videoPath, framesDir, fps);
+  const byIndex = await extractFramesAt(videoPath, framesDir, fps, Array.from({ length: count }, (_, i) => i));
+  const paths = Array.from({ length: count }, (_, i) => byIndex.get(i)).filter(Boolean);
+  return { paths, thumbs, fps, backend: (await has('ffmpeg')) ? 'ffmpeg' : 'avfoundation' };
 }

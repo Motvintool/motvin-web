@@ -25,6 +25,7 @@ import { log } from './log.js';
 import { luminance } from './hash.js';
 import { buildOcr, readText } from './ocr.js';
 import { classifyScreen, groupFlowsLocally, guessBrand } from './heuristics.js';
+import { aiChat, aiConfig, aiStatus } from './ai.js';
 import { ELEMENTS, INDUSTRIES, PUBLISHED_FLOW_CATEGORIES, SCREEN_TYPE_NAMES, STYLES } from './taxonomy.js';
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
@@ -46,7 +47,27 @@ const ANALYSIS_MAX_EDGE = 900;
  */
 export function pickBackend(preferred) {
   if (preferred && preferred !== 'auto') return preferred;
-  return process.env.ANTHROPIC_API_KEY ? 'api' : 'local';
+  if (process.env.ANTHROPIC_API_KEY) return 'api';
+  // A free AI, when one is configured: Ollama on this Mac, or a free-tier
+  // key for Gemini, Groq or OpenRouter. See ai.js.
+  if (aiConfig().configured) return 'ai';
+  return 'local';
+}
+
+/**
+ * The backend to actually use, having looked around.
+ *
+ * `auto` prefers the Anthropic API, then a configured free AI, then — when
+ * nothing is configured but Ollama is running on this machine with a model —
+ * that Ollama, and only then the on-device rules. The lookaround is what lets
+ * an admin get model-written content by installing Ollama and nothing else.
+ */
+export async function resolveBackend(preferred) {
+  const picked = pickBackend(preferred);
+  if (preferred && preferred !== 'auto') return picked;
+  if (picked !== 'local') return picked;
+  const status = await aiStatus();
+  return status.usable ? 'ai' : 'local';
 }
 
 /**
@@ -75,6 +96,19 @@ export async function probeAnalyzer(preferred) {
     } catch (error) {
       return { usable: false, backend, reason: error.message.split('\n')[0] };
     }
+  }
+
+  if (backend === 'ai') {
+    const status = await aiStatus();
+    if (!status.usable) return { usable: false, backend, reason: status.reason };
+    // The rules still type the screens; the model writes the words. Both
+    // have to work.
+    try {
+      await buildOcr();
+    } catch (error) {
+      return { usable: false, backend, reason: error.message.split('\n')[0] };
+    }
+    return { usable: true, backend, reason: null, model: status.model, vision: status.vision, provider: status.provider };
   }
 
   if (backend === 'api') {
@@ -383,6 +417,64 @@ async function callApiMulti(imagePaths, system, text) {
 }
 
 /**
+ * One completion with text and image blocks, on whichever model backend is in
+ * use — the adapter the researcher pass writes against.
+ *
+ * @param {'api'|'ai'|'cli'} backend
+ * @param {{system: string, blocks: ({type: 'text', text: string}|{type: 'image', base64: string})[], maxTokens?: number}} request
+ */
+export async function complete(backend, request) {
+  if (backend === 'ai') {
+    return aiChat({ system: request.system, blocks: request.blocks, maxTokens: request.maxTokens ?? 3000 });
+  }
+  if (backend === 'api') {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': API_VERSION,
+      },
+      body: JSON.stringify({
+        model: DEFAULT_MODEL,
+        max_tokens: request.maxTokens ?? 3000,
+        system: request.system,
+        messages: [
+          {
+            role: 'user',
+            content: request.blocks.map((block) =>
+              block.type === 'image'
+                ? { type: 'image', source: { type: 'base64', media_type: block.mediaType ?? 'image/png', data: block.base64 } }
+                : { type: 'text', text: block.text },
+            ),
+          },
+          { role: 'assistant', content: '{' },
+        ],
+      }),
+    });
+    if (!response.ok) throw new Error(`Anthropic API ${response.status}: ${(await response.text()).slice(0, 400)}`);
+    const payload = await response.json();
+    return `{${payload.content?.map((block) => block.text || '').join('') ?? ''}`;
+  }
+  // The CLI reads files from disk rather than attachments; images are dropped
+  // and the text carries the screens.
+  const text = request.blocks.filter((block) => block.type === 'text').map((block) => block.text).join('\n');
+  const result = await run('claude', ['-p', `${request.system}\n\n${text}`, '--output-format', 'json'], { timeout: 300_000 });
+  let envelope = null;
+  try {
+    envelope = JSON.parse(result.stdout);
+  } catch {
+    // Handled below.
+  }
+  if (envelope?.is_error) throw new Error(`claude CLI: ${envelope.result || 'error'}`);
+  if (result.failed) throw new Error(`claude CLI failed: ${result.stderr.trim() || `exit ${result.code}`}`);
+  return envelope?.result ?? result.stdout;
+}
+
+/** Downscaled base64 PNG of a screenshot, for any model backend. */
+export { encodeForModel };
+
+/**
  * Works out which app a set of screenshots belongs to.
  *
  * Called once per ingest rather than per screen: the whole point is that a
@@ -420,7 +512,20 @@ export async function identifyApp(imagePaths, options = {}) {
   const instruction = `These are ${sample.length} screen(s) from one iOS app. Identify it.`;
 
   let reply;
-  if (backend === 'api') {
+  if (backend === 'ai') {
+    // The free model sees the frames when it can; a text-only model gets the
+    // recognised text of the same screens, plus whatever brand the rules
+    // read off them, so it can still say what kind of app this is.
+    const brand = options.lineSets ? guessBrand(options.lineSets) : null;
+    const blocks = [];
+    for (const path of sample) blocks.push({ type: 'image', base64: await encodeForModel(path) });
+    const text = (options.lineSets ?? [])
+      .slice(0, 3)
+      .map((lines, index) => `Screen ${index + 1} text: ${lines.map((line) => line.text).join(' | ').slice(0, 800)}`)
+      .join('\n');
+    blocks.push({ type: 'text', text: `${instruction}${brand ? ` The screens mention "${brand.name}" (${brand.evidence}).` : ''}\n${text}` });
+    reply = await aiChat({ system: IDENTIFY_SYSTEM, blocks, maxTokens: 400 });
+  } else if (backend === 'api') {
     reply = await callApiMulti(sample, IDENTIFY_SYSTEM, instruction);
   } else {
     // The CLI reads files from disk, so the images travel as paths rather than
@@ -507,7 +612,7 @@ async function callApiText(system, text) {
 export async function groupIntoFlows(screens, options = {}) {
   if (screens.length < 2) return [];
 
-  if (pickBackend(options.backend) === 'local') {
+  if (['local', 'ai'].includes(pickBackend(options.backend))) {
     // Runs off the screen types the rules already assigned: consecutive screens
     // of the same journey become one flow, named for that journey.
     return groupFlowsLocally(screens);
@@ -686,9 +791,11 @@ export async function analyseScreen(imagePath, elements = [], options = {}) {
   const backend = pickBackend(options.backend);
   log.debug(`analysing with ${backend} backend (${elements.length} a11y elements)`);
 
-  if (backend === 'local') {
+  if (backend === 'local' || backend === 'ai') {
     // Brightness is read alongside the text so the rules can call a screen dark
-    // or light — the one style judgement available without a model.
+    // or light — the one style judgement available without a model. With the
+    // free AI the rules still do the typing; the researcher pass afterwards
+    // writes the names and descriptions from the screenshots.
     const [lines, brightness] = await Promise.all([
       options.lines ?? readText(imagePath),
       options.luminance !== undefined ? options.luminance : luminance(imagePath).catch(() => null),

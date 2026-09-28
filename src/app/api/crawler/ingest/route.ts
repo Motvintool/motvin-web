@@ -86,7 +86,7 @@ export type IngestResult = {
 };
 
 export type IngestEvent =
-  | { type: 'progress'; stage: string; message: string; done?: number; total?: number; frames?: number; screens?: number }
+  | { type: 'progress'; stage: string; message: string; done?: number; total?: number; frames?: number; screens?: number; result?: Partial<IngestResult> }
   | { type: 'log'; line: string }
   | { type: 'result'; data: IngestResult }
   | { type: 'error'; message: string };
@@ -178,13 +178,27 @@ export async function POST(request: Request) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      const send = (event: IngestEvent) => controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      // A closed tab must not end the run: the crawler keeps writing into the
+      // store, and a send to a gone reader is simply dropped.
       let closed = false;
-      const finish = async () => {
+      const send = (event: IngestEvent) => {
         if (closed) return;
-        closed = true;
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+        } catch {
+          closed = true;
+        }
+      };
+      let finished = false;
+      const finish = async () => {
+        if (finished) return;
+        finished = true;
         await rm(workDir, { recursive: true, force: true });
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          // Already closed by the reader going away.
+        }
       };
       runCrawler(args, send)
         .then(async (outcome) => {

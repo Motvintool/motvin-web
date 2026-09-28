@@ -6282,3 +6282,12 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   font-size: 13px;
   font-weight: 600;
 }
+
+.ins-flows-row-summary {
+  display: block;
+  margin-top: 4px;
+  max-width: 70ch;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ins-sub);
+}

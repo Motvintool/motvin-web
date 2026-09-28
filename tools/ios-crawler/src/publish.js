@@ -279,6 +279,8 @@ export function publishCrawl(options) {
       fineType: analysis.screenType,
       states,
       description: analysis.description || '',
+      ...(analysis.purpose ? { purpose: analysis.purpose } : {}),
+      ...(analysis.primaryAction ? { primaryAction: analysis.primaryAction } : {}),
       tags: [...new Set([...(analysis.tags ?? []), analysis.screenType.replace(/_/g, '-'), ...states, platform])].slice(0, 14),
       elements: analysis.elements ?? [],
       style: filterStyles(analysis.style),
@@ -326,6 +328,8 @@ export function publishCrawl(options) {
       flow_position: placed?.position ?? null,
       name,
       description: analysis.description,
+      purpose: analysis.purpose ?? null,
+      primary_action: analysis.primaryAction ?? null,
       tags: sidecar.tags,
       elements: analysis.elements,
       style: sidecar.style,
@@ -464,6 +468,7 @@ export function publishCrawl(options) {
         id: `${app.appId}-${platform}-${group.folder}`,
         appId: app.appId,
         name: group.name,
+        ...(group.summary ? { summary: group.summary } : {}),
         category: group.category,
         platform,
         screenIds,
@@ -524,6 +529,76 @@ export function publishCrawl(options) {
     flows,
     status: sourcesDoc.sources[app.appId].status,
   };
+}
+
+/**
+ * Rewrites the words of a publish that has already happened: screen names,
+ * descriptions, purposes and primary actions in the sidecars and analysis
+ * records, flow names and summaries in flows.json. Files, ids and structure
+ * stay where they are — this runs after the researcher has had its say, so
+ * the library can show the screens straight away and get its content a few
+ * minutes later.
+ *
+ * @param {{dataDir?: string, app: object, graph: ScreenGraph, written: object[], flows: object[], flowGroups: object[]}} options
+ */
+export function updatePublishedContent(options) {
+  const dataDir = resolveDataDir(options.dataDir);
+  const platform = options.app.platform || 'ios';
+  const appDir = join(dataDir, 'screens', platform, options.app.appId);
+  const analysisDir = join(dataDir, 'analysis');
+  let screens = 0;
+  let flows = 0;
+
+  const names = uniqueNames(options.written.map((entry) => options.graph.get(entry.nodeId)).filter(Boolean));
+  for (const entry of options.written) {
+    const node = options.graph.get(entry.nodeId);
+    if (!node || node.analysis.viaHeuristics !== false) continue;
+    const analysis = node.analysis;
+    const name = names.get(node.id) ?? analysis.name;
+    const base = entry.file.replace(/\.[^.]+$/, '');
+    const sidecarPath = join(appDir, `${base}.json`);
+    if (existsSync(sidecarPath)) {
+      const sidecar = readJson(sidecarPath, {});
+      sidecar.name = name;
+      sidecar.description = analysis.description || sidecar.description || '';
+      if (analysis.purpose) sidecar.purpose = analysis.purpose;
+      if (analysis.primaryAction) sidecar.primaryAction = analysis.primaryAction;
+      writeJson(sidecarPath, sidecar);
+    }
+    const recordPath = join(analysisDir, `${entry.screenId}.json`);
+    if (existsSync(recordPath)) {
+      const record = readJson(recordPath, {});
+      record.name = name;
+      record.description = analysis.description;
+      record.purpose = analysis.purpose ?? null;
+      record.primary_action = analysis.primaryAction ?? null;
+      record.analyzer = analysis.analyzer ?? record.analyzer;
+      record.analyzedAt = new Date().toISOString();
+      writeJson(recordPath, record);
+    }
+    entry.name = name;
+    screens++;
+  }
+
+  const flowsFile = join(dataDir, 'flows.json');
+  const flowsDoc = readJson(flowsFile, { version: 1, flows: [] });
+  const keyOf = (group) => group.key ?? group.name;
+  for (const flow of options.flows) {
+    const group = options.flowGroups.find((candidate) => `${options.app.appId}-${platform}-${candidate.folder}` === flow.id);
+    if (!group) continue;
+    const stored = (flowsDoc.flows || []).find((entry) => entry.id === flow.id);
+    if (!stored) continue;
+    if (stored.name !== group.name || (group.summary && stored.summary !== group.summary)) flows++;
+    stored.name = group.name;
+    flow.name = group.name;
+    if (group.summary) {
+      stored.summary = group.summary;
+      flow.summary = group.summary;
+    }
+    void keyOf;
+  }
+  writeJson(flowsFile, flowsDoc);
+  return { screens, flows };
 }
 
 /**
