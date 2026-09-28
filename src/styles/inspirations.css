@@ -6283,11 +6283,540 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   font-weight: 600;
 }
 
-.ins-flows-row-summary {
-  display: block;
-  margin-top: 4px;
-  max-width: 70ch;
+
+/* ─── Video ingest: the assistant dock and the AI picker ─────────────────────
+   The run lives on the server; these only show it. The dock is a chat: the
+   admin's request on the right, the assistant's live reply on the left. */
+
+.ins-admin-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ins-admin-toolbar .ins-field-hint {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+.ins-admin-actions--tight {
+  gap: 12px;
+  margin: 0;
+}
+
+.ins-ingest--quiet {
+  padding: 12px 16px;
+}
+
+.ins-ingest-step.is-failed {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+/* The AI pill — where a chat app shows the model name. */
+.ins-ai {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.ins-ai--right {
+  margin-left: auto;
+}
+
+.ins-ai-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--ins-border-strong);
+  border-radius: 999px;
+  background: var(--ins-card);
+  color: var(--ins-text);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease);
+}
+
+.ins-ai-pill:hover {
+  background: var(--ins-hover);
+}
+
+.ins-ai-pill:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ins-ai-pill-text {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ins-ai-chevron {
+  transition: transform var(--ins-fast) var(--ins-ease);
+}
+
+.ins-ai-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.ins-ai-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ins-muted);
+  box-shadow: 0 0 0 3px rgba(138, 143, 154, 0.18);
+}
+
+.is-on > .ins-ai-dot {
+  background: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2);
+}
+
+.is-warn > .ins-ai-dot {
+  background: #d97706;
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.2);
+}
+
+.is-error > .ins-ai-dot {
+  background: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.2);
+}
+
+.ins-ai-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 60;
+  width: min(420px, calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius-lg);
+  background: var(--ins-card);
+  box-shadow: 0 16px 48px -12px rgba(0, 0, 0, 0.3), 0 2px 8px -2px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: insToastIn 160ms var(--ins-ease);
+}
+
+.ins-ai--right .ins-ai-pop {
+  left: auto;
+  right: 0;
+}
+
+.ins-ai-pop-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 15px;
+}
+
+.ins-ai-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ins-sub);
+}
+
+.ins-ai-providers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ins-ai-provider {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--ins-radius);
+  background: transparent;
+  color: var(--ins-text);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-ai-provider:hover {
+  background: var(--ins-hover);
+}
+
+.ins-ai-provider.is-active {
+  border-color: var(--ins-border-strong);
+  background: var(--ins-card-alt);
+}
+
+.ins-ai-provider-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ins-ai-provider-hint {
+  grid-column: 1;
+  font-size: 13px;
+  color: var(--ins-muted);
+}
+
+.ins-ai-provider-check {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--ins-text);
+}
+
+.ins-ai-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--ins-border);
+}
+
+.ins-ai-fields .ins-field-hint {
+  margin: 0;
+  font-size: 13px;
+}
+
+.ins-ai-note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--ins-radius);
+  font-size: 14px;
+  background: var(--ins-card-alt);
+  color: var(--ins-sub);
+}
+
+.ins-ai-note.is-on {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.ins-ai-note.is-error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.ins-ai-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* The dock: a fixed card in the corner, ChatGPT-sized. */
+.ins-dock {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 75;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(70vh, 640px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ins-border);
+  border-radius: 18px;
+  background: var(--ins-card);
+  box-shadow: 0 24px 64px -16px rgba(0, 0, 0, 0.35), 0 4px 12px -4px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  animation: insToastIn 200ms var(--ins-ease);
+}
+
+.ins-dock-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 12px 14px;
+  border-bottom: 1px solid var(--ins-border);
+}
+
+.ins-dock-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--ins-text);
+  color: var(--ins-on-accent);
+  flex: 0 0 auto;
+}
+
+.ins-dock-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.ins-dock-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--ins-sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ins-dock-ai .ins-ai-dot {
+  width: 7px;
+  height: 7px;
+  box-shadow: none;
+}
+
+.ins-dock-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 14px;
+  overflow-y: auto;
+}
+
+.ins-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ins-chat-msg {
+  max-width: 92%;
+  padding: 10px 12px;
+  border-radius: 16px;
   font-size: 14px;
   line-height: 1.45;
+}
+
+.ins-chat-msg--user {
+  align-self: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--ins-text);
+  color: var(--ins-on-accent);
+  border-bottom-right-radius: 6px;
+}
+
+.ins-chat-msg--user .ins-chat-meta {
+  color: inherit;
+  opacity: 0.7;
+}
+
+.ins-chat-msg--assistant {
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  background: var(--ins-card-alt);
+  color: var(--ins-text);
+  border-bottom-left-radius: 6px;
+}
+
+.ins-chat-msg--assistant.is-failed {
+  background: #fee2e2;
+}
+
+.ins-chat-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ins-chat-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ins-muted);
+}
+
+.ins-chat-step.is-done {
   color: var(--ins-sub);
+}
+
+.ins-chat-step.is-active {
+  color: var(--ins-text);
+  font-weight: 600;
+}
+
+.ins-chat-step-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.ins-chat-step.is-done .ins-chat-step-mark {
+  color: #16a34a;
+}
+
+.ins-chat-step-mark .ins-spinner {
+  width: 12px;
+  height: 12px;
+}
+
+.ins-chat-step-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.ins-chat-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+}
+
+.ins-chat-line--soft {
+  color: var(--ins-sub);
+  font-size: 13px;
+}
+
+.ins-chat-line.is-error {
+  color: #991b1b;
+}
+
+.ins-chat-ok {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: #16a34a;
+}
+
+.ins-chat-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  font-size: 13px;
+}
+
+.ins-chat-meta {
+  font-size: 12px;
+  color: var(--ins-muted);
+}
+
+.ins-chat-foot .ins-chat-meta {
+  margin-right: auto;
+}
+
+.ins-chat-foot .ins-linkbtn {
+  font-size: 13px;
+}
+
+/* Three dots, the way a chat shows "typing". */
+.ins-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0 6px 0 0;
+  vertical-align: middle;
+  flex: 0 0 auto;
+  height: 1em;
+}
+
+.ins-typing i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  animation: insTyping 1.2s ease-in-out infinite;
+}
+
+.ins-typing i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.ins-typing i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes insTyping {
+  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
+.ins-dock-pill {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 75;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ins-text);
+  color: var(--ins-on-accent);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  cursor: pointer;
+  animation: insToastIn 180ms var(--ins-ease);
+}
+
+.ins-dock-pill .ins-spinner {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
+
+.ins-dock-pill-chevron {
+  transform: rotate(180deg);
+  opacity: 0.7;
+}
+
+.ins-dock-pill-text {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .ins-dock,
+  .ins-dock-pill {
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .ins-admin-toolbar {
+    flex-direction: column;
+  }
+
+  .ins-ai--right {
+    margin-left: 0;
+  }
+
+  .ins-ai--right .ins-ai-pop {
+    left: 0;
+    right: auto;
+  }
 }

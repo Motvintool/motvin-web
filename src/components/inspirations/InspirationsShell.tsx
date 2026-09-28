@@ -6,6 +6,7 @@ import { Header } from './Header';
 import { LibrarySync } from './LibrarySync';
 import { ScreenPreviewOverlay } from './ScreenPreviewModal';
 import { ToastProvider } from './Toast';
+import { IngestDock } from './admin/IngestDock';
 
 function InspirationsHeaderSkeleton() {
   return (
@@ -58,6 +59,9 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
         <Suspense fallback={null}>
           <ScreenPreviewOverlay />
         </Suspense>
+        {/* The library owner's running video ingest, on whichever page they
+            are on. Renders nothing for everyone else. */}
+        <IngestDock />
       </div>
     </ToastProvider>
   );

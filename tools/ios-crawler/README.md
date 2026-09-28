@@ -177,6 +177,23 @@ analyzer is also what finds the controls to tap.
 > installed here — which is consistent with this being a tool for apps you are
 > authorized to test.
 
+### Choosing the AI
+
+The admin page's **Automatic** tab has a model pill — like the model switcher in a chat app — that says which server and model are in use and whether the server answers (green: connected; red: chosen but not reachable; grey: off). It opens a panel to pick Ollama or LM Studio on this Mac, a free Gemini, Groq or OpenRouter key, any other OpenAI-compatible server, or no AI at all. The choice is saved to `.ai-settings.json` beside this README, so the terminal uses the same one:
+
+```bash
+node crawl.js ai                       # which AI, and does it answer
+node crawl.js ai --json                # the same, for machines
+node crawl.js ai --set --provider groq --model meta-llama/llama-4-scout-17b-16e-instruct --key gsk_…
+node crawl.js ai --set --off           # rules only
+```
+
+`MOTVIN_AI_URL`, `MOTVIN_AI_MODEL` and `MOTVIN_AI_KEY` in the environment still win over the saved choice, so a deployment can pin a model.
+
+### While it runs
+
+A video run belongs to the server, not to the page that started it. The admin page shows the run's stages, a progress bar and the crawler's live message; leave the page and the assistant card in the corner keeps showing it on every page of Inspirations until it is dismissed. The screens are published first and the AI writes their names afterwards, batch by batch — a reply the model cuts off is retried as two smaller calls rather than lost.
+
 ## Use
 
 ```bash

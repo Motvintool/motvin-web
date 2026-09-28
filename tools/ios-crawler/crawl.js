@@ -24,6 +24,7 @@ import { assertAuthorized } from './src/safety.js';
 import { publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
 import { classifyStored, ingestFolder, researchStored } from './src/ingest.js';
 import { pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
+import { AI_PROVIDERS, aiConfig, aiStatus, writeAiSettings } from './src/ai.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -41,6 +42,7 @@ ${bold('Commands')}
   ingest --app <file> --from <dir>
                             a folder of screenshots → the store             ${dim('no Simulator needed')}
   classify --app-id <id>    analyse screens already stored                  ${dim('no Simulator needed')}
+  ai                        which free AI is set up, and whether it answers   ${dim('--json for machines')}
   research --app-id <id>    rewrite an app's flow names, summaries and screen
                             content with the AI, from what is already stored ${dim('needs a model')}
 
@@ -389,6 +391,39 @@ async function runClassify(flags) {
   return result.failed ? 1 : 0;
 }
 
+/**
+ * The AI's standing: which server and model are chosen, where the choice
+ * came from, and whether the server answers right now. `--set` writes a
+ * choice from the terminal; the admin page writes the same file directly.
+ */
+async function runAi(flags) {
+  if (flags.set !== undefined) {
+    const current = aiConfig();
+    const settings = {
+      provider: flags.provider ?? current.provider,
+      url: flags.url ?? (flags.provider ? AI_PROVIDERS.find((entry) => entry.id === flags.provider)?.url : current.url) ?? current.url,
+      model: flags.model ?? current.model,
+      key: flags.key ?? current.key,
+      enabled: flags.enabled !== false && flags.off !== true,
+    };
+    writeAiSettings(settings);
+  }
+  const status = await aiStatus();
+  const config = aiConfig();
+  const payload = { ...status, providers: AI_PROVIDERS, configuredModel: config.model || null, configuredUrl: config.url };
+  if (flags.json) {
+    process.stdout.write(`${JSON.stringify(payload)}\n`);
+    return 0;
+  }
+  log.heading('Free AI');
+  log.info(`server: ${status.url} (${status.provider}, ${status.source === 'env' ? 'from the environment' : status.source === 'settings' ? 'chosen on the admin page' : 'the default'})`);
+  if (!status.enabled) log.warn(status.reason);
+  else if (status.usable) log.ok(`${status.model}${status.vision ? ' — reads screenshots' : ' — text only'}${status.connected ? '' : ' (server did not list its models)'}`);
+  else log.error(status.reason);
+  if (status.models.length) log.detail(`models: ${status.models.join(', ')}`);
+  return status.usable || !status.enabled ? 0 : 1;
+}
+
 async function runResearch(flags) {
   if (!flags.appId) {
     log.error('--app-id is required. See `node crawl.js` for usage.');
@@ -470,6 +505,8 @@ async function main() {
         return await runClassify(flags);
       case 'research':
         return await runResearch(flags);
+      case 'ai':
+        return await runAi(flags);
       case 'where':
         log.info(resolveDataDir(flags.dataDir));
         return 0;

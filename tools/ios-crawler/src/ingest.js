@@ -472,7 +472,13 @@ export async function ingestFolder(options) {
           vision: options.vision !== false,
           analyzer: options.analyzerLabel ?? backend,
           log: (message) => log.detail(message),
-          onBatch: (done, total) => report(options, 'research', `Writing flow content — screens ${done * 6 + 1}–${Math.min((done + 1) * 6, graph.size)} of ${graph.size}`, { done, total }),
+          onBatch: (done, total, batch) =>
+            report(
+              options,
+              'research',
+              batch ? `AI is writing the flow content — screens ${done + 1}–${Math.min(done + batch, total)} of ${total}` : 'AI is saving the flow content',
+              { done, total },
+            ),
         });
         for (const journey of journeys) {
           const group = flowGroups.find((candidate) => candidate.key === journey.key);

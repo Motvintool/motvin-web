@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# the admin page's choice of free AI (may hold an API key)
+tools/ios-crawler/.ai-settings.json

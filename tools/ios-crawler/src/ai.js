@@ -22,8 +22,49 @@
  * screen's recognised text, so the researcher pass works either way.
  */
 
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 /** Ollama's OpenAI-compatible endpoint, the zero-setup default. */
 export const AI_DEFAULT_URL = 'http://localhost:11434/v1';
+
+/**
+ * The admin page's choice of AI, saved next to the crawler so the terminal
+ * and the web page use the same one. Environment variables still win, so a
+ * deployment can pin a model without anyone being able to change it from
+ * the browser.
+ */
+export const AI_SETTINGS_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', '.ai-settings.json');
+
+/** Ready-made servers, so choosing one is a click rather than a URL. */
+export const AI_PROVIDERS = [
+  { id: 'ollama', name: 'Ollama (this Mac)', url: AI_DEFAULT_URL, needsKey: false, hint: 'Free and offline. ollama pull gemma3:4b' },
+  { id: 'lm-studio', name: 'LM Studio (this Mac)', url: 'http://localhost:1234/v1', needsKey: false, hint: 'Free and offline. Load a vision model in LM Studio.' },
+  { id: 'gemini', name: 'Google Gemini', url: 'https://generativelanguage.googleapis.com/v1beta/openai', needsKey: true, hint: 'Free tier. Key from aistudio.google.com', model: 'gemini-2.5-flash' },
+  { id: 'groq', name: 'Groq', url: 'https://api.groq.com/openai/v1', needsKey: true, hint: 'Free tier. Key from console.groq.com', model: 'meta-llama/llama-4-scout-17b-16e-instruct' },
+  { id: 'openrouter', name: 'OpenRouter', url: 'https://openrouter.ai/api/v1', needsKey: true, hint: 'Free models end in :free. Key from openrouter.ai', model: 'qwen/qwen2.5-vl-72b-instruct:free' },
+  { id: 'custom', name: 'Other OpenAI-compatible server', url: '', needsKey: false, hint: 'Any server with a /v1/chat/completions endpoint.' },
+];
+
+/** @returns {{provider?: string, url?: string, model?: string, key?: string, enabled?: boolean}} */
+export function readAiSettings() {
+  if (!existsSync(AI_SETTINGS_FILE)) return {};
+  try {
+    const parsed = JSON.parse(readFileSync(AI_SETTINGS_FILE, 'utf-8'));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function writeAiSettings(settings) {
+  const clean = {};
+  for (const key of ['provider', 'url', 'model', 'key']) if (typeof settings[key] === 'string') clean[key] = settings[key].trim();
+  if (settings.enabled === false) clean.enabled = false;
+  writeFileSync(AI_SETTINGS_FILE, `${JSON.stringify(clean, null, 2)}\n`);
+  return clean;
+}
 
 /** Names that mean a model reads images. */
 const VISION = /(vision|vl\b|-vl|llava|gemma3|gemma-3|minicpm-v|moondream|pixtral|qwen2\.5vl|qwen.*vl|gpt-4o|gpt-4\.1|gemini|claude|llama-4|mistral-small-3|phi-4-multimodal|granite3\.2-vision)/i;
@@ -32,16 +73,27 @@ const VISION = /(vision|vl\b|-vl|llava|gemma3|gemma-3|minicpm-v|moondream|pixtra
 const NOT_FOR_THIS = /(coder|embed|embedding|rerank|whisper|tts|guard)/i;
 
 export function aiConfig() {
-  const url = (process.env.MOTVIN_AI_URL || AI_DEFAULT_URL).replace(/\/+$/, '');
-  const key = process.env.MOTVIN_AI_KEY || '';
-  const model = process.env.MOTVIN_AI_MODEL || '';
+  const saved = readAiSettings();
+  const fromEnv = Boolean(process.env.MOTVIN_AI_URL || process.env.MOTVIN_AI_KEY || process.env.MOTVIN_AI_MODEL);
+  const url = (process.env.MOTVIN_AI_URL || saved.url || AI_DEFAULT_URL).replace(/\/+$/, '');
+  const key = process.env.MOTVIN_AI_KEY || saved.key || '';
+  const model = process.env.MOTVIN_AI_MODEL || saved.model || '';
   let provider = 'openai-compatible';
   if (/11434/.test(url)) provider = 'ollama';
   else if (/1234/.test(url)) provider = 'lm-studio';
   else if (/googleapis/.test(url)) provider = 'gemini';
   else if (/groq/.test(url)) provider = 'groq';
   else if (/openrouter/.test(url)) provider = 'openrouter';
-  return { url, key, model, provider, configured: Boolean(process.env.MOTVIN_AI_URL || process.env.MOTVIN_AI_KEY || process.env.MOTVIN_AI_MODEL) };
+  return {
+    url,
+    key,
+    model,
+    provider,
+    // Switched off from the admin page: the on-device rules do everything.
+    enabled: fromEnv || saved.enabled !== false,
+    source: fromEnv ? 'env' : saved.url || saved.model || saved.key || saved.enabled === false ? 'settings' : 'default',
+    configured: fromEnv || Boolean(saved.url || saved.model || saved.key),
+  };
 }
 
 function headers(config) {
@@ -86,14 +138,19 @@ export function pickModel(models, configured = '') {
  */
 export async function aiStatus() {
   const config = aiConfig();
+  const base = { provider: config.provider, url: config.url, source: config.source, enabled: config.enabled, hasKey: Boolean(config.key), models: [] };
+  if (!config.enabled) {
+    return { ...base, usable: false, connected: false, model: config.model || null, vision: false, reason: 'AI is switched off — names come from the on-device rules' };
+  }
   const models = await aiModels(config);
+  base.models = models;
   if (!models.length && !config.model) {
     return {
+      ...base,
       usable: false,
+      connected: false,
       model: null,
       vision: false,
-      provider: config.provider,
-      url: config.url,
       reason:
         config.provider === 'ollama'
           ? 'Ollama is not running or has no models — start it and run: ollama pull gemma3:4b'
@@ -102,9 +159,19 @@ export async function aiStatus() {
   }
   const model = pickModel(models, config.model);
   if (!model) {
-    return { usable: false, model: null, vision: false, provider: config.provider, url: config.url, reason: 'the server lists no model' };
+    return { ...base, usable: false, connected: models.length > 0, model: null, vision: false, reason: 'the server lists no model' };
   }
-  return { usable: true, model, vision: supportsVision(model), provider: config.provider, url: config.url, reason: null };
+  // A hosted server that refuses the key lists nothing; a chosen model the
+  // server does not know is still tried, since some servers list nothing.
+  const connected = models.length > 0;
+  return {
+    ...base,
+    usable: true,
+    connected,
+    model,
+    vision: supportsVision(model),
+    reason: connected ? null : `could not list models at ${config.url}; the chosen model will be tried as is`,
+  };
 }
 
 /**

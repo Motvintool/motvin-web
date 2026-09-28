@@ -219,6 +219,13 @@ export function publishCrawl(options) {
     group.folder = folder;
     group.depth = depthOf(group);
   }
+  // The caller's own group objects learn where their flow went, so a later
+  // write-back — the researcher's names, arriving after publish — can find
+  // each stored flow by its folder.
+  for (const group of flowGroups) {
+    const original = (options.flows ?? []).find((candidate) => keyOf(candidate) === keyOf(group));
+    if (original) original.folder = group.folder;
+  }
   for (const group of flowGroups) {
     const owned = group.nodeIds.filter((nodeId) => {
       const shallower = flowGroups.find((other) => other !== group && other.depth < group.depth && other.nodeIds.includes(nodeId));

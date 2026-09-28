@@ -26,7 +26,7 @@ import { buildSections, classifyScreen, cleanTitle, groupFlowsLocally, guessBran
 import { segmentRecording } from './segment.js';
 import { buildJourneys, journeyName, taskPhrase } from './journeys.js';
 import { describeAction, actionPhrase } from './actions.js';
-import { applyProposals, describeTree, BRIEF } from './researcher.js';
+import { applyProposals, describeTree, researchTree, BRIEF } from './researcher.js';
 import { pickModel, supportsVision } from './ai.js';
 import { isExternalAuthScreen } from './safety.js';
 import { dominantColors, fingerprintFromThumb, THUMB } from './hash.js';
@@ -942,6 +942,32 @@ export async function selfTest() {
       const described = describeTree(tree, g, { withImages: true });
       check('the tree is described with ids and images the model can refer to', described.text.includes(`id=${b.id}`) && described.text.includes('[image 2]') && described.screenIds.length === 2, described.text.slice(0, 200));
       check('the brief goes to the model as written', BRIEF.startsWith('Analyze the uploaded app screenshots as a UX/UI researcher'));
+      check('a batch whose reply is cut off is retried as two smaller calls', await (async () => {
+        // Its own graph: four screens in one journey, so one call covers them
+        // all and a cut-off reply has something to split.
+        const g2 = new ScreenGraph();
+        const ids = [];
+        for (let i = 0; i < 4; i++) {
+          const node = g2.add({ fingerprint: { dhash: `${i}`, ahash: `${i}` }, labels: [], screenshot: home, analysis: { ...analysisFor(`Screen ${i}`, 'feed'), lines: [], signals: {} } });
+          ids.push(node.id);
+        }
+        const tree2 = [{ key: 'r1', name: 'Food', category: 'discovery', parent: null, section: true, nodeIds: ids, steps: ids.map((nodeId) => ({ nodeId, action: null })) }];
+        const calls = [];
+        const outcome = await researchTree(tree2, g2, {
+          batchSize: 4,
+          vision: false,
+          app: { name: 'Swiggy' },
+          extractJson: (text) => JSON.parse(text),
+          complete: async ({ blocks }) => {
+            const text = blocks.map((block) => block.text ?? '').join(' ');
+            const focus = ids.filter((id) => new RegExp(`id=${id}\\b`).test(text) && (!/entries for these ids: ([^.]+)\./.test(text) || text.match(/entries for these ids: ([^.]+)\./)[1].split(', ').includes(id)));
+            calls.push(focus.length);
+            if (calls.length === 1) return '{"journeys": {';
+            return JSON.stringify({ journeys: {}, screens: Object.fromEntries(focus.map((id) => [id, { name: 'Written name', description: 'A sentence.' }])) });
+          },
+        });
+        return calls[0] === 4 && calls[1] === 2 && calls[2] === 2 && outcome.batches === 3 && outcome.screensUpdated === 4;
+      })(), '');
       const outcome = applyProposals(tree, g, {
         journeys: { 'J0 Food': { name: 'Groceries', summary: 'x' }, 'J1 Searching Food': { name: 'Food - Searching Dishes & Restaurants', summary: 'The person opens search from the Food home and looks for a dish.' } },
         screens: { [b.id]: { name: 'Dish search', purpose: 'Lets the person find dishes and restaurants by name.', primaryAction: 'Type a dish name', description: 'A search field with recent searches beneath it and the keyboard open.' }, [a.id]: { name: '', description: '' } },

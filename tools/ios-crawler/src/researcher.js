@@ -129,10 +129,20 @@ export async function researchTree(journeys, graph, options) {
   }
 
   const proposals = { journeys: {}, screens: {} };
-  const batches = [];
-  for (let i = 0; i < nodes.length; i += batchSize) batches.push(nodes.slice(i, i + batchSize));
+  // A queue rather than a fixed list: a batch whose reply came back cut off
+  // is split in two and tried again, so a long-winded model costs a second
+  // call, not the words for six screens.
+  const queue = [];
+  for (let i = 0; i < nodes.length; i += batchSize) queue.push(nodes.slice(i, i + batchSize));
+  const plannedCalls = queue.length;
+  let calls = 0;
+  let doneScreens = 0;
 
-  for (const [batchIndex, batch] of batches.entries()) {
+  while (queue.length) {
+    const batch = queue.shift();
+    const batchIndex = calls;
+    const batches = { length: Math.max(plannedCalls, calls + queue.length + 1) };
+    calls++;
     const focus = batch.map((node) => node.id);
     const tree = describeTree(journeys, graph, { withImages: vision, focus });
     const blocks = [];
@@ -155,7 +165,7 @@ export async function researchTree(journeys, graph, options) {
     blocks.push({ type: 'text', text: `${header}${scope}${tree.text}` });
 
     log?.(`researcher: batch ${batchIndex + 1}/${batches.length} — ${batch.length} screen(s)${vision ? ' with images' : ' from text'}`);
-    onBatch?.(batchIndex, batches.length);
+    onBatch?.(doneScreens, nodes.length, batch.length);
     let raw = null;
     try {
       // Six screens of names, purposes, actions and descriptions plus every
@@ -168,20 +178,29 @@ export async function researchTree(journeys, graph, options) {
       // One bad batch — a truncated reply, a timeout — costs that batch's
       // words, not the run.
       log?.(`researcher: batch ${batchIndex + 1} failed — ${String(error.message).split('\n')[0]}`);
+      if (batch.length > 1) {
+        const half = Math.ceil(batch.length / 2);
+        queue.unshift(batch.slice(0, half), batch.slice(half));
+        log?.(`researcher: retrying those ${batch.length} screen(s) as two smaller calls`);
+      } else {
+        doneScreens += batch.length;
+      }
       continue;
     }
+    doneScreens += batch.length;
     if (raw && typeof raw.journeys === 'object') Object.assign(proposals.journeys, raw.journeys);
     if (raw && typeof raw.screens === 'object') {
       for (const id of focus) if (raw.screens[id]) proposals.screens[id] = raw.screens[id];
     }
   }
+  onBatch?.(nodes.length, nodes.length, 0);
 
   const applied = applyProposals(journeys, graph, proposals);
   for (const id of Object.keys(proposals.screens)) {
     const node = graph.get(id);
     if (node && node.analysis.viaHeuristics === false) node.analysis.analyzer = analyzer;
   }
-  return { ...applied, batches: batches.length };
+  return { ...applied, batches: calls };
 }
 
 const clean = (value, max) => {
