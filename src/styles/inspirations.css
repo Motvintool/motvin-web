@@ -6820,3 +6820,167 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
     right: auto;
   }
 }
+
+/* The assistant's composer and chips. */
+.ins-dock.is-dragging {
+  outline: 2px dashed var(--ins-text);
+  outline-offset: -6px;
+}
+
+.ins-dock-drop {
+  position: sticky;
+  bottom: 0;
+  padding: 10px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--ins-radius);
+  background: var(--ins-text);
+  color: var(--ins-on-accent);
+}
+
+.ins-dock-composer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 10px 8px;
+  border-top: 1px solid var(--ins-border);
+  background: var(--ins-card);
+}
+
+.ins-dock-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--ins-border-strong);
+  border-radius: 999px;
+  background: var(--ins-input);
+  color: var(--ins-text);
+  font-size: 14px;
+}
+
+.ins-dock-input:focus {
+  outline: none;
+  border-color: var(--ins-text);
+  background: var(--ins-card);
+}
+
+.ins-dock-input::placeholder {
+  color: var(--ins-placeholder);
+}
+
+.ins-dock-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ins-text);
+  color: var(--ins-on-accent);
+  cursor: pointer;
+  transition: opacity var(--ins-fast) var(--ins-ease);
+}
+
+.ins-dock-send:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.ins-dock-send .ins-spinner {
+  width: 14px;
+  height: 14px;
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
+
+.ins-chat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ins-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--ins-border-strong);
+  border-radius: 999px;
+  background: var(--ins-card);
+  color: var(--ins-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-chip-btn:hover {
+  background: var(--ins-hover);
+}
+
+.ins-dock-pill.is-running {
+  padding-right: 16px;
+}
+
+/* The answer as it is typed: a blinking caret after the last word. */
+.ins-chat-line--text {
+  display: block;
+  white-space: pre-wrap;
+}
+
+.ins-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: currentColor;
+  animation: insCaret 1s steps(2, start) infinite;
+}
+
+@keyframes insCaret {
+  to { visibility: hidden; }
+}
+
+.ins-chip-btn--primary {
+  background: var(--ins-text);
+  color: var(--ins-on-accent);
+  border-color: var(--ins-text);
+}
+
+.ins-chip-btn--primary:hover {
+  background: var(--ins-text);
+  opacity: 0.9;
+}
+
+.ins-chip-btn--danger {
+  background: #dc2626;
+  color: #fff;
+  border-color: #dc2626;
+}
+
+.ins-chip-btn--danger:hover {
+  background: #b91c1c;
+}
+
+.ins-dock-held {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--ins-border);
+  background: var(--ins-card-alt);
+  font-size: 13px;
+  color: var(--ins-sub);
+}
+
+.ins-dock-held .ins-linkbtn {
+  font-size: 13px;
+}

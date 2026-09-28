@@ -60,7 +60,7 @@ export function readAiSettings() {
 
 export function writeAiSettings(settings) {
   const clean = {};
-  for (const key of ['provider', 'url', 'model', 'key', 'journeyModel']) if (typeof settings[key] === 'string' && settings[key].trim()) clean[key] = settings[key].trim();
+  for (const key of ['provider', 'url', 'model', 'key', 'journeyModel', 'chatModel']) if (typeof settings[key] === 'string' && settings[key].trim()) clean[key] = settings[key].trim();
   if (settings.enabled === false) clean.enabled = false;
   writeFileSync(AI_SETTINGS_FILE, `${JSON.stringify(clean, null, 2)}\n`);
   return clean;
@@ -201,6 +201,8 @@ export async function aiStatus() {
     connected,
     model,
     journeyModel: process.env.MOTVIN_AI_JOURNEY_MODEL || readAiSettings().journeyModel || pickJourneyModel(models, model),
+    // The admin chat: a general model with judgement; the journey model by default.
+    chatModel: process.env.MOTVIN_AI_CHAT_MODEL || readAiSettings().chatModel || process.env.MOTVIN_AI_JOURNEY_MODEL || readAiSettings().journeyModel || pickJourneyModel(models, model),
     vision: supportsVision(model),
     reason: connected ? null : `could not list models at ${config.url}; the chosen model will be tried as is`,
   };
@@ -311,4 +313,114 @@ export function ollamaReplyText(payload) {
   const last = thinking.lastIndexOf('}');
   if (first !== -1 && last > first) return thinking.slice(first, last + 1);
   return '';
+}
+
+/**
+ * One chat completion, streamed: `onToken(text)` is called with each piece
+ * as the model writes it, and the whole reply is returned at the end. Plain
+ * text, not JSON — a reply meant to be read as it arrives.
+ *
+ * A reasoning model (Qwen3) is not streamed: with thinking off, Ollama still
+ * files its answer under `thinking`, so the streamed `content` would be
+ * empty. Those are answered whole through aiChat instead.
+ */
+export async function aiChatStream(request, onToken) {
+  const config = aiConfig();
+  const model = request.model || config.model || pickModel(await aiModels(config));
+  if (!model) throw new Error(`no model available at ${config.url}`);
+  if (!canStream(model)) {
+    const whole = await aiChat({ ...request, model, json: false });
+    onToken?.(whole);
+    return whole;
+  }
+  const text = request.blocks.filter((block) => block.type === 'text').map((block) => block.text).join('\n\n');
+  let full = '';
+  const push = (piece) => {
+    if (!piece) return;
+    full += piece;
+    onToken?.(piece);
+  };
+
+  if (config.provider === 'ollama') {
+    const base = config.url.replace(/\/v1\/?$/, '');
+    const response = await fetch(`${base}/api/chat`, {
+      method: 'POST',
+      headers: headers(config),
+      body: JSON.stringify({
+        model,
+        stream: true,
+        think: false,
+        messages: [
+          { role: 'system', content: request.system },
+          { role: 'user', content: text },
+        ],
+        ...(request.json ? { format: 'json' } : {}),
+        options: { temperature: request.temperature ?? 0.3, num_ctx: request.contextTokens ?? 8192, num_predict: request.maxTokens ?? 400 },
+      }),
+      signal: AbortSignal.timeout(request.timeoutMs ?? 300_000),
+    });
+    if (!response.ok) throw new Error(`ollama ${response.status}: ${(await response.text()).slice(0, 400)}`);
+    for await (const line of lines(response.body)) {
+      let payload;
+      try {
+        payload = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      push(payload.message?.content ?? '');
+    }
+    return full;
+  }
+
+  const response = await fetch(`${config.url}/chat/completions`, {
+    method: 'POST',
+    headers: headers(config),
+    body: JSON.stringify({
+      model,
+      stream: true,
+      temperature: request.temperature ?? 0.3,
+      max_tokens: request.maxTokens ?? 400,
+      ...(request.json ? { response_format: { type: 'json_object' } } : {}),
+      messages: [
+        { role: 'system', content: request.system },
+        { role: 'user', content: text },
+      ],
+    }),
+    signal: AbortSignal.timeout(request.timeoutMs ?? 300_000),
+  });
+  if (!response.ok) throw new Error(`${config.provider} ${response.status}: ${(await response.text()).slice(0, 400)}`);
+  for await (const line of lines(response.body)) {
+    if (!line.startsWith('data:')) continue;
+    const data = line.slice(5).trim();
+    if (!data || data === '[DONE]') continue;
+    try {
+      const payload = JSON.parse(data);
+      push(payload.choices?.[0]?.delta?.content ?? '');
+    } catch {
+      // A keep-alive or partial line.
+    }
+  }
+  return full;
+}
+
+/** Whether a model's streamed `content` is its answer (see aiChatStream). */
+export function canStream(model) {
+  return !/qwen3/i.test(String(model));
+}
+
+/** The lines of a streamed body, as they complete. */
+async function* lines(body) {
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for await (const chunk of body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    let index = buffer.indexOf('\n');
+    while (index !== -1) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 1);
+      if (line) yield line;
+      index = buffer.indexOf('\n');
+    }
+  }
+  if (buffer.trim()) yield buffer.trim();
 }

@@ -49,6 +49,14 @@ export function useAdminState() {
     };
   }, []);
 
+  // The assistant in the corner writes through the same API; when it does,
+  // the tabs here reload so they show the change.
+  useEffect(() => {
+    const onChanged = () => void refresh();
+    window.addEventListener('motvin:admin-changed', onChanged);
+    return () => window.removeEventListener('motvin:admin-changed', onChanged);
+  }, [refresh]);
+
   /**
    * Runs one write, then reloads. Returns true when it succeeded, so callers
    * can clear their form only on success.

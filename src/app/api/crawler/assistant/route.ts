@@ -1,0 +1,59 @@
+import { fail, verifyAdmin } from '@/lib/server/adminAuth';
+import { answerQuestion, type HistoryLine } from '@/lib/server/assistant';
+
+/**
+ * POST /api/crawler/assistant — `{ question }` in; newline-delimited JSON out:
+ *
+ *   {"type":"token","text":"..."}                a piece of a model answer, as written
+ *   {"type":"done", text, source, actions, …}    the whole answer — the last line
+ *   {"type":"error", message}                    it failed — the last line
+ *
+ * Questions about runs, timing and the AI are answered from the job list at
+ * once (one "done" line); the rest go to the free AI with those facts as
+ * context, and its words stream back as it writes them.
+ */
+export async function POST(request: Request) {
+  const admin = await verifyAdmin(request);
+  if (!admin) return fail('This account may not administer the library.', 403);
+  let body: { question?: string; history?: HistoryLine[]; pending?: string | null; heldImage?: string | null };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return fail('The question could not be read.', 400);
+  }
+  const question = String(body.question ?? '').trim().slice(0, 600);
+  if (!question) return fail('Ask something.', 400);
+  const authorization = request.headers.get('authorization');
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      let closed = false;
+      const send = (event: object) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+        } catch {
+          closed = true;
+        }
+      };
+      const history = Array.isArray(body.history)
+        ? body.history.filter((line) => line && (line.role === 'user' || line.role === 'assistant') && typeof line.text === 'string').slice(-6).map((line) => ({ role: line.role, text: line.text.slice(0, 400) }))
+        : [];
+      const pending = typeof body.pending === 'string' ? body.pending.slice(0, 120) : null;
+      const heldImage = typeof body.heldImage === 'string' ? body.heldImage.slice(0, 120) : null;
+      answerQuestion({ question, authorization, history, pending, heldImage }, (piece) => send({ type: 'token', text: piece }))
+        .then((answer) => send({ type: 'done', ...answer }))
+        .catch((error: Error) => send({ type: 'error', message: error.message }))
+        .finally(() => {
+          try {
+            controller.close();
+          } catch {
+            // Already gone.
+          }
+        });
+    },
+  });
+  return new Response(stream, {
+    headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' },
+  });
+}

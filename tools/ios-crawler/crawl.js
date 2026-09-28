@@ -23,8 +23,8 @@ import { Crawler, DEFAULTS } from './src/crawler.js';
 import { assertAuthorized } from './src/safety.js';
 import { publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
 import { classifyStored, ingestFolder, researchStored } from './src/ingest.js';
-import { pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
-import { AI_PROVIDERS, aiConfig, aiStatus, readAiSettings, writeAiSettings } from './src/ai.js';
+import { extractJson, pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
+import { AI_PROVIDERS, aiChat, aiChatStream, aiConfig, aiStatus, canStream, readAiSettings, writeAiSettings } from './src/ai.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -32,6 +32,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const RESULT_MARKER = 'MOTVIN_RESULT';
 /** Prefix for `--json` progress lines, one per stage, so a caller can show them live. */
 const PROGRESS_MARKER = 'MOTVIN_PROGRESS';
+const TOKEN_MARKER = 'MOTVIN_TOKEN';
 
 const USAGE = `${bold('motvin-ios-crawler')} — automated iOS screen capture for Inspirations
 
@@ -43,6 +44,7 @@ ${bold('Commands')}
                             a folder of screenshots → the store             ${dim('no Simulator needed')}
   classify --app-id <id>    analyse screens already stored                  ${dim('no Simulator needed')}
   ai                        which free AI is set up, and whether it answers   ${dim('--json for machines')}
+  ask                       one question to the AI, JSON on stdin             ${dim('used by the admin assistant')}
   research --app-id <id>    rewrite an app's flow names, summaries and screen   ${dim('--only journeys|screens')}
                             content with the AI, from what is already stored ${dim('needs a model')}
 
@@ -407,6 +409,7 @@ async function runAi(flags) {
       url: flags.url ?? (flags.provider ? AI_PROVIDERS.find((entry) => entry.id === flags.provider)?.url : current.url) ?? current.url,
       model: flags.model ?? current.model,
       journeyModel: flags.journeyModel ?? readAiSettings().journeyModel ?? '',
+      chatModel: flags.chatModel ?? readAiSettings().chatModel ?? '',
       key: flags.key ?? current.key,
       enabled: flags.enabled !== false && flags.off !== true,
     };
@@ -424,9 +427,69 @@ async function runAi(flags) {
   if (!status.enabled) log.warn(status.reason);
   else if (status.usable) log.ok(`${status.model}${status.vision ? ' — reads screenshots' : ' — text only'}${status.connected ? '' : ' (server did not list its models)'}`);
   if (status.usable && status.journeyModel && status.journeyModel !== status.model) log.info(`journey names: ${status.journeyModel} (a larger general model; set --journey-model or MOTVIN_AI_JOURNEY_MODEL to change)`);
+  if (status.usable && status.chatModel && status.chatModel !== status.journeyModel) log.info(`admin chat: ${status.chatModel} (set --chat-model or MOTVIN_AI_CHAT_MODEL to change)`);
   else log.error(status.reason);
   if (status.models.length) log.detail(`models: ${status.models.join(', ')}`);
   return status.usable || !status.enabled ? 0 : 1;
+}
+
+/**
+ * One question to the free AI, for the admin page's assistant. The request
+ * comes on stdin as JSON — `{ "system": "...", "user": "...", "model": "..." }`
+ * — and the reply goes to stdout as `{ "text": "..." }`. Always asked in JSON
+ * mode, because a reasoning model answering in the open leaves its answer in
+ * the wrong field.
+ */
+async function runAsk(flags) {
+  let input = '';
+  for await (const chunk of process.stdin) input += chunk;
+  const request = JSON.parse(input || '{}');
+  const status = await aiStatus();
+  if (!status.usable) {
+    process.stdout.write(`${JSON.stringify({ text: null, reason: status.reason })}\n`);
+    return 1;
+  }
+  const model = request.model || status.chatModel || status.journeyModel || status.model;
+  // --stream: each piece of the answer as the model writes it, one marked
+  // line per piece, then the whole answer as the last line. A model that
+  // cannot be streamed (see canStream) answers whole, in JSON mode.
+  if (flags.stream && canStream(model)) {
+    // With --raw the caller's JSON shape streams out as written; the caller
+    // reads the fields it wants as they arrive.
+    const text = await aiChatStream(
+      {
+        system: flags.raw ? String(request.system ?? '') : `${request.system ?? ''}\nAnswer in plain text — no JSON, no markdown.`,
+        blocks: [{ type: 'text', text: String(request.user ?? '') }],
+        model,
+        json: Boolean(flags.raw),
+        maxTokens: Number(flags.maxTokens ?? 400),
+        temperature: flags.raw ? 0.4 : 0.3,
+      },
+      (piece) => process.stdout.write(`${TOKEN_MARKER} ${JSON.stringify(piece)}\n`),
+    );
+    process.stdout.write(`${JSON.stringify({ text: text.trim(), model, streamed: true })}\n`);
+    return 0;
+  }
+  // --raw: the caller's own JSON shape comes back untouched; otherwise the
+  // model is asked for {"answer": …} and the answer text is returned.
+  const reply = await aiChat({
+    system: flags.raw ? String(request.system ?? '') : `${request.system ?? ''}\nReply as JSON: {"answer": "<your answer>"} and nothing else.`,
+    blocks: [{ type: 'text', text: String(request.user ?? '') }],
+    model,
+    maxTokens: Number(flags.maxTokens ?? 400),
+    temperature: flags.raw ? 0.2 : 0.3,
+  });
+  let text = String(reply);
+  if (!flags.raw) {
+    try {
+      const parsed = extractJson(reply);
+      if (parsed && typeof parsed.answer === 'string') text = parsed.answer;
+    } catch {
+      // The raw reply is better than nothing.
+    }
+  }
+  process.stdout.write(`${JSON.stringify({ text: text.trim(), model })}\n`);
+  return 0;
 }
 
 async function runResearch(flags) {
@@ -515,6 +578,8 @@ async function main() {
         return await runResearch(flags);
       case 'ai':
         return await runAi(flags);
+      case 'ask':
+        return await runAsk(flags);
       case 'where':
         log.info(resolveDataDir(flags.dataDir));
         return 0;

@@ -1,6 +1,6 @@
 import type { AiSettingsInput } from '@/lib/inspirations/ingestJobs';
 import { fail, verifyAdmin } from '@/lib/server/adminAuth';
-import { aiStatus, writeSettings } from '@/lib/server/ai';
+import { aiStatus, forgetAiStatus, writeSettings } from '@/lib/server/ai';
 
 /**
  * GET /api/crawler/ai — which free AI the crawler will use and whether it
@@ -37,6 +37,7 @@ export async function PUT(request: Request) {
   if (input.enabled !== false && input.url && !/^https?:\/\//.test(input.url.trim())) return fail('The server URL must start with http:// or https://.', 400);
   try {
     writeSettings(input);
+    forgetAiStatus();
     return Response.json(await aiStatus(), { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return fail((error as Error).message, 500);

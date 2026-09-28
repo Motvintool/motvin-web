@@ -190,6 +190,12 @@ node crawl.js ai --set --off           # rules only
 
 `MOTVIN_AI_URL`, `MOTVIN_AI_MODEL` and `MOTVIN_AI_KEY` in the environment still win over the saved choice, so a deployment can pin a model.
 
+### The assistant
+
+The admin sees a small assistant card on every page of Inspirations. Drop a recording on it (or press +) to start a run; the run shows as a chat thread with its stages, progress and, at the end, a link into the gallery. Type a question — "how far is the run?", "how long is left?", "what did the last run do?", "which AI is on?" — and it answers from the run list at once; anything else goes to the free AI with those facts as context (`node crawl.js ask` is the same call from the terminal).
+
+It also does the admin's work on request. "Change Swiggy's tagline to Order in minutes", "set this as Swiggy's logo" (after dropping an image on it), "rename the splash screen to Welcome", "delete the Search flow", "remove Airbnb", "rebuild the index": the model turns the sentence into one operation from a fixed list, the assistant checks that the app, screen or flow exists, and shows the operation with a Confirm button. Nothing changes until it is pressed (or a typed "yes"); every change goes through the same admin API as the tabs, and the tabs reload when it lands.
+
 ### While it runs
 
 A video run belongs to the server, not to the page that started it. The admin page shows the run's stages, a progress bar and the crawler's live message; leave the page and the assistant card in the corner keeps showing it on every page of Inspirations until it is dismissed. The screens are published first and the AI writes their names afterwards, batch by batch — a reply the model cuts off is retried as two smaller calls rather than lost.

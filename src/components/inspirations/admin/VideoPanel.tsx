@@ -13,7 +13,6 @@ import {
   stageIndex,
   startIngest,
   useIngestJobs,
-  useSuppressDock,
   type IngestJob,
 } from '@/lib/inspirations/ingestJobs';
 import { CheckIcon, CloseIcon, UploadIcon } from '../Icons';
@@ -47,7 +46,6 @@ export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: ()
   const { user } = useAuth();
   const admin = Boolean(user && !user.isAnonymous);
   const { jobs, error: listError } = useIngestJobs(admin);
-  useSuppressDock(true);
 
   const [video, setVideo] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);

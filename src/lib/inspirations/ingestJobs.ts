@@ -2,6 +2,10 @@
 
 import { useEffect, useSyncExternalStore } from 'react';
 import { getIdToken } from '@/lib/firebase/auth';
+import { adminApi } from '@/lib/inspirations/admin';
+import { doneText, type AssistantAction, type ConfirmAction } from '@/lib/inspirations/assistantActions';
+import type { Platform } from '@/lib/inspirations/types';
+import { invalidateInspirationsCache } from '@/lib/inspirations/api';
 
 /**
  * Video ingest runs, as the browser sees them.
@@ -459,4 +463,279 @@ export function aiLabel(status: AiStatus | null): string {
   if (!status.enabled) return 'AI off';
   if (status.usable) return status.model ?? 'AI ready';
   return 'AI not connected';
+}
+
+// ─── The assistant's conversation ───────────────────────────────────────────
+
+export type { AdminOp, AssistantAction, ConfirmAction } from './assistantActions';
+
+export type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  at: string;
+  pending?: boolean;
+  actions?: AssistantAction[];
+  source?: 'rules' | 'ai';
+};
+
+type ChatSnapshot = {
+  messages: ChatMessage[];
+  /** The operation offered last, waiting for a yes or a Confirm. */
+  pending: ConfirmAction | null;
+  /** An image dropped on the dock, kept until it is used as a logo. */
+  heldImage: { name: string; size: number } | null;
+};
+let chat: ChatSnapshot = { messages: [], pending: null, heldImage: null };
+let heldFile: File | null = null;
+const chatListeners = new Set<() => void>();
+const CHAT_EMPTY: ChatSnapshot = { messages: [], pending: null, heldImage: null };
+
+function emitChat(next: ChatSnapshot) {
+  chat = next;
+  for (const listener of chatListeners) listener();
+}
+
+function subscribeChat(listener: () => void) {
+  chatListeners.add(listener);
+  return () => {
+    chatListeners.delete(listener);
+  };
+}
+
+/** The conversation so far. Kept for the page's life, across navigation. */
+export function useAssistantChat(): ChatSnapshot {
+  return useSyncExternalStore(subscribeChat, () => chat, () => CHAT_EMPTY);
+}
+
+function patchMessage(id: string, patch: Partial<ChatMessage>) {
+  emitChat({ ...chat, messages: chat.messages.map((message) => (message.id === id ? { ...message, ...patch } : message)) });
+}
+
+function append(message: ChatMessage) {
+  emitChat({ ...chat, messages: [...chat.messages.slice(-60), message] });
+}
+
+/** Types a whole answer out over a moment, the way a streamed one arrives. */
+function typeOut(id: string, text: string, done: Partial<ChatMessage>): Promise<void> {
+  return new Promise((resolve) => {
+    const words = text.split(/(\s+)/);
+    let shown = 0;
+    const tick = () => {
+      shown = Math.min(words.length, shown + 3);
+      patchMessage(id, { text: words.slice(0, shown).join(''), pending: shown < words.length });
+      if (shown < words.length) setTimeout(tick, 24);
+      else {
+        patchMessage(id, { ...done, text, pending: false });
+        resolve();
+      }
+    };
+    tick();
+  });
+}
+
+type AssistantEvent =
+  | { type: 'token'; text: string }
+  | { type: 'done'; text: string; source: 'rules' | 'ai'; actions: AssistantAction[]; model?: string; streamed?: boolean }
+  | { type: 'error'; message: string };
+
+/**
+ * Asks the assistant. The question shows at once; the answer types itself
+ * out — piece by piece as the model writes it, or over a moment when it
+ * came whole from the run list. The last few lines of the conversation go
+ * along, so "set it to Order in minutes" can follow "change Swiggy's
+ * tagline" and be understood.
+ */
+export async function askAssistant(question: string): Promise<ChatMessage> {
+  const trimmed = question.trim();
+  const stamp = Date.now().toString(36);
+  const history = chat.messages.filter((message) => !message.pending && message.text).slice(-12).map((message) => ({ role: message.role, text: message.text }));
+  const user: ChatMessage = { id: `u-${stamp}`, role: 'user', text: trimmed, at: new Date().toISOString() };
+  const pending: ChatMessage = { id: `a-${stamp}`, role: 'assistant', text: '', at: new Date().toISOString(), pending: true };
+  emitChat({ ...chat, messages: [...chat.messages.slice(-60), user, pending] });
+
+  let streamedText = '';
+  let final: AssistantEvent | null = null;
+  try {
+    const res = await fetch('/api/crawler/assistant', {
+      method: 'POST',
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ question: trimmed, history, pending: chat.pending?.label ?? null, heldImage: heldFile?.name ?? null }),
+    });
+    if (!res.ok || !res.body) {
+      const payload = (await res.json().catch(() => ({}))) as { message?: string };
+      throw new Error(payload.message || `The assistant did not answer (${res.status}).`);
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const handle = (line: string) => {
+      let event: AssistantEvent;
+      try {
+        event = JSON.parse(line) as AssistantEvent;
+      } catch {
+        return;
+      }
+      if (event.type === 'token') {
+        streamedText += event.text;
+        patchMessage(pending.id, { text: streamedText, pending: true });
+      } else final = event;
+    };
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let index = buffer.indexOf('\n');
+      while (index !== -1) {
+        const line = buffer.slice(0, index).trim();
+        buffer = buffer.slice(index + 1);
+        if (line) handle(line);
+        index = buffer.indexOf('\n');
+      }
+    }
+    if (buffer.trim()) handle(buffer.trim());
+  } catch (error) {
+    final = { type: 'error', message: (error as Error).message };
+  }
+
+  // Assigned inside the reader's callbacks, which TypeScript cannot follow.
+  const settled = (final as AssistantEvent | null) ?? { type: 'error' as const, message: 'The assistant stopped without answering.' };
+  if (settled.type === 'error') {
+    patchMessage(pending.id, { text: settled.message, pending: false, actions: [] });
+  } else if (settled.type !== 'done') {
+    patchMessage(pending.id, { text: streamedText || 'The assistant stopped without answering.', pending: false, actions: [] });
+  } else if (streamedText) {
+    patchMessage(pending.id, { text: settled.text || streamedText, pending: false, actions: settled.actions ?? [], source: settled.source });
+  } else {
+    await typeOut(pending.id, settled.text, { actions: settled.actions ?? [], source: settled.source });
+  }
+  // An offered operation waits for a yes — typed or pressed.
+  if (settled.type === 'done') {
+    const offered = (settled.actions ?? []).find((action): action is ConfirmAction => action.type === 'confirm') ?? null;
+    emitChat({ ...chat, pending: offered });
+  }
+  return chat.messages.find((message) => message.id === pending.id) ?? pending;
+}
+
+const YES = /^(yes|y|yeah|yep|ok|okay|sure|confirm|do it|go ahead|proceed|yes remove|yes delete|remove it|delete it|apply|save)\b/i;
+const NO = /^(no|nope|cancel|stop|don't|dont|never mind|nevermind|forget it)\b/i;
+
+/** Whether a typed line answers the operation that is waiting. */
+export function answersPending(text: string): 'yes' | 'no' | null {
+  if (!chat.pending) return null;
+  const trimmed = text.trim();
+  if (YES.test(trimmed)) return 'yes';
+  if (NO.test(trimmed)) return 'no';
+  return null;
+}
+
+export function cancelPending() {
+  if (!chat.pending) return;
+  const label = chat.pending.label;
+  emitChat({ ...chat, pending: null });
+  assistantSays(`Cancelled — “${label}” was not done. Nothing changed.`);
+}
+
+/** Keeps an image the admin dropped, until a request says which app it is for. */
+export function holdImage(file: File) {
+  heldFile = file;
+  emitChat({ ...chat, heldImage: { name: file.name, size: file.size } });
+}
+
+export function heldImageFile(): File | null {
+  return heldFile;
+}
+
+export function releaseImage() {
+  heldFile = null;
+  emitChat({ ...chat, heldImage: null });
+}
+
+function tellAdminChanged() {
+  invalidateInspirationsCache();
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('motvin:admin-changed'));
+}
+
+/**
+ * Performs a confirmed operation through the admin API, as the signed-in
+ * admin, and reports what happened. A logo needs an image: the one dropped
+ * earlier, or the one passed in from the picker.
+ */
+export async function performAction(action: ConfirmAction, image?: File | null): Promise<'done' | 'needs-image' | 'failed'> {
+  const { op } = action;
+  if (op.kind === 'set-logo' && !(image ?? heldFile)) return 'needs-image';
+  emitChat({ ...chat, pending: null });
+  const working: ChatMessage = { id: `a-${Date.now().toString(36)}`, role: 'assistant', text: `${action.label}…`, at: new Date().toISOString(), pending: true };
+  append(working);
+  try {
+    let done = doneText(op);
+    switch (op.kind) {
+      case 'remove-app': {
+        const { removed } = await adminApi.deleteApp(op.appId);
+        done = doneText(op, { screens: removed.screens ?? 0, flows: removed.flows ?? 0 });
+        break;
+      }
+      case 'rebuild': {
+        const report = await adminApi.rebuild();
+        const problems = report.problems?.length ?? 0;
+        done = problems ? `Index rebuilt with ${problems} problem${problems === 1 ? '' : 's'} — see the admin page.` : doneText(op);
+        break;
+      }
+      case 'update-app': {
+        const state = await adminApi.getState();
+        const current = state.apps.find((app) => app.id === op.appId);
+        if (!current) throw new Error(`${op.name} is no longer in the library.`);
+        const next = { ...current, ...(op.fields as Partial<typeof current>) };
+        await adminApi.saveApp(next);
+        break;
+      }
+      case 'set-logo': {
+        const file = image ?? heldFile!;
+        await adminApi.uploadLogo(op.appId, file.name, file);
+        releaseImage();
+        done = `${op.name}’s logo is now “${file.name}”.`;
+        break;
+      }
+      case 'rename-screen': {
+        const state = await adminApi.getState();
+        const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === op.file);
+        await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), name: op.to });
+        break;
+      }
+      case 'delete-screen':
+        await adminApi.deleteScreen(op.platform as Platform, op.appId, op.file);
+        break;
+      case 'rename-flow': {
+        const state = await adminApi.getState();
+        const flow = state.flows.find((entry) => entry.id === op.flowId);
+        if (!flow) throw new Error('That flow is no longer in the library.');
+        await adminApi.saveFlow({ ...flow, name: op.to });
+        break;
+      }
+      case 'delete-flow':
+        await adminApi.deleteFlow(op.flowId);
+        break;
+    }
+    patchMessage(working.id, { pending: false, text: done, actions: [] });
+    tellAdminChanged();
+    return 'done';
+  } catch (error) {
+    patchMessage(working.id, { pending: false, text: `That did not go through: ${(error as Error).message}`, actions: [] });
+    return 'failed';
+  }
+}
+
+/** A line the assistant says on its own — after an upload starts, for one. */
+export function assistantSays(text: string, actions: AssistantAction[] = []) {
+  append({ id: `a-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`, role: 'assistant', text, at: new Date().toISOString(), actions });
+}
+
+/** What the admin typed, shown as theirs — for a yes or no settled locally. */
+export function adminSays(text: string) {
+  append({ id: `u-${Date.now().toString(36)}`, role: 'user', text, at: new Date().toISOString() });
+}
+
+export function clearAssistantChat() {
+  heldFile = null;
+  emitChat({ messages: [], pending: null, heldImage: null });
 }
