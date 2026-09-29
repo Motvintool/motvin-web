@@ -145,6 +145,11 @@ export function FlowsPanel({
 
   return (
     <div className="ins-admin-panel">
+      <p className="ins-field-hint">
+        A flow is an ordered walk through one app on one platform — pick the screens, in order, that a visitor
+        steps through.
+      </p>
+
       <form
         className="ins-admin-form"
         onSubmit={(e) => {
@@ -362,6 +367,19 @@ export function FlowsPanel({
                   {state.apps.find((a) => a.id === flow.appId)?.name ?? flow.appId} ·{' '}
                   {PLATFORM_LABEL[flow.platform] ?? flow.platform} · {flow.category} · {flow.screenIds.length} steps
                 </p>
+                {(() => {
+                  // A version that was deleted (or renamed away from) leaves
+                  // this flow's screenIds pointing nowhere — the blank tiles
+                  // above are a symptom, not the cause, so it's named here
+                  // rather than left for the admin to puzzle out from empty
+                  // thumbnails alone.
+                  const missing = flow.screenIds.filter((id) => !byId.has(id)).length;
+                  return missing > 0 ? (
+                    <p className="ins-admin-warn">
+                      {missing} of {flow.screenIds.length} screens no longer exist — probably from a deleted or renamed version.
+                    </p>
+                  ) : null;
+                })()}
               </div>
               <div className="ins-admin-item-actions">
                 <button type="button" className="ins-btn ins-btn--sm" onClick={() => edit(flow)} disabled={busy}>

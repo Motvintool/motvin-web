@@ -1916,10 +1916,12 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 }
 
 .ins-input {
-  height: 32px;
-  padding: 0 10px;
+  height: 36px;
+  padding: 0 12px;
   border: 1px solid var(--ins-border);
-  border-radius: 7px;
+  /* The site's own radius token, not a one-off value — every admin field now
+     rounds the same amount as the cards and pills around it. */
+  border-radius: var(--ins-radius);
   background: var(--ins-card);
   color: var(--ins-text);
   font-size: 16px;
@@ -1931,6 +1933,24 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   outline: none;
   border-color: var(--ins-accent);
   box-shadow: 0 0 0 3px var(--ins-accent-subtle);
+}
+
+/* A dropdown's own content should decide its width. Left at the default
+   width: 100% above, a three-option "Platform" select stretched to fill
+   whatever room a flex row left it — often most of the row — which read as
+   an oversized, empty-looking control next to everything around it. */
+select.ins-input {
+  width: auto;
+  min-width: 150px;
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+
+/* The field wrapper itself must stop growing too — .ins-field's flex-grow:1
+   is what handed a short select all that extra row space in the first
+   place; the label above it can stay put at the select's own width. */
+.ins-field:has(> select) {
+  flex-grow: 0;
 }
 
 .ins-popwrap {
@@ -4515,7 +4535,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 }
 
 .ins-tabpanel {
-  padding-top: 4px;
+  padding-top: 12px;
 }
 
 /* Flow rows inside screen detail */
@@ -5125,49 +5145,161 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
    ADMIN
    ========================================================= */
 
+/* The library admin as a slide-over, opened from ProfileMenu's "Admin" item
+   instead of a full page navigation — a tool you dip into from wherever you
+   are, not a place you go. Same dim/blur backdrop language as
+   .ins-search-overlay, anchored to the right edge instead of centered. */
+.ins-admin-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(6px);
+}
+
+.ins-admin-drawer {
+  position: relative;
+  width: min(960px, 100vw);
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  background: var(--ins-page);
+  box-shadow: -16px 0 48px rgba(0, 0, 0, 0.22);
+  animation: insAdminDrawerIn 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes insAdminDrawerIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-admin-drawer {
+    animation: none;
+  }
+}
+
+.ins-admin-drawer-close {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 9999px;
+  background: var(--ins-tag);
+  color: var(--ins-text);
+  cursor: pointer;
+  z-index: 1;
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-admin-drawer-close:hover {
+  background: var(--ins-hover);
+}
+
+.ins-admin-drawer-body {
+  /* Top padding clears the fixed close button so it never sits over the
+     page heading's own title and Rebuild-manifest button. */
+  padding: 64px clamp(20px, 4vw, 40px) 40px;
+}
+
+@media (max-width: 720px) {
+  .ins-admin-drawer {
+    width: 100vw;
+  }
+}
+
 .ins-admin-status {
   padding: 40px 0;
   text-align: center;
 }
 
+/* A slim caption, not a bordered card — this used to be its own boxed
+   notice sitting on top of the title and the summary strip below it, so the
+   drawer opened on three stacked boxes before any real content. Read as an
+   eyebrow line above "Library admin" instead. */
 .ins-admin-signed-in {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   font-size: 16px;
-  color: var(--ins-sub);
-  padding: 8px 12px;
-  margin-bottom: 14px;
-  border: 1px solid var(--ins-border);
-  border-radius: var(--ins-radius);
-  background: var(--ins-card);
+  color: var(--ins-muted);
+  margin: 0 0 6px;
 }
 
+.ins-admin-signed-in svg {
+  color: #16a34a;
+  flex: none;
+}
+
+/* Library totals as a row of tiles — a number you can read from across the
+   room over a quiet label — rather than one run-on line of "24 published
+   screens 2 apps 17 flows" where nothing stood out. */
 .ins-admin-summary {
   display: flex;
-  align-items: center;
-  gap: 18px;
+  align-items: stretch;
+  gap: 10px;
   flex-wrap: wrap;
-  font-size: 16px;
-  color: var(--ins-sub);
-  padding: 10px 14px;
-  margin-bottom: 14px;
-  border: 1px solid var(--ins-border);
+  margin-bottom: 20px;
+}
+
+.ins-admin-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 116px;
+  padding: 12px 16px;
   border-radius: var(--ins-radius);
   background: var(--ins-card-alt);
+  text-align: left;
 }
 
-.ins-admin-summary strong {
+.ins-admin-stat-num {
+  font-size: var(--ins-type-title);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: var(--ins-tracking-title);
   color: var(--ins-text);
-  font-size: 16px;
 }
 
-.ins-admin-held {
+.ins-admin-stat-label {
+  font-size: 16px;
+  color: var(--ins-muted);
+}
+
+/* Held-back files are the one total that needs acting on, so that tile is
+   the one with colour — and it's a button, jumping to the Screens tab. */
+.ins-admin-stat--held {
+  background: #fff4e5;
+  cursor: pointer;
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-admin-stat--held:hover {
+  background: #ffe9cc;
+}
+
+.ins-admin-stat--held .ins-admin-stat-num {
   color: #b45309;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+}
+
+.ins-admin-built {
+  align-self: center;
+  margin-left: auto;
+  font-size: 16px;
+  color: var(--ins-muted);
 }
 
 .ins-admin-banner {
@@ -5220,14 +5352,16 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   gap: 16px;
 }
 
+/* Forms sit on the soft grey surface; records (.ins-admin-item) stay white.
+   Two surfaces, so "where I type" and "what's stored" read apart at a glance
+   instead of every box being the same white-with-a-hairline. */
 .ins-admin-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px;
-  border: 1px solid var(--ins-border);
+  gap: 16px;
+  padding: 20px;
   border-radius: var(--ins-radius-lg);
-  background: var(--ins-card);
+  background: var(--ins-card-alt);
 }
 
 .ins-admin-form-title {
@@ -5265,11 +5399,11 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   width: 168px;
 }
 
+/* Sentence case, not tracked/uppercase — the rest of the site (FilterToolbar's
+   "Categories", "Screen type", …) never shouts its labels either. */
 .ins-field-label {
   font-size: 16px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--ins-muted);
 }
 
@@ -5292,6 +5426,17 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+/* A row mixing label-over-control fields with a button or checkbox: bottom-
+   align so the button/checkbox sits level with the controls, not floating
+   at the vertical centre of the taller label+control stacks beside it. */
+.ins-align-controls {
+  align-items: flex-end;
+}
+
+.ins-align-controls .ins-checkline {
+  height: 36px;
 }
 
 /* Upload queue */
@@ -5385,9 +5530,15 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 
 .ins-admin-item {
   border: 1px solid var(--ins-border);
-  border-radius: var(--ins-radius);
+  border-radius: var(--ins-radius-lg);
   background: var(--ins-card);
   overflow: hidden;
+  transition: border-color var(--ins-fast) var(--ins-ease), box-shadow var(--ins-fast) var(--ins-ease);
+}
+
+.ins-admin-item:hover {
+  border-color: var(--ins-border-strong);
+  box-shadow: 0 2px 10px -6px rgba(0, 0, 0, 0.18);
 }
 
 .ins-admin-item.is-held {
@@ -5401,8 +5552,8 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 .ins-admin-item-head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 14px;
+  padding: 14px 16px;
 }
 
 .ins-admin-item-text {
@@ -5511,11 +5662,10 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 .ins-admin-inline-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
-  border: 1px dashed var(--ins-border-strong);
+  gap: 14px;
+  padding: 18px;
   border-radius: var(--ins-radius-lg);
-  background: var(--ins-card);
+  background: var(--ins-card-alt);
 }
 
 .ins-linkbtn {
@@ -5534,16 +5684,19 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   color: var(--ins-text);
 }
 
+/* The drop target is the one thing on the Add screens tab to actually do,
+   so it gets the most room and the only illustration: a white disc holding
+   the upload arrow on the grey surface, generous padding, a dashed edge. */
 .ins-dropzone {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 32px 20px;
+  gap: 14px;
+  padding: 44px 24px;
   text-align: center;
   border: 1px dashed var(--ins-border-strong);
   border-radius: var(--ins-radius-lg);
-  background: var(--ins-card);
+  background: var(--ins-card-alt);
   transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease);
 }
 
@@ -5553,7 +5706,14 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 }
 
 .ins-dropzone-icon {
-  color: var(--ins-muted);
+  box-sizing: content-box;
+  width: 22px;
+  height: 22px;
+  padding: 13px;
+  border-radius: 999px;
+  background: var(--ins-card);
+  color: var(--ins-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .ins-dropzone-text {
@@ -5563,7 +5723,9 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 }
 
 .ins-dropzone-title {
+  font-size: var(--ins-type-title);
   font-weight: 600;
+  letter-spacing: var(--ins-tracking-title);
   color: var(--ins-text);
 }
 
@@ -6355,15 +6517,18 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
    The run lives on the server; these only show it. The dock is a chat: the
    admin's request on the right, the assistant's live reply on the left. */
 
-.ins-admin-toolbar {
+/* The Automatic/Manual switch atop "Add screens" — the toggle stays a fixed
+   size and the hint explaining the current mode fills the rest of the row,
+   wrapping under it on narrow screens rather than squeezing the toggle. */
+.ins-admin-modeswitch {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
-.ins-admin-toolbar .ins-field-hint {
-  flex: 1 1 auto;
+.ins-admin-modeswitch .ins-field-hint {
+  flex: 1 1 260px;
   margin: 0;
 }
 
@@ -6872,10 +7037,6 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   .ins-dock-pill {
     right: 12px;
     bottom: 12px;
-  }
-
-  .ins-admin-toolbar {
-    flex-direction: column;
   }
 
   .ins-ai--right {

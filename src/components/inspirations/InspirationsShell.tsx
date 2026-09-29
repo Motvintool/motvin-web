@@ -6,6 +6,7 @@ import { Header } from './Header';
 import { LibrarySync } from './LibrarySync';
 import { ScreenPreviewOverlay } from './ScreenPreviewModal';
 import { ToastProvider } from './Toast';
+import { AdminDrawerOverlay } from './admin/AdminDrawer';
 import { IngestDock } from './admin/IngestDock';
 
 function InspirationsHeaderSkeleton() {
@@ -58,6 +59,11 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
         {/* Reads ?screen= and renders over whatever page is showing. */}
         <Suspense fallback={null}>
           <ScreenPreviewOverlay />
+        </Suspense>
+        {/* Reads ?admin= and renders the library admin as a drawer over
+            whatever page is showing — see ProfileMenu's "Admin" item. */}
+        <Suspense fallback={null}>
+          <AdminDrawerOverlay />
         </Suspense>
         {/* The library owner's running video ingest, on whichever page they
             are on. Renders nothing for everyone else. */}

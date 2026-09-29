@@ -133,6 +133,7 @@ export function AppVersionScreens({
 
   return (
     <div className="ins-admin-versions-manager">
+      <p className="ins-admin-form-title">{app.name}&rsquo;s versions</p>
       <div className="ins-admin-versions-tabs" role="tablist" aria-label={`${app.name} versions`}>
         {versions.map((v) => (
           <button

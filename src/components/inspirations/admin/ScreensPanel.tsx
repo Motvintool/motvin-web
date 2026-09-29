@@ -5,8 +5,10 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { adminApi, type AdminScreenFile, type AdminState, type ScreenSidecar, adminScreenImagePath } from '@/lib/inspirations/admin';
 import { splitScreenFile } from '@/lib/inspirations/screenPaths';
 import { PLATFORM_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from '@/lib/inspirations/taxonomy';
-import { SCREEN_TYPES, STYLES, type ScreenType, type Style } from '@/lib/inspirations/types';
+import { SCREEN_TYPES, STYLES, type Platform, type ScreenType, type Style } from '@/lib/inspirations/types';
 import { CheckIcon, PencilIcon, TrashIcon } from '../Icons';
+
+type StatusFilter = 'all' | 'published' | 'held';
 
 /**
  * Every stored screenshot, published or not.
@@ -14,6 +16,12 @@ import { CheckIcon, PencilIcon, TrashIcon } from '../Icons';
  * Files the builder could not publish are listed first with the reason,
  * because those are the ones needing a decision. Metadata is edited in place
  * and written to the file's sidecar.
+ *
+ * A flat, unfiltered list of every screen of every app got hard to scan once
+ * a library held more than a handful of apps — finding one specific screen
+ * meant scrolling past everything else. The toolbar below narrows the list
+ * to an app, a platform, published/held, or a name match, so "find that one
+ * screen" stays a few keystrokes instead of a search-in-page.
  */
 export function ScreensPanel({
   state,
@@ -25,36 +33,121 @@ export function ScreensPanel({
   run: (action: () => Promise<unknown>, onDone?: () => void) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [appFilter, setAppFilter] = useState('');
+  const [platformFilter, setPlatformFilter] = useState<Platform | ''>('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-  const files = [...state.files].sort((a, b) => {
+  const all = [...state.files].sort((a, b) => {
     if (a.published !== b.published) return a.published ? 1 : -1;
     return a.appId.localeCompare(b.appId) || a.file.localeCompare(b.file);
   });
 
-  if (files.length === 0) {
-    return <p className="ins-muted ins-admin-status">No screenshots stored yet. Add some on the Upload tab.</p>;
+  if (all.length === 0) {
+    return <p className="ins-muted ins-admin-status">No screenshots stored yet. Add some on the Add screens tab.</p>;
   }
+
+  const needle = query.trim().toLowerCase();
+  const files = all.filter((f) => {
+    if (appFilter && f.appId !== appFilter) return false;
+    if (platformFilter && f.platform !== platformFilter) return false;
+    if (statusFilter === 'published' && !f.published) return false;
+    if (statusFilter === 'held' && f.published) return false;
+    if (!needle) return true;
+    return (
+      f.file.toLowerCase().includes(needle) ||
+      f.id.toLowerCase().includes(needle) ||
+      (f.sidecar?.name ?? '').toLowerCase().includes(needle)
+    );
+  });
+
+  const appsWithFiles = state.apps.filter((a) => all.some((f) => f.appId === a.id));
+  const filtered = query || appFilter || platformFilter || statusFilter !== 'all';
 
   return (
     <div className="ins-admin-panel">
+      <div className="ins-admin-row">
+        <label className="ins-field ins-field--wide">
+          <span className="ins-field-label">Search</span>
+          <input
+            className="ins-input"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Name, file or id"
+          />
+        </label>
+        <label className="ins-field">
+          <span className="ins-field-label">App</span>
+          <select className="ins-input" value={appFilter} onChange={(e) => setAppFilter(e.target.value)}>
+            <option value="">All apps</option>
+            {appsWithFiles.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="ins-field">
+          <span className="ins-field-label">Platform</span>
+          <select className="ins-input" value={platformFilter} onChange={(e) => setPlatformFilter(e.target.value as Platform | '')}>
+            <option value="">All platforms</option>
+            {state.vocabulary.platforms.map((p) => (
+              <option key={p} value={p}>
+                {PLATFORM_LABEL[p] ?? p}
+              </option>
+            ))}
+          </select>
+        </label>
+        <fieldset className="ins-field">
+          <legend className="ins-field-label">Status</legend>
+          <div className="ins-filter-options">
+            {(['all', 'published', 'held'] as StatusFilter[]).map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`ins-chip ins-chip--sm ${statusFilter === s ? 'is-active' : ''}`}
+                aria-pressed={statusFilter === s}
+                onClick={() => setStatusFilter(s)}
+              >
+                {s === 'all' ? 'All' : s === 'published' ? 'Published' : 'Held back'}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      </div>
+
       <p className="ins-admin-note">
-        {files.filter((f) => f.published).length} published, {files.filter((f) => !f.published).length} held back.
+        {filtered ? (
+          <>
+            Showing {files.length} of {all.length} —{' '}
+            <button type="button" className="ins-linkbtn" onClick={() => { setQuery(''); setAppFilter(''); setPlatformFilter(''); setStatusFilter('all'); }}>
+              clear filters
+            </button>
+          </>
+        ) : (
+          <>{all.filter((f) => f.published).length} published, {all.filter((f) => !f.published).length} held back.</>
+        )}
       </p>
 
-      <div className="ins-admin-list">
-        {files.map((file) => (
-          <ScreenRow
-            key={`${file.platform}/${file.appId}/${file.file}`}
-            file={file}
-            state={state}
-            busy={busy}
-            run={run}
-            editing={editing === file.id}
-            onEdit={() => setEditing(editing === file.id ? null : file.id)}
-            onClose={() => setEditing(null)}
-          />
-        ))}
-      </div>
+      {files.length === 0 ? (
+        <p className="ins-muted">Nothing matches these filters.</p>
+      ) : (
+        <div className="ins-admin-list">
+          {files.map((file) => (
+            <ScreenRow
+              key={`${file.platform}/${file.appId}/${file.file}`}
+              file={file}
+              state={state}
+              busy={busy}
+              run={run}
+              editing={editing === file.id}
+              onEdit={() => setEditing(editing === file.id ? null : file.id)}
+              onClose={() => setEditing(null)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

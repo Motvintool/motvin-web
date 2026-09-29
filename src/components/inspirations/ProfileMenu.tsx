@@ -1,13 +1,16 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { LibraryProfileBadge, badgeWrapClassName } from '@/components/library/LibraryProfileBadge';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { useAuthModal } from '@/components/shared/AuthModal';
+import { useHydrated } from '@/components/shared/useHydrated';
 import { isAdminEmail } from '@/lib/inspirations/admin';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { applyTheme, getStoredTheme, storeTheme, type ThemePreference } from '@/lib/theme';
+import { ADMIN_PARAM } from './admin/AdminDrawer';
 import { FolderIcon, UploadIcon } from './Icons';
 
 /**
@@ -18,15 +21,32 @@ import { FolderIcon, UploadIcon } from './Icons';
  * Admin link, and theme switching, none of which LibraryProfileMenu has.
  */
 export function ProfileMenu() {
-  const { user, signOut } = useAuth();
+  const { user: liveUser, signOut } = useAuth();
   const { open: openAuth } = useAuthModal();
+  // The server always renders this menu signed out. This header hydrates
+  // inside its own Suspense boundary, after AuthProvider has already swapped
+  // in the cached user — so without this gate the hydration render shows the
+  // avatar against HTML that shows "Login", and React throws a mismatch and
+  // client-renders the boundary from scratch on every page load.
+  const hydrated = useHydrated();
+  const user = hydrated ? liveUser : null;
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState<ThemePreference>('dark');
   const rootRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const signedIn = Boolean(user && !user.isAnonymous);
   // Presentation only. The admin API verifies the signed-in account itself,
   // so revealing this link would not grant anyone access.
   const showAdmin = signedIn && isAdminEmail(user?.email);
+  // Opens the admin drawer over whatever page is showing (see AdminDrawer.tsx)
+  // instead of navigating away to a separate page — same `?admin=1`-on-the-
+  // current-URL convention ScreenCard uses for `?screen=`.
+  const adminHref = (() => {
+    const sp = new URLSearchParams(searchParams.toString());
+    sp.set(ADMIN_PARAM, '1');
+    return `${pathname}?${sp.toString()}`;
+  })();
 
   useEffect(() => {
     if (!open) return;
@@ -88,7 +108,7 @@ export function ProfileMenu() {
               <span>Collections</span>
             </Link>
             {showAdmin && (
-              <Link href={INSPIRATIONS_ROUTES.admin} className="mi-profile-item" role="menuitem" onClick={() => setOpen(false)}>
+              <Link href={adminHref} scroll={false} className="mi-profile-item" role="menuitem" onClick={() => setOpen(false)}>
                 <UploadIcon size={16} />
                 <span>Admin</span>
                 <span className="ins-popover-item-tag">Upload</span>

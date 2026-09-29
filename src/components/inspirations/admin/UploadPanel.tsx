@@ -2,9 +2,11 @@
 
 import { useRef, useState, type DragEvent } from 'react';
 import { adminApi, safeFileName, type AdminState } from '@/lib/inspirations/admin';
+import { localDateString } from '@/lib/inspirations/dates';
 import { INDUSTRY_LABEL, PLATFORM_LABEL, SCREEN_TYPE_LABEL } from '@/lib/inspirations/taxonomy';
 import { INDUSTRIES, SCREEN_TYPES, type Industry, type Platform, type ScreenType } from '@/lib/inspirations/types';
 import { CheckIcon, CloseIcon, PlusIcon, UploadIcon } from '../Icons';
+import { AppModeSelect } from './AppModeSelect';
 
 /**
  * Upload screenshots into the store.
@@ -13,7 +15,15 @@ import { CheckIcon, CloseIcon, PlusIcon, UploadIcon } from '../Icons';
  * type, and nothing is sent until Upload is pressed. Each row keeps its own
  * result so a partial failure is visible per file rather than as one lost
  * batch.
+ *
+ * The app and version pickers mirror Automatic's: New app / Old app up top,
+ * and for an old app a version target ("Update Latest" or "Add a new
+ * version…") rather than a bare date box — the same choice, the same
+ * wording, whichever way screens are added.
  */
+
+/** The version picker's "new version" option, alongside the app's real ones. */
+const NEW_VERSION = '__new__';
 
 type Staged = {
   key: string;
@@ -46,21 +56,47 @@ export function UploadPanel({
   onUploaded: () => Promise<void> | void;
   run: (action: () => Promise<unknown>, onDone?: () => void) => Promise<boolean>;
 }) {
+  // A brand-new app is created here and switched to; an existing one is
+  // picked from the list — same split as Automatic's New app / Old app.
+  const [appMode, setAppMode] = useState<'new' | 'old'>(state.apps.length === 0 ? 'new' : 'old');
   const [appId, setAppId] = useState(state.apps[0]?.id ?? '');
-  // With an empty library there is nothing to select, so the app form opens
-  // straight away rather than sending you to another tab first.
-  const [addingApp, setAddingApp] = useState(state.apps.length === 0);
   const [newApp, setNewApp] = useState({ name: '', id: '', industry: 'saas' as Industry });
   const [idTouched, setIdTouched] = useState(false);
   const [platform, setPlatform] = useState<Platform>('web');
-  // Blank means "figure it out" — the app's newest existing version, or
-  // today if it has none yet, the same default the crawler uses.
+  // "New app": blank means today, the same default a brand-new app gets from
+  // Automatic — it has no version yet to default to. "Old app": either an
+  // existing version's id, or NEW_VERSION to start another one.
   const [version, setVersion] = useState('');
+  const [versionTarget, setVersionTarget] = useState(NEW_VERSION);
+  const [newVersionDate, setNewVersionDate] = useState('');
   const [overwrite, setOverwrite] = useState(false);
   const [queue, setQueue] = useState<Staged[]>([]);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const selectedApp = appMode === 'old' ? state.apps.find((a) => a.id === appId) ?? null : null;
+  // A blank date resolves to today, so the collision check has to resolve it
+  // the same way, or typing nothing would slip past it.
+  const newVersionCollision =
+    selectedApp && versionTarget === NEW_VERSION
+      ? ((selectedApp.versions ?? []).find((v) => v.id === (newVersionDate || localDateString())) ?? null)
+      : null;
+
+  // Picking a different existing app (or switching into "Old app") starts
+  // back at its own current version rather than carrying over whatever was
+  // selected before — adjusted here, during render, rather than in an
+  // effect: an effect would render once with the stale target, then again
+  // once it caught up.
+  const modeKey = `${appMode}:${appId}`;
+  const [prevModeKey, setPrevModeKey] = useState(modeKey);
+  if (modeKey !== prevModeKey) {
+    setPrevModeKey(modeKey);
+    if (appMode === 'old') {
+      setVersionTarget(selectedApp?.currentVersion ?? NEW_VERSION);
+      setNewVersionDate('');
+    }
+  }
 
   const createApp = async () => {
     const id = (newApp.id || slugify(newApp.name)).trim();
@@ -68,7 +104,7 @@ export function UploadPanel({
     const ok = await run(() => adminApi.saveApp({ id, name: newApp.name.trim(), industry: newApp.industry }));
     if (ok) {
       setAppId(id);
-      setAddingApp(false);
+      setAppMode('old');
       setNewApp({ name: '', id: '', industry: 'saas' });
       setIdTouched(false);
     }
@@ -110,6 +146,17 @@ export function UploadPanel({
     });
   };
 
+  // "Old app" always resolves to a concrete date before it reaches the
+  // server — a blank "Add a new version" date must land on today, never on
+  // whatever the app's current version happens to be, or "new version"
+  // would silently become "update the old one".
+  const resolvedVersion =
+    appMode === 'old'
+      ? versionTarget === NEW_VERSION
+        ? newVersionDate || localDateString()
+        : versionTarget
+      : version || undefined;
+
   const uploadAll = async () => {
     if (!appId) return;
     setUploading(true);
@@ -123,7 +170,7 @@ export function UploadPanel({
         const ext = item.name.slice(item.name.lastIndexOf('.'));
         const fileName = base.startsWith(item.screenType) ? item.name : `${item.screenType}-${base}${ext}`;
 
-        await adminApi.uploadScreen(platform, appId, fileName, item.file, overwrite, version || undefined);
+        await adminApi.uploadScreen(platform, appId, fileName, item.file, overwrite, resolvedVersion);
         update(item.key, { status: 'done', message: 'Uploaded' });
       } catch (err) {
         update(item.key, { status: 'failed', message: (err as Error).message });
@@ -137,37 +184,8 @@ export function UploadPanel({
 
   return (
     <div className="ins-admin-panel">
-      <p className="ins-field-hint">
-        Screenshots you have already taken. Choose the app and platform, set each screen&rsquo;s type,
-        then upload. For a whole app at once, use <strong>Automatic</strong> instead.
-      </p>
-
-      <div className="ins-admin-row">
-        <label className="ins-field">
-          <span className="ins-field-label">App</span>
-          <select
-            className="ins-input"
-            value={appId}
-            disabled={state.apps.length === 0}
-            onChange={(e) => setAppId(e.target.value)}
-          >
-            {state.apps.length === 0 ? (
-              <option value="">No apps yet — add one below</option>
-            ) : (
-              <option value="">Select an app…</option>
-            )}
-            {state.apps.map((app) => (
-              <option key={app.id} value={app.id}>
-                {app.name} ({app.id})
-              </option>
-            ))}
-          </select>
-          {state.apps.length > 0 && !addingApp && (
-            <button type="button" className="ins-linkbtn" onClick={() => setAddingApp(true)}>
-              <PlusIcon size={12} /> Add a new app
-            </button>
-          )}
-        </label>
+      <div className="ins-admin-row ins-align-controls">
+        <AppModeSelect mode={appMode} onChange={setAppMode} noApps={state.apps.length === 0} />
 
         <label className="ins-field">
           <span className="ins-field-label">Platform</span>
@@ -180,11 +198,47 @@ export function UploadPanel({
           </select>
         </label>
 
-        <label className="ins-field">
-          <span className="ins-field-label">Version</span>
-          <input className="ins-input" type="date" value={version} onChange={(e) => setVersion(e.target.value)} />
-          <span className="ins-field-hint">Blank uses the app&rsquo;s current version, or today if it has none.</span>
-        </label>
+        {appMode === 'old' && (
+          <>
+            <label className="ins-field">
+              <span className="ins-field-label">App</span>
+              <select className="ins-input" value={appId} onChange={(e) => setAppId(e.target.value)}>
+                <option value="">Choose an app…</option>
+                {state.apps.map((app) => (
+                  <option key={app.id} value={app.id}>
+                    {app.name} ({app.id})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {selectedApp && (
+              <label className="ins-field">
+                <span className="ins-field-label">Version</span>
+                <select className="ins-input" value={versionTarget} onChange={(e) => setVersionTarget(e.target.value)}>
+                  {(selectedApp.versions ?? []).map((v) => (
+                    <option key={v.id} value={v.id}>
+                      Update {v.isLatest ? 'Latest' : v.label}
+                    </option>
+                  ))}
+                  <option value={NEW_VERSION}>Add a new version…</option>
+                </select>
+              </label>
+            )}
+
+            {selectedApp && versionTarget === NEW_VERSION && (
+              <label className="ins-field">
+                <span className="ins-field-label">New version&rsquo;s date</span>
+                <input
+                  className="ins-input"
+                  type="date"
+                  value={newVersionDate}
+                  onChange={(e) => setNewVersionDate(e.target.value)}
+                />
+              </label>
+            )}
+          </>
+        )}
 
         <label className="ins-checkline">
           <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
@@ -192,7 +246,7 @@ export function UploadPanel({
         </label>
       </div>
 
-      {addingApp && (
+      {appMode === 'new' && (
         <div className="ins-admin-inline-form">
           <p className="ins-admin-form-title">
             {state.apps.length === 0 ? 'Add your first app' : 'Add an app'}
@@ -239,6 +293,11 @@ export function UploadPanel({
                 ))}
               </select>
             </label>
+            <label className="ins-field">
+              <span className="ins-field-label">Version</span>
+              <input className="ins-input" type="date" value={version} onChange={(e) => setVersion(e.target.value)} />
+              <span className="ins-field-hint">Blank uses today&rsquo;s date.</span>
+            </label>
           </div>
           <div className="ins-admin-actions">
             <button
@@ -250,12 +309,29 @@ export function UploadPanel({
               <PlusIcon size={15} /> Create app
             </button>
             {state.apps.length > 0 && (
-              <button type="button" className="ins-btn ins-btn--ghost" onClick={() => setAddingApp(false)} disabled={busy}>
+              <button type="button" className="ins-btn ins-btn--ghost" onClick={() => setAppMode('old')} disabled={busy}>
                 Cancel
               </button>
             )}
           </div>
         </div>
+      )}
+
+      {newVersionCollision ? (
+        <p className="ins-admin-err">
+          {selectedApp?.name} already has a version dated {newVersionCollision.isLatest ? 'Latest' : newVersionCollision.label} —
+          pick “Update {newVersionCollision.isLatest ? 'Latest' : newVersionCollision.label}” above instead, or choose a
+          different date.
+        </p>
+      ) : (
+        appMode === 'old' &&
+        selectedApp && (
+          <p className="ins-field-hint">
+            {versionTarget === NEW_VERSION
+              ? 'These screens start a new version — blank uses today’s date.'
+              : `These screens are added to ${selectedApp.name}’s existing ${(selectedApp.versions ?? []).find((v) => v.id === versionTarget)?.isLatest ? 'Latest' : (selectedApp.versions ?? []).find((v) => v.id === versionTarget)?.label ?? versionTarget} version.`}
+          </p>
+        )
       )}
 
       <div
@@ -274,23 +350,32 @@ export function UploadPanel({
         <UploadIcon size={22} className="ins-dropzone-icon" />
         <div className="ins-dropzone-text">
           <p className="ins-dropzone-title">
-            {appId ? 'Drop screenshots here' : 'Choose an app to start uploading'}
+            {newVersionCollision
+              ? 'Fix the version above first'
+              : appId
+                ? 'Drop screenshots here'
+                : 'Choose an app to start uploading'}
           </p>
-          <p className="ins-dropzone-desc">
-            PNG, JPEG, WebP, AVIF or GIF. Each file is stored under{' '}
-            <code>
-              screens/{platform}/{appId || '<app>'}
-              {version ? `/versions/${version}` : ''}/
-            </code>
-            .
-          </p>
+          {/* When the version has a collision, the resolved path below isn't
+              where an upload would actually land — nothing is going to that
+              folder until the date changes — so it's left out rather than
+              stating a destination that contradicts the error above it. */}
+          {!newVersionCollision && (
+            <p className="ins-dropzone-desc">
+              PNG, JPEG, WebP, AVIF or GIF. Each file is stored under{' '}
+              <code>
+                screens/{platform}/{appId || '<app>'}/versions/{resolvedVersion || localDateString()}
+              </code>
+              .
+            </p>
+          )}
         </div>
         <button
           type="button"
           className="ins-btn"
           onClick={() => inputRef.current?.click()}
-          disabled={!appId}
-          title={appId ? undefined : 'Choose or create an app first'}
+          disabled={!appId || Boolean(newVersionCollision)}
+          title={appId ? (newVersionCollision ? 'Fix the version above first' : undefined) : 'Choose or create an app first'}
         >
           Choose files
         </button>
@@ -366,7 +451,7 @@ export function UploadPanel({
             <button
               type="button"
               className="ins-btn ins-btn--primary"
-              disabled={!appId || uploading || busy || pending === 0}
+              disabled={!appId || uploading || busy || pending === 0 || Boolean(newVersionCollision)}
               onClick={uploadAll}
             >
               <UploadIcon size={15} />

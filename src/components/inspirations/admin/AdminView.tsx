@@ -1,14 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactElement } from 'react';
 import { adminApi } from '@/lib/inspirations/admin';
 import { PageHeading } from '../PageHeading';
-import { CloseIcon, LayersIcon } from '../Icons';
+import { CloseIcon, FlowIcon, FolderIcon, ImageIcon, LayersIcon, UploadIcon } from '../Icons';
+import { AddScreensPanel } from './AddScreensPanel';
 import { AppsPanel } from './AppsPanel';
 import { FlowsPanel } from './FlowsPanel';
 import { ScreensPanel } from './ScreensPanel';
-import { UploadPanel } from './UploadPanel';
-import { VideoPanel } from './VideoPanel';
 import { useAdminState } from './useAdminState';
 
 /**
@@ -17,25 +16,26 @@ import { useAdminState } from './useAdminState';
  * Writes go to data/inspirations in motvin-backend through the admin API. The
  * manifest is rebuilt after every change, and the build report is shown here,
  * so it is always clear what actually became public.
+ *
+ * Four sections, each answering one question: Add screens (how do new ones
+ * get in), Screens (what is stored, published or not), Apps (the products
+ * they belong to, including their version history), Flows (the journeys
+ * built from them). Adding screens used to be two separate tabs — Manual and
+ * Automatic — which read as unrelated features rather than two ways to do
+ * the same thing; they are now one tab with a switch, in AddScreensPanel.
  */
 
-type Tab = 'manual' | 'automatic' | 'screens' | 'apps' | 'flows';
+type Tab = 'add' | 'screens' | 'apps' | 'flows';
 
-/**
- * Two ways to add screens, and they are separate on purpose: Manual is files
- * you have already chosen and named, Automatic is a recording the pipeline
- * pulls screens out of by itself. Only one is ever on screen.
- */
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'manual', label: 'Manual' },
-  { id: 'automatic', label: 'Automatic' },
-  { id: 'screens', label: 'Screens' },
-  { id: 'apps', label: 'Apps' },
-  { id: 'flows', label: 'Flows' },
+const TABS: { id: Tab; label: string; icon: (props: { size?: number }) => ReactElement }[] = [
+  { id: 'add', label: 'Add screens', icon: UploadIcon },
+  { id: 'screens', label: 'Screens', icon: ImageIcon },
+  { id: 'apps', label: 'Apps', icon: FolderIcon },
+  { id: 'flows', label: 'Flows', icon: FlowIcon },
 ];
 
 export function AdminView() {
-  const [tab, setTab] = useState<Tab>('manual');
+  const [tab, setTab] = useState<Tab>('add');
   const { state, loading, busy, error, report, refresh, run, setError } = useAdminState();
 
   const held = state?.files.filter((f) => !f.published).length ?? 0;
@@ -49,6 +49,7 @@ export function AdminView() {
             type="button"
             className="ins-btn"
             disabled={busy || loading}
+            title="Every change above already rebuilds automatically. Use this only after editing files or running the crawler CLI directly on disk, outside this page."
             onClick={() => void run(async () => ({ report: await adminApi.rebuild() }))}
           >
             <LayersIcon size={15} /> Rebuild manifest
@@ -58,25 +59,27 @@ export function AdminView() {
 
       {state && (
         <div className="ins-admin-summary">
-          <span>
-            <strong>{state.counts.screens ?? 0}</strong> published screens
-          </span>
-          <span>
-            <strong>{state.counts.apps ?? 0}</strong> apps
-          </span>
-          <span>
-            <strong>{state.counts.flows ?? 0}</strong> flows
-          </span>
-          <span>
-            <strong>{state.counts.patterns ?? 0}</strong> patterns
-          </span>
+          {(
+            [
+              ['screens', 'Published screens'],
+              ['apps', 'Apps'],
+              ['flows', 'Flows'],
+              ['patterns', 'Patterns'],
+            ] as const
+          ).map(([key, label]) => (
+            <div key={key} className="ins-admin-stat">
+              <span className="ins-admin-stat-num">{state.counts[key] ?? 0}</span>
+              <span className="ins-admin-stat-label">{label}</span>
+            </div>
+          ))}
           {held > 0 && (
-            <button type="button" className="ins-admin-held" onClick={() => setTab('screens')}>
-              {held} file{held === 1 ? '' : 's'} held back
+            <button type="button" className="ins-admin-stat ins-admin-stat--held" onClick={() => setTab('screens')}>
+              <span className="ins-admin-stat-num">{held}</span>
+              <span className="ins-admin-stat-label">Held back</span>
             </button>
           )}
           {state.generatedAt && (
-            <span className="ins-muted">Built {new Date(state.generatedAt).toLocaleString()}</span>
+            <span className="ins-admin-built">Built {new Date(state.generatedAt).toLocaleString()}</span>
           )}
         </div>
       )}
@@ -109,27 +112,30 @@ export function AdminView() {
       )}
 
       <div className="ins-tabbar" role="tablist" aria-label="Admin sections">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            className={`ins-tab ${tab === t.id ? 'is-active' : ''}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-            {t.id === 'screens' && held > 0 && <span className="ins-tab-count">{held}</span>}
-          </button>
-        ))}
+        {TABS.map((t) => {
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              className={`ins-tab ${tab === t.id ? 'is-active' : ''}`}
+              onClick={() => setTab(t.id)}
+            >
+              <Icon size={15} />
+              {t.label}
+              {t.id === 'screens' && held > 0 && <span className="ins-tab-count">{held}</span>}
+            </button>
+          );
+        })}
       </div>
 
       {loading || !state ? (
         <p className="ins-muted ins-admin-status">Loading the store…</p>
       ) : (
         <section className="ins-tabpanel" role="tabpanel">
-          {tab === 'manual' && <UploadPanel state={state} busy={busy} onUploaded={refresh} run={run} />}
-          {tab === 'automatic' && <VideoPanel state={state} busy={busy} onIngested={refresh} />}
+          {tab === 'add' && <AddScreensPanel state={state} busy={busy} run={run} onIngested={refresh} onUploaded={refresh} />}
           {tab === 'screens' && <ScreensPanel state={state} busy={busy} run={run} />}
           {tab === 'apps' && <AppsPanel state={state} busy={busy} run={run} />}
           {tab === 'flows' && <FlowsPanel state={state} busy={busy} run={run} />}

@@ -96,6 +96,12 @@ export function AppsPanel({
 
   return (
     <div className="ins-admin-panel">
+      <p className="ins-field-hint">
+        The products screenshots belong to. Open <strong>Versions</strong> on any app below to manage its dated
+        captures — add or remove one, or rename one&rsquo;s date to change which is &ldquo;Latest&rdquo;. That is
+        different from the <strong>Screens</strong> tab above, which lists every screen of every app in one place.
+      </p>
+
       <form
         className="ins-admin-form"
         onSubmit={(e) => {
@@ -221,9 +227,10 @@ export function AppsPanel({
                     type="button"
                     className="ins-btn ins-btn--sm"
                     disabled={busy}
+                    aria-expanded={managingId === app.id}
                     onClick={() => setManagingId(managingId === app.id ? null : app.id)}
                   >
-                    {managingId === app.id ? 'Close' : 'Screens'}
+                    {managingId === app.id ? 'Close' : 'Versions'}
                   </button>
                   <button
                     type="button"

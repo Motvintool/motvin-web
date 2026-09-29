@@ -18,7 +18,7 @@ import {
   type IngestJob,
 } from '@/lib/inspirations/ingestJobs';
 import { CheckIcon, CloseIcon, UploadIcon } from '../Icons';
-import { AiPicker } from './AiPicker';
+import { AppModeSelect } from './AppModeSelect';
 import { IngestSummary, interimResult } from './IngestSummary';
 
 /**
@@ -84,10 +84,14 @@ export function VideoPanel({ state, busy, onIngested }: { state: AdminState; bus
       : null;
 
   // Picking a different existing app starts back at its own current version
-  // rather than carrying over whatever the previous app had selected.
-  useEffect(() => {
+  // rather than carrying over whatever the previous app had selected —
+  // adjusted here, during render, rather than in an effect: an effect would
+  // render once with the stale target, then again once it caught up.
+  const [prevOldAppId, setPrevOldAppId] = useState(oldAppId);
+  if (oldAppId !== prevOldAppId) {
+    setPrevOldAppId(oldAppId);
     setVersionTarget(selectedApp?.currentVersion ?? NEW_VERSION);
-  }, [oldAppId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   useEffect(() => {
     if (!running) return;
@@ -166,17 +170,6 @@ export function VideoPanel({ state, busy, onIngested }: { state: AdminState; bus
 
   return (
     <div className="ins-admin-panel">
-      <div className="ins-admin-toolbar">
-        <p className="ins-field-hint">
-          Record yourself using the app on a real device, then drop the video here. Walk at a normal
-          pace and pause a moment on each screen. Every screen that held still is kept — splash, prompts,
-          empty states, sheets and toasts included — repeats are folded into one, and pages still loading and
-          Google or Apple sign-in pages are left out. The app, the screen names and the journeys are worked
-          out from the screens themselves; the AI chosen here then writes the flow content.
-        </p>
-        <AiPicker admin={admin} align="right" />
-      </div>
-
       <div
         className={`ins-dropzone ${dragging ? 'is-dragging' : ''}`}
         onDragOver={(e: DragEvent) => {
@@ -212,63 +205,25 @@ export function VideoPanel({ state, busy, onIngested }: { state: AdminState; bus
         />
       </div>
 
-      <div className="ins-admin-actions">
-        <div className="ins-segmented" role="radiogroup" aria-label="Platform">
-          {PLATFORM_CHOICES.map((choice) => (
-            <button
-              key={choice.id}
-              type="button"
-              role="radio"
-              aria-checked={platform === choice.id}
-              className={`ins-segmented-item ${platform === choice.id ? 'is-active' : ''}`}
-              onClick={() => setPlatform(choice.id)}
-              disabled={running}
-            >
-              {choice.label}
-            </button>
-          ))}
-        </div>
-        <div className="ins-segmented" role="radiogroup" aria-label="App">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={appMode === 'new'}
-            className={`ins-segmented-item ${appMode === 'new' ? 'is-active' : ''}`}
-            onClick={() => setAppMode('new')}
+      <div className="ins-admin-actions ins-align-controls">
+        <label className="ins-field">
+          <span className="ins-field-label">Platform</span>
+          <select
+            className="ins-input"
+            value={platform}
+            onChange={(e) => setPlatform(e.target.value as 'ios' | 'android' | 'web')}
             disabled={running}
           >
-            New app
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={appMode === 'old'}
-            className={`ins-segmented-item ${appMode === 'old' ? 'is-active' : ''}`}
-            onClick={() => setAppMode('old')}
-            disabled={running || state.apps.length === 0}
-            title={state.apps.length === 0 ? 'No apps in the library yet' : undefined}
-          >
-            Old app
-          </button>
-        </div>
-        <button
-          type="button"
-          className="ins-btn ins-btn--primary"
-          disabled={!video || running || busy || (appMode === 'old' && !oldAppId) || Boolean(newVersionCollision)}
-          onClick={() => void submit()}
-        >
-          {running ? <span className="ins-spinner" /> : <UploadIcon size={15} />}
-          {running ? 'A run is in progress…' : 'Find screens in this video'}
-        </button>
-        {running && (
-          <span className="ins-muted">
-            You can leave this page — the run continues on the server and the assistant in the corner follows it.
-          </span>
-        )}
-      </div>
+            {PLATFORM_CHOICES.map((choice) => (
+              <option key={choice.id} value={choice.id}>
+                {choice.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <AppModeSelect mode={appMode} onChange={setAppMode} disabled={running} noApps={state.apps.length === 0} />
 
-      {appMode === 'new' ? (
-        <div className="ins-admin-actions">
+        {appMode === 'new' ? (
           <label className="ins-field ins-field--inline">
             <span className="ins-field-label">Version</span>
             <input
@@ -280,64 +235,82 @@ export function VideoPanel({ state, busy, onIngested }: { state: AdminState; bus
               aria-describedby="ins-video-version-hint"
             />
           </label>
-          <p id="ins-video-version-hint" className="ins-field-hint">
-            The app is identified from the screens themselves. Leave the version blank to file this capture
-            under today&rsquo;s date.
-          </p>
-        </div>
-      ) : (
-        <div className="ins-admin-actions">
-          <label className="ins-field ins-field--inline">
-            <span className="ins-field-label">App</span>
-            <select className="ins-input" value={oldAppId} onChange={(e) => setOldAppId(e.target.value)} disabled={running}>
-              <option value="">Choose an app…</option>
-              {state.apps.map((app) => (
-                <option key={app.id} value={app.id}>
-                  {app.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {selectedApp && (
+        ) : (
+          <>
             <label className="ins-field ins-field--inline">
-              <span className="ins-field-label">Version</span>
-              <select
-                className="ins-input"
-                value={versionTarget}
-                onChange={(e) => setVersionTarget(e.target.value)}
-                disabled={running}
-              >
-                {(selectedApp.versions ?? []).map((v) => (
-                  <option key={v.id} value={v.id}>
-                    Update {v.isLatest ? 'Latest' : v.label}
+              <span className="ins-field-label">App</span>
+              <select className="ins-input" value={oldAppId} onChange={(e) => setOldAppId(e.target.value)} disabled={running}>
+                <option value="">Choose an app…</option>
+                {state.apps.map((app) => (
+                  <option key={app.id} value={app.id}>
+                    {app.name}
                   </option>
                 ))}
-                <option value={NEW_VERSION}>Add a new version…</option>
               </select>
             </label>
-          )}
-          {selectedApp && versionTarget === NEW_VERSION && (
-            <label className="ins-field ins-field--inline">
-              <span className="ins-field-label">New version&rsquo;s date</span>
-              <input className="ins-input" type="date" value={newVersionDate} onChange={(e) => setNewVersionDate(e.target.value)} disabled={running} />
-            </label>
-          )}
-          {newVersionCollision ? (
-            <p className="ins-admin-err">
-              {selectedApp?.name} already has a version dated {newVersionCollision.isLatest ? 'Latest' : newVersionCollision.label} —
-              pick “Update {newVersionCollision.isLatest ? 'Latest' : newVersionCollision.label}” above instead, or choose a different
-              date.
-            </p>
-          ) : (
-            <p className="ins-field-hint">
-              {selectedApp
-                ? versionTarget === NEW_VERSION
-                  ? 'These screens start a new version — blank uses today’s date.'
-                  : `These screens are added to ${selectedApp.name}’s existing ${(selectedApp.versions ?? []).find((v) => v.id === versionTarget)?.isLatest ? 'Latest' : (selectedApp.versions ?? []).find((v) => v.id === versionTarget)?.label ?? versionTarget} version.`
-                : 'Choose which app this recording is more screens of.'}
-            </p>
-          )}
-        </div>
+            {selectedApp && (
+              <label className="ins-field ins-field--inline">
+                <span className="ins-field-label">Version</span>
+                <select
+                  className="ins-input"
+                  value={versionTarget}
+                  onChange={(e) => setVersionTarget(e.target.value)}
+                  disabled={running}
+                >
+                  {(selectedApp.versions ?? []).map((v) => (
+                    <option key={v.id} value={v.id}>
+                      Update {v.isLatest ? 'Latest' : v.label}
+                    </option>
+                  ))}
+                  <option value={NEW_VERSION}>Add a new version…</option>
+                </select>
+              </label>
+            )}
+            {selectedApp && versionTarget === NEW_VERSION && (
+              <label className="ins-field ins-field--inline">
+                <span className="ins-field-label">New version&rsquo;s date</span>
+                <input className="ins-input" type="date" value={newVersionDate} onChange={(e) => setNewVersionDate(e.target.value)} disabled={running} />
+              </label>
+            )}
+          </>
+        )}
+
+        <button
+          type="button"
+          className="ins-btn ins-btn--primary ins-btn--sm"
+          disabled={!video || running || busy || (appMode === 'old' && !oldAppId) || Boolean(newVersionCollision)}
+          onClick={() => void submit()}
+        >
+          {running ? <span className="ins-spinner" /> : <UploadIcon size={15} />}
+          {running ? 'A run is in progress…' : 'Find screens in this video'}
+        </button>
+      </div>
+
+      {running && (
+        <p className="ins-muted">
+          You can leave this page — the run continues on the server and the assistant in the corner follows it.
+        </p>
+      )}
+
+      {appMode === 'new' ? (
+        <p id="ins-video-version-hint" className="ins-field-hint">
+          The app is identified from the screens themselves. Leave the version blank to file this capture
+          under today&rsquo;s date.
+        </p>
+      ) : newVersionCollision ? (
+        <p className="ins-admin-err">
+          {selectedApp?.name} already has a version dated {newVersionCollision.isLatest ? 'Latest' : newVersionCollision.label} —
+          pick “Update {newVersionCollision.isLatest ? 'Latest' : newVersionCollision.label}” above instead, or choose a different
+          date.
+        </p>
+      ) : (
+        <p className="ins-field-hint">
+          {selectedApp
+            ? versionTarget === NEW_VERSION
+              ? 'These screens start a new version — blank uses today’s date.'
+              : `These screens are added to ${selectedApp.name}’s existing ${(selectedApp.versions ?? []).find((v) => v.id === versionTarget)?.isLatest ? 'Latest' : (selectedApp.versions ?? []).find((v) => v.id === versionTarget)?.label ?? versionTarget} version.`
+            : 'Choose which app this recording is more screens of.'}
+        </p>
       )}
 
       {(error || listError) && <p className="ins-admin-err">{error ?? listError}</p>}
