@@ -129,7 +129,7 @@ export function AdminView() {
       ) : (
         <section className="ins-tabpanel" role="tabpanel">
           {tab === 'manual' && <UploadPanel state={state} busy={busy} onUploaded={refresh} run={run} />}
-          {tab === 'automatic' && <VideoPanel busy={busy} onIngested={refresh} />}
+          {tab === 'automatic' && <VideoPanel state={state} busy={busy} onIngested={refresh} />}
           {tab === 'screens' && <ScreensPanel state={state} busy={busy} run={run} />}
           {tab === 'apps' && <AppsPanel state={state} busy={busy} run={run} />}
           {tab === 'flows' && <FlowsPanel state={state} busy={busy} run={run} />}

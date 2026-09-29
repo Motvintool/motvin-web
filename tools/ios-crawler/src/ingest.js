@@ -39,7 +39,7 @@ import { extractJson } from './analyze.js';
 import { buildJourneys } from './journeys.js';
 import { actionPhrase, describeAction } from './actions.js';
 import { isBlockingScreen, isExternalAuthScreen } from './safety.js';
-import { publishCrawl, rebuildManifest, resolveDataDir, safeName, updatePublishedContent } from './publish.js';
+import { localDateString, publishCrawl, rebuildManifest, resolveDataDir, resolveVersionId, safeName, updatePublishedContent } from './publish.js';
 import { readText } from './ocr.js';
 import { filterStyles, isPublishable, labelFor, publishedTypeFor, PUBLISHED_TYPES, stateFor } from './taxonomy.js';
 
@@ -377,6 +377,12 @@ export async function ingestFolder(options) {
     }
     if (!resolvedApp.platform) resolvedApp = { ...resolvedApp, platform: 'ios' };
 
+    // Which dated capture this run's screens land in: an explicit --version,
+    // else today — so a re-ingest on a later day lands alongside the last
+    // one rather than folding into it, and the "Latest" pill on the app page
+    // actually shows the new run.
+    const versionId = options.dryRun ? null : resolveVersionId(resolveDataDir(options.dataDir), resolvedApp.appId, options.version);
+
     // Grouping runs on the finished descriptions, so it can see a journey
     // across several screens rather than judging each one alone. Screens that
     // will not be published (a Google sign-in page) are left out of the flow
@@ -449,6 +455,7 @@ export async function ingestFolder(options) {
       app: resolvedApp,
       flows: flowGroups,
       dataDir: options.dataDir,
+      version: versionId,
       dryRun: options.dryRun,
       capture: captureInfo,
     });
@@ -500,7 +507,7 @@ export async function ingestFolder(options) {
             group.summary = journey.summary ?? group.summary ?? null;
           }
         }
-        const written = updatePublishedContent({ dataDir: options.dataDir, app: resolvedApp, graph, written: result.screens, flows: result.flows, flowGroups });
+        const written = updatePublishedContent({ dataDir: options.dataDir, version: result.version, app: resolvedApp, graph, written: result.screens, flows: result.flows, flowGroups });
         log.info(`researcher: ${outcome.journeysRenamed} journey name(s), ${outcome.screensUpdated} screen(s) described in ${outcome.batches} call(s); ${written.screens} screen(s) and ${written.flows} flow(s) rewritten`);
         researched = { ...outcome, ...written };
       } catch (error) {
@@ -1038,7 +1045,7 @@ export async function classifyStored(options) {
         tags: [...new Set([...(analysis.tags || []), analysis.screenType.replace(/_/g, '-'), ...states, platform])].slice(0, 14),
         elements: analysis.elements,
         style: filterStyles(analysis.style),
-        capturedAt: existing?.capturedAt || new Date().toISOString().slice(0, 10),
+        capturedAt: existing?.capturedAt || localDateString(),
       };
 
       const verdict = isBlockingScreen({

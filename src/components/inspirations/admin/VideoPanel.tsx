@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
-import { adminApi } from '@/lib/inspirations/admin';
+import { adminApi, type AdminState } from '@/lib/inspirations/admin';
 import { invalidateInspirationsCache } from '@/lib/inspirations/api';
+import { localDateString } from '@/lib/inspirations/dates';
 import {
   INGEST_STAGES,
   clock,
@@ -43,13 +44,27 @@ import { IngestSummary, interimResult } from './IngestSummary';
  * So that is the one manual step, offered after the screens land.
  */
 
-export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: () => Promise<void> | void }) {
+/** The version picker's "new version" option, alongside the app's real ones. */
+const NEW_VERSION = '__new__';
+
+export function VideoPanel({ state, busy, onIngested }: { state: AdminState; busy: boolean; onIngested: () => Promise<void> | void }) {
   const { user } = useAuth();
   const admin = Boolean(user && !user.isAnonymous);
   const { jobs, error: listError } = useIngestJobs(admin);
 
   const [video, setVideo] = useState<File | null>(null);
   const [platform, setPlatform] = useState<'ios' | 'android' | 'web'>('ios');
+  // A brand-new app is identified from the screens themselves, same as
+  // before; an existing one is picked here instead, so these screens are
+  // added to it rather than possibly identified as a look-alike new app.
+  const [appMode, setAppMode] = useState<'new' | 'old'>('new');
+  const [oldAppId, setOldAppId] = useState('');
+  // For "New app": blank means "figure it out" — today, since a brand-new
+  // app has no version yet to be the app's own. For "Old app": either an
+  // existing version's id, or NEW_VERSION to start another one.
+  const [version, setVersion] = useState('');
+  const [versionTarget, setVersionTarget] = useState(NEW_VERSION);
+  const [newVersionDate, setNewVersionDate] = useState('');
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logoState, setLogoState] = useState<'idle' | 'saving' | 'done'>('idle');
@@ -60,6 +75,19 @@ export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: ()
 
   const latest = jobs.find((job) => !job.dismissed) ?? null;
   const running = jobs.some(isActive);
+  const selectedApp = state.apps.find((a) => a.id === oldAppId) ?? null;
+  // A blank date resolves to today server-side, so the collision check has
+  // to resolve it the same way, or typing nothing would slip past it.
+  const newVersionCollision =
+    selectedApp && versionTarget === NEW_VERSION
+      ? ((selectedApp.versions ?? []).find((v) => v.id === (newVersionDate || localDateString())) ?? null)
+      : null;
+
+  // Picking a different existing app starts back at its own current version
+  // rather than carrying over whatever the previous app had selected.
+  useEffect(() => {
+    setVersionTarget(selectedApp?.currentVersion ?? NEW_VERSION);
+  }, [oldAppId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!running) return;
@@ -92,11 +120,29 @@ export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: ()
 
   const submit = async () => {
     if (!video || !user) return;
+    if (appMode === 'old' && !oldAppId) {
+      setError('Choose which app these screens belong to.');
+      return;
+    }
+    if (newVersionCollision) {
+      setError(
+        `${selectedApp?.name} already has a version dated ${newVersionCollision.isLatest ? 'Latest' : newVersionCollision.label} — pick “Update” for it instead, or choose a different date.`,
+      );
+      return;
+    }
     setError(null);
     setLogoState('idle');
+    const resolvedVersion =
+      appMode === 'old' ? (versionTarget === NEW_VERSION ? newVersionDate || undefined : versionTarget) : version || undefined;
     try {
-      await startIngest(video, user.email, { platform });
+      await startIngest(video, user.email, {
+        platform,
+        version: resolvedVersion,
+        appId: appMode === 'old' ? oldAppId : undefined,
+      });
       setVideo(null);
+      setVersion('');
+      setNewVersionDate('');
     } catch (err) {
       setError((err as Error).message);
     }
@@ -182,10 +228,33 @@ export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: ()
             </button>
           ))}
         </div>
+        <div className="ins-segmented" role="radiogroup" aria-label="App">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={appMode === 'new'}
+            className={`ins-segmented-item ${appMode === 'new' ? 'is-active' : ''}`}
+            onClick={() => setAppMode('new')}
+            disabled={running}
+          >
+            New app
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={appMode === 'old'}
+            className={`ins-segmented-item ${appMode === 'old' ? 'is-active' : ''}`}
+            onClick={() => setAppMode('old')}
+            disabled={running || state.apps.length === 0}
+            title={state.apps.length === 0 ? 'No apps in the library yet' : undefined}
+          >
+            Old app
+          </button>
+        </div>
         <button
           type="button"
           className="ins-btn ins-btn--primary"
-          disabled={!video || running || busy}
+          disabled={!video || running || busy || (appMode === 'old' && !oldAppId) || Boolean(newVersionCollision)}
           onClick={() => void submit()}
         >
           {running ? <span className="ins-spinner" /> : <UploadIcon size={15} />}
@@ -197,6 +266,79 @@ export function VideoPanel({ busy, onIngested }: { busy: boolean; onIngested: ()
           </span>
         )}
       </div>
+
+      {appMode === 'new' ? (
+        <div className="ins-admin-actions">
+          <label className="ins-field ins-field--inline">
+            <span className="ins-field-label">Version</span>
+            <input
+              className="ins-input"
+              type="date"
+              value={version}
+              onChange={(e) => setVersion(e.target.value)}
+              disabled={running}
+              aria-describedby="ins-video-version-hint"
+            />
+          </label>
+          <p id="ins-video-version-hint" className="ins-field-hint">
+            The app is identified from the screens themselves. Leave the version blank to file this capture
+            under today&rsquo;s date.
+          </p>
+        </div>
+      ) : (
+        <div className="ins-admin-actions">
+          <label className="ins-field ins-field--inline">
+            <span className="ins-field-label">App</span>
+            <select className="ins-input" value={oldAppId} onChange={(e) => setOldAppId(e.target.value)} disabled={running}>
+              <option value="">Choose an app…</option>
+              {state.apps.map((app) => (
+                <option key={app.id} value={app.id}>
+                  {app.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {selectedApp && (
+            <label className="ins-field ins-field--inline">
+              <span className="ins-field-label">Version</span>
+              <select
+                className="ins-input"
+                value={versionTarget}
+                onChange={(e) => setVersionTarget(e.target.value)}
+                disabled={running}
+              >
+                {(selectedApp.versions ?? []).map((v) => (
+                  <option key={v.id} value={v.id}>
+                    Update {v.isLatest ? 'Latest' : v.label}
+                  </option>
+                ))}
+                <option value={NEW_VERSION}>Add a new version…</option>
+              </select>
+            </label>
+          )}
+          {selectedApp && versionTarget === NEW_VERSION && (
+            <label className="ins-field ins-field--inline">
+              <span className="ins-field-label">New version&rsquo;s date</span>
+              <input className="ins-input" type="date" value={newVersionDate} onChange={(e) => setNewVersionDate(e.target.value)} disabled={running} />
+            </label>
+          )}
+          {newVersionCollision ? (
+            <p className="ins-admin-err">
+              {selectedApp?.name} already has a version dated {newVersionCollision.isLatest ? 'Latest' : newVersionCollision.label} —
+              pick “Update {newVersionCollision.isLatest ? 'Latest' : newVersionCollision.label}” above instead, or choose a different
+              date.
+            </p>
+          ) : (
+            <p className="ins-field-hint">
+              {selectedApp
+                ? versionTarget === NEW_VERSION
+                  ? 'These screens start a new version — blank uses today’s date.'
+                  : `These screens are added to ${selectedApp.name}’s existing ${(selectedApp.versions ?? []).find((v) => v.id === versionTarget)?.isLatest ? 'Latest' : (selectedApp.versions ?? []).find((v) => v.id === versionTarget)?.label ?? versionTarget} version.`
+                : 'Choose which app this recording is more screens of.'}
+            </p>
+          )}
+        </div>
+      )}
 
       {(error || listError) && <p className="ins-admin-err">{error ?? listError}</p>}
 

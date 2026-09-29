@@ -6,6 +6,7 @@ import { adminApi, type ScreenSidecar } from '@/lib/inspirations/admin';
 import { doneText, type AdminOp, type AssistantAction, type ConfirmAction, type Expect } from '@/lib/inspirations/assistantActions';
 import type { Platform, ScreenType } from '@/lib/inspirations/types';
 import { invalidateInspirationsCache } from '@/lib/inspirations/api';
+import { qualifyFlowFile, qualifyScreenFile } from '@/lib/inspirations/screenPaths';
 
 /**
  * Video ingest runs, as the browser sees them.
@@ -252,7 +253,15 @@ export function refreshIngestJobs(): Promise<void> {
   return fetchJobs().then(schedule);
 }
 
-export type StartIngestOptions = { keepLoading?: boolean; fps?: number; platform?: 'ios' | 'android' | 'web' };
+export type StartIngestOptions = {
+  keepLoading?: boolean;
+  fps?: number;
+  platform?: 'ios' | 'android' | 'web';
+  /** Which dated capture to publish into; omit to use today's date. */
+  version?: string;
+  /** An app already in the library to add these screens to; omit to identify a new one from the screens. */
+  appId?: string;
+};
 
 export const PLATFORM_CHOICES: { id: 'ios' | 'android' | 'web'; label: string }[] = [
   { id: 'ios', label: 'iOS' },
@@ -314,6 +323,8 @@ export function startIngest(video: File, startedBy: string, options: StartIngest
       if (options.keepLoading) query.set('loading', '1');
       if (options.fps) query.set('fps', String(options.fps));
       query.set('platform', options.platform ?? 'ios');
+      if (options.version) query.set('version', options.version);
+      if (options.appId) query.set('appId', options.appId);
 
       // XMLHttpRequest, for one reason: fetch cannot report upload progress.
       const xhr = new XMLHttpRequest();
@@ -872,12 +883,12 @@ export async function performAction(action: ConfirmAction, image?: File | null):
       }
       case 'rename-screen': {
         const state = await adminApi.getState();
-        const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === op.file);
-        await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), name: op.to });
+        const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === qualifyScreenFile(qualifyFlowFile(op.file, op.flow), op.version));
+        await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), name: op.to }, op.version, op.flow);
         break;
       }
       case 'delete-screen':
-        await adminApi.deleteScreen(op.platform as Platform, op.appId, op.file);
+        await adminApi.deleteScreen(op.platform as Platform, op.appId, op.file, op.version, op.flow);
         break;
       case 'rename-flow': {
         const state = await adminApi.getState();
@@ -891,8 +902,8 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         break;
       case 'set-screen-type': {
         const state = await adminApi.getState();
-        const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === op.file);
-        await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), screenType: op.screenType as ScreenType });
+        const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === qualifyScreenFile(qualifyFlowFile(op.file, op.flow), op.version));
+        await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), screenType: op.screenType as ScreenType }, op.version, op.flow);
         break;
       }
       case 'set-flow-category': {
@@ -904,16 +915,16 @@ export async function performAction(action: ConfirmAction, image?: File | null):
       }
       case 'set-screen-tags': {
         const state = await adminApi.getState();
-        const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === op.file);
+        const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === qualifyScreenFile(qualifyFlowFile(op.file, op.flow), op.version));
         const existing = file?.sidecar?.tags ?? [];
         const tags = op.mode === 'replace' ? op.tags : [...new Set([...existing, ...op.tags])];
-        await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), tags });
+        await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), tags }, op.version, op.flow);
         break;
       }
       case 'set-screen-description': {
         const state = await adminApi.getState();
-        const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === op.file);
-        await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), description: op.description } as ScreenSidecar);
+        const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === qualifyScreenFile(qualifyFlowFile(op.file, op.flow), op.version));
+        await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), description: op.description } as ScreenSidecar, op.version, op.flow);
         break;
       }
       case 'add-to-flow':
@@ -940,6 +951,10 @@ export async function performAction(action: ConfirmAction, image?: File | null):
       case 'set-source-status': {
         const state = await adminApi.getState();
         await adminApi.saveSource(op.appId, { ...(state.sources[op.appId] ?? {}), status: op.status });
+        break;
+      }
+      case 'delete-app-version': {
+        await adminApi.deleteVersion(op.appId, op.versionId);
         break;
       }
       case 'stop-run': {

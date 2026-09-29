@@ -107,6 +107,15 @@ export type ScreenSource = {
   permission: string | null;
 };
 
+/** One dated capture of an app's screens, e.g. "Sep 2026". */
+export type AppVersion = {
+  id: string;
+  label: string;
+  capturedAt: string;
+  /** Whether this is the newest version by date — the version pill calls it "Latest". */
+  isLatest: boolean;
+};
+
 export type App = {
   id: string;
   name: string;
@@ -129,6 +138,10 @@ export type App = {
    */
   rating: number | null;
   ratingCount: number | null;
+  /** Every dated capture stored for this app, newest first. */
+  versions: AppVersion[];
+  /** Which version the app page opens on by default — always the newest. */
+  currentVersion: string | null;
 };
 
 export type ScreenCapture = {
@@ -172,6 +185,8 @@ export type Screen = {
   elements: ElementKind[];
   style: Style[];
   capturedAt: string | null;
+  /** Which dated capture this screen belongs to, e.g. "2026-09". */
+  version: string;
   /** Whether an analyzer has produced real findings for this screen. */
   hasAnalysis: boolean;
   /** Whether the recorded licence permits handing the file to a visitor. */
@@ -213,6 +228,8 @@ export type Flow = {
   steps?: FlowStep[];
   /** One sentence on what the person does across the journey, when written. */
   summary?: string | null;
+  /** Which capture this flow's screens belong to, when known. */
+  version?: string | null;
 };
 
 export type FlowActionKind = 'tap' | 'type' | 'switch-tab' | 'scroll' | 'back' | 'dismiss' | 'wait' | 'open';

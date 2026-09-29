@@ -5257,6 +5257,14 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   flex: 2 1 320px;
 }
 
+/* A field sitting inline among buttons (e.g. VideoPanel's actions row)
+   rather than stacked in its own form row — narrower, and never grows to
+   crowd out the controls beside it. */
+.ins-field--inline {
+  flex: 0 0 auto;
+  width: 168px;
+}
+
 .ins-field-label {
   font-size: 16px;
   font-weight: 600;
@@ -5421,6 +5429,65 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 .ins-admin-item-sub {
   font-size: 16px;
   color: var(--ins-muted);
+}
+
+/* Per-app version manager (AppVersionScreens), inline under an app row in
+   the Apps tab. */
+.ins-admin-versions-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 12px;
+  border-top: 1px solid var(--ins-border);
+  background: var(--ins-page);
+}
+
+.ins-admin-versions-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ins-admin-thumbgrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ins-admin-thumb-card {
+  position: relative;
+  width: 84px;
+  flex: none;
+}
+
+.ins-admin-thumb-card-img {
+  display: block;
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--ins-border);
+  background: var(--ins-card-alt);
+}
+
+.ins-admin-thumb-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  cursor: pointer;
+}
+
+.ins-admin-thumb-remove:hover {
+  background: rgba(200, 30, 30, 0.85);
 }
 
 .ins-admin-item-actions {

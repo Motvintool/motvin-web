@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { adminApi, type AdminScreenFile, type AdminState, type ScreenSidecar, adminScreenImagePath } from '@/lib/inspirations/admin';
+import { splitScreenFile } from '@/lib/inspirations/screenPaths';
 import { PLATFORM_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from '@/lib/inspirations/taxonomy';
 import { SCREEN_TYPES, STYLES, type ScreenType, type Style } from '@/lib/inspirations/types';
 import { CheckIcon, PencilIcon, TrashIcon } from '../Icons';
@@ -90,6 +91,17 @@ function ScreenRow({
     adminScreenImagePath(file),
   );
 
+  // `file.file` is version-qualified ("versions/2026-09-29/welcome.png"), and
+  // flow-qualified too when it sits inside a flow folder
+  // ("versions/2026-09-29/onboarding/1.png", or just "onboarding/1.png" for
+  // a legacy screen). The backend's per-file routes take the bare leaf name
+  // plus the version and flow as separate query params — never a literal
+  // `/` inside the name itself — so all three are split back apart here.
+  const { name: leafFile, version: screenVersion, flow: screenFlow } = splitScreenFile(file.file, file.version);
+  const versionLabel = state.apps
+    .find((a) => a.id === file.appId)
+    ?.versions?.find((v) => v.id === file.version);
+
   const save = () => {
     const meta: ScreenSidecar = {
       name: name.trim() || undefined,
@@ -99,12 +111,12 @@ function ScreenRow({
       style,
       capturedAt: capturedAt.trim() || undefined,
     };
-    void run(() => adminApi.saveScreenMeta(file.platform, file.appId, file.file, meta), onClose);
+    void run(() => adminApi.saveScreenMeta(file.platform, file.appId, leafFile, meta, screenVersion, screenFlow), onClose);
   };
 
   const remove = () => {
     if (!window.confirm(`Delete ${file.file} from ${file.appId}? The file is removed from the store.`)) return;
-    void run(() => adminApi.deleteScreen(file.platform, file.appId, file.file));
+    void run(() => adminApi.deleteScreen(file.platform, file.appId, leafFile, screenVersion, screenFlow));
   };
 
   return (
@@ -127,6 +139,7 @@ function ScreenRow({
             {app?.name ?? file.appId} · {PLATFORM_LABEL[file.platform] ?? file.platform} ·{' '}
             {file.width && file.height ? `${file.width} × ${file.height}` : 'unreadable'} ·{' '}
             {Math.round(file.bytes / 1024)} KB
+            {versionLabel && <> · {versionLabel.isLatest ? 'Latest' : versionLabel.label}</>}
           </p>
           {file.published ? (
             <p className="ins-admin-ok">

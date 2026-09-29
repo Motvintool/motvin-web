@@ -17,19 +17,20 @@ export type AdminOp =
   | { kind: 'update-app'; appId: string; name: string; fields: AppFields }
   /** Needs an image: the one already dropped on the dock, or one picked on confirm. */
   | { kind: 'set-logo'; appId: string; name: string }
-  | { kind: 'rename-screen'; platform: string; appId: string; file: string; from: string; to: string }
-  | { kind: 'delete-screen'; platform: string; appId: string; file: string; name: string }
+  | { kind: 'rename-screen'; platform: string; appId: string; file: string; version?: string; flow?: string; from: string; to: string }
+  | { kind: 'delete-screen'; platform: string; appId: string; file: string; version?: string; flow?: string; name: string }
   | { kind: 'rename-flow'; flowId: string; from: string; to: string }
   | { kind: 'delete-flow'; flowId: string; name: string }
-  | { kind: 'set-screen-type'; platform: string; appId: string; file: string; name: string; screenType: string }
+  | { kind: 'set-screen-type'; platform: string; appId: string; file: string; version?: string; flow?: string; name: string; screenType: string }
   | { kind: 'set-flow-category'; flowId: string; name: string; category: string }
-  | { kind: 'set-screen-tags'; platform: string; appId: string; file: string; name: string; tags: string[]; mode: 'add' | 'replace' }
-  | { kind: 'set-screen-description'; platform: string; appId: string; file: string; name: string; description: string }
+  | { kind: 'set-screen-tags'; platform: string; appId: string; file: string; version?: string; flow?: string; name: string; tags: string[]; mode: 'add' | 'replace' }
+  | { kind: 'set-screen-description'; platform: string; appId: string; file: string; version?: string; flow?: string; name: string; description: string }
   | { kind: 'add-to-flow'; flowId: string; flowName: string; screenIds: string[]; screenNames: string[] }
   | { kind: 'remove-from-flow'; flowId: string; flowName: string; screenIds: string[]; screenNames: string[] }
   | { kind: 'create-flow'; appId: string; appName: string; name: string; category: string; screenIds: string[]; screenNames: string[] }
   | { kind: 'set-flow-parent'; flowId: string; name: string; parentId: string | null; parentName: string | null }
   | { kind: 'set-source-status'; appId: string; name: string; status: 'pending' | 'review' | 'approved' | 'rejected' }
+  | { kind: 'delete-app-version'; appId: string; name: string; versionId: string; versionLabel: string; screens: number }
   | { kind: 'stop-run'; jobId: string; title: string }
   | { kind: 'research-app'; appId: string; name: string }
   | { kind: 'set-ai'; chatModel?: string | null; enabled?: boolean }
@@ -49,7 +50,7 @@ export type ConfirmAction = Extract<AssistantAction, { type: 'confirm' }>;
 
 /** Which operations remove something for good. */
 export function isDestructive(op: AdminOp): boolean {
-  return op.kind === 'remove-app' || op.kind === 'delete-screen' || op.kind === 'delete-flow' || op.kind === 'stop-run';
+  return op.kind === 'remove-app' || op.kind === 'delete-screen' || op.kind === 'delete-flow' || op.kind === 'stop-run' || op.kind === 'delete-app-version';
 }
 
 const list = (names: string[]) => (names.length <= 3 ? names.map((name) => `“${name}”`).join(', ') : `${names.length} screens`);
@@ -93,6 +94,8 @@ export function labelFor(op: AdminOp): string {
       return op.parentName ? `Nest “${op.name}” under “${op.parentName}”` : `Make “${op.name}” top-level`;
     case 'set-source-status':
       return `Mark ${op.name} as ${op.status}`;
+    case 'delete-app-version':
+      return `Delete ${op.name}’s ${op.versionLabel} version`;
     case 'stop-run':
       return `Stop “${op.title}”`;
     case 'research-app':
@@ -143,6 +146,8 @@ export function describeOp(op: AdminOp, extra: { screens?: number; flows?: numbe
       return op.parentName ? `Nest the flow “${op.name}” under “${op.parentName}”?` : `Make the flow “${op.name}” a top-level section?`;
     case 'set-source-status':
       return `Mark ${op.name}’s source record as ${op.status}?${op.status === 'approved' ? ' Approved apps are published.' : op.status === 'rejected' ? ' Rejected apps are held back from the public library.' : ''}`;
+    case 'delete-app-version':
+      return `Delete ${op.name}’s ${op.versionLabel} version? Its ${op.screens} screen${op.screens === 1 ? '' : 's'} are removed for good.`;
     case 'stop-run':
       return `Stop the run “${op.title}”? Screens it has already published stay; the rest of the run is abandoned.`;
     case 'research-app':
@@ -193,6 +198,8 @@ export function doneText(op: AdminOp, result: { screens?: number; flows?: number
       return op.parentName ? `“${op.name}” now sits under “${op.parentName}”.` : `“${op.name}” is now a top-level section.`;
     case 'set-source-status':
       return `${op.name} is marked ${op.status}, and the index rebuilt.`;
+    case 'delete-app-version':
+      return `Deleted ${op.name}’s ${op.versionLabel} version.`;
     case 'stop-run':
       return `Stopped “${op.title}”.`;
     case 'research-app':

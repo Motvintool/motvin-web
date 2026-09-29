@@ -38,22 +38,10 @@ const TABS: { id: AppTab; label: string }[] = [
   { id: 'flows', label: 'Flows' },
 ];
 
-/** "Curated" is this page's own given order (build-time manifest order) — no
- * sort param to send, since screens here are already loaded in full. */
-type DetailSort = 'curated' | 'newest' | 'oldest';
-const DETAIL_SORTS: SortOption<DetailSort>[] = [
-  { value: 'curated', label: 'Curated' },
-  { value: 'newest', label: 'Newest' },
-  { value: 'oldest', label: 'Oldest' },
-];
-
-function sortScreens(list: Screen[], sort: DetailSort): Screen[] {
-  if (sort === 'curated') return list;
-  return [...list].sort((a, b) => {
-    const at = a.capturedAt ? new Date(a.capturedAt).getTime() : 0;
-    const bt = b.capturedAt ? new Date(b.capturedAt).getTime() : 0;
-    return sort === 'newest' ? bt - at : at - bt;
-  });
+/** The right-edge control's options: the app's dated captures, newest first,
+ * with the newest one always labeled "Latest". */
+function versionOptions(versions: App['versions']): SortOption<string>[] {
+  return versions.map((v) => ({ value: v.id, label: v.isLatest ? 'Latest' : v.label }));
 }
 
 
@@ -447,7 +435,7 @@ export function AppDetailView({
   const [floatOpen, setFloatOpen] = useState(false);
   const [floatRemovedOpen, setFloatRemovedOpen] = useState(false);
   const [elementFilter, setElementFilter] = useState<ElementKind[]>([]);
-  const [sort, setSort] = useState<DetailSort>('curated');
+  const [version, setVersion] = useState<string>(app.currentVersion ?? '');
   const [patternFilter, setPatternFilter] = useState<string[]>([]);
   const [flowFilter, setFlowFilter] = useState<string[]>([]);
   const [textSearchOpen, setTextSearchOpen] = useState(false);
@@ -509,12 +497,19 @@ export function AppDetailView({
   const screenById = new Map(screens.map((s) => [s.id, s]));
   const appsMap = new Map([[app.id, app]]);
 
+  // The version pill narrows every tab to one dated capture at a time — the
+  // same screens/flows the rest of the page's filters (element, pattern,
+  // flow, text) then narrow further, so switching versions never has to
+  // reset those other picks.
+  const versionScreens = version ? screens.filter((s) => s.version === version) : screens;
+  const versionFlows = version ? flows.filter((f) => !f.version || f.version === version) : flows;
+
   const elementCounts = new Map<ElementKind, number>();
-  screens.forEach((s) => s.elements.forEach((e) => elementCounts.set(e, (elementCounts.get(e) ?? 0) + 1)));
+  versionScreens.forEach((s) => s.elements.forEach((e) => elementCounts.set(e, (elementCounts.get(e) ?? 0) + 1)));
   // The tab defaults to every screen; picking a category from the menu just
   // narrows this same set rather than swapping in a separate grouped view.
   const uiElementScreens =
-    elementFilter.length > 0 ? screens.filter((s) => s.elements.some((e) => elementFilter.includes(e))) : screens;
+    elementFilter.length > 0 ? versionScreens.filter((s) => s.elements.some((e) => elementFilter.includes(e))) : versionScreens;
   // While textActive, an in-flight OCR pass (textMatchedIds still null) shows
   // nothing rather than the unfiltered set — matching a screen that hasn't
   // been checked yet would be worse than a moment of empty grid.
@@ -523,20 +518,21 @@ export function AppDetailView({
   // instead of element kind.
   const selectedFlowScreenIds =
     flowFilter.length > 0
-      ? new Set(flows.filter((f) => flowFilter.includes(f.id)).flatMap((f) => f.screenIds))
+      ? new Set(versionFlows.filter((f) => flowFilter.includes(f.id)).flatMap((f) => f.screenIds))
       : null;
-  const flowFilteredScreens = selectedFlowScreenIds ? screens.filter((s) => selectedFlowScreenIds.has(s.id)) : screens;
-  const sortedScreens = textFilter(sortScreens(flowFilteredScreens, sort));
-  const sortedUiElementScreens = textFilter(sortScreens(uiElementScreens, sort));
+  const flowFilteredScreens = selectedFlowScreenIds ? versionScreens.filter((s) => selectedFlowScreenIds.has(s.id)) : versionScreens;
+  const sortedScreens = textFilter(flowFilteredScreens);
+  const sortedUiElementScreens = textFilter(uiElementScreens);
 
   // Per category, the distinct screens its patterns point back to — the
   // pill's own counts, same "screens" unit the UI Elements pill uses rather
   // than a count of patterns.
+  const versionScreenIds = new Set(versionScreens.map((s) => s.id));
   const patternCategoryScreenIds = new Map<string, Set<string>>();
   patterns.forEach((p) => {
     const set = patternCategoryScreenIds.get(p.category) ?? new Set<string>();
     p.screenIds.forEach((id) => {
-      if (screenIds.has(id)) set.add(id);
+      if (versionScreenIds.has(id)) set.add(id);
     });
     patternCategoryScreenIds.set(p.category, set);
   });
@@ -548,8 +544,9 @@ export function AppDetailView({
   const categoryFilteredPatterns =
     patternFilter.length > 0 ? patterns.filter((p) => patternFilter.includes(p.category)) : patterns;
   const patternScreenIds = new Set(categoryFilteredPatterns.flatMap((p) => p.screenIds));
-  const patternScreens = screens.filter((s) => patternScreenIds.has(s.id));
-  const sortedPatternScreens = textFilter(sortScreens(patternScreens, sort));
+  const patternScreens = versionScreens.filter((s) => patternScreenIds.has(s.id));
+  const sortedPatternScreens = textFilter(patternScreens);
+  const versionPatternCount = patterns.filter((p) => p.screenIds.some((id) => versionScreenIds.has(id))).length;
 
   // Docks into the header on scroll, same as the browse pages' own filter
   // toolbar (ToolbarRow) — reuses its scroll-tracking/portal hook so both
@@ -578,11 +575,11 @@ export function AppDetailView({
         {TABS.map((t) => {
           const count =
             t.id === 'screens'
-              ? screens.length
+              ? versionScreens.length
               : t.id === 'flows'
-                ? flows.length
+                ? versionFlows.length
                 : t.id === 'patterns'
-                  ? patterns.length
+                  ? versionPatternCount
                   : t.id === 'ui-elements'
                     ? elementCounts.size
                     : undefined;
@@ -605,10 +602,10 @@ export function AppDetailView({
       {/* Lets the Screens tab be narrowed to one flow's screens — the exact
           same tree (buildTree/prune, .ins-flowtree markup) the Flows tab's
           own "ins-flows-nav" sidebar uses, reused inside a popover. */}
-      {tab === 'screens' && flows.length > 0 && (
+      {tab === 'screens' && versionFlows.length > 0 && (
         <>
           <span className="ins-ftoolbar-divider" aria-hidden="true" />
-          <FlowTreePill flows={flows} screenById={screenById} selected={flowFilter} onApply={setFlowFilter} />
+          <FlowTreePill flows={versionFlows} screenById={screenById} selected={flowFilter} onApply={setFlowFilter} />
         </>
       )}
 
@@ -653,58 +650,60 @@ export function AppDetailView({
       )}
 
       {/* Right-aligned so the tab row carries both the navigation and the
-          sort control for whichever screen grid is on view — same grouping
-          and gap the filter toolbar uses for its own right edge. The Flows
-          tab shows its own browser (FlowsBrowser), not a ScreenGrid —
-          neither the text search nor the sort control does anything there,
-          so neither renders there. */}
-      {tab !== 'flows' && (
-        <div className="ins-ftoolbar-right">
-          <div className="ins-text-search-wrap" ref={textSearchRef}>
-          {textSearchOpen ? (
-            <div className="ins-text-search">
-              <SearchIcon size={16} />
-              <input
-                type="text"
-                autoFocus
-                value={textQuery}
-                onChange={(e) => setTextQuery(e.target.value)}
-                placeholder="Search text in screenshot..."
-                aria-label="Search text in screenshot"
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
+          version picker for whichever grid is on view — same grouping and gap
+          the filter toolbar uses for its own right edge. The Flows tab shows
+          its own browser (FlowsBrowser), not a ScreenGrid, so the text search
+          doesn't apply there — but the version picker still does, the same
+          control in the same spot on every tab. */}
+      <div className="ins-ftoolbar-right">
+        {tab !== 'flows' && (
+          <>
+            <div className="ins-text-search-wrap" ref={textSearchRef}>
+            {textSearchOpen ? (
+              <div className="ins-text-search">
+                <SearchIcon size={16} />
+                <input
+                  type="text"
+                  autoFocus
+                  value={textQuery}
+                  onChange={(e) => setTextQuery(e.target.value)}
+                  placeholder="Search text in screenshot..."
+                  aria-label="Search text in screenshot"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setTextSearchOpen(false);
+                      setTextQuery('');
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="ins-text-search-close"
+                  aria-label="Close text search"
+                  onClick={() => {
                     setTextSearchOpen(false);
                     setTextQuery('');
-                  }
-                }}
-              />
+                  }}
+                >
+                  <CloseIcon size={12} />
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
-                className="ins-text-search-close"
-                aria-label="Close text search"
-                onClick={() => {
-                  setTextSearchOpen(false);
-                  setTextQuery('');
-                }}
+                className="ins-text-search-trigger"
+                aria-label="Search text in screenshot"
+                onClick={() => setTextSearchOpen(true)}
               >
-                <CloseIcon size={12} />
+                <img alt="" width={20} height={20} src="/ASSET/Icons/Motvin/text-in-screenshot.svg" />
               </button>
+            )}
             </div>
-          ) : (
-            <button
-              type="button"
-              className="ins-text-search-trigger"
-              aria-label="Search text in screenshot"
-              onClick={() => setTextSearchOpen(true)}
-            >
-              <img alt="" width={20} height={20} src="/ASSET/Icons/Motvin/text-in-screenshot.svg" />
-            </button>
-          )}
-          </div>
-          <span className="ins-ftoolbar-divider" aria-hidden="true" />
-          <SortPill value={sort} options={DETAIL_SORTS} onChange={setSort} />
-        </div>
-      )}
+            <span className="ins-ftoolbar-divider" aria-hidden="true" />
+          </>
+        )}
+        <SortPill value={version} options={versionOptions(app.versions)} onChange={setVersion} />
+      </div>
     </div>
   );
 
@@ -808,7 +807,7 @@ export function AppDetailView({
       {tab === 'screens' && (
         <section className="ins-tabpanel ins-shot-panel">
           {textLoading ? (
-            <ScreenGridSkeleton count={screens.length || 8} />
+            <ScreenGridSkeleton count={versionScreens.length || 8} />
           ) : (
             <ScreenGrid
               screens={sortedScreens}
@@ -829,14 +828,14 @@ export function AppDetailView({
 
       {tab === 'flows' && (
         <section className="ins-tabpanel">
-          {flows.length === 0 ? (
+          {versionFlows.length === 0 ? (
             <EmptyState title="No flows stored for this app yet" />
           ) : (
             // Inside one product the categories are what you navigate by, so
             // this view groups them in a list rather than listing them flat as
             // the all-flows page does.
             <FlowsBrowser
-              entries={flows.map((f) => ({
+              entries={versionFlows.map((f) => ({
                 flow: f,
                 screens: f.screenIds.map((id) => screenById.get(id)).filter((s): s is Screen => Boolean(s)),
               }))}
@@ -872,7 +871,7 @@ export function AppDetailView({
 
       {tab === 'patterns' && (
         <section className="ins-tabpanel ins-shot-panel">
-          {patterns.length === 0 ? (
+          {versionPatternCount === 0 ? (
             <EmptyState title="No patterns matched this app's screens yet" />
           ) : textLoading ? (
             <ScreenGridSkeleton count={patternScreens.length || 6} />

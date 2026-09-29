@@ -6,6 +6,7 @@ import { adminApi, type AdminAppRecord, type AdminState } from '@/lib/inspiratio
 import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
 import { INDUSTRIES, type Industry } from '@/lib/inspirations/types';
 import { PlusIcon, TrashIcon, UploadIcon } from '../Icons';
+import { AppVersionScreens } from './AppVersionScreens';
 
 /**
  * App records: the products screenshots belong to.
@@ -39,6 +40,7 @@ export function AppsPanel({
   const [idTouched, setIdTouched] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [logoFor, setLogoFor] = useState<string | null>(null);
+  const [managingId, setManagingId] = useState<string | null>(null);
 
   const startNew = () => {
     setDraft(EMPTY);
@@ -219,6 +221,14 @@ export function AppsPanel({
                     type="button"
                     className="ins-btn ins-btn--sm"
                     disabled={busy}
+                    onClick={() => setManagingId(managingId === app.id ? null : app.id)}
+                  >
+                    {managingId === app.id ? 'Close' : 'Screens'}
+                  </button>
+                  <button
+                    type="button"
+                    className="ins-btn ins-btn--sm"
+                    disabled={busy}
                     onClick={() => {
                       setLogoFor(app.id);
                       logoInputRef.current?.click();
@@ -240,6 +250,9 @@ export function AppsPanel({
                   </button>
                 </div>
               </div>
+              {managingId === app.id && (
+                <AppVersionScreens app={app} files={screens} busy={busy} run={run} />
+              )}
             </div>
           );
         })}

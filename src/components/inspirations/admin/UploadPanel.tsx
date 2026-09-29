@@ -53,6 +53,9 @@ export function UploadPanel({
   const [newApp, setNewApp] = useState({ name: '', id: '', industry: 'saas' as Industry });
   const [idTouched, setIdTouched] = useState(false);
   const [platform, setPlatform] = useState<Platform>('web');
+  // Blank means "figure it out" — the app's newest existing version, or
+  // today if it has none yet, the same default the crawler uses.
+  const [version, setVersion] = useState('');
   const [overwrite, setOverwrite] = useState(false);
   const [queue, setQueue] = useState<Staged[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -120,7 +123,7 @@ export function UploadPanel({
         const ext = item.name.slice(item.name.lastIndexOf('.'));
         const fileName = base.startsWith(item.screenType) ? item.name : `${item.screenType}-${base}${ext}`;
 
-        await adminApi.uploadScreen(platform, appId, fileName, item.file, overwrite);
+        await adminApi.uploadScreen(platform, appId, fileName, item.file, overwrite, version || undefined);
         update(item.key, { status: 'done', message: 'Uploaded' });
       } catch (err) {
         update(item.key, { status: 'failed', message: (err as Error).message });
@@ -175,6 +178,12 @@ export function UploadPanel({
               </option>
             ))}
           </select>
+        </label>
+
+        <label className="ins-field">
+          <span className="ins-field-label">Version</span>
+          <input className="ins-input" type="date" value={version} onChange={(e) => setVersion(e.target.value)} />
+          <span className="ins-field-hint">Blank uses the app&rsquo;s current version, or today if it has none.</span>
         </label>
 
         <label className="ins-checkline">
@@ -269,7 +278,11 @@ export function UploadPanel({
           </p>
           <p className="ins-dropzone-desc">
             PNG, JPEG, WebP, AVIF or GIF. Each file is stored under{' '}
-            <code>screens/{platform}/{appId || '<app>'}/</code>.
+            <code>
+              screens/{platform}/{appId || '<app>'}
+              {version ? `/versions/${version}` : ''}/
+            </code>
+            .
           </p>
         </div>
         <button

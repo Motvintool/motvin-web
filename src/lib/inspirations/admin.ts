@@ -95,6 +95,15 @@ export type AdminScreenFile = {
   sidecar: ScreenSidecar | null;
   published: boolean;
   blockedReason: string | null;
+  /** Which dated capture this file belongs to, e.g. "2026-09". */
+  version: string;
+};
+
+export type AdminAppVersion = {
+  id: string;
+  label: string;
+  capturedAt: string;
+  isLatest: boolean;
 };
 
 export type ScreenSidecar = {
@@ -113,6 +122,8 @@ export type AdminAppRecord = {
   website?: string;
   tagline?: string;
   logo?: string;
+  versions?: AdminAppVersion[];
+  currentVersion?: string | null;
 };
 
 export type AdminSourceRecord = {
@@ -218,16 +229,22 @@ export const adminApi = {
     fileName: string,
     file: Blob,
     overwrite = false,
+    /** Which dated capture to file it under; omit to use the app's newest existing version (or today, for a brand-new app). */
+    version?: string,
+    /** The flow folder to file it under, when it belongs in one; omit for a loose screen. */
+    flow?: string,
   ): Promise<{ id: string; file: string; width: number; height: number; report: BuildReport }> {
     const name = safeFileName(fileName);
-    const res = await fetch(
-      `${baseUrl()}/screens/${platform}/${appId}/${name}${overwrite ? '?overwrite=1' : ''}`,
-      {
-        method: 'POST',
-        headers: await authHeaders({ 'Content-Type': contentTypeFor(name) }),
-        body: file,
-      },
-    );
+    const params = new URLSearchParams();
+    if (overwrite) params.set('overwrite', '1');
+    if (version !== undefined) params.set('version', version);
+    if (flow) params.set('flow', flow);
+    const qs = params.toString();
+    const res = await fetch(`${baseUrl()}/screens/${platform}/${appId}/${name}${qs ? `?${qs}` : ''}`, {
+      method: 'POST',
+      headers: await authHeaders({ 'Content-Type': contentTypeFor(name) }),
+      body: file,
+    });
     return unwrap(res);
   },
 
@@ -247,10 +264,19 @@ export const adminApi = {
     appId: string,
     fileName: string,
     meta: ScreenSidecar,
+    /** Which dated capture the file is already in; omit for the legacy (undated) bucket. */
+    version?: string,
+    /** The flow folder it already sits in, when it is inside one. */
+    flow?: string,
   ): Promise<{ id: string; report: BuildReport }> {
-    // A screen inside a flow folder is "flow/3.png": one path segment to the
-    // backend, so the slash travels encoded.
-    const res = await fetch(`${baseUrl()}/screens/${platform}/${appId}/${encodeURIComponent(fileName)}/meta`, {
+    // `fileName` is always the bare leaf — a version or a flow folder is
+    // never part of it, only ever a query param alongside it, so neither
+    // has to travel as a literal `/` inside this one path segment.
+    const params = new URLSearchParams();
+    if (version) params.set('version', version);
+    if (flow) params.set('flow', flow);
+    const qs = params.toString();
+    const res = await fetch(`${baseUrl()}/screens/${platform}/${appId}/${encodeURIComponent(fileName)}/meta${qs ? `?${qs}` : ''}`, {
       method: 'PUT',
       headers: await authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(meta),
@@ -258,8 +284,12 @@ export const adminApi = {
     return unwrap(res);
   },
 
-  async deleteScreen(platform: Platform, appId: string, fileName: string): Promise<{ report: BuildReport }> {
-    const res = await fetch(`${baseUrl()}/screens/${platform}/${appId}/${encodeURIComponent(fileName)}`, {
+  async deleteScreen(platform: Platform, appId: string, fileName: string, version?: string, flow?: string): Promise<{ report: BuildReport }> {
+    const params = new URLSearchParams();
+    if (version) params.set('version', version);
+    if (flow) params.set('flow', flow);
+    const qs = params.toString();
+    const res = await fetch(`${baseUrl()}/screens/${platform}/${appId}/${encodeURIComponent(fileName)}${qs ? `?${qs}` : ''}`, {
       method: 'DELETE',
       headers: await authHeaders(),
     });
@@ -303,6 +333,30 @@ export const adminApi = {
 
   async deleteFlow(flowId: string): Promise<{ report: BuildReport }> {
     const res = await fetch(`${baseUrl()}/flows/${flowId}`, {
+      method: 'DELETE',
+      headers: await authHeaders(),
+    });
+    return unwrap(res);
+  },
+
+  async listVersions(appId: string): Promise<AdminAppVersion[]> {
+    const res = await fetch(`${baseUrl()}/apps/${appId}/versions`, { headers: await authHeaders() });
+    return unwrap(res);
+  },
+
+  /** Renames a dated version — the only way to change which one is "Latest". */
+  async renameVersion(appId: string, versionId: string, newVersionId: string): Promise<{ versions: AdminAppVersion[]; report: BuildReport }> {
+    const res = await fetch(`${baseUrl()}/apps/${appId}/versions/${versionId}`, {
+      method: 'PUT',
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ versionId: newVersionId }),
+    });
+    return unwrap(res);
+  },
+
+  /** Removes an entire dated version — its screens, sidecars and analysis records. */
+  async deleteVersion(appId: string, versionId: string): Promise<{ removed: { screens: number; analysis: number }; report: BuildReport }> {
+    const res = await fetch(`${baseUrl()}/apps/${appId}/versions/${versionId}`, {
       method: 'DELETE',
       headers: await authHeaders(),
     });

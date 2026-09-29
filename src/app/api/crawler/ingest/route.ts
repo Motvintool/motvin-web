@@ -48,6 +48,17 @@ export async function POST(request: Request) {
   const keepLoading = params.get('loading') === '1';
   const platform = (params.get('platform') ?? 'ios').trim().toLowerCase();
   if (!['ios', 'android', 'web'].includes(platform)) return fail('platform must be ios, android or web.', 400);
+  // Which dated capture to publish into — omit to let the crawler default to
+  // today, so a re-run on a later day lands alongside the last one instead of
+  // merging into it.
+  const version = params.get('version')?.trim() || null;
+  if (version && !/^\d{4}-\d{2}-\d{2}$/.test(version)) return fail('version must be in YYYY-MM-DD form.', 400);
+  // An app already in the library — skips identification, so these screens
+  // are added to it rather than possibly identified as a new one. Omit for
+  // "New app", the admin page's default, where the app is worked out from
+  // the screens themselves.
+  const appId = params.get('appId')?.trim() || null;
+  if (appId && !/^[a-z0-9][a-z0-9-]{0,63}$/.test(appId)) return fail('appId must be lower-case letters, digits and hyphens.', 400);
 
   // The video's own name is the last resort for naming the app, used when no
   // analyzer can identify it. A fixed temp name would make every such upload an
@@ -90,6 +101,8 @@ export async function POST(request: Request) {
     '--fps', String(fps),
     '--min-hold', String(minHold),
     '--platform', platform,
+    ...(version ? ['--version', version] : []),
+    ...(appId ? ['--app-id', appId] : []),
     ...(keepBrief ? [] : ['--no-brief']),
     ...(keepLoading ? ['--keep-loading'] : []),
   ];

@@ -81,6 +81,54 @@ export function safeName(name) {
 }
 
 /**
+ * Versioning matches motvin-backend's manifest.builder.ts exactly: a dated
+ * capture lives at `screens/<platform>/<app>/versions/<YYYY-MM-DD>/…`, same
+ * shape (loose files or `<flow>/<n>.png`) as an unversioned publish, just
+ * rooted one level deeper. Passing no `version` keeps today's flat layout —
+ * this stays a plain, versioning-optional primitive; `ingestFolder` (the real
+ * entry point behind both the CLI and the admin page's video upload) is what
+ * decides whether and which version to use, by calling `resolveVersionId`.
+ */
+export const VERSIONS_DIR_NAME = 'versions';
+const VERSION_ID_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Which version a fresh capture should land in: an explicit `--version`, or
+ * today's date. There is no pin any more — renaming a version's date, from
+ * the admin's version picker, is the only way to change which one is
+ * "Latest" — so a run with no explicit version always starts (or adds to)
+ * today's dated folder, never silently folds into an older existing one.
+ */
+export function resolveVersionId(dataDir, appId, explicit) {
+  if (explicit) {
+    if (!VERSION_ID_RE.test(explicit)) {
+      throw new Error(`--version must be in YYYY-MM-DD form (got "${explicit}")`);
+    }
+    return explicit;
+  }
+  return localDateString();
+}
+
+/**
+ * Today's date where this machine actually is, as `YYYY-MM-DD`.
+ * `toISOString()` reports UTC, which is a different calendar day from local
+ * "today" for several hours around local midnight (IST, five and a half
+ * hours ahead, still sees UTC on yesterday's date until 5:30am) — an ingest
+ * run in that window must not land a day early.
+ */
+export function localDateString(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** Mirrors manifest.builder.ts's `screenIdFor`: every path segment, hyphenated. */
+function idFor(appId, platform, relativePath) {
+  return `${appId}-${platform}-${relativePath.split('/').filter(Boolean).join('-')}`;
+}
+
+/**
  * Gives every node a name no other node in the same publish shares.
  *
  * Tab-based apps title every section with the same widget — "Address
@@ -152,8 +200,16 @@ export function publishCrawl(options) {
   if (!INDUSTRIES.includes(app.industry)) {
     throw new Error(`app.industry "${app.industry}" is not one the builder accepts: ${INDUSTRIES.join(', ')}`);
   }
-
-  const appDir = join(dataDir, 'screens', platform, app.appId);
+  if (options.version && !VERSION_ID_RE.test(options.version)) {
+    throw new Error(`version must be in YYYY-MM-DD form (got "${options.version}")`);
+  }
+  const versionId = options.version || null;
+  // The path this run's screens are addressed under, relative to the app
+  // folder — `versions/<id>` when versioned, nothing when not, so an
+  // unversioned publish (selftest, a caller with no opinion) writes exactly
+  // where it always has.
+  const versionPrefix = versionId ? `${VERSIONS_DIR_NAME}/${versionId}/` : '';
+  const appDir = versionId ? join(dataDir, 'screens', platform, app.appId, VERSIONS_DIR_NAME, versionId) : join(dataDir, 'screens', platform, app.appId);
   const analysisDir = join(dataDir, 'analysis');
 
   const written = [];
@@ -239,7 +295,7 @@ export function publishCrawl(options) {
     });
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateString();
   const capture = options.capture ?? {};
 
   // ─── Screens ────────────────────────────────────────────────────────────
@@ -250,10 +306,8 @@ export function publishCrawl(options) {
     const name = names.get(node.id);
 
     let relativePath;
-    let screenId;
     if (placed) {
       relativePath = `${placed.folder}/${placed.position}`;
-      screenId = `${app.appId}-${platform}-${placed.folder}-${placed.position}`;
     } else {
       const index = (typeCounts.get(publishedType) ?? 0) + 1;
       typeCounts.set(publishedType, index);
@@ -261,8 +315,12 @@ export function publishCrawl(options) {
       // sidecar overrides it, so the prefix has to be a published type.
       const base = safeName(index === 1 ? publishedType : `${publishedType}-${index}`);
       relativePath = base;
-      screenId = `${app.appId}-${platform}-${base}`;
     }
+    // Ids and URLs are addressed from the app folder, so they carry the
+    // version prefix; `relativePath` itself stays exactly what it always was
+    // — it is joined onto `appDir`, which is already inside `versions/<id>/`
+    // when this run is versioned.
+    const screenId = idFor(app.appId, platform, `${versionPrefix}${relativePath}`);
 
     const fileName = `${relativePath}.png`;
     const states = filterStates([...(analysis.states ?? []), stateFor(analysis.screenType)].filter(Boolean));
@@ -403,9 +461,9 @@ export function publishCrawl(options) {
       brief: Boolean(nodeCapture?.brief),
       atSeconds: nodeCapture?.start ?? null,
       holdSeconds: nodeCapture?.holdSeconds ?? null,
-      // Versioned the way the manifest builder versions it, so the admin
-      // page shows the frame just written rather than a cached earlier one.
-      url: `/api/inspirations/screens/${platform}/${app.appId}/${fileName}?v=${Math.floor(Date.now() / 1000).toString(36)}`,
+      // Cache-busted by the write time, so the admin page shows the frame
+      // just written rather than a cached earlier one.
+      url: `/api/inspirations/screens/${platform}/${app.appId}/${versionPrefix}${fileName}?v=${Math.floor(Date.now() / 1000).toString(36)}`,
     });
   }
 
@@ -464,7 +522,7 @@ export function publishCrawl(options) {
   if (flowGroups.length) {
     // The named journeys: each folder is one flow, its screens already in the
     // order they were walked.
-    const idOfGroup = new Map(flowGroups.map((group) => [keyOf(group), `${app.appId}-${platform}-${group.folder}`]));
+    const idOfGroup = new Map(flowGroups.map((group) => [keyOf(group), idFor(app.appId, platform, `${versionPrefix}${group.folder}`)]));
     // Children before their parent would read backwards in the store; parents
     // first, then children in walk order.
     flowGroups.sort((a, b) => a.depth - b.depth || flowGroups.indexOf(a) - flowGroups.indexOf(b));
@@ -472,7 +530,7 @@ export function publishCrawl(options) {
       const screenIds = group.nodeIds.map((nodeId) => screenIdByNode.get(nodeId)).filter(Boolean);
       if (!screenIds.length) continue;
       flows.push({
-        id: `${app.appId}-${platform}-${group.folder}`,
+        id: idFor(app.appId, platform, `${versionPrefix}${group.folder}`),
         appId: app.appId,
         name: group.name,
         ...(group.summary ? { summary: group.summary } : {}),
@@ -506,7 +564,7 @@ export function publishCrawl(options) {
       if (members.length < 2) continue;
       members.sort((a, b) => a.node.depth - b.node.depth || a.index - b.index);
       flows.push({
-        id: `${app.appId}-${platform}-${category}`,
+        id: idFor(app.appId, platform, `${versionPrefix}${category}`),
         appId: app.appId,
         name: category.charAt(0).toUpperCase() + category.slice(1),
         category,
@@ -531,6 +589,7 @@ export function publishCrawl(options) {
   return {
     dataDir,
     appDir,
+    version: versionId,
     screens: written,
     skipped,
     flows,
@@ -546,12 +605,16 @@ export function publishCrawl(options) {
  * the library can show the screens straight away and get its content a few
  * minutes later.
  *
- * @param {{dataDir?: string, app: object, graph: ScreenGraph, written: object[], flows: object[], flowGroups: object[]}} options
+ * @param {{dataDir?: string, version?: string, app: object, graph: ScreenGraph, written: object[], flows: object[], flowGroups: object[]}} options
  */
 export function updatePublishedContent(options) {
   const dataDir = resolveDataDir(options.dataDir);
   const platform = options.app.platform || 'ios';
-  const appDir = join(dataDir, 'screens', platform, options.app.appId);
+  // Must agree with the appDir publishCrawl actually wrote these screens to —
+  // callers pass back the `version` publishCrawl resolved and returned.
+  const appDir = options.version
+    ? join(dataDir, 'screens', platform, options.app.appId, VERSIONS_DIR_NAME, options.version)
+    : join(dataDir, 'screens', platform, options.app.appId);
   const analysisDir = join(dataDir, 'analysis');
   let screens = 0;
   let flows = 0;
@@ -589,9 +652,10 @@ export function updatePublishedContent(options) {
 
   const flowsFile = join(dataDir, 'flows.json');
   const flowsDoc = readJson(flowsFile, { version: 1, flows: [] });
+  const versionPrefix = options.version ? `${VERSIONS_DIR_NAME}/${options.version}/` : '';
   const keyOf = (group) => group.key ?? group.name;
   for (const flow of options.flows) {
-    const group = options.flowGroups.find((candidate) => `${options.app.appId}-${platform}-${candidate.folder}` === flow.id);
+    const group = options.flowGroups.find((candidate) => idFor(options.app.appId, platform, `${versionPrefix}${candidate.folder}`) === flow.id);
     if (!group) continue;
     const stored = (flowsDoc.flows || []).find((entry) => entry.id === flow.id);
     if (!stored) continue;

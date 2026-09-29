@@ -21,7 +21,7 @@ import { selfTest } from './src/selftest.js';
 import { Simulator } from './src/device.js';
 import { Crawler, DEFAULTS } from './src/crawler.js';
 import { assertAuthorized } from './src/safety.js';
-import { publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
+import { localDateString, publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
 import { classifyStored, ingestFolder, researchStored } from './src/ingest.js';
 import { extractJson, pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
 import { AI_PROVIDERS, aiChat, aiChatStream, aiConfig, aiStatus, canStream, readAiSettings, writeAiSettings } from './src/ai.js';
@@ -76,6 +76,8 @@ ${bold('ingest options')}
   --authorized              confirm you hold the rights to capture this app ${dim('required')}
   --app <file>              app config JSON. Omit it and the app is identified
                             from the screens themselves
+  --app-id <id>             add to an app already in the library, by its slug —
+                            skips identification, instead of a config file
   --authorized-by <who>     recorded in sources.json when there is no --app
   --fps <n>                 frames per second to pull from a video          ${dim('default 5')}
   --min-hold <seconds>      how long a screen must hold still to count      ${dim('default 0.5')}
@@ -83,6 +85,7 @@ ${bold('ingest options')}
                             when they are distinct (splash, toasts, spinners)
   --keep-loading            publish pages still loading too; by default they
                             are left out of the library
+  --version <YYYY-MM-DD>    which dated capture to publish into            ${dim("default: today")}
   --data-dir <path>         Inspirations store
   --no-classify             skip analysis; file everything as "other"
   --dry-run                 report what would be written, write nothing
@@ -240,19 +243,55 @@ async function runCrawl(flags) {
   return 0;
 }
 
+/**
+ * An app already in the library, as `runIngest`'s own `app` shape — used by
+ * `--app-id`, the "add to an existing app" path the admin page's video
+ * upload offers alongside "identify a new app from the screens". Unlike
+ * `--app`, this needs no config file: everything the pipeline needs (name,
+ * industry) is already recorded in apps.json from when the app was first
+ * ingested.
+ */
+function loadExistingApp(dataDirRaw, appId) {
+  const dataDir = resolveDataDir(dataDirRaw);
+  const appsFile = join(dataDir, 'apps.json');
+  if (!existsSync(appsFile)) return null;
+  const apps = JSON.parse(readFileSync(appsFile, 'utf-8'))?.apps ?? [];
+  return apps.find((a) => a.id === appId) ?? null;
+}
+
 async function runIngest(flags) {
   if (!flags.from) {
     log.error('--from is required. See `node crawl.js` for usage.');
     return 1;
   }
 
-  // With --app, the config supplies the app and its rights record. Without it,
-  // the app is identified from the screens themselves — which is what the admin
-  // page's video upload does, so that a capture needs no form first.
-  const app = flags.app ? loadAppConfig(flags.app) : null;
-  if (app) {
+  // With --app, the config file supplies the app and its rights record. With
+  // --app-id, it names an app already in the library — its record there
+  // supplies name and industry, so these screens are added to it rather than
+  // identified as a possibly-different app of the same name. Without either,
+  // the app is identified from the screens themselves — which is what the
+  // admin page's video upload does by default, so a capture needs no form
+  // first.
+  let app = null;
+  if (flags.appId) {
+    const existing = loadExistingApp(flags.dataDir, flags.appId);
+    if (!existing) {
+      log.error(`no app "${flags.appId}" in the library — check Apps for its id.`);
+      return 1;
+    }
+    app = {
+      appId: existing.id,
+      name: existing.name,
+      industry: existing.industry,
+      website: existing.website || '',
+      tagline: existing.tagline || '',
+      authorization: { permission: '', authorizedBy: flags.authorizedBy || '', grantedAt: localDateString() },
+    };
+  } else if (flags.app) {
+    app = loadAppConfig(flags.app);
     assertAuthorized(app, { authorized: flags.authorized === true });
-  } else if (flags.authorized !== true) {
+  }
+  if (!app && flags.authorized !== true) {
     log.error('pass --authorized to confirm you hold the rights to capture this app.');
     return 1;
   }
@@ -301,7 +340,7 @@ async function runIngest(flags) {
     app,
     authorization: app
       ? app.authorization
-      : { permission: '', authorizedBy: flags.authorizedBy || '', grantedAt: new Date().toISOString().slice(0, 10) },
+      : { permission: '', authorizedBy: flags.authorizedBy || '', grantedAt: localDateString() },
     dataDir: flags.dataDir,
     backend,
     vision: flags.__vision,
@@ -313,6 +352,7 @@ async function runIngest(flags) {
     keepBrief: flags.brief !== false,
     keepLoading: flags.keepLoading === true,
     platform: flags.platform,
+    version: flags.version,
     dryRun: flags.dryRun === true,
     onProgress: flags.json
       ? (event) => process.stdout.write(`${PROGRESS_MARKER} ${JSON.stringify(event)}\n`)

@@ -4,6 +4,8 @@ import { describeOp, isDestructive, labelFor, type AdminOp, type AssistantAction
 import { askModel, cachedAiStatus } from '@/lib/server/ai';
 import { backendBase } from '@/lib/server/adminAuth';
 import { listJobs } from '@/lib/server/ingestJobs';
+import { splitScreenFile } from '@/lib/inspirations/screenPaths';
+import { localDateString } from '@/lib/inspirations/dates';
 
 /**
  * The admin assistant — a conversation, not a menu.
@@ -35,9 +37,19 @@ export type AssistantAnswer = {
 export type HistoryLine = { role: 'user' | 'assistant'; text: string };
 
 type Counts = { screens?: number; apps?: number; flows?: number; patterns?: number };
-type StateApp = { id: string; name: string; tagline?: string; industry?: string; website?: string; logo?: string };
+type StateAppVersion = { id: string; label: string; capturedAt: string; isLatest: boolean };
+type StateApp = {
+  id: string;
+  name: string;
+  tagline?: string;
+  industry?: string;
+  website?: string;
+  logo?: string;
+  versions?: StateAppVersion[];
+  currentVersion?: string | null;
+};
 type StateFlow = { id: string; appId: string; name: string; platform?: string; parentId?: string | null; screenIds?: string[] };
-type StateFile = { id?: string; appId: string; platform: string; file: string; published?: boolean; sidecar?: { name?: string; tags?: string[] } | null };
+type StateFile = { id?: string; appId: string; platform: string; file: string; version?: string; published?: boolean; sidecar?: { name?: string; tags?: string[] } | null };
 type LibraryState = {
   counts?: Counts;
   apps?: StateApp[];
@@ -172,6 +184,18 @@ function findFlow(state: LibraryState | null, appId: string | null, wanted: stri
   return flows.find((flow) => norm(flow.name) === needle || flow.id === needle) ?? flows.find((flow) => norm(flow.name).startsWith(needle)) ?? flows.find((flow) => norm(flow.name).includes(needle)) ?? null;
 }
 
+/** "Latest"/"newest"/"current", an exact id, or a label ("Jan 2025"), matched loosely. */
+function matchVersion(versions: StateAppVersion[], wanted: string): StateAppVersion | null {
+  const needle = norm(wanted);
+  return (
+    (/^(latest|newest|current|most recent)$/.test(needle) ? versions.find((v) => v.isLatest) : null) ??
+    versions.find((v) => v.id === needle) ??
+    versions.find((v) => norm(v.label) === needle) ??
+    versions.find((v) => norm(v.label).includes(needle) || needle.includes(norm(v.label))) ??
+    null
+  );
+}
+
 function countsFor(state: LibraryState | null, appId: string) {
   return {
     screens: (state?.files ?? []).filter((file) => file.appId === appId).length,
@@ -199,6 +223,7 @@ const OP_SCHEMA = `"op": null, or exactly one of:
   {"kind": "create-flow", "app": "<app name>", "to": "<new flow name>", "category": "<flow category or null>", "screens": ["<screen name>", ...]}
   {"kind": "set-flow-parent", "app": "<app name or null>", "flow": "<flow name>", "parent": "<parent flow name, or null for top level>"}
   {"kind": "set-source-status", "app": "<app name>", "to": "pending" | "review" | "approved" | "rejected"}
+  {"kind": "delete-app-version", "app": "<app name>", "to": "<a version id, a month like 'Jan 2025', or 'latest'>"}
   {"kind": "stop-run"}
   {"kind": "research-app", "app": "<app name>"}
   {"kind": "set-ai", "model": "<model name or null>", "enabled": true | false | null}
@@ -329,6 +354,22 @@ function validateOp(
       if (current === match) return { note: `${app.name} is already marked ${match}.`, settled: true };
       return confirm({ kind: 'set-source-status', appId: app.id, name: app.name, status: match });
     }
+    case 'delete-app-version': {
+      if (!app) return noApp;
+      const versions = app.versions ?? [];
+      if (versions.length <= 1) return { note: `${app.name} has only one version — delete the app if you want it gone entirely.`, settled: true };
+      const match = matchVersion(versions, String(op.to ?? ''));
+      if (!match) return { note: `${app.name}’s versions are ${versions.map((v) => (v.isLatest ? 'Latest' : v.label)).join(', ')}.` };
+      const screens = (state?.files ?? []).filter((f) => f.appId === app.id && f.version === match.id).length;
+      return confirm({
+        kind: 'delete-app-version',
+        appId: app.id,
+        name: app.name,
+        versionId: match.id,
+        versionLabel: match.isLatest ? 'Latest' : match.label,
+        screens,
+      });
+    }
     case 'set-screen-tags':
     case 'set-screen-description': {
       if (!app) return noApp;
@@ -337,11 +378,13 @@ function validateOp(
       if (op.kind === 'set-screen-description') {
         const description = unquote(String(op.to ?? '')).slice(0, 600);
         if (!description || !grounded(description, grounding.saidByAdmin, grounding.askedToInvent)) return {};
-        return confirm({ kind: 'set-screen-description', platform: screen.platform, appId: app.id, file: screen.file, name: screenName(screen), description });
+        const descFile = splitScreenFile(screen.file, screen.version ?? '');
+        return confirm({ kind: 'set-screen-description', platform: screen.platform, appId: app.id, file: descFile.name, version: descFile.version, flow: descFile.flow, name: screenName(screen), description });
       }
       const tags = [...new Set(names(op.tags).map((tag) => tag.toLowerCase().replace(/[^a-z0-9 &-]/g, '').trim()).filter(Boolean))].slice(0, 12);
       if (!tags.length) return {};
-      return confirm({ kind: 'set-screen-tags', platform: screen.platform, appId: app.id, file: screen.file, name: screenName(screen), tags, mode: op.mode === 'replace' ? 'replace' : 'add' });
+      const tagsFile = splitScreenFile(screen.file, screen.version ?? '');
+      return confirm({ kind: 'set-screen-tags', platform: screen.platform, appId: app.id, file: tagsFile.name, version: tagsFile.version, flow: tagsFile.flow, name: screenName(screen), tags, mode: op.mode === 'replace' ? 'replace' : 'add' });
     }
     case 'add-to-flow':
     case 'remove-from-flow': {
@@ -432,7 +475,8 @@ function validateOp(
       const wanted = norm(String(op.to ?? '')).replace(/\s+/g, '_');
       const match = types.find((entry) => entry === wanted || entry.replace(/_/g, ' ') === norm(String(op.to ?? '')));
       if (!match) return { note: `“${op.to ?? ''}” is not a screen type the library knows — it has ${types.map((entry) => entry.replace(/_/g, ' ')).join(', ')}.` };
-      return confirm({ kind: 'set-screen-type', platform: screen.platform, appId: app.id, file: screen.file, name: screenName(screen), screenType: match });
+      const typeFile = splitScreenFile(screen.file, screen.version ?? '');
+      return confirm({ kind: 'set-screen-type', platform: screen.platform, appId: app.id, file: typeFile.name, version: typeFile.version, flow: typeFile.flow, name: screenName(screen), screenType: match });
     }
     case 'set-flow-category': {
       const owner = op.app ? findApp(state, op.app) : mentioned[0] ?? null;
@@ -451,10 +495,11 @@ function validateOp(
         const names = [...new Set((state?.files ?? []).filter((file) => file.appId === app.id).map(screenName))];
         return { note: `I can’t find a screen called “${op.screen ?? ''}” in ${app.name}. Its screens are ${names.slice(0, 25).join(', ')}${names.length > 25 ? ', …' : ''}.` };
       }
-      if (op.kind === 'delete-screen') return confirm({ kind: 'delete-screen', platform: screen.platform, appId: app.id, file: screen.file, name: screenName(screen) });
+      const opFile = splitScreenFile(screen.file, screen.version ?? '');
+      if (op.kind === 'delete-screen') return confirm({ kind: 'delete-screen', platform: screen.platform, appId: app.id, file: opFile.name, version: opFile.version, flow: opFile.flow, name: screenName(screen) });
       const to = unquote(String(op.to ?? '')).slice(0, 80);
       if (!to || !grounded(to, grounding.saidByAdmin, grounding.askedToInvent)) return {};
-      return confirm({ kind: 'rename-screen', platform: screen.platform, appId: app.id, file: screen.file, from: screenName(screen), to });
+      return confirm({ kind: 'rename-screen', platform: screen.platform, appId: app.id, file: opFile.name, version: opFile.version, flow: opFile.flow, from: screenName(screen), to });
     }
     case 'rename-flow':
     case 'delete-flow': {
@@ -620,7 +665,7 @@ function unclaim(text: string): string {
 
 /** Stage one: what, if anything, is the admin asking to change? JSON, short, unstreamed. */
 const READER = `You read one message from the admin of a design-reference library and decide whether it asks for a change to the library. Return JSON only: {"op": …} where ${OP_SCHEMA}
-Rules: op is null for questions, chat, thanks, or a bare "yes"/"confirm"/"ok". Only return an op for what THIS message asks — never pick a screen, flow or app the admin did not mention in it. Adding a new app to the library is done by uploading a screen recording of it, so "add an app", "new app", "add another app" is {"kind": "upload"} — never ask which existing app. "Keep the name Swiggy", "the name should stay Swiggy", "set the name to X", "call it X" are update-app with fields.name. "Stop the run/upload" is stop-run. "Rewrite/regenerate the names for X with AI" is research-app. "Use model M for chat", "turn the AI off/on" is set-ai. "Approve X", "mark X as reviewed/rejected" is set-source-status. "Add screens A and B to flow F", "move A into F" is add-to-flow; "take A out of F" is remove-from-flow; "create a flow F with A, B" is create-flow; "put flow F under G" is set-flow-parent. "Tag the splash screen as onboarding, brand" is set-screen-tags. "Open the flows page" is open with page. Use app, screen and flow names exactly as in the facts. Put values (a tagline, a name, a link) in the op only when the admin actually wrote them, or asked you to make one up ("suggest", "your wish", "another") — then write a good one (a tagline: one line in the app's voice, under 60 characters). Never invent a link. If a value is missing, still return the op with "fields": {} (or no "to"), so the assistant knows what to ask for. Use the recent conversation: "make it X" after a request about a tagline means that tagline.`;
+Rules: op is null for questions, chat, thanks, or a bare "yes"/"confirm"/"ok". Only return an op for what THIS message asks — never pick a screen, flow or app the admin did not mention in it. Adding a new app to the library is done by uploading a screen recording of it, so "add an app", "new app", "add another app" is {"kind": "upload"} — never ask which existing app. "Keep the name Swiggy", "the name should stay Swiggy", "set the name to X", "call it X" are update-app with fields.name. "Stop the run/upload" is stop-run. "Rewrite/regenerate the names for X with AI" is research-app. "Use model M for chat", "turn the AI off/on" is set-ai. "Approve X", "mark X as reviewed/rejected" is set-source-status. "Delete X's Jan 2025 version", "remove the Sep 2026 capture of X" is delete-app-version. "Add screens A and B to flow F", "move A into F" is add-to-flow; "take A out of F" is remove-from-flow; "create a flow F with A, B" is create-flow; "put flow F under G" is set-flow-parent. "Tag the splash screen as onboarding, brand" is set-screen-tags. "Open the flows page" is open with page. Use app, screen and flow names exactly as in the facts. Put values (a tagline, a name, a link) in the op only when the admin actually wrote them, or asked you to make one up ("suggest", "your wish", "another") — then write a good one (a tagline: one line in the app's voice, under 60 characters). Never invent a link. If a value is missing, still return the op with "fields": {} (or no "to"), so the assistant knows what to ask for. Use the recent conversation: "make it X" after a request about a tagline means that tagline.`;
 
 /** Stage two: the assistant's own words, streamed as plain text. */
 const PERSONA = `You are the Motvin assistant: the helper inside Motvin Inspirations, a design-reference library like Mobbin. You talk with the library's admin the way a sharp, friendly colleague would — warm, brief, specific, plain English, no markdown, never stiff or repetitive; if the same thing comes up twice, say it differently and add something useful. Use the facts you are given; never invent apps, screens, flows, runs, links or numbers.
@@ -718,7 +763,7 @@ export async function answerQuestion(
     .filter(Boolean)
     .join('\n');
   const facts = [
-    `Today: ${new Date(now).toISOString().slice(0, 10)}.`,
+    `Today: ${localDateString(new Date(now))}.`,
     counts ? `Library: ${counts.screens ?? 0} screens, ${counts.apps ?? 0} apps, ${counts.flows ?? 0} flows, ${counts.patterns ?? 0} patterns.` : null,
     `Apps: ${apps.map((app) => `${app.name} — ${countsFor(state, app.id).screens} screens, ${countsFor(state, app.id).flows} flows${app.tagline ? `, tagline “${app.tagline}”` : ''}`).join('; ') || 'none yet'}.`,
     `Editable app fields: name, tagline, industry (one of ${(state?.vocabulary?.industries ?? []).join(', ')}), website — the app's link, which is also what the “View in App Store” button opens. Screens can be renamed, deleted or retyped (types: ${(state?.vocabulary?.screenTypes ?? []).map((entry) => entry.replace(/_/g, ' ')).join(', ')}); flows can be renamed, deleted or filed under a category (${(state?.vocabulary?.flowCategories ?? []).join(', ')}).`,

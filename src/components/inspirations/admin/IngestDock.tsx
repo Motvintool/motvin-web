@@ -106,7 +106,7 @@ export function renderChat(text: string): string {
   return blocks.join('');
 }
 
-const SUGGESTIONS = ['How far is the run?', 'How long is left?', 'What did the last run do?', 'Which AI is on?'];
+const SUGGESTIONS = ['How far is the run?', 'How long is left?', 'What did the last run do?', 'Which AI is on?', "Set an app's version"];
 
 export function IngestDock() {
   const { user, ready } = useAuth();

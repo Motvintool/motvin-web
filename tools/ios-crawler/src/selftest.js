@@ -407,7 +407,10 @@ export async function selfTest() {
 
     check('duplicate captures are dropped', ingested.ingested === 2 && ingested.duplicates.length === 1, `${ingested.ingested} unique, ${ingested.duplicates.length} duplicate`);
     check('the duplicate points at the screen it repeats', ingested.duplicates[0].sameAs === 's001', ingested.duplicates[0].sameAs);
-    check('unclassified screens still reach the store', existsSync(join(ingestStore, 'screens', 'ios', 'ingest-selftest', 'other.png')));
+    check(
+      'unclassified screens still reach the store',
+      existsSync(join(ingestStore, 'screens', 'ios', 'ingest-selftest', 'versions', ingested.version, 'other.png')),
+    );
     check('ingested screens publish immediately', ingested.status === 'approved');
     check('classification being off is reported', ingested.analyzerUsable === false);
 
@@ -1058,6 +1061,47 @@ export async function selfTest() {
     check('the analysis record has a palette', captureRecord.palette?.[0]?.hex === '#ff5200');
     check('the analysis record names its analyzer', /on-device/.test(captureRecord.analyzer));
     check('edges skip over the excluded screen by name', captureRecord.sections[2].points.some((p) => p.includes('Leads to')) === false || true);
+    check('an unversioned publish reports no version, and stays flat', capturePublished.version === null);
+
+    log.heading('Publishing into a version');
+    const versionStore = join(dir, 'version-store');
+    mkdirSync(join(versionStore, 'screens', 'ios'), { recursive: true });
+    mkdirSync(join(versionStore, 'analysis'), { recursive: true });
+    for (const [file, value] of [['apps.json', { version: 1, apps: [] }], ['flows.json', { version: 1, flows: [] }], ['sources.json', { version: 1, sources: {} }]]) {
+      writeFileSync(join(versionStore, file), JSON.stringify(value));
+    }
+    const versionGraph = new ScreenGraph();
+    const versionNode = versionGraph.add({ fingerprint: printHome, labels: [], screenshot: home, analysis: analysisFor('Splash screen', 'splash') });
+    const versionPublished = publishCrawl({
+      graph: versionGraph,
+      dataDir: versionStore,
+      version: '2026-09-29',
+      flows: [{ name: 'Onboarding', category: 'onboarding', nodeIds: [versionNode.id] }],
+      app: { appId: 'versioned-app', name: 'Versioned App', industry: 'food', authorization: { permission: 'own-work', authorizedBy: 'self-test', grantedAt: '2026-01-01' } },
+    });
+    check(
+      'a versioned publish writes under screens/<platform>/<app>/versions/<id>/',
+      existsSync(join(versionStore, 'screens', 'ios', 'versioned-app', 'versions', '2026-09-29', 'onboarding', '1.png')),
+    );
+    check(
+      "a versioned screen's id carries the version, matching the manifest builder's scheme",
+      versionPublished.screens[0].screenId === 'versioned-app-ios-versions-2026-09-29-onboarding-1',
+      versionPublished.screens[0].screenId,
+    );
+    check(
+      "a versioned flow's id carries the version too",
+      versionPublished.flows[0]?.id === 'versioned-app-ios-versions-2026-09-29-onboarding',
+      versionPublished.flows[0]?.id,
+    );
+    check('publishCrawl reports the version it resolved', versionPublished.version === '2026-09-29');
+    check('a bad --version is refused', (() => {
+      try {
+        publishCrawl({ graph: versionGraph, dataDir: versionStore, version: 'not-a-date', app: { appId: 'versioned-app', name: 'Versioned App', industry: 'food' } });
+        return false;
+      } catch (error) {
+        return /YYYY-MM-DD/.test(error.message);
+      }
+    })());
 
     log.heading('Result');
     if (failures.length) {
