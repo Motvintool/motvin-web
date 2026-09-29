@@ -223,7 +223,7 @@ async function runCrawl(flags) {
   }
 
   log.heading('Publishing');
-  const result = publishCrawl({
+  const result = await publishCrawl({
     graph,
     app,
     dataDir: flags.dataDir,

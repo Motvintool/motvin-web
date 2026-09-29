@@ -450,7 +450,7 @@ export async function ingestFolder(options) {
 
     log.heading('Publishing');
     report(options, 'publish', 'Writing screens into the library');
-    const result = publishCrawl({
+    const result = await publishCrawl({
       graph,
       app: resolvedApp,
       flows: flowGroups,

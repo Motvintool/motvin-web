@@ -290,9 +290,9 @@ Into the Inspirations store (`motvin-backend/data/inspirations/`):
 
 | Path | Contents |
 |---|---|
-| `screens/ios/<app>/<flow>/<n>.png` | the screen, inside its journey, numbered in walk order |
+| `screens/ios/<app>/<flow>/<n>.webp` | the screen, inside its journey, numbered in walk order — re-encoded from the captured PNG to WebP (quality 85) on the way in, at roughly a tenth the size with no visible loss |
 | `screens/ios/<app>/<flow>/<n>.json` | sidecar the builder reads — name, screenType, tags, elements, style |
-| `screens/ios/<app>/<type>[-n].png` | the fallback layout, used when screens could not be grouped |
+| `screens/ios/<app>/<type>[-n].webp` | the fallback layout, used when screens could not be grouped |
 | `analysis/<screen-id>.json` | the full record: fine-grained screen type, description, flow, navigation edges, blocked reason |
 | `apps.json`, `flows.json` | upserted |
 | `sources.json` | upserted as **`approved`** — origin recorded, nothing held back |

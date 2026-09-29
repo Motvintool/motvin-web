@@ -5,11 +5,11 @@
  * motvin-backend/data/inspirations/README.md and enforced by
  * manifest.builder.ts, so this module's whole job is translation:
  *
- *   screens/ios/<app>/<flow>/<n>.png    the frame, inside its journey
+ *   screens/ios/<app>/<flow>/<n>.webp   the frame, inside its journey
  *   screens/ios/<app>/<flow>/<n>.json   the sidecar the builder reads — name,
  *                                       type, state, description, tags,
  *                                       elements, style, capture facts
- *   screens/ios/<app>/<type>[-n].png    the fallback layout, when screens
+ *   screens/ios/<app>/<type>[-n].webp   the fallback layout, when screens
  *                                       could not be grouped
  *   analysis/<screen-id>.json           the full record — the fine-grained
  *                                       screen type, the description, the
@@ -19,6 +19,15 @@
  *                                       led to
  *   apps.json / flows.json              upserted
  *   sources.json                        upserted as status "approved"
+ *
+ * The frame arrives as a PNG — that is what the capture and analysis stages
+ * both want, and changing it would touch every OCR and vision call in the
+ * pipeline for no reason. It is re-encoded to WebP (quality 85) exactly once,
+ * here, on the way into permanent storage: a screenshot is mostly flat colour
+ * and sharp text, the content WebP compresses hardest, and at this quality
+ * the two are indistinguishable side by side while the file is roughly a
+ * tenth the size — the same trade a captured-screen library like Mobbin's
+ * makes for its own published screens.
  *
  * sources.json still records where each capture came from — its permission,
  * licence and attribution all surface in the manifest and on the screen page.
@@ -30,9 +39,10 @@
  * one.
  */
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import sharp from 'sharp';
 import { run } from './exec.js';
 import { log } from './log.js';
 import { buildSections } from './heuristics.js';
@@ -83,7 +93,7 @@ export function safeName(name) {
 /**
  * Versioning matches motvin-backend's manifest.builder.ts exactly: a dated
  * capture lives at `screens/<platform>/<app>/versions/<YYYY-MM-DD>/…`, same
- * shape (loose files or `<flow>/<n>.png`) as an unversioned publish, just
+ * shape (loose files or `<flow>/<n>.webp`) as an unversioned publish, just
  * rooted one level deeper. Passing no `version` keeps today's flat layout —
  * this stays a plain, versioning-optional primitive; `ingestFolder` (the real
  * entry point behind both the CLI and the admin page's video upload) is what
@@ -182,11 +192,12 @@ function uniqueNames(nodes) {
 }
 
 /**
- * Publishes a crawl.
+ * Publishes a crawl. Async because writing a screen now means re-encoding
+ * it to WebP, not just copying bytes.
  * @param {{graph: ScreenGraph, app: object, flows?: object[], dataDir?: string, dryRun?: boolean,
  *          capture?: {source?: string, fps?: number, frames?: number, durationSeconds?: number}}} options
  */
-export function publishCrawl(options) {
+export async function publishCrawl(options) {
   const { graph, app } = options;
   const dataDir = resolveDataDir(options.dataDir);
   const platform = app.platform || 'ios';
@@ -240,7 +251,7 @@ export function publishCrawl(options) {
   /**
    * Where each screen goes.
    *
-   * With a flow grouping, a screen lives at `<flow>/<position>.png` — the
+   * With a flow grouping, a screen lives at `<flow>/<position>.webp` — the
    * folder names the journey and the number is the order it was walked. That
    * ordering is the thing a gallery wants and a flat filename cannot carry.
    *
@@ -322,7 +333,7 @@ export function publishCrawl(options) {
     // when this run is versioned.
     const screenId = idFor(app.appId, platform, `${versionPrefix}${relativePath}`);
 
-    const fileName = `${relativePath}.png`;
+    const fileName = `${relativePath}.webp`;
     const states = filterStates([...(analysis.states ?? []), stateFor(analysis.screenType)].filter(Boolean));
     const nodeCapture = node.capture ?? null;
 
@@ -442,7 +453,9 @@ export function publishCrawl(options) {
     };
 
     if (!options.dryRun) {
-      copyFileSync(node.screenshot, join(appDir, fileName));
+      // The captured PNG is what OCR and vision already read; it is only
+      // ever turned into WebP right here, once, on the way into the library.
+      await sharp(node.screenshot).webp({ quality: 85 }).toFile(join(appDir, fileName));
       writeJson(join(appDir, `${relativePath}.json`), sidecar);
       writeJson(join(analysisDir, `${screenId}.json`), analysisRecord);
     }

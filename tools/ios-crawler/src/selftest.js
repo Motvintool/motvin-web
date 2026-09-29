@@ -327,7 +327,7 @@ export async function selfTest() {
       depth: 2,
     });
 
-    const published = publishCrawl({
+    const published = await publishCrawl({
       graph: publishGraph,
       dataDir: store,
       app: {
@@ -341,8 +341,8 @@ export async function selfTest() {
 
     const appDir = join(store, 'screens', 'ios', 'selftest-app');
     check('every screen was written', published.screens.length === 3);
-    check('the paywall filed under the pricing prefix', existsSync(join(appDir, 'pricing.png')), published.screens.map((s) => s.file).join(', '));
-    check('a product and a cart file under their own published types', existsSync(join(appDir, 'product.png')) && existsSync(join(appDir, 'cart.png')));
+    check('the paywall filed under the pricing prefix', existsSync(join(appDir, 'pricing.webp')), published.screens.map((s) => s.file).join(', '));
+    check('a product and a cart file under their own published types', existsSync(join(appDir, 'product.webp')) && existsSync(join(appDir, 'cart.webp')));
     check('each screen has a sidecar', existsSync(join(appDir, 'pricing.json')));
 
     const sidecar = JSON.parse(readFileSync(join(appDir, 'pricing.json'), 'utf-8'));
@@ -362,7 +362,7 @@ export async function selfTest() {
 
     let rejectedIndustry = false;
     try {
-      publishCrawl({ graph: publishGraph, dataDir: store, app: { appId: 'x', name: 'X', industry: 'cheese' } });
+      await publishCrawl({ graph: publishGraph, dataDir: store, app: { appId: 'x', name: 'X', industry: 'cheese' } });
     } catch {
       rejectedIndustry = true;
     }
@@ -409,7 +409,7 @@ export async function selfTest() {
     check('the duplicate points at the screen it repeats', ingested.duplicates[0].sameAs === 's001', ingested.duplicates[0].sameAs);
     check(
       'unclassified screens still reach the store',
-      existsSync(join(ingestStore, 'screens', 'ios', 'ingest-selftest', 'versions', ingested.version, 'other.png')),
+      existsSync(join(ingestStore, 'screens', 'ios', 'ingest-selftest', 'versions', ingested.version, 'other.webp')),
     );
     check('ingested screens publish immediately', ingested.status === 'approved');
     check('classification being off is reported', ingested.analyzerUsable === false);
@@ -591,7 +591,7 @@ export async function selfTest() {
     const b = flowGraph.add({ fingerprint: printSearch, labels: [], screenshot: search, analysis: analysisFor('Sign up', 'signup') });
     const c = flowGraph.add({ fingerprint: printScrolled, labels: [], screenshot: homeScrolled, analysis: analysisFor('Home', 'home') });
 
-    const flowPublished = publishCrawl({
+    const flowPublished = await publishCrawl({
       graph: flowGraph,
       dataDir: flowStore,
       flows: [{ name: 'Getting started', category: 'onboarding', nodeIds: [a.id, b.id, c.id] }],
@@ -605,7 +605,7 @@ export async function selfTest() {
 
     const flowDir = join(flowStore, 'screens', 'ios', 'flow-app', 'getting-started');
     check('screens land in a folder named after the flow', existsSync(flowDir));
-    check('they are numbered in walk order', existsSync(join(flowDir, '1.png')) && existsSync(join(flowDir, '2.png')) && existsSync(join(flowDir, '3.png')));
+    check('they are numbered in walk order', existsSync(join(flowDir, '1.webp')) && existsSync(join(flowDir, '2.webp')) && existsSync(join(flowDir, '3.webp')));
     check('each has its sidecar beside it', existsSync(join(flowDir, '1.json')));
     check('the screen id carries the flow', flowPublished.screens[0].screenId === 'flow-app-ios-getting-started-1', flowPublished.screens[0].screenId);
     check('position is reported', flowPublished.screens[2].position === 3);
@@ -785,7 +785,7 @@ export async function selfTest() {
       const loading = g.add({ fingerprint: printSearch, labels: [], screenshot: search, analysis: analysisFor('Home — loading', 'loading') });
       loading.skipPublish = true;
       loading.skipReason = 'loading state — not published';
-      const out = publishCrawl({ graph: g, dataDir: loadStore, dryRun: true, app: { appId: 'load-app', name: 'Load App', industry: 'food' } });
+      const out = await publishCrawl({ graph: g, dataDir: loadStore, dryRun: true, app: { appId: 'load-app', name: 'Load App', industry: 'food' } });
       check('a loading state marked for skipping is left out and reported', out.screens.length === 1 && out.skipped[0]?.screenType === 'loading');
     }
 
@@ -1041,7 +1041,7 @@ export async function selfTest() {
     captureGraph.connect(splashNode.id, 't1', googleNode.id, 'at 0:01');
     captureGraph.connect(googleNode.id, 't2', sheetNode.id, 'at 0:02');
 
-    const capturePublished = publishCrawl({
+    const capturePublished = await publishCrawl({
       graph: captureGraph,
       dataDir: captureStore,
       flows: [{ name: 'Onboarding', category: 'onboarding', nodeIds: [splashNode.id, googleNode.id, sheetNode.id] }],
@@ -1072,7 +1072,7 @@ export async function selfTest() {
     }
     const versionGraph = new ScreenGraph();
     const versionNode = versionGraph.add({ fingerprint: printHome, labels: [], screenshot: home, analysis: analysisFor('Splash screen', 'splash') });
-    const versionPublished = publishCrawl({
+    const versionPublished = await publishCrawl({
       graph: versionGraph,
       dataDir: versionStore,
       version: '2026-09-29',
@@ -1081,7 +1081,7 @@ export async function selfTest() {
     });
     check(
       'a versioned publish writes under screens/<platform>/<app>/versions/<id>/',
-      existsSync(join(versionStore, 'screens', 'ios', 'versioned-app', 'versions', '2026-09-29', 'onboarding', '1.png')),
+      existsSync(join(versionStore, 'screens', 'ios', 'versioned-app', 'versions', '2026-09-29', 'onboarding', '1.webp')),
     );
     check(
       "a versioned screen's id carries the version, matching the manifest builder's scheme",
@@ -1094,9 +1094,9 @@ export async function selfTest() {
       versionPublished.flows[0]?.id,
     );
     check('publishCrawl reports the version it resolved', versionPublished.version === '2026-09-29');
-    check('a bad --version is refused', (() => {
+    check('a bad --version is refused', await (async () => {
       try {
-        publishCrawl({ graph: versionGraph, dataDir: versionStore, version: 'not-a-date', app: { appId: 'versioned-app', name: 'Versioned App', industry: 'food' } });
+        await publishCrawl({ graph: versionGraph, dataDir: versionStore, version: 'not-a-date', app: { appId: 'versioned-app', name: 'Versioned App', industry: 'food' } });
         return false;
       } catch (error) {
         return /YYYY-MM-DD/.test(error.message);
