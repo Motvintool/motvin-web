@@ -35,6 +35,10 @@ export const PlusIcon = (p: IconProps) => (
 export const MinusIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M5 12h14" /></svg>
 );
+/** A filled square — stops a run or aborts a reply in progress, the way a chat client does. */
+export const StopIcon = (p: IconProps) => (
+  <svg {...base(p)} fill="currentColor" stroke="none"><rect x="7" y="7" width="10" height="10" rx="2" /></svg>
+);
 export const MoreIcon = (p: IconProps) => (
   <svg {...base(p)} fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>
 );

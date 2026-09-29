@@ -790,8 +790,22 @@ export async function answerQuestion(
     const current: Record<string, string | undefined> = { tagline: app?.tagline, name: app?.name };
     for (const key of ['tagline', 'name'] as const) {
       const value = typeof fields[key] === 'string' ? unquote(fields[key] as string) : '';
-      const wanted = key in fields || new RegExp(`\\b${key}`, 'i').test(question);
-      if (!wanted) continue;
+      // The reader is not trusted just for having included a field: asked to
+      // change a name, a small model will sometimes hand back a tagline too,
+      // out of nowhere. A field is only in play when this message names it,
+      // or the value given for it is actually grounded in what the admin
+      // wrote — a bare "key in fields" from the reader proves nothing. The
+      // two paths that build `fields` themselves — continuing a suggestion
+      // ("another"), or answering a value the assistant just asked for — put
+      // the key there on purpose and are trusted as-is.
+      const wanted =
+        followUp || answeringExpected
+          ? key in fields
+          : new RegExp(`\\b${key}\\b`, 'i').test(question) || (value !== '' && grounded(value, question, false));
+      if (!wanted) {
+        delete fields[key];
+        continue;
+      }
       // Text in quotes is the value, exactly — the reader tends to stop at a comma.
       const quotedNow = [...question.matchAll(/[“"']([^”"']{1,160})[”"']/g)].map((match) => match[1].trim()).filter(Boolean);
       if (quotedNow.length === 1 && !/^https?:/i.test(quotedNow[0])) {
@@ -882,6 +896,11 @@ export async function answerQuestion(
       : /^(thanks|thank you|thx|cheers|great|nice|cool|perfect|awesome)\b/i.test(question)
         ? 'The admin is thanking you or approving. Reply in one short, warm line and offer to help with anything else. Do not greet.'
         : 'This is a remark or a chat message, not a request for a change. Reply naturally, briefly, from the facts if they apply.';
+    // The facts already say whether an offer is waiting; a remark like this
+    // is exactly where a small model tends to glance at the conversation
+    // history and repeat an earlier offer back as if it had already gone
+    // through. It has not — only the values in the facts above are real.
+    if (input.pending) situation += ` An offer (“${input.pending}”) is still waiting on the admin's Confirm and has not happened yet. If it comes up, say it is still pending — never that the app already has those values.`;
   }
 
   // Stage two: say it.

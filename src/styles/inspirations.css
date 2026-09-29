@@ -6890,6 +6890,16 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   cursor: default;
 }
 
+/* While the assistant is writing, the send button becomes a stop button —
+   always enabled, since it exists to interrupt, not to submit. */
+.ins-dock-send.is-stop {
+  opacity: 1;
+}
+
+.ins-dock-send.is-stop:hover {
+  background: #1a1a1a;
+}
+
 .ins-dock-send .ins-spinner {
   width: 14px;
   height: 14px;

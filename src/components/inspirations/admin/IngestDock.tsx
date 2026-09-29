@@ -19,12 +19,13 @@ import {
   holdImage,
   holdVideo,
   loadAssistantChat,
-  offerStop,
   performAction,
   platformIn,
   PLATFORM_CHOICES,
   releaseImage,
   releaseVideo,
+  stopActiveRun,
+  stopAssistant,
   clock,
   dismissIngestJob,
   isActive,
@@ -39,7 +40,7 @@ import {
   type ConfirmAction,
   type IngestJob,
 } from '@/lib/inspirations/ingestJobs';
-import { ArrowRightIcon, CheckIcon, CloseIcon, ExpandIcon, ExternalIcon, MinusIcon, PlusIcon, SparklesIcon, TrashIcon, UploadIcon } from '../Icons';
+import { ArrowRightIcon, CheckIcon, CloseIcon, ExpandIcon, ExternalIcon, MinusIcon, PlusIcon, SparklesIcon, StopIcon, TrashIcon, UploadIcon } from '../Icons';
 import { tone } from './AiPicker';
 
 /**
@@ -139,6 +140,8 @@ export function IngestDock() {
 
   const visible = jobs.filter((job) => !job.dismissed).slice(0, 3);
   const running = visible.some(isActive);
+  /** The one job the composer's stop control acts on, if any is going. */
+  const liveJob = visible.find(isActive) ?? null;
 
   // The saved conversation comes back once the admin is known.
   useEffect(() => {
@@ -244,7 +247,9 @@ export function IngestDock() {
   };
 
   const send = async (text: string) => {
-    if (!text.trim() || asking) return;
+    // Nothing goes out while there is a reply still typing or a run still
+    // going — same rule as the disabled input and the stop button above.
+    if (!text.trim() || asking || liveJob) return;
     setQuestion('');
     if (/^upload$/i.test(text.trim())) {
       fileRef.current?.click();
@@ -412,7 +417,7 @@ export function IngestDock() {
         )}
         {timeline(visible, messages).map((item) =>
           item.kind === 'job' ? (
-            <JobThread key={item.job.id} job={item.job} now={now} onStop={() => offerStop(item.job)} />
+            <JobThread key={item.job.id} job={item.job} now={now} />
           ) : (
             <ChatBubble key={item.message.id} message={item.message} onAction={act} pending={pendingAction} onCancel={cancelPending} />
           ),
@@ -429,11 +434,9 @@ export function IngestDock() {
               {job.message} · {clock((now - Date.parse(job.startedAt)) / 1000)}
             </span>
           </span>
-          {job.status === 'running' && (
-            <button type="button" className="ins-linkbtn ins-linkbtn--danger" onClick={() => offerStop(job)}>
-              Stop
-            </button>
-          )}
+          {/* The actual stop control lives in the composer below, right next
+              to send — one consistent place for "stop what's happening",
+              the same as stopping a reply mid-type. */}
         </div>
       ))}
       {heldVideo && (
@@ -464,19 +467,49 @@ export function IngestDock() {
           className="ins-dock-input"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder={heldVideo ? 'iOS, Android or Web?' : expecting ? `Type ${expecting.app}’s new ${expecting.field}…` : running ? 'Ask how far the run is…' : heldImage ? 'Which app is this logo for?' : 'Ask, or tell me what to change…'}
+          placeholder={
+            liveJob
+              ? liveJob.status === 'uploading'
+                ? 'Uploading — press stop to cancel…'
+                : 'A run is going — press stop to cancel it…'
+              : heldVideo
+                ? 'iOS, Android or Web?'
+                : expecting
+                  ? `Type ${expecting.app}’s new ${expecting.field}…`
+                  : heldImage
+                    ? 'Which app is this logo for?'
+                    : 'Ask, or tell me what to change…'
+          }
           aria-label="Ask the assistant"
           list="ins-dock-suggestions"
-          disabled={asking}
+          // Nothing can be typed while a reply is still coming, or while a
+          // run is going — the button in this state is Stop, not Send, so
+          // there is nothing for a message to do here until it finishes.
+          disabled={asking || Boolean(liveJob)}
         />
         <datalist id="ins-dock-suggestions">
           {SUGGESTIONS.map((text) => (
             <option key={text} value={text} />
           ))}
         </datalist>
-        <button type="submit" className="ins-dock-send" disabled={!question.trim() || asking} aria-label="Send">
-          {asking ? <span className="ins-spinner" /> : <ArrowRightIcon size={15} />}
-        </button>
+        {asking || liveJob ? (
+          // One button, one job: while there is anything to stop — a reply
+          // still typing, or a run still going — it *is* the stop button.
+          // Send has nothing to do here, exactly like mid-reply.
+          <button
+            type="button"
+            className="ins-dock-send is-stop"
+            onClick={() => (asking ? stopAssistant() : liveJob && stopActiveRun(liveJob))}
+            aria-label={asking ? 'Stop generating' : liveJob?.status === 'uploading' ? 'Cancel the upload' : 'Stop the run'}
+            title={asking ? 'Stop generating' : liveJob?.status === 'uploading' ? 'Cancel the upload' : 'Stop the run'}
+          >
+            <StopIcon size={13} />
+          </button>
+        ) : (
+          <button type="submit" className="ins-dock-send" disabled={!question.trim()} aria-label="Send">
+            <ArrowRightIcon size={15} />
+          </button>
+        )}
       </form>
     </aside>
   );
@@ -590,7 +623,7 @@ function timeline(jobs: IngestJob[], messages: ChatMessage[]): ({ kind: 'job'; a
   return items.sort((a, b) => a.at - b.at);
 }
 
-export function JobThread({ job, now, onStop }: { job: IngestJob; now: number; onStop?: () => void }) {
+export function JobThread({ job, now }: { job: IngestJob; now: number }) {
   const started = Date.parse(job.startedAt);
   const ended = job.finishedAt ? Date.parse(job.finishedAt) : now;
   const elapsed = clock((ended - started) / 1000);
@@ -687,11 +720,9 @@ export function JobThread({ job, now, onStop }: { job: IngestJob; now: number; o
             {active ? `${elapsed} elapsed` : `took ${elapsed}`}
             {job.analyzer && active ? ` · ${job.analyzer.replace(/^free AI — /, '')}` : ''}
           </span>
-          {active && job.status === 'running' && onStop && (
-            <button type="button" className="ins-linkbtn ins-linkbtn--danger" onClick={onStop}>
-              Stop
-            </button>
-          )}
+          {/* Stop/Cancel lives in exactly one place — the pinned strip right
+              above the composer — so it doesn't repeat itself down the
+              conversation for the same run. */}
           {!active && appHref && (
             <Link href={appHref} className="ins-linkbtn">
               Open in gallery

@@ -317,6 +317,7 @@ export function startIngest(video: File, startedBy: string, options: StartIngest
 
       // XMLHttpRequest, for one reason: fetch cannot report upload progress.
       const xhr = new XMLHttpRequest();
+      currentUpload = { xhr, jobId: localId };
       xhr.open('POST', `/api/crawler/ingest?${query}`);
       for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
       xhr.upload.onprogress = (event) => {
@@ -325,11 +326,19 @@ export function startIngest(video: File, startedBy: string, options: StartIngest
         upsert({ ...placeholder, uploaded: fraction, message: `Uploading ${megabytes(video.size)} — ${Math.round(fraction * 100)}%` });
       };
       xhr.onerror = () => {
+        if (currentUpload?.jobId === localId) currentUpload = null;
         const message = 'The upload did not reach the server.';
         upsert({ ...placeholder, status: 'failed', error: message, finishedAt: new Date().toISOString() });
         reject(new Error(message));
       };
+      xhr.onabort = () => {
+        if (currentUpload?.jobId === localId) currentUpload = null;
+        const message = 'Cancelled by the admin.';
+        upsert({ ...placeholder, status: 'failed', error: message, message, finishedAt: new Date().toISOString() });
+        reject(new Error(message));
+      };
       xhr.onload = () => {
+        if (currentUpload?.jobId === localId) currentUpload = null;
         let payload: { jobId?: string; message?: string } = {};
         try {
           payload = JSON.parse(xhr.responseText) as typeof payload;
@@ -350,6 +359,17 @@ export function startIngest(video: File, startedBy: string, options: StartIngest
       xhr.send(video);
     })();
   });
+}
+
+/**
+ * Cancels a video upload while it is still in flight — before the server
+ * even has a job to `?stop=1`. Returns false when nothing is uploading.
+ */
+export function cancelUpload(): boolean {
+  if (!currentUpload) return false;
+  currentUpload.xhr.abort();
+  currentUpload = null;
+  return true;
 }
 
 /** Removes a finished run from the list, everywhere it is shown. */
@@ -515,6 +535,16 @@ type ChatSnapshot = {
 let chat: ChatSnapshot = { messages: [], pending: null, heldImage: null, heldVideo: null, expecting: null };
 let heldFile: File | null = null;
 let heldVideoFile: File | null = null;
+/** The in-flight assistant request, if any — `stopAssistant()` aborts it. */
+let currentAsk: AbortController | null = null;
+/** Set for the turn currently in flight; also halts the local typing animation for a whole (non-streamed) answer. */
+let stopRequested = false;
+/**
+ * The video upload in flight, if any. Sending a 200+ MB recording can take
+ * a while on its own, before a server job even exists to `?stop=1` — so a
+ * cancel here has to abort the browser's own request, not ask the server.
+ */
+let currentUpload: { xhr: XMLHttpRequest; jobId: string } | null = null;
 const chatListeners = new Set<() => void>();
 const CHAT_EMPTY: ChatSnapshot = { messages: [], pending: null, heldImage: null, heldVideo: null, expecting: null };
 
@@ -598,6 +628,13 @@ function typeOut(id: string, text: string, done: Partial<ChatMessage>): Promise<
     const words = text.split(/(\s+)/);
     let shown = 0;
     const tick = () => {
+      if (stopRequested) {
+        // The admin pressed Stop while an instant answer was still being
+        // typed out; it freezes where it is, exactly like an aborted stream.
+        patchMessage(id, { text: words.slice(0, shown).join('') || 'Stopped.', pending: false, actions: [] });
+        resolve();
+        return;
+      }
       shown = Math.min(words.length, shown + 3);
       patchMessage(id, { text: words.slice(0, shown).join(''), pending: shown < words.length });
       if (shown < words.length) setTimeout(tick, 24);
@@ -630,13 +667,21 @@ export async function askAssistant(question: string): Promise<ChatMessage> {
   const pending: ChatMessage = { id: `a-${stamp}`, role: 'assistant', text: '', at: new Date().toISOString(), pending: true };
   emitChat({ ...chat, messages: [...chat.messages.slice(-60), user, pending] });
 
+  // One in-flight request at a time; a stray abort from an earlier turn
+  // must never cancel this one.
+  const controller = new AbortController();
+  currentAsk = controller;
+  stopRequested = false;
+
   let streamedText = '';
+  let stopped = false;
   let final: AssistantEvent | null = null;
   try {
     const res = await fetch('/api/crawler/assistant', {
       method: 'POST',
       headers: await authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ question: trimmed, history, pending: chat.pending?.label ?? null, heldImage: heldFile?.name ?? null, lastOp: lastOfferedOp(), expecting: chat.expecting }),
+      signal: controller.signal,
     });
     if (!res.ok || !res.body) {
       const payload = (await res.json().catch(() => ({}))) as { message?: string };
@@ -671,7 +716,20 @@ export async function askAssistant(question: string): Promise<ChatMessage> {
     }
     if (buffer.trim()) handle(buffer.trim());
   } catch (error) {
-    final = { type: 'error', message: (error as Error).message };
+    if ((error as Error).name === 'AbortError') {
+      stopped = true;
+      // The reader is torn down by the abort; whatever streamed in already
+      // is what is kept, exactly as ChatGPT leaves a stopped reply in place.
+    } else {
+      final = { type: 'error', message: (error as Error).message };
+    }
+  } finally {
+    if (currentAsk === controller) currentAsk = null;
+  }
+
+  if (stopped) {
+    patchMessage(pending.id, { text: streamedText || 'Stopped.', pending: false, actions: [] });
+    return chat.messages.find((message) => message.id === pending.id) ?? pending;
   }
 
   // Assigned inside the reader's callbacks, which TypeScript cannot follow.
@@ -693,6 +751,12 @@ export async function askAssistant(question: string): Promise<ChatMessage> {
     emitChat({ ...chat, pending: cancelled ? null : offered, expecting: settled.expect === undefined ? (offered ? null : chat.expecting) : settled.expect });
   }
   return chat.messages.find((message) => message.id === pending.id) ?? pending;
+}
+
+/** Aborts the assistant's in-flight reply, if any — the send button becomes this while it types. */
+export function stopAssistant() {
+  stopRequested = true;
+  currentAsk?.abort();
 }
 
 const YES = /^(yes|y|yeah|yep|ok|okay|sure|confirm|do it|go ahead|proceed|yes remove|yes delete|remove it|delete it|apply|save)\b/i;
@@ -928,6 +992,21 @@ export function offerStop(job: IngestJob) {
     label: `Stop “${job.title}”`,
     destructive: true,
   });
+}
+
+/**
+ * Stops whatever a job is doing right now, however far it has got. A
+ * recording still in flight over the wire is cancelled outright — nothing
+ * has been published yet, so there is nothing at stake in asking twice. A
+ * run already going on the server (reading frames, publishing, writing
+ * names) gets the usual Confirm, since it may already have screens live.
+ */
+export function stopActiveRun(job: IngestJob) {
+  if (job.status === 'uploading') {
+    if (cancelUpload()) assistantSays(`Cancelled the upload of “${job.title}”.`);
+    return;
+  }
+  offerStop(job);
 }
 
 /** A line the assistant says on its own — after an upload starts, for one. */
