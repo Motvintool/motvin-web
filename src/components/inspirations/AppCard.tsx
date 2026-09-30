@@ -1,11 +1,22 @@
 'use client';
 
 import Link from 'next/link';
+import { useState, useEffect, useRef } from 'react';
+import JSZip from 'jszip';
+import { createPortal } from 'react-dom';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { App, Screen } from '@/lib/inspirations/types';
+import { addWatermarkToBlob } from '@/lib/inspirations/watermark';
 import { AppLogo } from './AppLogo';
 import { Screenshot } from './Screenshot';
 import { useSiblingCycle } from './useSiblingCycle';
+import { useToast } from './Toast';
+import { inspirationsApi } from '@/lib/inspirations/api';
+
+const imgSaveRight = "/ASSET/Icons/Motvin/save-right.svg";
+const imgDownloadPng = "/ASSET/Icons/Motvin/download-png.svg";
+const imgCopyLink = "/ASSET/Icons/Motvin/copy-link.svg";
+const imgFrame = "/ASSET/Icons/Motvin/right-arrow-small.svg";
 
 /**
  * App tile — the exact same card as a screen (.ins-card): one of the app's
@@ -40,6 +51,172 @@ export function AppCard({
     preview ?? null,
   );
 
+  const { show: showToast } = useToast();
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [showVersions, setShowVersions] = useState(false);
+  const hideTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!contextMenu) {
+      setShowVersions(false);
+      return;
+    }
+    const hideMenu = () => setContextMenu(null);
+    window.addEventListener('click', hideMenu);
+    window.addEventListener('scroll', hideMenu, { capture: true });
+    window.addEventListener('contextmenu', hideMenu, { capture: true });
+    return () => {
+      window.removeEventListener('click', hideMenu);
+      window.removeEventListener('scroll', hideMenu, { capture: true });
+      window.removeEventListener('contextmenu', hideMenu, { capture: true });
+    };
+  }, [contextMenu]);
+
+  const handleMouseEnterVersion = () => {
+    if (hideTimeout.current) clearTimeout(hideTimeout.current);
+    setShowVersions(true);
+  };
+
+  const handleMouseLeaveVersion = () => {
+    hideTimeout.current = setTimeout(() => {
+      setShowVersions(false);
+    }, 150);
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleSave = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu(null);
+    if (!selected) {
+      onToggleSelect?.();
+    }
+  };
+
+  const handleDownloadAll = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu(null);
+    try {
+      const screensToDownload = previewScreens && previewScreens.length > 0 ? previewScreens : (activeScreen ? [activeScreen] : []);
+      
+      if (screensToDownload.length === 0) {
+        const urlToDownload = app.logo;
+        if (!urlToDownload) throw new Error('No media to download');
+        const src = inspirationsApi.mediaUrl(urlToDownload);
+        if (!src) return;
+        const response = await fetch(src);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${app.name}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+        return;
+      }
+
+      const zip = new JSZip();
+      let hasFiles = false;
+
+      for (const s of screensToDownload) {
+        const src = inspirationsApi.mediaUrl(s.url);
+        if (!src) continue;
+        const response = await fetch(src);
+        const blob = await response.blob();
+        const watermarkedBlob = await addWatermarkToBlob(
+          blob, 
+          app.name, 
+          inspirationsApi.mediaUrl(app.logo)
+        );
+        zip.file(`${s.name || app.name}-${s.id}.png`, watermarkedBlob);
+        hasFiles = true;
+      }
+      
+      if (hasFiles) {
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const blobUrl = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${app.name}-screens.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }
+    } catch (error) {
+      showToast('Failed to download');
+    }
+  };
+
+  const handleDownloadVersion = async (e: React.MouseEvent, versionId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu(null);
+    setShowVersions(false);
+    try {
+      const data = await inspirationsApi.getApp(app.slug);
+      if (!data) return;
+      const versionScreens = data.screens.filter(s => s.version === versionId);
+      
+      if (versionScreens.length === 0) {
+        showToast('No screens found for this version');
+        return;
+      }
+
+      const zip = new JSZip();
+      let hasFiles = false;
+
+      for (const s of versionScreens) {
+        const src = inspirationsApi.mediaUrl(s.url);
+        if (!src) continue;
+        const response = await fetch(src);
+        const blob = await response.blob();
+        const watermarkedBlob = await addWatermarkToBlob(
+          blob, 
+          app.name, 
+          inspirationsApi.mediaUrl(app.logo)
+        );
+        zip.file(`${s.name || app.name}-${s.id}.png`, watermarkedBlob);
+        hasFiles = true;
+      }
+      
+      if (hasFiles) {
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const blobUrl = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${app.name}-version-${versionId}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }
+    } catch (error) {
+      showToast('Failed to download version screens');
+    }
+  };
+
+  const handleCopyLink = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu(null);
+    try {
+      const url = new URL(href, window.location.origin).toString();
+      await navigator.clipboard.writeText(url);
+      showToast('Link copied');
+    } catch (error) {
+      showToast('Failed to copy link');
+    }
+  };
+
   return (
     <article className="ins-card" data-id={app.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
       <div className="ins-card-shot">
@@ -72,7 +249,7 @@ export function AppCard({
             <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={16} height={16} />
           </button>
         )}
-        <div className="ins-card-inset">
+        <div className="ins-card-inset" onContextMenu={handleContextMenu}>
           <Link href={href} className="ins-card-link" aria-label={app.name}>
             {activeScreen ? <Screenshot screen={activeScreen} /> : <AppLogo app={app} size={96} />}
           </Link>
@@ -100,6 +277,72 @@ export function AppCard({
           {app.tagline && <p className="ins-card-tagline">{app.tagline}</p>}
         </div>
       </div>
+      {contextMenu && typeof document !== 'undefined' && createPortal(
+        <div 
+          style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, zIndex: 10000, display: 'flex', gap: '8px', alignItems: 'flex-start' }}
+          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+        >
+          <div 
+            className="ins-context-menu"
+            style={{ position: 'relative', top: 'auto', left: 'auto', width: 242, zIndex: 1 }}
+          >
+            <div className="ins-context-menu-group">
+              <div 
+                onMouseEnter={handleMouseEnterVersion} 
+                onMouseLeave={handleMouseLeaveVersion}
+                style={{ width: '100%' }}
+              >
+                <button type="button" className="ins-context-menu-btn" onClick={handleDownloadAll}>
+                  <div className="ins-context-menu-btn-content">
+                    <div className="ins-context-menu-icon">
+                      <img alt="" src={imgDownloadPng} />
+                    </div>
+                    <p className="ins-context-menu-text">Download all screens</p>
+                  </div>
+                  <div className="ins-context-menu-icon-right">
+                    <img alt="" src={imgFrame} />
+                  </div>
+                </button>
+              </div>
+            <button type="button" className="ins-context-menu-btn" onClick={handleCopyLink}>
+              <div className="ins-context-menu-btn-content">
+                <div className="ins-context-menu-icon">
+                  <img alt="" src={imgCopyLink} />
+                </div>
+                <p className="ins-context-menu-text">Copy app link</p>
+              </div>
+            </button>
+          </div>
+          <div className="ins-context-menu-divider" />
+          <button type="button" className="ins-context-menu-btn" onClick={handleSave}>
+            <div className="ins-context-menu-btn-content">
+              <div className="ins-context-menu-icon">
+                <img alt="" src={imgSaveRight} />
+              </div>
+              <p className="ins-context-menu-text">Save collection</p>
+            </div>
+          </button>
+        </div>
+
+        {showVersions && (
+          <div 
+            className="ins-context-menu"
+            style={{ position: 'relative', top: 'auto', left: 'auto', zIndex: 2 }}
+            onMouseEnter={handleMouseEnterVersion}
+            onMouseLeave={handleMouseLeaveVersion}
+          >
+            {app.versions.map(v => (
+              <button key={v.id} type="button" className="ins-context-menu-btn" onClick={(e) => handleDownloadVersion(e, v.id)}>
+                <p className="ins-context-menu-text" style={{ whiteSpace: 'nowrap' }}>
+                  {v.label}
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>,
+      document.body
+    )}
     </article>
   );
 }

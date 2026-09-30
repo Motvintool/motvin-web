@@ -44,15 +44,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="ins-toast-stack" role="status" aria-live="polite">
+      <div className="ins-float-collection" role="status" aria-live="polite" style={{ zIndex: 10000, flexDirection: 'column', alignItems: 'center' }}>
         {toasts.map((t) => (
-          <div key={t.id} className="ins-toast">
-            <CheckIcon size={14} />
+          <div key={t.id} className="ins-float-collection-success" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="ins-float-collection-success-check" aria-hidden>
+              <span />
+            </span>
             <span>{t.message}</span>
             {t.action && (
               <button
                 type="button"
                 className="ins-toast-action"
+                style={{ marginLeft: '12px' }}
                 onClick={() => {
                   t.action?.onClick();
                   dismiss(t.id);

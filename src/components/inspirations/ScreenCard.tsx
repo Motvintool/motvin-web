@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { memo, useState, type MouseEvent } from 'react';
+import { memo, useState, useEffect, useRef, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 
@@ -12,6 +12,7 @@ import { SCREEN_PARAM } from './ScreenPreviewModal';
 import { Screenshot } from './Screenshot';
 import { useToast } from './Toast';
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { addWatermarkToBlob } from '@/lib/inspirations/watermark';
 
 /** A plain left-click with no modifier opens the preview modal in place;
  * anything else (middle-click, cmd/ctrl-click, shift-click) is the visitor
@@ -21,6 +22,10 @@ function isPlainClick(e: MouseEvent) {
 }
 
 const NAME_TAGLINE_SEPARATOR = ' — ';
+
+const imgGroup = "/ASSET/Icons/Motvin/copy-png.svg";
+const imgDownloadPng = "/ASSET/Icons/Motvin/download-png.svg";
+const imgCopyLink = "/ASSET/Icons/Motvin/copy-link.svg";
 
 /**
  * Some stored app names carry their tagline inline (e.g. "Bumble — Find new
@@ -71,20 +76,47 @@ function ScreenCardImpl({
 }) {
   const shownScreen = screen;
   const { show: showToast } = useToast();
-  const [copied, setCopied] = useState(false);
+
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const hideMenu = () => setContextMenu(null);
+    window.addEventListener('click', hideMenu);
+    window.addEventListener('scroll', hideMenu, { capture: true });
+    window.addEventListener('contextmenu', hideMenu, { capture: true });
+    return () => {
+      window.removeEventListener('click', hideMenu);
+      window.removeEventListener('scroll', hideMenu, { capture: true });
+      window.removeEventListener('contextmenu', hideMenu, { capture: true });
+    };
+  }, [contextMenu]);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setContextMenu(null);
     try {
       const src = inspirationsApi.mediaUrl(shownScreen.url);
       if (!src) throw new Error('No source');
       const response = await fetch(src);
       const blob = await response.blob();
+      
+      const watermarkedBlob = await addWatermarkToBlob(
+        blob, 
+        app?.name, 
+        app ? inspirationsApi.mediaUrl(app.logo) : undefined
+      );
+
       if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1600);
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': watermarkedBlob })]);
+        showToast('Copied as png');
       } else {
         showToast('Copying not supported');
       }
@@ -118,6 +150,46 @@ function ScreenCardImpl({
   })();
   const openPreview = () => {
     router.push(href, { scroll: false });
+  };
+
+  const handleDownloadPng = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu(null);
+    try {
+      const src = inspirationsApi.mediaUrl(shownScreen.url);
+      if (!src) return;
+      const response = await fetch(src);
+      const blob = await response.blob();
+      const watermarkedBlob = await addWatermarkToBlob(
+        blob, 
+        app?.name, 
+        app ? inspirationsApi.mediaUrl(app.logo) : undefined
+      );
+      const blobUrl = URL.createObjectURL(watermarkedBlob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${shownScreen.name}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      showToast('Failed to download');
+    }
+  };
+
+  const handleCopyLink = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu(null);
+    try {
+      const url = new URL(href, window.location.origin).toString();
+      await navigator.clipboard.writeText(url);
+      showToast('Link copied');
+    } catch (error) {
+      showToast('Failed to copy link');
+    }
   };
 
   const { title: appTitle, tagline: derivedTagline } = app ? splitAppName(app.name) : { title: '', tagline: null };
@@ -155,7 +227,7 @@ function ScreenCardImpl({
             <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={16} height={16} />
           </button>
         )}
-        <div className="ins-card-inset">
+        <div className="ins-card-inset" onContextMenu={handleContextMenu}>
           <Link
             href={href}
             className="ins-card-link"
@@ -219,14 +291,40 @@ function ScreenCardImpl({
           )}
         </div>
       )}
-      {copied && typeof document !== 'undefined' && createPortal(
-        <div className="ins-float-collection" role="status" aria-live="polite">
-          <div className="ins-float-collection-success">
-            <span className="ins-float-collection-success-check" aria-hidden>
-              <span />
-            </span>
-            Copied as png
+
+      {contextMenu && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="ins-context-menu"
+          style={{ top: contextMenu.y, left: contextMenu.x, width: 180 }}
+          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+        >
+          <div className="ins-context-menu-group">
+            <button type="button" className="ins-context-menu-btn" onClick={handleCopy}>
+              <div className="ins-context-menu-btn-content">
+                <div className="ins-context-menu-icon">
+                  <img alt="" src={imgGroup} />
+                </div>
+                <p className="ins-context-menu-text">Copy png</p>
+              </div>
+            </button>
+            <button type="button" className="ins-context-menu-btn" onClick={handleDownloadPng}>
+              <div className="ins-context-menu-btn-content">
+                <div className="ins-context-menu-icon">
+                  <img alt="" src={imgDownloadPng} />
+                </div>
+                <p className="ins-context-menu-text">Download png</p>
+              </div>
+            </button>
           </div>
+          <div className="ins-context-menu-divider" />
+          <button type="button" className="ins-context-menu-btn" onClick={handleCopyLink}>
+            <div className="ins-context-menu-btn-content">
+              <div className="ins-context-menu-icon">
+                <img alt="" src={imgCopyLink} />
+              </div>
+              <p className="ins-context-menu-text">Copy link</p>
+            </div>
+          </button>
         </div>,
         document.body
       )}
