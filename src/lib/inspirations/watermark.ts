@@ -1,4 +1,4 @@
-export const addWatermarkToBlob = async (blob: Blob, appName?: string, appLogoUrl?: string): Promise<Blob> => {
+export const addWatermarkToBlob = async (blob: Blob, appName?: string | null, appLogoUrl?: string | null): Promise<Blob> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';

@@ -2,9 +2,9 @@
 
 import { useEffect, useSyncExternalStore } from 'react';
 import { getIdToken } from '@/lib/firebase/auth';
-import { adminApi, type ScreenSidecar } from '@/lib/inspirations/admin';
+import { adminApi, safeFileName, type ScreenSidecar } from '@/lib/inspirations/admin';
 import { doneText, type AdminOp, type AssistantAction, type ConfirmAction, type Expect } from '@/lib/inspirations/assistantActions';
-import type { Platform, ScreenType } from '@/lib/inspirations/types';
+import { SCREEN_TYPES, type Industry, type Platform, type ScreenType, type Style } from '@/lib/inspirations/types';
 import { invalidateInspirationsCache } from '@/lib/inspirations/api';
 import { qualifyFlowFile, qualifyScreenFile } from '@/lib/inspirations/screenPaths';
 
@@ -532,20 +532,38 @@ export type ChatMessage = {
   source?: 'rules' | 'ai';
 };
 
+/** What was dropped: one recording for a run, or several screenshots to file directly. */
+export type HeldKind = 'video' | 'screens';
+
+/**
+ * Where the dock is in the questions it asks about a dropped upload — the
+ * same choices the admin page offers as controls: platform, then a new app
+ * or an existing one (a new app's name, for screenshots), then which of
+ * that app's versions (or a new one, then its date); then a Confirm, like
+ * every other change.
+ */
+export type UploadPlan = {
+  step: 'platform' | 'app' | 'name' | 'version' | 'date' | 'confirm';
+  platform?: 'ios' | 'android' | 'web';
+  appId?: string;
+  appName?: string;
+  newApp?: { id: string; name: string };
+};
+
 type ChatSnapshot = {
   messages: ChatMessage[];
   /** The operation offered last, waiting for a yes or a Confirm. */
   pending: ConfirmAction | null;
   /** An image dropped on the dock, kept until it is used as a logo. */
   heldImage: { name: string; size: number } | null;
-  /** A recording dropped on the dock, waiting to be told its platform. */
-  heldVideo: { name: string; size: number } | null;
+  /** A recording or a set of screenshots dropped on the dock, part-way through being asked where it goes. */
+  heldUpload: { kind: HeldKind; names: string[]; size: number; plan: UploadPlan } | null;
   /** What the assistant asked to be told next — the next message is that value. */
   expecting: Expect | null;
 };
-let chat: ChatSnapshot = { messages: [], pending: null, heldImage: null, heldVideo: null, expecting: null };
+let chat: ChatSnapshot = { messages: [], pending: null, heldImage: null, heldUpload: null, expecting: null };
 let heldFile: File | null = null;
-let heldVideoFile: File | null = null;
+let heldUploadFiles: File[] = [];
 /** The in-flight assistant request, if any — `stopAssistant()` aborts it. */
 let currentAsk: AbortController | null = null;
 /** Set for the turn currently in flight; also halts the local typing animation for a whole (non-streamed) answer. */
@@ -557,7 +575,7 @@ let stopRequested = false;
  */
 let currentUpload: { xhr: XMLHttpRequest; jobId: string } | null = null;
 const chatListeners = new Set<() => void>();
-const CHAT_EMPTY: ChatSnapshot = { messages: [], pending: null, heldImage: null, heldVideo: null, expecting: null };
+const CHAT_EMPTY: ChatSnapshot = { messages: [], pending: null, heldImage: null, heldUpload: null, expecting: null };
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let loaded = false;
@@ -802,7 +820,11 @@ export function cancelPending() {
     return;
   }
   const label = chat.pending.label;
-  emitChat({ ...chat, pending: null, expecting: null });
+  // A cancelled upload lets go of the dropped files too — the offer was
+  // the last question about them.
+  const upload = chat.pending.op.kind === 'start-ingest' || chat.pending.op.kind === 'upload-screens';
+  if (upload) heldUploadFiles = [];
+  emitChat({ ...chat, pending: null, expecting: null, heldUpload: upload ? null : chat.heldUpload });
   assistantSays(`Cancelled — “${label}” was not done. Nothing changed.`);
 }
 
@@ -821,19 +843,31 @@ export function releaseImage() {
   emitChat({ ...chat, heldImage: null });
 }
 
-/** Keeps a recording until the admin says which platform it is from. */
-export function holdVideo(file: File) {
-  heldVideoFile = file;
-  emitChat({ ...chat, heldVideo: { name: file.name, size: file.size } });
+/** Keeps a recording, or a set of screenshots, while the dock asks where they should go — starting with the platform. */
+export function holdUpload(kind: HeldKind, files: File[]) {
+  heldUploadFiles = files;
+  emitChat({ ...chat, heldUpload: { kind, names: files.map((file) => file.name), size: files.reduce((sum, file) => sum + file.size, 0), plan: { step: 'platform' } } });
 }
 
-export function heldVideoFileNow(): File | null {
-  return heldVideoFile;
+/** Records the answer to one of those questions, and which one comes next. */
+export function setUploadPlan(plan: UploadPlan) {
+  if (!chat.heldUpload) return;
+  emitChat({ ...chat, heldUpload: { ...chat.heldUpload, plan } });
 }
 
-export function releaseVideo() {
-  heldVideoFile = null;
-  emitChat({ ...chat, heldVideo: null });
+export function heldUploadFilesNow(): File[] {
+  return heldUploadFiles;
+}
+
+export function releaseUpload() {
+  heldUploadFiles = [];
+  emitChat({ ...chat, heldUpload: null });
+}
+
+/** The admin page's rule for a screenshot's type: the first known type named in its file name, else "other". */
+function guessScreenType(fileName: string): ScreenType {
+  const base = fileName.toLowerCase();
+  return SCREEN_TYPES.find((type) => base.includes(type)) ?? 'other';
 }
 
 function tellAdminChanged() {
@@ -938,7 +972,62 @@ export async function performAction(action: ConfirmAction, image?: File | null):
       }
       case 'create-flow': {
         const slug = op.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'flow';
-        await adminApi.saveFlow({ id: `${op.appId}-ios-${slug}`, appId: op.appId, name: op.name, category: op.category, platform: 'ios' as Platform, screenIds: op.screenIds, parentId: null });
+        await adminApi.saveFlow({ id: `${op.appId}-${op.platform}-${slug}`, appId: op.appId, name: op.name, category: op.category, platform: op.platform as Platform, screenIds: op.screenIds, parentId: null });
+        break;
+      }
+      case 'reorder-flow': {
+        const state = await adminApi.getState();
+        const flow = state.flows.find((entry) => entry.id === op.flowId);
+        if (!flow) throw new Error('That flow is no longer in the library.');
+        await adminApi.saveFlow({ ...flow, screenIds: op.screenIds });
+        break;
+      }
+      case 'create-app': {
+        await adminApi.saveApp({ id: op.id, name: op.name, industry: op.industry as Industry });
+        break;
+      }
+      case 'set-screen-details': {
+        const state = await adminApi.getState();
+        const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === qualifyScreenFile(qualifyFlowFile(op.file, op.flow), op.version));
+        const next: ScreenSidecar = { ...(file?.sidecar ?? {}) };
+        if (op.capturedAt) next.capturedAt = op.capturedAt;
+        if (op.elements) next.elements = op.elements;
+        if (op.style) next.style = op.style as Style[];
+        await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, next, op.version, op.flow);
+        break;
+      }
+      case 'start-ingest': {
+        const file = heldUploadFiles[0];
+        if (!file) throw new Error('The recording is no longer held — drop it here again.');
+        releaseUpload();
+        // The upload of a large recording can take a while on its own; the run
+        // shows as a job above from its first second, so this does not wait.
+        void startIngest(file, op.startedBy, { platform: op.platform, appId: op.appId, version: op.version }).catch((error: Error) => {
+          assistantSays(`I could not start that run: ${error.message}`);
+        });
+        break;
+      }
+      case 'upload-screens': {
+        const files = heldUploadFiles;
+        if (!files.length) throw new Error('The screenshots are no longer held — drop them here again.');
+        if (op.newApp) await adminApi.saveApp({ id: op.newApp.id, name: op.newApp.name, industry: (op.newApp.industry ?? 'saas') as Industry });
+        const failed: string[] = [];
+        for (const file of files) {
+          // The screen type must lead the file name — that is what the builder
+          // reads when no sidecar exists — the same rule as the Manual tab.
+          const safe = safeFileName(file.name);
+          const base = safe.replace(/\.[^.]+$/, '');
+          const ext = safe.slice(safe.lastIndexOf('.'));
+          const type = guessScreenType(safe);
+          const fileName = base.startsWith(type) ? safe : `${type}-${base}${ext}`;
+          try {
+            await adminApi.uploadScreen(op.platform as Platform, op.appId, fileName, file, false, op.version);
+          } catch (error) {
+            failed.push(`${file.name} (${(error as Error).message})`);
+          }
+        }
+        releaseUpload();
+        if (failed.length) done = `Uploaded ${files.length - failed.length} of ${files.length} to ${op.appName}. Not uploaded: ${failed.join('; ')}.`;
         break;
       }
       case 'set-flow-parent': {
@@ -955,6 +1044,10 @@ export async function performAction(action: ConfirmAction, image?: File | null):
       }
       case 'delete-app-version': {
         await adminApi.deleteVersion(op.appId, op.versionId);
+        break;
+      }
+      case 'rename-app-version': {
+        await adminApi.renameVersion(op.appId, op.versionId, op.newVersionId);
         break;
       }
       case 'stop-run': {
@@ -978,9 +1071,9 @@ export async function performAction(action: ConfirmAction, image?: File | null):
       }
       case 'add-screen': {
         const file = image ?? heldFile!;
-        await adminApi.uploadScreen('ios' as Platform, op.appId, file.name, file);
+        await adminApi.uploadScreen(op.platform as Platform, op.appId, file.name, file, false, op.versionId);
         releaseImage();
-        done = `“${file.name}” is now a screen of ${op.name}.`;
+        done = `“${file.name}” is now a screen of ${op.name}${op.versionLabel ? ` (${op.versionLabel})` : ''}.`;
         break;
       }
     }
@@ -1036,8 +1129,8 @@ export function adminSays(text: string) {
 
 export async function clearAssistantChat() {
   heldFile = null;
-  heldVideoFile = null;
-  emitChat({ messages: [], pending: null, heldImage: null, heldVideo: null, expecting: null });
+  heldUploadFiles = [];
+  emitChat({ messages: [], pending: null, heldImage: null, heldUpload: null, expecting: null });
   try {
     await fetch('/api/crawler/assistant/history', { method: 'DELETE', headers: await authHeaders() });
   } catch {

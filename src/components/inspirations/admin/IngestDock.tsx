@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
-import { isAdminEmail } from '@/lib/inspirations/admin';
+import { adminApi, isAdminEmail, type AdminAppRecord, type AdminState } from '@/lib/inspirations/admin';
+import { dayLabel, localDateString, parseDateInput } from '@/lib/inspirations/dates';
+import { describeOp, labelFor, type AdminOp } from '@/lib/inspirations/assistantActions';
 import { invalidateInspirationsCache } from '@/lib/inspirations/api';
 import {
   INGEST_STAGES,
@@ -15,15 +17,17 @@ import {
   cancelPending,
   clearAssistantChat,
   getPending,
-  heldVideoFileNow,
+  heldUploadFilesNow,
   holdImage,
-  holdVideo,
+  holdUpload,
   loadAssistantChat,
   performAction,
   platformIn,
   PLATFORM_CHOICES,
   releaseImage,
-  releaseVideo,
+  offerAction,
+  releaseUpload,
+  setUploadPlan,
   stopActiveRun,
   stopAssistant,
   clock,
@@ -31,7 +35,6 @@ import {
   isActive,
   megabytes,
   stageIndex,
-  startIngest,
   useAiStatus,
   useAssistantChat,
   useIngestJobs,
@@ -39,6 +42,7 @@ import {
   type ChatMessage,
   type ConfirmAction,
   type IngestJob,
+  type UploadPlan,
 } from '@/lib/inspirations/ingestJobs';
 import { ArrowRightIcon, CheckIcon, CloseIcon, ExpandIcon, ExternalIcon, MinusIcon, PlusIcon, SparklesIcon, StopIcon, TrashIcon, UploadIcon } from '../Icons';
 import { tone } from './AiPicker';
@@ -106,13 +110,26 @@ export function renderChat(text: string): string {
   return blocks.join('');
 }
 
-const SUGGESTIONS = ['How far is the run?', 'How long is left?', 'What did the last run do?', 'Which AI is on?', "Set an app's version"];
+const SUGGESTIONS = ['How far is the run?', 'How long is left?', 'What did the last run do?', 'Which AI is on?', 'What can you do?'];
+
+/** "Update Latest", "latest", "29 Sep 2026", "2026-09-29", "sep 29" → that version of the app, if it has one. */
+function matchHeldVersion(versions: { id: string; label: string; isLatest: boolean }[], text: string) {
+  const needle = text.trim().toLowerCase().replace(/^update\s+/, '').replace(/\s+version$/, '');
+  if (/^(latest|newest|current)$/.test(needle)) return versions.find((v) => v.isLatest) ?? null;
+  const asDate = parseDateInput(needle);
+  return (
+    versions.find((v) => v.id === needle || v.label.toLowerCase() === needle) ??
+    (asDate ? versions.find((v) => v.id === asDate) : null) ??
+    versions.find((v) => v.label.toLowerCase().includes(needle)) ??
+    null
+  );
+}
 
 export function IngestDock() {
   const { user, ready } = useAuth();
   const admin = ready && Boolean(user && !user.isAnonymous && isAdminEmail(user.email));
   const { jobs } = useIngestJobs(admin);
-  const { messages, pending: pendingAction, heldImage, heldVideo, expecting } = useAssistantChat();
+  const { messages, pending: pendingAction, heldImage, heldUpload, expecting } = useAssistantChat();
   const [logoFor, setLogoFor] = useState<ConfirmAction | null>(null);
   const { status: ai, loading: aiLoading } = useAiStatus(admin);
   const [collapsed, setCollapsed] = useState(() => {
@@ -137,6 +154,8 @@ export function IngestDock() {
   const [asking, setAsking] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  /** The library as it stood when a recording was dropped — apps and their versions, for the questions that follow. */
+  const libraryRef = useRef<AdminState | null>(null);
 
   const visible = jobs.filter((job) => !job.dismissed).slice(0, 3);
   const running = visible.some(isActive);
@@ -185,27 +204,35 @@ export function IngestDock() {
 
   const isImage = (file: File) => file.type.startsWith('image/') || /\.(png|jpe?g|webp|svg|gif|avif)$/i.test(file.name);
 
-  /** A dropped or picked file: a video starts a run, an image becomes a logo. */
-  const upload = async (file: File) => {
-    if (!user) return;
-    if (isImage(file)) {
-      // Picked for a logo the admin just confirmed, or for one waiting.
+  /** Dropped or picked files: a recording starts a run, several screenshots are filed, one image becomes a logo or a screen. */
+  const upload = async (picked: File[]) => {
+    if (!user || !picked.length) return;
+    const images = picked.filter(isImage);
+    const videos = picked.filter((file) => file.type.startsWith('video/') || /\.(mov|mp4|m4v|avi|mkv)$/i.test(file.name));
+    if (images.length === 1 && !videos.length) {
+      const file = images[0];
+      // Picked for a logo or a screen the admin just confirmed, or for one waiting.
       const target = logoFor ?? (pendingAction?.op.kind === 'set-logo' || pendingAction?.op.kind === 'add-screen' ? pendingAction : null);
       if (target) {
         setLogoFor(null);
         await performAction(target, file);
         return;
       }
-      if (pendingAction?.op.kind === 'add-screen') {
-        await performAction(pendingAction, file);
-        return;
-      }
       holdImage(file);
       assistantSays(`Got “${file.name}”. Is it a logo or a screen? Say, for example, “set this as Swiggy’s logo” or “add this as a screen to Swiggy”.`);
       return;
     }
-    if (!(file.type.startsWith('video/') || /\.(mov|mp4|m4v|avi|mkv)$/i.test(file.name))) {
-      assistantSays('I can take a screen recording (.mov or .mp4) to add an app, or an image to set a logo.');
+    if (images.length > 1) {
+      // Several screenshots: the admin page's Manual upload, asked as
+      // questions — platform, then which app (or a new one), then version.
+      holdUpload('screens', images);
+      libraryRef.current = null;
+      assistantSays(`Got ${images.length} screenshots. Which platform are they from?`, [...PLATFORM_CHOICES.map((choice) => chip(choice.label)), chip('Cancel')]);
+      return;
+    }
+    const video = videos[0];
+    if (!video) {
+      assistantSays('I can take a screen recording (.mov or .mp4) to add an app, several screenshots to file under an app, or one image to set a logo.');
       return;
     }
     if (running) {
@@ -213,22 +240,180 @@ export function IngestDock() {
       return;
     }
     // A recording does not say what it was recorded on, and that decides
-    // where its screens are filed — so the platform is asked first.
-    holdVideo(file);
-    assistantSays(`Got “${file.name}” (${megabytes(file.size)}). Which platform is it from?`, [...PLATFORM_CHOICES.map((choice) => ({ type: 'reply' as const, text: choice.label })), { type: 'reply' as const, text: 'Cancel' }]);
+    // where its screens are filed — so the platform is asked first. Which
+    // app, and which of its versions, follow: the same choices the admin
+    // page's Automatic tab offers as controls, asked here one at a time.
+    holdUpload('video', [video]);
+    libraryRef.current = null;
+    assistantSays(`Got “${video.name}” (${megabytes(video.size)}). Which platform is it from?`, [...PLATFORM_CHOICES.map((choice) => chip(choice.label)), chip('Cancel')]);
   };
 
-  /** Starts the held recording once the platform is known. */
-  const startHeld = async (platform: 'ios' | 'android' | 'web') => {
-    const file = heldVideoFileNow();
-    if (!file || !user) return;
-    releaseVideo();
-    try {
-      await startIngest(file, user.email, { platform });
-      assistantSays(`Starting on “${file.name}” as ${PLATFORM_CHOICES.find((choice) => choice.id === platform)?.label ?? platform}. The screens will be live in a minute or two; the AI writes the names after that.`);
-    } catch (error) {
-      assistantSays(`I could not start that run: ${(error as Error).message}`);
+  const chip = (text: string) => ({ type: 'reply' as const, text });
+  const library = async (): Promise<AdminState> => (libraryRef.current ??= await adminApi.getState());
+  const versionName = (v: { isLatest: boolean; label: string }) => (v.isLatest ? 'Latest' : v.label);
+
+  /**
+   * Every question answered: the upload is offered as a Confirm, the same
+   * as any other change — nothing is sent until it is pressed (or a typed
+   * yes). The files themselves stay held by the chat store until then.
+   */
+  const offerHeld = (opts: { platform: 'ios' | 'android' | 'web'; appId?: string; version?: string; newApp?: { id: string; name: string } }) => {
+    const held = heldUpload;
+    const files = heldUploadFilesNow();
+    if (!held || !files.length || !user) return;
+    const app = opts.appId ? (libraryRef.current?.apps.find((entry) => entry.id === opts.appId) ?? null) : null;
+    const existing = app?.versions?.find((v) => v.id === opts.version);
+    const versionLabel = opts.version ? (existing ? `${versionName(existing)} version` : `new version dated ${dayLabel(opts.version)}`) : undefined;
+    const appName = app?.name ?? opts.newApp?.name;
+    setUploadPlan({ ...held.plan, step: 'confirm', platform: opts.platform, appId: opts.appId ?? opts.newApp?.id, appName, newApp: opts.newApp });
+    const op: AdminOp =
+      held.kind === 'video'
+        ? { kind: 'start-ingest', fileName: files[0].name, platform: opts.platform, appId: opts.appId, appName: app?.name, version: opts.version, versionLabel, startedBy: user.email }
+        : {
+            kind: 'upload-screens',
+            count: files.length,
+            platform: opts.platform,
+            appId: opts.appId ?? opts.newApp?.id ?? '',
+            appName: appName ?? '',
+            version: opts.version ?? localDateString(),
+            versionLabel: versionLabel ?? `new version dated ${dayLabel(localDateString())}`,
+            newApp: opts.newApp,
+          };
+    offerAction(describeOp(op), { type: 'confirm', op, label: labelFor(op), destructive: false });
+  };
+
+  const cancelHeld = () => {
+    const waiting = getPending();
+    if (waiting && (waiting.op.kind === 'start-ingest' || waiting.op.kind === 'upload-screens')) {
+      cancelPending();
+      return;
     }
+    releaseUpload();
+    assistantSays('Okay, I’ve set that aside. Drop it again whenever you like.');
+  };
+
+  const askApp = async (plan: UploadPlan) => {
+    const state = await library();
+    if (!state.apps.length) {
+      if (heldUpload?.kind === 'screens') askName(plan);
+      else offerHeld({ platform: plan.platform! });
+      return;
+    }
+    setUploadPlan({ ...plan, step: 'app' });
+    assistantSays('Is this a new app, or more screens of one already in the library?', [chip('New app'), ...state.apps.slice(0, 8).map((app) => chip(app.name)), chip('Cancel')]);
+  };
+
+  /** Screenshots for an app that does not exist yet: a recording identifies its app itself; screenshots cannot. */
+  const askName = (plan: UploadPlan) => {
+    setUploadPlan({ ...plan, step: 'name' });
+    assistantSays('What is the app called? I’ll create it and file the screenshots under it.', [chip('Cancel')]);
+  };
+
+  const askVersion = (plan: UploadPlan, app: AdminAppRecord) => {
+    const versions = app.versions ?? [];
+    setUploadPlan({ ...plan, step: 'version', appId: app.id, appName: app.name, newApp: undefined });
+    assistantSays(`Which version of ${app.name} should these screens go into?`, [...versions.map((v) => chip(`Update ${versionName(v)}`)), chip('New version'), chip('Cancel')]);
+  };
+
+  const askDate = (plan: UploadPlan) => {
+    setUploadPlan({ ...plan, step: 'date' });
+    assistantSays(`What date should the ${plan.newApp ? 'first' : 'new'} version have? Today is ${dayLabel(localDateString())}.`, [chip('Today'), chip('Cancel')]);
+  };
+
+  /** One typed or chipped answer to whichever question the held upload is on. */
+  const answerHeld = async (raw: string) => {
+    const text = raw.trim();
+    const plan: UploadPlan = heldUpload?.plan ?? { step: 'platform' };
+    if (plan.step === 'confirm') {
+      // The questions are done; only the Confirm (or a yes/no) is left.
+      const waiting = getPending();
+      const reply = answersPending(text);
+      if (waiting && reply === 'yes') await run(waiting);
+      else if (reply === 'no' || /^(cancel|discard|never ?mind|forget it)\b/i.test(text)) cancelHeld();
+      else assistantSays('Press Confirm above to go ahead, or say cancel.');
+      return;
+    }
+    if (/^(cancel|discard|never ?mind|forget it|no)\b/i.test(text)) {
+      cancelHeld();
+      return;
+    }
+    if (plan.step === 'platform') {
+      const platform = platformIn(text);
+      if (!platform) {
+        assistantSays('Which platform — iOS, Android or Web?', [...PLATFORM_CHOICES.map((choice) => chip(choice.label)), chip('Cancel')]);
+        return;
+      }
+      await askApp({ ...plan, platform });
+      return;
+    }
+    if (plan.step === 'app') {
+      if (/^(a )?new( app)?$/i.test(text)) {
+        if (heldUpload?.kind === 'screens') askName(plan);
+        else offerHeld({ platform: plan.platform! });
+        return;
+      }
+      const state = await library();
+      const needle = text.toLowerCase();
+      const app =
+        state.apps.find((entry) => entry.name.toLowerCase() === needle || entry.id === needle) ??
+        state.apps.find((entry) => needle.includes(entry.name.toLowerCase()) || entry.name.toLowerCase().includes(needle));
+      if (!app) {
+        assistantSays(`I don’t know an app called “${text}”. Pick one, or say “new app”.`, [chip('New app'), ...state.apps.slice(0, 8).map((entry) => chip(entry.name)), chip('Cancel')]);
+        return;
+      }
+      askVersion(plan, app);
+      return;
+    }
+    if (plan.step === 'name') {
+      const name = text.replace(/^[“"']+|[”"']+$/g, '').trim().slice(0, 80);
+      if (!name) {
+        assistantSays('What should the app be called?', [chip('Cancel')]);
+        return;
+      }
+      const state = await library();
+      const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
+      // Named an app that turns out to exist: file under it rather than make a twin.
+      const existing = state.apps.find((entry) => entry.id === id || entry.name.toLowerCase() === name.toLowerCase());
+      if (existing) {
+        askVersion(plan, existing);
+        return;
+      }
+      askDate({ ...plan, appName: name, newApp: { id, name } });
+      return;
+    }
+    const state = await library();
+    const app = state.apps.find((entry) => entry.id === plan.appId);
+    const versions = app?.versions ?? [];
+    if (plan.step === 'version') {
+      if (/\bnew\b/i.test(text)) {
+        askDate(plan);
+        return;
+      }
+      const version = matchHeldVersion(versions, text);
+      if (!version) {
+        assistantSays(`Which version? ${app?.name ?? 'It'} has ${versions.map(versionName).join(', ') || 'none yet'} — or say “new version”.`, [...versions.map((v) => chip(`Update ${versionName(v)}`)), chip('New version'), chip('Cancel')]);
+        return;
+      }
+      offerHeld({ platform: plan.platform!, appId: plan.appId, version: version.id });
+      return;
+    }
+    // step === 'date': a date for the new version — or a change of mind, adding to an existing one.
+    const asExisting = /^update\b/i.test(text) ? matchHeldVersion(versions, text) : null;
+    if (asExisting) {
+      offerHeld({ platform: plan.platform!, appId: plan.appId, version: asExisting.id });
+      return;
+    }
+    const date = parseDateInput(text);
+    if (!date) {
+      assistantSays('I didn’t catch a date in that — say it like 2026-09-30, “30 Sep 2026”, or “today”.', [chip('Today'), chip('Cancel')]);
+      return;
+    }
+    const clash = versions.find((v) => v.id === date);
+    if (clash) {
+      assistantSays(`${app?.name ?? 'It'} already has a version dated ${versionName(clash)} — pick a different date, or add these screens to that one.`, [chip(`Update ${versionName(clash)}`), chip('Today'), chip('Cancel')]);
+      return;
+    }
+    offerHeld({ platform: plan.platform!, appId: plan.appId, version: date, newApp: plan.newApp });
   };
 
   const ask = async (event?: FormEvent) => {
@@ -255,20 +440,12 @@ export function IngestDock() {
       fileRef.current?.click();
       return;
     }
-    // A held recording is waiting for its platform; a platform word answers it.
-    if (heldVideoFileNow()) {
-      const platform = platformIn(text);
-      if (platform) {
-        adminSays(text.trim());
-        await startHeld(platform);
-        return;
-      }
-      if (/^(cancel|never ?mind|forget it|no)\b/i.test(text.trim())) {
-        adminSays(text.trim());
-        releaseVideo();
-        assistantSays('Okay, I’ve set that recording aside. Drop it again whenever you like.');
-        return;
-      }
+    // A held upload is part-way through its questions — platform, app,
+    // version, date, Confirm; whatever is typed answers the one it is on.
+    if (heldUploadFilesNow().length) {
+      adminSays(text.trim());
+      await answerHeld(text);
+      return;
     }
     const waiting = getPending();
     const reply = answersPending(text);
@@ -288,15 +465,9 @@ export function IngestDock() {
     if (action.type === 'upload') fileRef.current?.click();
     else if (action.type === 'confirm') void run(action);
     else if (action.type === 'reply') {
-      if (heldVideoFileNow() && platformIn(action.text)) {
+      if (heldUploadFilesNow().length) {
         adminSays(action.text);
-        void startHeld(platformIn(action.text)!);
-        return;
-      }
-      if (heldVideoFileNow() && /^cancel/i.test(action.text)) {
-        adminSays(action.text);
-        releaseVideo();
-        assistantSays('Okay, I’ve set that recording aside. Drop it again whenever you like.');
+        void answerHeld(action.text);
         return;
       }
       if (/^cancel/i.test(action.text) && getPending()) {
@@ -323,11 +494,12 @@ export function IngestDock() {
       ref={fileRef}
       type="file"
       accept="video/*,image/*,.mov,.mp4,.m4v,.png,.jpg,.jpeg,.webp,.svg"
+      multiple
       hidden
       onChange={(e) => {
-        const file = e.target.files?.[0];
+        const files = Array.from(e.target.files ?? []);
         e.target.value = '';
-        if (file) void upload(file);
+        if (files.length) void upload(files);
       }}
     />
   );
@@ -357,8 +529,8 @@ export function IngestDock() {
       onDrop={(e: DragEvent) => {
         e.preventDefault();
         setDragging(false);
-        const file = e.dataTransfer.files?.[0];
-        if (file) void upload(file);
+        const files = Array.from(e.dataTransfer.files ?? []);
+        if (files.length) void upload(files);
       }}
     >
       {picker}
@@ -400,7 +572,7 @@ export function IngestDock() {
           <div className="ins-chat">
             <div className="ins-chat-msg ins-chat-msg--assistant">
               <p className="ins-chat-line">
-                Hi. Drop a screen recording to add an app, drop an image to set a logo, or tell me what to change — “change Swiggy’s tagline to …”, “remove Airbnb”. I’ll ask before doing anything.
+                Hi. Drop a screen recording — or several screenshots — to add an app or more screens to one, drop one image to set a logo, or tell me what to change — “change Swiggy’s tagline to …”, “delete the splash screen from Swiggy’s Sep 29 version”, “move Airbnb’s latest version to 30 Sep 2026”. I’ll ask before doing anything.
               </p>
               <div className="ins-chat-actions">
                 <button type="button" className="ins-chip-btn" onClick={() => fileRef.current?.click()}>
@@ -439,12 +611,32 @@ export function IngestDock() {
               the same as stopping a reply mid-type. */}
         </div>
       ))}
-      {heldVideo && (
+      {heldUpload && (
         <div className="ins-dock-held">
           <span>
-            Recording ready: <strong>{heldVideo.name}</strong> — which platform? iOS, Android or Web.
+            {heldUpload.kind === 'video' ? (
+              <>
+                Recording ready: <strong>{heldUpload.names[0]}</strong>
+              </>
+            ) : (
+              <>
+                <strong>{heldUpload.names.length} screenshots</strong> ready
+              </>
+            )}{' '}
+            —{' '}
+            {heldUpload.plan.step === 'platform'
+              ? 'which platform? iOS, Android or Web.'
+              : heldUpload.plan.step === 'app'
+                ? 'a new app, or which existing one?'
+                : heldUpload.plan.step === 'name'
+                  ? 'what is the new app called?'
+                  : heldUpload.plan.step === 'version'
+                    ? `which version of ${heldUpload.plan.appName}?`
+                    : heldUpload.plan.step === 'date'
+                      ? 'what date for the new version?'
+                      : 'waiting for your Confirm above.'}
           </span>
-          <button type="button" className="ins-linkbtn" onClick={releaseVideo}>
+          <button type="button" className="ins-linkbtn" onClick={cancelHeld}>
             Discard
           </button>
         </div>
@@ -472,8 +664,8 @@ export function IngestDock() {
               ? liveJob.status === 'uploading'
                 ? 'Uploading — press stop to cancel…'
                 : 'A run is going — press stop to cancel it…'
-              : heldVideo
-                ? 'iOS, Android or Web?'
+              : heldUpload
+                ? 'Answer the question above…'
                 : expecting
                   ? `Type ${expecting.app}’s new ${expecting.field}…`
                   : heldImage
