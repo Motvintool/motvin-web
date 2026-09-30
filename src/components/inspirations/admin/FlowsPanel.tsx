@@ -1,11 +1,11 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { inspirationsApi } from '@/lib/inspirations/api';
-import { adminApi, type AdminFlowRecord, type AdminScreenFile, type AdminState, adminScreenImagePath } from '@/lib/inspirations/admin';
-import { PLATFORM_LABEL, SCREEN_TYPE_LABEL } from '@/lib/inspirations/taxonomy';
-import type { Platform, ScreenType } from '@/lib/inspirations/types';
+import { adminApi, type AdminFlowRecord, type AdminState } from '@/lib/inspirations/admin';
+import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
+import type { Platform } from '@/lib/inspirations/types';
 import { CloseIcon, PlusIcon, TrashIcon } from '../Icons';
+import { screenLabel, thumbUrl } from './screenFiles';
 
 /**
  * Flow builder.
@@ -26,20 +26,6 @@ import { CloseIcon, PlusIcon, TrashIcon } from '../Icons';
 
 function slugify(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
-}
-
-function screenLabel(file: AdminScreenFile): string {
-  const sidecar = file.sidecar ?? {};
-  if (sidecar.name) return sidecar.name;
-  if (sidecar.screenType) return SCREEN_TYPE_LABEL[sidecar.screenType as ScreenType] ?? sidecar.screenType;
-  return file.file.replace(/\.[^.]+$/, '');
-}
-
-function thumbUrl(file: AdminScreenFile): string | null {
-  if (!file.published) return null;
-  return inspirationsApi.mediaUrl(
-    adminScreenImagePath(file),
-  );
 }
 
 export function FlowsPanel({

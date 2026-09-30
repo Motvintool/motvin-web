@@ -34,13 +34,21 @@ const imgFrame = "/ASSET/Icons/Motvin/right-arrow-small.svg";
 export function AppCard({
   app,
   preview,
+  previewScreens: presetScreens,
   selected = false,
   selectable = false,
   onToggleSelect,
   onRemove,
 }: {
   app: App;
+  /** The screen shown before anyone hovers. Defaults to the first of `previewScreens`. */
   preview?: Screen | null;
+  /**
+   * The carousel, when the caller already has it — the admin's pick for this
+   * app (see appCardScreens). Without it the card fetches the app's screens on
+   * hover and orders them by `app.cardScreens` when that is set.
+   */
+  previewScreens?: Screen[] | null;
   selected?: boolean;
   selectable?: boolean;
   onToggleSelect?: () => void;
@@ -48,7 +56,8 @@ export function AppCard({
 }) {
   const href = INSPIRATIONS_ROUTES.app(app);
   const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step } = useSiblingCycle(
-    preview ?? null,
+    preview ?? presetScreens?.[0] ?? null,
+    { preset: presetScreens, preferredIds: app.cardScreens },
   );
 
   const { show: showToast } = useToast();

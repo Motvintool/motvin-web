@@ -122,6 +122,12 @@ export const PlayOutlineIcon = (p: IconProps) => (
     />
   </svg>
 );
+export const UndoIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M9 14 4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></svg>
+);
+export const RetryIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M20 12a8 8 0 1 1-2.5-5.8" /><path d="M20 4v5h-5" /></svg>
+);
 export const PencilIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M4 20h4l10-10-4-4L4 16z" /><path d="m13 7 4 4" /></svg>
 );

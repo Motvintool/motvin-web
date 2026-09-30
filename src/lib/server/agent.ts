@@ -2,7 +2,8 @@ import { readSettings } from '@/lib/server/ai';
 import type { AiStatus, IngestJob } from '@/lib/inspirations/ingestJobs';
 import type { AdminOp, AssistantAction, Expect } from '@/lib/inspirations/assistantActions';
 import { localDateString } from '@/lib/inspirations/dates';
-import type { AssistantAnswer, HistoryLine, LibraryState, ParsedOp } from '@/lib/server/assistant';
+import { splitScreenFile } from '@/lib/inspirations/screenPaths';
+import type { AssistantAnswer, HistoryLine, LibraryState, ParsedOp, TokenSink } from '@/lib/server/assistant';
 
 /**
  * The admin assistant as an agent: a model that can look things up and
@@ -46,6 +47,10 @@ export type AgentDeps = {
   describeAi: (ai: AiStatus | null) => string;
   /** Turns "I've deleted X" into "I can delete X" — the model may only ever offer. */
   unclaim: (text: string) => string;
+  /** Where the model's words go as it writes them, and where its working steps are reported. */
+  onToken?: TokenSink;
+  /** Fires when the admin stops the reply — every model call in flight is dropped. */
+  signal?: AbortSignal;
 };
 
 // ─── The model ───────────────────────────────────────────────────────────────
@@ -137,45 +142,220 @@ type Turn =
   | { role: 'assistant'; content: string; tool_calls: unknown[] }
   | { role: 'tool'; content: string; tool_call_id?: string; tool_name?: string };
 
-async function chat(config: AgentConfig, model: string, messages: Turn[], tools: ToolDef[]): Promise<{ content: string; toolCalls: ToolCall[]; raw: unknown }> {
+/**
+ * Words are streamed to the admin only once it is clear they are words. A
+ * model's reply may be prose, a tool call written as JSON, or both; the
+ * first characters decide. Prose goes out as it arrives, except a bracketed
+ * note or a JSON object part-way through, which is held back until it
+ * closes and then dropped — those are for the machinery, not the admin.
+ */
+export class ProseGate {
+  private held = '';
+  private mode: 'undecided' | 'prose' | 'tool' = 'undecided';
+  /** Something was just dropped: the punctuation and space that trailed it go too. */
+  private trimming = false;
+  private readonly emit: (piece: string) => void;
+  constructor(emit: (piece: string) => void) {
+    this.emit = emit;
+  }
+  push(piece: string) {
+    if (this.mode === 'tool' || !piece) return;
+    this.held += piece;
+    if (this.mode === 'undecided') {
+      const lead = this.held.replace(/^\s+/, '');
+      if (!lead) return;
+      if (/^[{<`]/.test(lead)) {
+        this.mode = 'tool';
+        return;
+      }
+      // Enough to be sure it is not a fence or a tag about to open.
+      if (lead.length < 4) return;
+      this.mode = 'prose';
+      this.held = lead;
+    }
+    // Words go out up to the first thing that is not for the admin — a
+    // bracketed note, a JSON object, a code fence, a tag; each is held until
+    // it closes and then dropped, with any stray punctuation after it.
+    for (;;) {
+      if (this.trimming) {
+        const trimmed = this.held.replace(/^[ \t]*[.,]?[ \t]*/, '');
+        if (!trimmed && this.held) return; // only space or a dot so far; wait for a word
+        if (trimmed) this.trimming = false;
+        this.held = trimmed;
+      }
+      const open = this.held.search(/\[|\{|```|<\/?(?:tools?|tool_calls?)\b/i);
+      if (open === -1) {
+        this.emit(this.held);
+        this.held = '';
+        return;
+      }
+      if (open > 0) {
+        this.emit(this.held.slice(0, open));
+        this.held = this.held.slice(open);
+      }
+      const close = this.closeOf(this.held);
+      if (close === -1) return;
+      this.held = this.held.slice(close);
+      this.trimming = true;
+    }
+  }
+  /** Where the held-back thing at the start of `text` ends, or -1 while it is still open. */
+  private closeOf(text: string): number {
+    if (text.startsWith('```')) {
+      const end = text.indexOf('```', 3);
+      return end === -1 ? -1 : end + 3;
+    }
+    if (text.startsWith('[')) {
+      const end = text.indexOf(']');
+      return end === -1 ? -1 : end + 1;
+    }
+    if (text.startsWith('<')) {
+      const end = text.indexOf('>');
+      return end === -1 ? -1 : end + 1;
+    }
+    let depth = 0;
+    let inString = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (inString) {
+        if (ch === '\\') i++;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') inString = true;
+      else if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) return i + 1;
+      }
+    }
+    return -1;
+  }
+}
+
+/** The lines of a streamed body, as they complete. */
+async function* lines(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let index = buffer.indexOf('\n');
+    while (index !== -1) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 1);
+      if (line) yield line;
+      index = buffer.indexOf('\n');
+    }
+  }
+  if (buffer.trim()) yield buffer.trim();
+}
+
+type ChatOptions = { onToken?: (piece: string) => void; signal?: AbortSignal };
+
+function callSignal(signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(180_000);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
+/**
+ * One round with the model. Streamed when there is somewhere for the words
+ * to go: the reply's text and any tool calls are gathered as they arrive,
+ * and the text is passed on through the gate above.
+ */
+async function chat(config: AgentConfig, model: string, messages: Turn[], tools: ToolDef[], options: ChatOptions = {}): Promise<{ content: string; toolCalls: ToolCall[]; raw: unknown }> {
   const toolSpecs = tools.map((tool) => ({ type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.parameters } }));
+  const gate = options.onToken ? new ProseGate(options.onToken) : null;
+  const streaming = Boolean(gate);
+  let content = '';
+  let toolCalls: ToolCall[] = [];
   if (config.provider === 'ollama') {
     const base = config.url.replace(/\/v1\/?$/, '');
     const response = await fetch(`${base}/api/chat`, {
       method: 'POST',
       headers: headers(config),
-      body: JSON.stringify({ model, stream: false, messages, tools: toolSpecs, think: false, keep_alive: '30m', options: { temperature: 0.1, num_ctx: 16384, num_predict: 500 } }),
-      signal: AbortSignal.timeout(180_000),
+      body: JSON.stringify({ model, stream: streaming, messages, tools: toolSpecs, think: false, keep_alive: '30m', options: { temperature: 0.1, num_ctx: 16384, num_predict: 500 } }),
+      signal: callSignal(options.signal),
     });
     if (!response.ok) throw new Error(`ollama ${response.status}: ${(await response.text()).slice(0, 300)}`);
-    const payload = (await response.json()) as { message?: { content?: string; tool_calls?: { function?: { name?: string; arguments?: unknown } }[] } };
-    const message = payload.message ?? {};
-    const toolCalls = (message.tool_calls ?? []).map((call, index) => ({
-      id: `call_${index}`,
-      name: String(call.function?.name ?? ''),
-      args: parseArgs(call.function?.arguments),
-    })).filter((call) => call.name);
-    if (toolCalls.length) return { content: String(message.content ?? ''), toolCalls, raw: message };
-    const fromText = toolCallsFromText(String(message.content ?? ''), tools);
-    return { content: fromText.rest, toolCalls: fromText.calls, raw: fromText.calls.length ? { role: 'assistant', content: '', tool_calls: fromText.calls.map((call) => ({ function: { name: call.name, arguments: call.args } })) } : message };
+    type OllamaMessage = { content?: string; tool_calls?: { function?: { name?: string; arguments?: unknown } }[] };
+    const take = (message: OllamaMessage) => {
+      const piece = String(message.content ?? '');
+      if (piece) {
+        content += piece;
+        gate?.push(piece);
+      }
+      for (const call of message.tool_calls ?? []) {
+        const name = String(call.function?.name ?? '');
+        if (name) toolCalls.push({ id: `call_${toolCalls.length}`, name, args: parseArgs(call.function?.arguments) });
+      }
+    };
+    if (streaming && response.body) {
+      for await (const line of lines(response.body)) {
+        try {
+          const chunk = JSON.parse(line) as { message?: OllamaMessage; error?: string };
+          if (chunk.error) throw new Error(chunk.error);
+          if (chunk.message) take(chunk.message);
+        } catch (error) {
+          if (error instanceof SyntaxError) continue;
+          throw error;
+        }
+      }
+    } else {
+      const payload = (await response.json()) as { message?: OllamaMessage };
+      take(payload.message ?? {});
+    }
+    if (toolCalls.length) return { content, toolCalls, raw: { role: 'assistant', content, tool_calls: toolCalls.map((call) => ({ function: { name: call.name, arguments: call.args } })) } };
+    const fromText = toolCallsFromText(content, tools);
+    return { content: fromText.rest, toolCalls: fromText.calls, raw: fromText.calls.length ? { role: 'assistant', content: '', tool_calls: fromText.calls.map((call) => ({ function: { name: call.name, arguments: call.args } })) } : { role: 'assistant', content } };
   }
   const response = await fetch(`${config.url}/chat/completions`, {
     method: 'POST',
     headers: headers(config),
-    body: JSON.stringify({ model, messages, tools: toolSpecs, temperature: 0.1, max_tokens: 500 }),
-    signal: AbortSignal.timeout(180_000),
+    body: JSON.stringify({ model, messages, tools: toolSpecs, temperature: 0.1, max_tokens: 500, stream: streaming }),
+    signal: callSignal(options.signal),
   });
   if (!response.ok) throw new Error(`${config.provider} ${response.status}: ${(await response.text()).slice(0, 300)}`);
-  const payload = (await response.json()) as { choices?: { message?: { content?: string | null; tool_calls?: { id?: string; function?: { name?: string; arguments?: unknown } }[] } }[] };
-  const message = payload.choices?.[0]?.message ?? {};
-  const toolCalls = (message.tool_calls ?? []).map((call, index) => ({
-    id: String(call.id ?? `call_${index}`),
-    name: String(call.function?.name ?? ''),
-    args: parseArgs(call.function?.arguments),
-  })).filter((call) => call.name);
-  if (toolCalls.length) return { content: String(message.content ?? ''), toolCalls, raw: message };
-  const fromText = toolCallsFromText(String(message.content ?? ''), tools);
-  return { content: fromText.rest, toolCalls: fromText.calls, raw: fromText.calls.length ? { role: 'assistant', content: '', tool_calls: fromText.calls.map((call) => ({ id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.args) } })) } : message };
+  type OpenAiCall = { index?: number; id?: string; function?: { name?: string; arguments?: unknown } };
+  if (streaming && response.body) {
+    // Server-sent events; a tool call's arguments arrive in pieces, by index.
+    const partial = new Map<number, { id: string; name: string; args: string }>();
+    for await (const line of lines(response.body)) {
+      if (!line.startsWith('data:')) continue;
+      const data = line.slice(5).trim();
+      if (data === '[DONE]') break;
+      let chunk: { choices?: { delta?: { content?: string | null; tool_calls?: OpenAiCall[] } }[] };
+      try {
+        chunk = JSON.parse(data) as typeof chunk;
+      } catch {
+        continue;
+      }
+      const delta = chunk.choices?.[0]?.delta ?? {};
+      if (delta.content) {
+        content += delta.content;
+        gate?.push(delta.content);
+      }
+      for (const call of delta.tool_calls ?? []) {
+        const index = call.index ?? 0;
+        const entry = partial.get(index) ?? { id: call.id ?? `call_${index}`, name: '', args: '' };
+        if (call.function?.name) entry.name += call.function.name;
+        if (typeof call.function?.arguments === 'string') entry.args += call.function.arguments;
+        partial.set(index, entry);
+      }
+    }
+    toolCalls = [...partial.values()].filter((entry) => entry.name).map((entry) => ({ id: entry.id, name: entry.name, args: parseArgs(entry.args) }));
+  } else {
+    const payload = (await response.json()) as { choices?: { message?: { content?: string | null; tool_calls?: OpenAiCall[] } }[] };
+    const message = payload.choices?.[0]?.message ?? {};
+    content = String(message.content ?? '');
+    toolCalls = (message.tool_calls ?? []).map((call, index) => ({ id: String(call.id ?? `call_${index}`), name: String(call.function?.name ?? ''), args: parseArgs(call.function?.arguments) })).filter((call) => call.name);
+  }
+  const asOpenAi = (calls: ToolCall[]) => ({ role: 'assistant', content: '', tool_calls: calls.map((call) => ({ id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.args) } })) });
+  if (toolCalls.length) return { content, toolCalls, raw: { ...asOpenAi(toolCalls), content } };
+  const fromText = toolCallsFromText(content, tools);
+  return { content: fromText.rest, toolCalls: fromText.calls, raw: fromText.calls.length ? asOpenAi(fromText.calls) : { role: 'assistant', content } };
 }
 
 /**
@@ -267,6 +447,7 @@ const READ_TOOLS: ToolDef[] = [
   { name: 'get_app', description: "One app in full: name, tagline, industry, website, logo, source status, versions, flows with their steps, and screen names grouped by version.", parameters: obj({ app: APP }, ['app']) },
   { name: 'list_screens', description: "An app's screens by name, with type and version — all versions, or one.", parameters: obj({ app: APP, version: str("A version — date or 'latest' — to limit to; omit for all.") }, ['app']) },
   { name: 'list_flows', description: "An app's flows, each with its steps in order.", parameters: obj({ app: APP }, ['app']) },
+  { name: 'show_screens', description: "Show the admin an app's screens as thumbnails they can look at and tap to pick — all versions, or one. Use it whenever they need to choose screens (to delete, rename, reorder) or ask to see them. This is how they see images.", parameters: obj({ app: APP, version: str("A version — a date or 'latest' — to show only that one; omit for all.") }, ['app']) },
   { name: 'get_runs', description: 'The video ingest runs — what is running now and how far, and recent finished ones.', parameters: obj({}) },
   { name: 'get_ai', description: 'Which AI models are connected and what each does.', parameters: obj({}) },
 ];
@@ -277,6 +458,7 @@ const WRITE_TOOLS: (ToolDef & { kind: string })[] = [
   { kind: 'delete-app-version', name: 'delete_version', description: "Delete one dated version (capture) of an app and its screens. Only when a version is meant — 'the Sep 29 version', 'the latest capture'.", parameters: obj({ app: APP, version: str("Which version — a date like '29 Sep 2026', '2026-09-29', or 'latest'.") }, ['app', 'version']) },
   { kind: 'rename-app-version', name: 'change_version_date', description: "Change the date of one of an app's versions. The newest date is the one shown as 'Latest'.", parameters: obj({ app: APP, version: str("The version to change — a date or 'latest'."), to: str('The new date the admin wrote, e.g. 2026-10-05 or 5 Oct 2026.') }, ['app', 'version', 'to']) },
   { kind: 'delete-screen', name: 'delete_screen', description: 'Delete one screen of an app for good.', parameters: obj({ app: APP, screen: SCREEN, version: VERSION_OF_SCREEN }, ['app', 'screen']) },
+  { kind: 'delete-screens', name: 'delete_screens', description: 'Delete several screens of an app at once, by name or by pasted link.', parameters: obj({ app: APP, screens: strList('The screens — names, or links the admin pasted.'), version: VERSION_OF_SCREEN }, ['app', 'screens']) },
   { kind: 'rename-screen', name: 'rename_screen', description: 'Rename a screen.', parameters: obj({ app: APP, screen: SCREEN, to: str('The new name, in the admin’s words.'), version: VERSION_OF_SCREEN }, ['app', 'screen', 'to']) },
   { kind: 'set-screen-type', name: 'set_screen_type', description: 'Set a screen’s type (splash, onboarding, login, home, checkout, …).', parameters: obj({ app: APP, screen: SCREEN, to: str('The screen type.'), version: VERSION_OF_SCREEN }, ['app', 'screen', 'to']) },
   { kind: 'set-screen-tags', name: 'set_screen_tags', description: 'Add tags to a screen, or replace its tags.', parameters: obj({ app: APP, screen: SCREEN, tags: strList('The tags.'), mode: { type: 'string', enum: ['add', 'replace'], description: 'add keeps existing tags; replace drops them.' }, version: VERSION_OF_SCREEN }, ['app', 'screen', 'tags']) },
@@ -317,6 +499,8 @@ Understand what is meant, from the whole conversation:
 - Names, taglines and links must be the admin's own words; only when they ask you to suggest one may you write one, and then say it is a suggestion.
 - A bare "yes" or "ok" means nothing here; the Confirm button is how things go ahead.
 - Never announce that you will look something up or do something — call the tool in this same turn instead. Words without a tool call change nothing.
+- To see screens, the admin needs show_screens — it puts thumbnails in the chat that they can tap to select and delete. Call it when they ask to see, list or pick screens, or when they want to delete or rename screens without saying which. Never say you cannot show images.
+- A screen link the admin pastes (…/api/inspirations/screens/…) names that screen exactly; pass it unchanged as the screen.
 
 Reply in one or two sentences. If you proposed a change, describe it as what will happen when they confirm and invite them to confirm. If you asked a read tool something, answer from what it returned. If nothing needs changing, just answer, or ask.`;
 
@@ -383,6 +567,70 @@ function answerRead(name: string, args: Record<string, unknown>, deps: AgentDeps
     default:
       return `Unknown tool ${name}.`;
   }
+}
+
+/** One line of the thinking thread for a tool call, in plain words. */
+function stepText(call: ToolCall, state: LibraryState | null): string {
+  const app = findApp(state, call.args.app)?.name ?? (typeof call.args.app === 'string' ? call.args.app : '');
+  const version = typeof call.args.version === 'string' && call.args.version.trim() ? ` (${call.args.version.trim()})` : '';
+  const screen = typeof call.args.screen === 'string' ? ` “${call.args.screen}”` : Array.isArray(call.args.screens) ? ` ${call.args.screens.length} screens` : '';
+  const flow = typeof call.args.flow === 'string' ? ` “${call.args.flow}”` : '';
+  switch (call.name) {
+    case 'list_apps':
+      return 'Looked at the app list';
+    case 'get_app':
+      return `Read ${app || 'the app'} in full`;
+    case 'list_screens':
+      return `Listed ${app || 'the app'}’s screens${version}`;
+    case 'list_flows':
+      return `Listed ${app || 'the app'}’s flows`;
+    case 'get_runs':
+      return 'Checked the runs';
+    case 'get_ai':
+      return 'Checked the AI';
+    case 'show_screens':
+      return `Gathered ${app || 'the app'}’s screens${version} to show`;
+    case 'upload_recording':
+      return 'Reached for the recording picker';
+    case 'open_page':
+      return 'Picked a page to open';
+    default: {
+      const tool = WRITE_TOOLS.find((entry) => entry.name === call.name);
+      const verb = tool ? tool.name.replace(/_/g, ' ') : call.name;
+      return `Proposed: ${verb}${app ? ` — ${app}` : ''}${screen}${flow}${version}`;
+    }
+  }
+}
+
+/**
+ * The thumbnails for show_screens: an app's screens, in one version or all,
+ * as the dock renders them — image path, name, and what a delete of each
+ * would need.
+ */
+function screensToShow(state: LibraryState | null, args: Record<string, unknown>): { action?: AssistantAction; note?: string } {
+  const app = findApp(state, args.app);
+  const apps = state?.apps ?? [];
+  if (!app) return { note: `No app called “${String(args.app ?? '')}”. The apps are: ${apps.map((entry) => entry.name).join(', ') || 'none'}.` };
+  const own = (state?.files ?? []).filter((file) => file.appId === app.id);
+  const wanted = typeof args.version === 'string' ? args.version.trim() : '';
+  const versions = app.versions ?? [];
+  const version = wanted ? versions.find((v) => v.id === wanted || norm(v.label) === norm(wanted) || (/^(latest|newest|new|current)$/i.test(wanted) && v.isLatest) || norm(v.label).includes(norm(wanted))) ?? null : null;
+  if (wanted && !version) return { note: `${app.name} has no version like “${wanted}”. Its versions: ${versions.map((v) => (v.isLatest ? `Latest (${v.label})` : v.label)).join(', ') || 'none'}.` };
+  const pool = version ? own.filter((file) => file.version === version.id) : own;
+  if (!pool.length) return { note: `${app.name} has no screens${version ? ` in its ${version.label} version` : ''}.` };
+  const platform = pool[0].platform;
+  const screens = pool
+    .filter((file) => file.platform === platform)
+    .slice(0, 60)
+    .map((file) => {
+      const part = splitScreenFile(file.file, file.version ?? '');
+      return { id: file.id ?? file.file, name: screenNameOf(file), path: `/api/inspirations/screens/${file.platform}/${file.appId}/${file.file}`, file: part.name, version: part.version, flow: part.flow };
+    });
+  const label = version ? (version.isLatest ? `Latest (${version.label})` : version.label) : 'all versions';
+  return {
+    action: { type: 'screens', appId: app.id, appName: app.name, platform, versionId: version?.id, versionLabel: version?.label, screens },
+    note: `${screens.length} screen${screens.length === 1 ? '' : 's'} of ${app.name}, ${label}.`,
+  };
 }
 
 /** The write tool's arguments, as the operation assistant.ts validates. */
@@ -494,8 +742,34 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
   let nudged = 0;
   let lastNote: string | undefined;
   let narratedAtEnd = false;
+  // Each round streams its words as they come. Words written on the way to
+  // a tool call, or before a reminder, were the model working rather than
+  // answering: they are folded into the reply's thinking thread, where each
+  // lookup and each checked change is shown as a step — so the admin can
+  // watch, and afterwards open, what happened between question and answer.
+  let streamedRounds = 0;
+  let spokeThisRound = false;
+  const sink: ChatOptions = {
+    signal: deps.signal,
+    onToken: deps.onToken
+      ? (piece) => {
+          if (!spokeThisRound) {
+            spokeThisRound = true;
+            streamedRounds++;
+          }
+          deps.onToken?.(piece);
+        }
+      : undefined,
+  };
+  const fold = () => {
+    if (spokeThisRound) deps.onToken?.('', { kind: 'fold' });
+    spokeThisRound = false;
+  };
+  const step = (text: string, detail?: string) => deps.onToken?.('', { kind: 'step', text, detail });
   for (let round = 0; round < 5; round++) {
-    const reply = await chat(config, model, messages, tools);
+    if (deps.signal?.aborted) throw new Error('Stopped.');
+    spokeThisRound = false;
+    const reply = await chat(config, model, messages, tools, sink);
     debug(`round ${round} reply`, reply.raw);
     lastContent = reply.content.trim() || lastContent;
     // Nothing at all on the first round — a model that spent its budget
@@ -505,38 +779,59 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
     if (!reply.toolCalls.length) {
       // A small model sometimes narrates the lookup ("I'll list its
       // screens") instead of making it. One reminder, then take its words.
-      const narrated = /\b(?:I(?:'|’)ll|I will|let me|let(?:'|’)?s|I(?:'|’)m going to|I am going to|I can)\s+(?:now\s+|just\s+)?(?:call|use|invoke|run|list|check|look|find|get|fetch|retrieve|see|propose|delete|remove|rename|set|update|change|create|add|try)\b/i.test(reply.content);
+      const narrated = /\b(?:I(?:'|’)ll|I will|let me|let(?:'|’)?s|I(?:'|’)m going to|I am going to|I can|we can)\s+(?:now\s+|just\s+|start by\s+|begin by\s+|go ahead and\s+)?(?:call|use|invoke|run|list|check|look|find|get|fetch|retrieve|see|show|display|present|bring up|pull up|propose|delete|remove|rename|set|update|change|create|add|try)\w*\b/i.test(reply.content);
       const toldToUpload = /\b(?:upload|drop|provide|share)\b[^.]*\b(?:recording|video)\b/i.test(reply.content);
       // "Confirm to remove …" / "… will be renamed once you confirm" with no
       // call behind it: the model copied the shape of its earlier answers
       // and proposed nothing.
       const describedChange = /\bconfirm\b/i.test(reply.content) && /\b(remov|delet|renam|set|updat|chang|add|creat|mov|reorder|approv|mark|switch|stop|rebuil)\w*\b/i.test(reply.content);
+      // "Here are the screens…" / "I'll show you the screens" with nothing shown.
+      const offeredToShow = /\b(?:show|display|list|here are|here is|these are)\b/i.test(reply.content) && /\b(?:screens?|screenshots?|images?|thumbnails?)\b/i.test(reply.content) && !/\bwhich app\b/i.test(reply.content);
       // Asking what a new app is called: the recording answers that.
       const askedAppName = /\b(?:name|title|industry)\b/i.test(reply.content) && /\bnew app\b|\badd (?:an? |the )?app\b/i.test(input.question) && /\?|please/i.test(reply.content);
       narratedAtEnd = narrated || describedChange;
-      if (nudged < 2 && (narrated || toldToUpload || describedChange || askedAppName)) {
+      if (nudged < 2 && (narrated || toldToUpload || describedChange || askedAppName || offeredToShow)) {
         nudged++;
         messages.push({ role: 'assistant', content: reply.content });
         messages.push({
           role: 'user',
           content: `[Note, not from the admin: ${
-            toldToUpload || askedAppName
+            offeredToShow && !toldToUpload
+              ? 'the admin sees no screens until you call show_screens — call it now for that app (and version, if one was meant), without any words.'
+              : toldToUpload || askedAppName
               ? 'the admin cannot upload until you call upload_recording — it opens their file picker. Call it now, without any words.'
               : describedChange
                 ? 'you described a change but called no write tool, so nothing was proposed and there is no Confirm button. Call the matching tool now (look the app up first if you must), without any words.'
                 : 'you said what you would do but called no tool, so nothing happened. Call the tool now, in this turn, without any words.'
           }]`,
         });
+        fold();
+        step('Reminded myself to act, not describe');
         lastContent = '';
         continue;
       }
       break;
     }
+    // Words alongside a tool call were the model thinking aloud.
+    fold();
     // The assistant turn goes back as the model produced it, then one tool
     // result per call, so the transcript stays well-formed for the next round.
     messages.push({ role: 'assistant', content: reply.content, tool_calls: (reply.raw as { tool_calls?: unknown[] })?.tool_calls ?? [] });
     let stop = false;
     for (const call of reply.toolCalls) {
+      step(stepText(call, deps.state));
+      if (call.name === 'show_screens') {
+        const shown = screensToShow(deps.state, call.args);
+        if (shown.action) {
+          action = shown.action;
+          note = shown.note;
+          stop = true;
+          messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `${shown.note} They are on screen now as thumbnails the admin can tap to select and delete; tell them so in one short sentence and stop.` });
+          break;
+        }
+        messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: shown.note ?? 'Nothing to show.' });
+        continue;
+      }
       const read = READ_TOOLS.find((tool) => tool.name === call.name);
       if (read) {
         messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: answerRead(call.name, call.args, deps) });
@@ -544,10 +839,12 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
       }
       const write = WRITE_TOOLS.find((tool) => tool.name === call.name);
       if (!write) {
+        step(`Tried a tool that does not exist (${call.name})`);
         messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `There is no tool called ${call.name}. The tools are: ${tools.map((tool) => tool.name).join(', ')}.` });
         continue;
       }
       const checked = deps.validate(toParsedOp(write, call.args));
+      step(checked.action ? 'Checked — ready to confirm' : checked.settled ? 'Checked — nothing to change' : 'Checked — not possible as asked', checked.note);
       if (checked.action) {
         action = checked.action;
         note = checked.note;
@@ -570,9 +867,16 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
       // One short closing round for the wording. Whatever the model wrote
       // alongside the call was written before it knew the proposal stood,
       // so it is not used.
-      messages.push({ role: 'user', content: `[Note, not from the admin: tell them, in one or two plain sentences and your own words, what will happen when they press Confirm — nothing has happened yet — and invite them to confirm. Do not call tools, do not repeat this note, do not say "proposal".]` });
+      messages.push({
+        role: 'user',
+        content:
+          action?.type === 'screens'
+            ? `[Note, not from the admin: in one short sentence, say the screens are shown below and they can tap the ones to delete. Do not list the names. Do not call tools, do not repeat this note.]`
+            : `[Note, not from the admin: tell them, in one or two plain sentences and your own words, what will happen when they press Confirm — nothing has happened yet — and invite them to confirm. Do not call tools, do not repeat this note, do not say "proposal".]`,
+      });
       try {
-        const closing = await chat(config, model, messages, tools);
+        spokeThisRound = false;
+        const closing = await chat(config, model, messages, tools, sink);
         debug('closing', closing.raw);
         lastContent = closing.content.trim();
       } catch {
@@ -592,11 +896,15 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
   if (action?.type === 'confirm') {
     if (!text) text = note ?? action.label;
     if (!/confirm/i.test(text)) text = `${text} Confirm and it’s set.`;
+  } else if (action?.type === 'screens') {
+    if (!text || /\b(?:splash|home|login|onboarding)\b.*,.*,/i.test(text)) text = `${note ?? 'Here are the screens.'} Tap the ones to delete, then press the button under them.`;
   } else if (!text) {
     text = note ?? (settled ? 'Nothing needs changing there.' : 'Could you say that another way? Tell me the app and what should change.');
   }
   const actions: AssistantAction[] = action ? [action] : [];
   if (action?.type === 'confirm' && !action.destructive) actions.push({ type: 'reply', text: 'Cancel that' });
   if (action?.type === 'upload') actions.push({ type: 'reply', text: 'What should I record?' });
-  return { text, source: 'ai', actions, model, streamed: false };
+  // The words that streamed are the model's as written; the text here is
+  // the same words tidied, which the dock swaps in when the reply settles.
+  return { text, source: 'ai', actions, model, streamed: streamedRounds > 0 };
 }

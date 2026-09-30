@@ -33,6 +33,23 @@ export function fetchSiblings(appId: string): Promise<Screen[]> {
   return cached;
 }
 
+export type SiblingCycleOptions = {
+  /**
+   * A fixed set of screens to cycle through instead of fetching siblings —
+   * an app card whose admin picked its carousel already knows them. Counts
+   * only when it holds two or more: a lone screen is just a cover, and the
+   * card should still fetch the app's other screens to flip through.
+   */
+  preset?: Screen[] | null;
+  /**
+   * Screen ids to prefer, in order, when siblings are fetched — used when
+   * the caller knows the admin's pick but not the screen records yet. Ids
+   * that are not among the fetched siblings are skipped; if none match, the
+   * ordinary "this screen, then its siblings" order applies.
+   */
+  preferredIds?: string[];
+};
+
 /**
  * Hover-intent cycling through a handful of an app's other screens — shared
  * by ScreenCard and AppCard so a card behaves the same way in either grid:
@@ -42,21 +59,27 @@ export function fetchSiblings(appId: string): Promise<Screen[]> {
  * screens to preview), in which case this is inert — no fetch, no controls,
  * `activeScreen` stays null.
  */
-export function useSiblingCycle(screen: Screen | null) {
-  const [previewScreens, setPreviewScreens] = useState<Screen[] | null>(null);
+export function useSiblingCycle(screen: Screen | null, options: SiblingCycleOptions = {}) {
+  const preset = options.preset && options.preset.length > 1 ? options.preset.slice(0, MAX_PREVIEW_SCREENS) : null;
+  const [fetched, setFetched] = useState<Screen[] | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const hoverTimer = useRef<number | null>(null);
 
-  const activeScreen = previewScreens?.[activeIndex] ?? screen;
+  const previewScreens = preset ?? fetched;
   const dotCount = previewScreens?.length ?? 0;
+  // The preset can shrink between renders (a regrid), so never index past it.
+  const activeScreen = (dotCount > 0 ? previewScreens![activeIndex % dotCount] : null) ?? screen;
 
   const startHover = () => {
     if (!screen || previewScreens || hoverTimer.current !== null) return;
     hoverTimer.current = window.setTimeout(() => {
       hoverTimer.current = null;
       void fetchSiblings(screen.appId).then((siblings) => {
-        const others = siblings.filter((s) => s.id !== screen.id);
-        setPreviewScreens([screen, ...others].slice(0, MAX_PREVIEW_SCREENS));
+        const all = [screen, ...siblings.filter((s) => s.id !== screen.id)];
+        const preferred = (options.preferredIds ?? [])
+          .map((id) => all.find((s) => s.id === id))
+          .filter((s): s is Screen => Boolean(s));
+        setFetched((preferred.length ? preferred : all).slice(0, MAX_PREVIEW_SCREENS));
       });
     }, HOVER_INTENT_MS);
   };

@@ -124,6 +124,8 @@ export type AdminAppRecord = {
   logo?: string;
   versions?: AdminAppVersion[];
   currentVersion?: string | null;
+  /** Screen ids picked for the app card's carousel, in order (max 4). Omitted or empty means automatic. */
+  cardScreens?: string[];
 };
 
 export type AdminSourceRecord = {

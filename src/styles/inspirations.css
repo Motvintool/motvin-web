@@ -5599,32 +5599,17 @@ select.ins-input {
   gap: 6px;
 }
 
-.ins-admin-thumbgrid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
+/* A version's screens are .ins-flowbuild-tile's (see FlowsPanel) — the one
+   thing added is the delete control in the tile's top-right corner. */
 .ins-admin-thumb-card {
   position: relative;
-  width: 84px;
-  flex: none;
-}
-
-.ins-admin-thumb-card-img {
-  display: block;
-  width: 84px;
-  height: 84px;
-  object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid var(--ins-border);
-  background: var(--ins-card-alt);
 }
 
 .ins-admin-thumb-remove {
   position: absolute;
   top: 4px;
   right: 4px;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5849,6 +5834,13 @@ select.ins-input {
 .ins-flowbuild-tile.is-selected {
   border-color: var(--ins-accent);
   background: var(--ins-accent-subtle);
+}
+
+/* A pool tile that can't be picked right now — the card picker's carousel is
+   full. Still readable, clearly not a button for the moment. */
+.ins-flowbuild-tile:disabled:not(.is-selected) {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .ins-flowbuild-badge {
@@ -7449,4 +7441,278 @@ select.ins-input {
   height: 1px;
   background: #f0f0f0;
   margin: 2px 0;
+}
+
+/* ─── Message tools: copy, edit, undo, try again ───────────────────────────
+   Small and quiet under each message, shown on hover the way a chat app
+   does it; always there where there is no hover to speak of. */
+.ins-chat-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: -2px;
+  opacity: 0;
+  transition: opacity var(--ins-fast) var(--ins-ease);
+}
+
+.ins-chat-tools--user {
+  align-self: flex-end;
+}
+
+.ins-chat:hover .ins-chat-tools,
+.ins-chat:focus-within .ins-chat-tools {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .ins-chat-tools {
+    opacity: 1;
+  }
+}
+
+.ins-chat-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ins-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease);
+}
+
+.ins-chat-tool:hover:not(:disabled) {
+  background: var(--ins-tag);
+  color: var(--ins-text);
+}
+
+.ins-chat-tool:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ins-chat-time {
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--ins-muted);
+  white-space: nowrap;
+}
+
+/* Editing a sent message: the bubble becomes the composer for that message. */
+.ins-chat-edit {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--ins-card-alt);
+}
+
+.ins-chat-edit-input {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ins-text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  resize: none;
+  outline: none;
+}
+
+.ins-chat-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* ─── Screens shown in the chat, to look at and pick from ─────────────── */
+.ins-chat-screens {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.ins-chat-screens-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ins-chat-screens-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 8px;
+}
+
+.ins-chat-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ins-text);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 10px;
+}
+
+.ins-chat-screen:disabled {
+  cursor: default;
+}
+
+.ins-chat-screen img,
+.ins-chat-screen-none {
+  display: block;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background: var(--ins-card);
+  box-shadow: 0 0 0 1px var(--ins-border);
+  transition: border-color var(--ins-fast) var(--ins-ease), transform var(--ins-fast) var(--ins-ease);
+}
+
+.ins-chat-screen:not(:disabled):hover img {
+  transform: translateY(-1px);
+}
+
+.ins-chat-screen.is-picked img {
+  border-color: var(--ins-text);
+}
+
+.ins-chat-screen-name {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--ins-sub);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ins-chat-screen-tick {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ins-text);
+  box-shadow: 0 0 0 1px var(--ins-border);
+}
+
+.ins-chat-screen.is-picked .ins-chat-screen-tick {
+  background: var(--ins-text);
+  color: var(--ins-on-accent);
+}
+
+/* ─── The assistant's thinking thread ────────────────────────────────────
+   Its working — thoughts aloud, lookups, checks — above the answer, the way
+   a reasoning model shows its steps: open while it works, one folded line
+   after, always quiet next to the answer itself. */
+.ins-chat-thread {
+  border-left: 2px solid var(--ins-border-strong);
+  padding-left: 10px;
+  font-size: 12.5px;
+  color: var(--ins-muted);
+}
+
+.ins-chat-thread-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  color: var(--ins-sub);
+}
+
+.ins-chat-thread-summary::-webkit-details-marker {
+  display: none;
+}
+
+.ins-chat-thread-summary svg {
+  transition: transform var(--ins-fast) var(--ins-ease);
+}
+
+.ins-chat-thread[open] .ins-chat-thread-summary svg {
+  transform: rotate(180deg);
+}
+
+.ins-chat-thread.is-working .ins-chat-thread-title {
+  background: linear-gradient(90deg, var(--ins-muted) 0%, var(--ins-text) 50%, var(--ins-muted) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: insShimmer 1.6s linear infinite;
+}
+
+@keyframes insShimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.ins-chat-thread-list {
+  margin: 8px 0 2px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ins-chat-thread-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.4;
+}
+
+.ins-chat-thread-thought {
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
+.ins-chat-thread-step {
+  color: var(--ins-sub);
+}
+
+.ins-chat-thread-step::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 7px 2px 0;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.ins-chat-thread-detail {
+  padding-left: 12px;
+  font-size: 12px;
 }

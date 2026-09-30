@@ -5,8 +5,8 @@ import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'rea
 import { useAuth } from '@/components/shared/AuthProvider';
 import { adminApi, isAdminEmail, type AdminAppRecord, type AdminState } from '@/lib/inspirations/admin';
 import { dayLabel, localDateString, parseDateInput } from '@/lib/inspirations/dates';
-import { describeOp, labelFor, type AdminOp } from '@/lib/inspirations/assistantActions';
-import { invalidateInspirationsCache } from '@/lib/inspirations/api';
+import { describeOp, labelFor, type AdminOp, type ScreensAction } from '@/lib/inspirations/assistantActions';
+import { inspirationsApi, invalidateInspirationsCache } from '@/lib/inspirations/api';
 import {
   INGEST_STAGES,
   adminSays,
@@ -24,12 +24,15 @@ import {
   performAction,
   platformIn,
   PLATFORM_CHOICES,
+  questionBefore,
   releaseImage,
   offerAction,
   releaseUpload,
   setUploadPlan,
   stopActiveRun,
   stopAssistant,
+  truncateChatAt,
+  undoChange,
   clock,
   dismissIngestJob,
   isActive,
@@ -41,10 +44,11 @@ import {
   type AssistantAction,
   type ChatMessage,
   type ConfirmAction,
+  type ThreadEntry,
   type IngestJob,
   type UploadPlan,
 } from '@/lib/inspirations/ingestJobs';
-import { ArrowRightIcon, CheckIcon, CloseIcon, ExpandIcon, ExternalIcon, MinusIcon, PlusIcon, SparklesIcon, StopIcon, TrashIcon, UploadIcon } from '../Icons';
+import { ArrowRightIcon, CheckIcon, ChevronDownIcon, CloseIcon, CopyIcon, ExpandIcon, ExternalIcon, MinusIcon, PencilIcon, PlusIcon, RetryIcon, SparklesIcon, StopIcon, TrashIcon, UndoIcon, UploadIcon } from '../Icons';
 import { tone } from './AiPicker';
 
 /**
@@ -130,6 +134,9 @@ export function IngestDock() {
   const admin = ready && Boolean(user && !user.isAnonymous && isAdminEmail(user.email));
   const { jobs } = useIngestJobs(admin);
   const { messages, pending: pendingAction, heldImage, heldUpload, expecting } = useAssistantChat();
+  // Only the newest answer can be asked again — earlier ones already have
+  // what came after them.
+  const lastAnswerId = [...messages].reverse().find((message) => message.role === 'assistant' && !message.pending && message.text)?.id ?? null;
   const [logoFor, setLogoFor] = useState<ConfirmAction | null>(null);
   const { status: ai, loading: aiLoading } = useAiStatus(admin);
   const [collapsed, setCollapsed] = useState(() => {
@@ -154,6 +161,47 @@ export function IngestDock() {
   const [asking, setAsking] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const focusWhenOpen = useRef(false);
+
+  // ⌘/ (Ctrl+/ elsewhere) opens the assistant and puts the cursor in the
+  // composer from anywhere on the page; Esc in the composer folds it away.
+  useEffect(() => {
+    if (!admin) return;
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === '/') {
+        event.preventDefault();
+        focusWhenOpen.current = true;
+        setCollapsed((value) => {
+          if (value) {
+            try {
+              localStorage.setItem(COLLAPSED_KEY, '0');
+            } catch {
+              // Private mode or blocked storage.
+            }
+          }
+          return false;
+        });
+        inputRef.current?.focus();
+      } else if (event.key === 'Escape' && document.activeElement === inputRef.current) {
+        inputRef.current?.blur();
+        setCollapsed(true);
+        try {
+          localStorage.setItem(COLLAPSED_KEY, '1');
+        } catch {
+          // Private mode or blocked storage.
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [admin]);
+  useEffect(() => {
+    if (!collapsed && focusWhenOpen.current) {
+      focusWhenOpen.current = false;
+      inputRef.current?.focus();
+    }
+  }, [collapsed]);
   /** The library as it stood when a recording was dropped — apps and their versions, for the questions that follow. */
   const libraryRef = useRef<AdminState | null>(null);
 
@@ -477,6 +525,22 @@ export function IngestDock() {
     }
   };
 
+  /** Edit a sent message and send it again: the conversation continues from there. */
+  const resend = (message: ChatMessage, text: string) => {
+    if (asking || liveJob || !text.trim()) return;
+    truncateChatAt(message.id);
+    void send(text.trim());
+  };
+
+  /** Ask the same thing again, for another answer. */
+  const retry = (message: ChatMessage) => {
+    if (asking || liveJob) return;
+    const question = questionBefore(message.id);
+    if (!question) return;
+    truncateChatAt(question.id);
+    void send(question.text);
+  };
+
   const toggleWide = () => {
     setWide((value) => {
       try {
@@ -508,7 +572,7 @@ export function IngestDock() {
     return (
       <>
         {picker}
-        <button type="button" className={`ins-dock-pill ${latest && isActive(latest) ? 'is-running' : ''}`} onClick={toggle} aria-label="Open the assistant">
+        <button type="button" className={`ins-dock-pill ${latest && isActive(latest) ? 'is-running' : ''}`} onClick={toggle} aria-label="Open the assistant" title="Open the assistant (⌘/)">
           {latest && isActive(latest) ? <span className="ins-spinner" /> : <SparklesIcon size={15} />}
           <span className="ins-dock-pill-text">{latest && isActive(latest) ? pillText(latest) : 'Motvin assistant'}</span>
         </button>
@@ -562,7 +626,7 @@ export function IngestDock() {
         <button type="button" className="ins-iconbtn ins-iconbtn--plain" onClick={toggleWide} aria-label={wide ? 'Smaller' : 'Larger'} title={wide ? 'Smaller' : 'Larger'}>
           <ExpandIcon size={15} />
         </button>
-        <button type="button" className="ins-iconbtn ins-iconbtn--plain" onClick={toggle} aria-label="Minimise">
+        <button type="button" className="ins-iconbtn ins-iconbtn--plain" onClick={toggle} aria-label="Minimise" title="Minimise (Esc in the composer)">
           <MinusIcon size={15} />
         </button>
       </header>
@@ -591,7 +655,19 @@ export function IngestDock() {
           item.kind === 'job' ? (
             <JobThread key={item.job.id} job={item.job} now={now} />
           ) : (
-            <ChatBubble key={item.message.id} message={item.message} onAction={act} pending={pendingAction} onCancel={cancelPending} />
+            <ChatBubble
+              key={item.message.id}
+              message={item.message}
+              onAction={act}
+              pending={pendingAction}
+              onCancel={cancelPending}
+              onResend={resend}
+              onRetry={retry}
+              onUndo={(target) => void undoChange(target.id)}
+              canRetry={!asking && !liveJob && item.message.id === lastAnswerId}
+              busy={asking || Boolean(liveJob)}
+              newest={item.message.id === lastAnswerId}
+            />
           ),
         )}
         {dragging && <div className="ins-dock-drop">Drop to start a run</div>}
@@ -673,6 +749,7 @@ export function IngestDock() {
                     : 'Ask, or tell me what to change…'
           }
           aria-label="Ask the assistant"
+          ref={inputRef}
           list="ins-dock-suggestions"
           // Nothing can be typed while a reply is still coming, or while a
           // run is going — the button in this state is Stop, not Send, so
@@ -721,29 +798,234 @@ function fraction(job: IngestJob): number | null {
 }
 
 /** One answer, with any actions it offers. */
+/** When a message was sent — the time today, the day and time otherwise. */
+function timeLabel(at: string): string {
+  const date = new Date(at);
+  if (Number.isNaN(date.getTime())) return '';
+  const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return date.toDateString() === new Date().toDateString() ? time : `${date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, ${time}`;
+}
+
+/**
+ * Screens shown in the chat as thumbnails — the "image list" the admin asks
+ * for when picking what to delete. Tap to select; the button under the grid
+ * offers the delete as a Confirm, the same as every other change. Once the
+ * offer is answered the grid stays as a record, without its controls.
+ */
+function ScreenPicker({ action, live, disabled }: { action: ScreensAction; live: boolean; disabled: boolean }) {
+  const [picked, setPicked] = useState<string[]>([]);
+  const toggle = (id: string) => setPicked((list) => (list.includes(id) ? list.filter((entry) => entry !== id) : [...list, id]));
+  const offer = () => {
+    const chosen = action.screens.filter((screen) => picked.includes(screen.id));
+    if (!chosen.length) return;
+    const op: AdminOp =
+      chosen.length === 1
+        ? { kind: 'delete-screen', platform: action.platform, appId: action.appId, file: chosen[0].file, version: chosen[0].version, flow: chosen[0].flow, name: chosen[0].name }
+        : { kind: 'delete-screens', platform: action.platform, appId: action.appId, name: action.appName, screens: chosen.map(({ file, version, flow, name }) => ({ file, version, flow, name })) };
+    setPicked([]);
+    offerAction(describeOp(op), { type: 'confirm', op, label: labelFor(op), destructive: true });
+  };
+  return (
+    <div className="ins-chat-screens">
+      <div className="ins-chat-screens-head">
+        <span className="ins-chat-meta">
+          {action.screens.length} screen{action.screens.length === 1 ? '' : 's'} · {action.appName}
+          {action.versionLabel ? ` · ${action.versionLabel}` : ''}
+        </span>
+        {live && picked.length > 0 && (
+          <button type="button" className="ins-linkbtn" onClick={() => setPicked([])}>
+            Clear
+          </button>
+        )}
+      </div>
+      <div className="ins-chat-screens-grid" role={live ? 'listbox' : 'list'} aria-multiselectable={live || undefined} aria-label={`Screens of ${action.appName}`}>
+        {action.screens.map((screen) => {
+          const src = inspirationsApi.mediaUrl(screen.path);
+          const selected = picked.includes(screen.id);
+          return (
+            <button
+              key={screen.id}
+              type="button"
+              role={live ? 'option' : undefined}
+              aria-selected={live ? selected : undefined}
+              className={`ins-chat-screen ${selected ? 'is-picked' : ''}`}
+              onClick={() => live && toggle(screen.id)}
+              disabled={!live || disabled}
+              title={screen.name}
+            >
+              {/* The backend serves these already sized; the optimiser would only add a hop. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {src ? <img src={src} alt={screen.name} loading="lazy" /> : <span className="ins-chat-screen-none" aria-hidden />}
+              <span className="ins-chat-screen-name">{screen.name}</span>
+              {live && <span className="ins-chat-screen-tick" aria-hidden>{selected ? <CheckIcon size={12} /> : null}</span>}
+            </button>
+          );
+        })}
+      </div>
+      {live && (
+        <div className="ins-chat-actions">
+          <button type="button" className="ins-chip-btn ins-chip-btn--danger" onClick={offer} disabled={disabled || picked.length === 0}>
+            <TrashIcon size={13} /> Delete {picked.length || ''} selected
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What the assistant did between the question and the answer — its thinking
+ * aloud and each lookup or check — as a quiet thread above the answer. Open
+ * while it works, folded to one line once it has answered; the admin can
+ * open it again to see how the answer came about.
+ */
+function ThinkingThread({ entries, working, ms }: { entries: ThreadEntry[]; working: boolean; ms?: number }) {
+  const steps = entries.filter((entry) => entry.kind === 'step').length;
+  const summary = working ? 'Thinking' : `Thought for ${ms ? Math.max(1, Math.round(ms / 1000)) : '—'}s${steps ? ` · ${steps} step${steps === 1 ? '' : 's'}` : ''}`;
+  return (
+    <details className={`ins-chat-thread ${working ? 'is-working' : ''}`} open={working || undefined}>
+      <summary className="ins-chat-thread-summary">
+        <span className="ins-chat-thread-title">{summary}</span>
+        <ChevronDownIcon size={13} />
+      </summary>
+      <ol className="ins-chat-thread-list">
+        {entries.map((entry, index) => (
+          <li key={index} className={`ins-chat-thread-item is-${entry.kind}`}>
+            {entry.kind === 'thought' ? (
+              <span className="ins-chat-thread-thought">{entry.text}</span>
+            ) : (
+              <>
+                <span className="ins-chat-thread-step">{entry.text}</span>
+                {entry.detail && <span className="ins-chat-thread-detail">{entry.detail}</span>}
+              </>
+            )}
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+}
+
+/** Copies a message's words; the button shows a tick for a moment. */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard access refused: nothing to show.
+    }
+  };
+  return (
+    <button type="button" className="ins-chat-tool" onClick={() => void copy()} aria-label={copied ? 'Copied' : 'Copy'} title={copied ? 'Copied' : 'Copy'}>
+      {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
+    </button>
+  );
+}
+
+/**
+ * One message, with the small tools under it that a chat is expected to
+ * have: Copy on every message; Edit on the admin's own, which sends the
+ * edited words again from that point; Undo on an answer that reports a
+ * change, while it can still be put back; Try again on the newest answer.
+ */
 function ChatBubble({
   message,
   onAction,
   pending,
   onCancel,
+  onResend,
+  onRetry,
+  onUndo,
+  canRetry,
+  busy,
+  newest,
 }: {
   message: ChatMessage;
   onAction: (action: AssistantAction) => void;
   pending: ConfirmAction | null;
   onCancel: () => void;
+  onResend: (message: ChatMessage, text: string) => void;
+  onRetry: (message: ChatMessage) => void;
+  onUndo: (message: ChatMessage) => void;
+  canRetry: boolean;
+  busy: boolean;
+  /** This is the newest answer: a screen grid in it still takes picks. */
+  newest: boolean;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(message.text);
   if (message.role === 'user') {
+    if (editing) {
+      const submit = () => {
+        if (!draft.trim()) return;
+        setEditing(false);
+        if (draft.trim() === message.text.trim()) return;
+        onResend(message, draft);
+      };
+      return (
+        <div className="ins-chat">
+          <div className="ins-chat-edit">
+            <textarea
+              className="ins-chat-edit-input"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setEditing(false);
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  submit();
+                }
+              }}
+              rows={Math.min(6, Math.max(1, draft.split('\n').length))}
+              aria-label="Edit your message"
+              autoFocus
+            />
+            <div className="ins-chat-edit-actions">
+              <button type="button" className="ins-chip-btn ins-chip-btn--quiet" onClick={() => setEditing(false)}>
+                Cancel
+              </button>
+              <button type="button" className="ins-chip-btn ins-chip-btn--primary" onClick={submit} disabled={!draft.trim()}>
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="ins-chat">
         <div className="ins-chat-msg ins-chat-msg--user">
           <span>{message.text}</span>
         </div>
+        <div className="ins-chat-tools ins-chat-tools--user">
+          <span className="ins-chat-time">{timeLabel(message.at)}</span>
+          <CopyButton text={message.text} />
+          <button
+            type="button"
+            className="ins-chat-tool"
+            onClick={() => {
+              setDraft(message.text);
+              setEditing(true);
+            }}
+            disabled={busy}
+            aria-label="Edit message"
+            title="Edit message"
+          >
+            <PencilIcon size={14} />
+          </button>
+        </div>
       </div>
     );
   }
+  const undo = message.undo && !message.undo.used ? message.undo : null;
+  const isLatestGrid = newest;
   return (
     <div className="ins-chat">
       <div className="ins-chat-msg ins-chat-msg--assistant">
+        {message.thread && message.thread.length > 0 && <ThinkingThread entries={message.thread} working={Boolean(message.pending)} ms={message.thinkingMs} />}
         {message.pending && !message.text ? (
           <p className="ins-chat-line">
             <span className="ins-typing" aria-hidden>
@@ -784,6 +1066,9 @@ function ChatBubble({
                   </span>
                 );
               }
+              if (action.type === 'screens') {
+                return <ScreenPicker key={index} action={action} live={isLatestGrid} disabled={busy} />;
+              }
               if (action.type === 'reply') {
                 return (
                   <button key={index} type="button" className="ins-chip-btn ins-chip-btn--quiet" onClick={() => onAction(action)}>
@@ -799,8 +1084,23 @@ function ChatBubble({
             })}
           </div>
         )}
-
       </div>
+      {!message.pending && message.text && (
+        <div className="ins-chat-tools">
+          <CopyButton text={message.text} />
+          {undo && (
+            <button type="button" className="ins-chat-tool ins-chat-tool--text" onClick={() => onUndo(message)} disabled={busy} title={`Undo — ${undo.label}`}>
+              <UndoIcon size={14} /> Undo
+            </button>
+          )}
+          {canRetry && (
+            <button type="button" className="ins-chat-tool ins-chat-tool--text" onClick={() => onRetry(message)} title="Ask again for another answer">
+              <RetryIcon size={14} /> Try again
+            </button>
+          )}
+          <span className="ins-chat-time">{timeLabel(message.at)}</span>
+        </div>
+      )}
     </div>
   );
 }

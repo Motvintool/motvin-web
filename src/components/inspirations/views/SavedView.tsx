@@ -1,6 +1,6 @@
 'use client';
 
-import { coverScreen } from '@/lib/inspirations/cover';
+import { appCardScreens } from '@/lib/inspirations/cover';
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -106,7 +106,7 @@ export function SavedView() {
   const savedApps = savedAppIds.map((id) => apps.get(id)).filter((app): app is App => Boolean(app));
   const { data: appPreviews, loading: appPreviewsLoading } = useAsync(async () => {
     const details = await Promise.all(savedApps.map((app) => inspirationsApi.getApp(app.id)));
-    return new Map(savedApps.map((app, index) => [app.id, coverScreen(details[index]?.screens ?? [])]));
+    return new Map(savedApps.map((app, index) => [app.id, appCardScreens(app, details[index]?.screens ?? [])]));
   }, `saved-app-previews:${savedApps.map((app) => app.id).join(',')}`);
   const selectedApps = [...selected]
     .reverse()
@@ -378,7 +378,7 @@ export function SavedView() {
                       <AppCard
                         key={app.id}
                         app={app}
-                        preview={appPreviews?.get(app.id)}
+                        previewScreens={appPreviews?.get(app.id)}
                         onRemove={() => {
                           if (window.confirm(`Remove "${app.name}"?`)) {
                             removeFromCollection(collection.id, { type: 'app', id: app.id });

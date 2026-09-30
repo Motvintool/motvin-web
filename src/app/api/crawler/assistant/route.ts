@@ -6,6 +6,8 @@ import { answerQuestion, type HistoryLine } from '@/lib/server/assistant';
  * POST /api/crawler/assistant — `{ question }` in; newline-delimited JSON out:
  *
  *   {"type":"token","text":"..."}                a piece of a model answer, as written
+ *   {"type":"fold"}                              the pieces so far were the assistant working, not answering — move them to its thread
+ *   {"type":"step","text":"…","detail":"…"}      one thing the assistant did on the way: a lookup, a check
  *   {"type":"done", text, source, actions, …}    the whole answer — the last line
  *   {"type":"error", message}                    it failed — the last line
  *
@@ -26,7 +28,14 @@ export async function POST(request: Request) {
   if (!question) return fail('Ask something.', 400);
   const authorization = request.headers.get('authorization');
   const encoder = new TextEncoder();
+  // Closing the response — the admin pressed Stop — stops the model too,
+  // rather than leaving it to finish an answer nobody will read.
+  const aborter = new AbortController();
+  request.signal.addEventListener('abort', () => aborter.abort(), { once: true });
   const stream = new ReadableStream<Uint8Array>({
+    cancel() {
+      aborter.abort();
+    },
     start(controller) {
       let closed = false;
       const send = (event: object) => {
@@ -44,7 +53,7 @@ export async function POST(request: Request) {
       const heldImage = typeof body.heldImage === 'string' ? body.heldImage.slice(0, 120) : null;
       const lastOp = body.lastOp && typeof body.lastOp === 'object' && typeof body.lastOp.kind === 'string' ? body.lastOp : null;
       const expecting = body.expecting && typeof body.expecting === 'object' && body.expecting.kind === 'update-app' && typeof body.expecting.appId === 'string' ? body.expecting : null;
-      answerQuestion({ question, authorization, history, pending, heldImage, lastOp, expecting }, (piece) => send({ type: 'token', text: piece }))
+      answerQuestion({ question, authorization, history, pending, heldImage, lastOp, expecting, signal: aborter.signal }, (piece, control) => send(!control ? { type: 'token', text: piece } : control.kind === 'fold' ? { type: 'fold' } : { type: 'step', text: control.text, detail: control.detail }))
         .then((answer) => send({ type: 'done', ...answer }))
         .catch((error: Error) => send({ type: 'error', message: error.message }))
         .finally(() => {

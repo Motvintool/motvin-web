@@ -3,7 +3,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { getIdToken } from '@/lib/firebase/auth';
 import { adminApi, safeFileName, type ScreenSidecar } from '@/lib/inspirations/admin';
-import { doneText, type AdminOp, type AssistantAction, type ConfirmAction, type Expect } from '@/lib/inspirations/assistantActions';
+import { doneText, isDestructive, labelFor, type AdminOp, type AssistantAction, type ConfirmAction, type Expect } from '@/lib/inspirations/assistantActions';
 import { SCREEN_TYPES, type Industry, type Platform, type ScreenType, type Style } from '@/lib/inspirations/types';
 import { invalidateInspirationsCache } from '@/lib/inspirations/api';
 import { qualifyFlowFile, qualifyScreenFile } from '@/lib/inspirations/screenPaths';
@@ -530,7 +530,15 @@ export type ChatMessage = {
   pending?: boolean;
   actions?: AssistantAction[];
   source?: 'rules' | 'ai';
+  /** For a change that went through: the operation that puts it back, until it is used. */
+  undo?: { op: AdminOp; label: string; used?: boolean };
+  /** What the assistant did on the way to this answer: its thinking aloud, and each lookup or check. */
+  thread?: ThreadEntry[];
+  /** How long the thinking took, once the answer settled. */
+  thinkingMs?: number;
 };
+
+export type ThreadEntry = { kind: 'thought' | 'step'; text: string; detail?: string };
 
 /** What was dropped: one recording for a run, or several screenshots to file directly. */
 export type HeldKind = 'video' | 'screens';
@@ -678,6 +686,8 @@ function typeOut(id: string, text: string, done: Partial<ChatMessage>): Promise<
 
 type AssistantEvent =
   | { type: 'token'; text: string }
+  | { type: 'fold' }
+  | { type: 'step'; text: string; detail?: string }
   | { type: 'done'; text: string; source: 'rules' | 'ai'; actions: AssistantAction[]; model?: string; streamed?: boolean; expect?: Expect | null }
   | { type: 'error'; message: string };
 
@@ -703,6 +713,8 @@ export async function askAssistant(question: string): Promise<ChatMessage> {
   stopRequested = false;
 
   let streamedText = '';
+  const thread: ThreadEntry[] = [];
+  const startedAt = Date.now();
   let stopped = false;
   let final: AssistantEvent | null = null;
   try {
@@ -729,6 +741,15 @@ export async function askAssistant(question: string): Promise<ChatMessage> {
       if (event.type === 'token') {
         streamedText += event.text;
         patchMessage(pending.id, { text: streamedText, pending: true });
+      } else if (event.type === 'fold') {
+        // What streamed so far was the assistant working, not answering: it
+        // moves into the thread, and the answer starts afresh.
+        if (streamedText.trim()) thread.push({ kind: 'thought', text: streamedText.trim() });
+        streamedText = '';
+        patchMessage(pending.id, { text: '', thread: [...thread], pending: true });
+      } else if (event.type === 'step') {
+        thread.push({ kind: 'step', text: event.text, detail: event.detail });
+        patchMessage(pending.id, { thread: [...thread], pending: true });
       } else final = event;
     };
     for (;;) {
@@ -756,21 +777,22 @@ export async function askAssistant(question: string): Promise<ChatMessage> {
     if (currentAsk === controller) currentAsk = null;
   }
 
+  const thinking = thread.length ? { thread, thinkingMs: Date.now() - startedAt } : {};
   if (stopped) {
-    patchMessage(pending.id, { text: streamedText || 'Stopped.', pending: false, actions: [] });
+    patchMessage(pending.id, { text: streamedText || 'Stopped.', pending: false, actions: [], ...thinking });
     return chat.messages.find((message) => message.id === pending.id) ?? pending;
   }
 
   // Assigned inside the reader's callbacks, which TypeScript cannot follow.
   const settled = (final as AssistantEvent | null) ?? { type: 'error' as const, message: 'The assistant stopped without answering.' };
   if (settled.type === 'error') {
-    patchMessage(pending.id, { text: settled.message, pending: false, actions: [] });
+    patchMessage(pending.id, { text: settled.message, pending: false, actions: [], ...thinking });
   } else if (settled.type !== 'done') {
-    patchMessage(pending.id, { text: streamedText || 'The assistant stopped without answering.', pending: false, actions: [] });
+    patchMessage(pending.id, { text: streamedText || 'The assistant stopped without answering.', pending: false, actions: [], ...thinking });
   } else if (streamedText) {
-    patchMessage(pending.id, { text: settled.text || streamedText, pending: false, actions: settled.actions ?? [], source: settled.source });
+    patchMessage(pending.id, { text: settled.text || streamedText, pending: false, actions: settled.actions ?? [], source: settled.source, ...thinking });
   } else {
-    await typeOut(pending.id, settled.text, { actions: settled.actions ?? [], source: settled.source });
+    await typeOut(pending.id, settled.text, { actions: settled.actions ?? [], source: settled.source, ...thinking });
   }
   // An offered operation waits for a yes — typed or pressed; a cancel drops it.
   if (settled.type === 'done') {
@@ -886,6 +908,12 @@ export async function performAction(action: ConfirmAction, image?: File | null):
   emitChat({ ...chat, pending: null });
   const working: ChatMessage = { id: `a-${Date.now().toString(36)}`, role: 'assistant', text: `${action.label}…`, at: new Date().toISOString(), pending: true };
   append(working);
+  // The operation that would put this change back, worked out from the
+  // library as it is before the change — the message reporting the change
+  // carries it as its Undo. Deleting screens, versions or apps has no way
+  // back, so those carry none.
+  let inverse: AdminOp | null = null;
+  const namesOf = (state: { files: { id: string; sidecar: { name?: string } | null; file: string }[] }, ids: string[]) => ids.map((id) => state.files.find((entry) => entry.id === id)).map((entry) => entry?.sidecar?.name ?? entry?.file.replace(/\.[^.]+$/, '') ?? '?');
   try {
     let done = doneText(op);
     switch (op.kind) {
@@ -905,6 +933,8 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         const current = state.apps.find((app) => app.id === op.appId);
         if (!current) throw new Error(`${op.name} is no longer in the library.`);
         const next = { ...current, ...(op.fields as Partial<typeof current>) };
+        const before = Object.fromEntries(Object.keys(op.fields).map((key) => [key, (current as unknown as Record<string, string | undefined>)[key] ?? '']));
+        inverse = { kind: 'update-app', appId: op.appId, name: next.name, fields: before };
         await adminApi.saveApp(next);
         break;
       }
@@ -918,25 +948,48 @@ export async function performAction(action: ConfirmAction, image?: File | null):
       case 'rename-screen': {
         const state = await adminApi.getState();
         const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === qualifyScreenFile(qualifyFlowFile(op.file, op.flow), op.version));
+        inverse = { ...op, from: op.to, to: op.from };
         await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), name: op.to }, op.version, op.flow);
         break;
       }
       case 'delete-screen':
         await adminApi.deleteScreen(op.platform as Platform, op.appId, op.file, op.version, op.flow);
         break;
+      case 'delete-screens': {
+        const failed: string[] = [];
+        for (const screen of op.screens) {
+          try {
+            await adminApi.deleteScreen(op.platform as Platform, op.appId, screen.file, screen.version, screen.flow);
+          } catch (error) {
+            failed.push(`${screen.name} (${(error as Error).message})`);
+          }
+        }
+        if (failed.length) done = `Deleted ${op.screens.length - failed.length} of ${op.screens.length} screens from ${op.name}. Not deleted: ${failed.join('; ')}.`;
+        break;
+      }
       case 'rename-flow': {
         const state = await adminApi.getState();
         const flow = state.flows.find((entry) => entry.id === op.flowId);
         if (!flow) throw new Error('That flow is no longer in the library.');
+        inverse = { ...op, from: op.to, to: op.from };
         await adminApi.saveFlow({ ...flow, name: op.to });
         break;
       }
-      case 'delete-flow':
+      case 'delete-flow': {
+        // A flow is only a record; deleting it can be undone by making it again.
+        const state = await adminApi.getState();
+        const flow = state.flows.find((entry) => entry.id === op.flowId);
+        if (flow) {
+          const app = state.apps.find((entry) => entry.id === flow.appId);
+          inverse = { kind: 'create-flow', appId: flow.appId, appName: app?.name ?? flow.appId, name: flow.name, category: flow.category, platform: flow.platform, screenIds: flow.screenIds, screenNames: namesOf(state, flow.screenIds) };
+        }
         await adminApi.deleteFlow(op.flowId);
         break;
+      }
       case 'set-screen-type': {
         const state = await adminApi.getState();
         const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === qualifyScreenFile(qualifyFlowFile(op.file, op.flow), op.version));
+        if (file?.sidecar?.screenType) inverse = { ...op, screenType: file.sidecar.screenType };
         await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), screenType: op.screenType as ScreenType }, op.version, op.flow);
         break;
       }
@@ -944,6 +997,7 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         const state = await adminApi.getState();
         const flow = state.flows.find((entry) => entry.id === op.flowId);
         if (!flow) throw new Error('That flow is no longer in the library.');
+        inverse = { ...op, category: flow.category };
         await adminApi.saveFlow({ ...flow, category: op.category });
         break;
       }
@@ -952,12 +1006,14 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === qualifyScreenFile(qualifyFlowFile(op.file, op.flow), op.version));
         const existing = file?.sidecar?.tags ?? [];
         const tags = op.mode === 'replace' ? op.tags : [...new Set([...existing, ...op.tags])];
+        inverse = { ...op, tags: existing, mode: 'replace' };
         await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), tags }, op.version, op.flow);
         break;
       }
       case 'set-screen-description': {
         const state = await adminApi.getState();
         const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === qualifyScreenFile(qualifyFlowFile(op.file, op.flow), op.version));
+        inverse = { ...op, description: (file?.sidecar as { description?: string } | null)?.description ?? '' };
         await adminApi.saveScreenMeta(op.platform as Platform, op.appId, op.file, { ...(file?.sidecar ?? {}), description: op.description } as ScreenSidecar, op.version, op.flow);
         break;
       }
@@ -967,22 +1023,27 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         const flow = state.flows.find((entry) => entry.id === op.flowId);
         if (!flow) throw new Error('That flow is no longer in the library.');
         const screenIds = op.kind === 'add-to-flow' ? [...new Set([...flow.screenIds, ...op.screenIds])] : flow.screenIds.filter((id) => !op.screenIds.includes(id));
+        inverse = { kind: 'reorder-flow', flowId: flow.id, name: flow.name, screenIds: flow.screenIds, screenNames: namesOf(state, flow.screenIds) };
         await adminApi.saveFlow({ ...flow, screenIds });
         break;
       }
       case 'create-flow': {
         const slug = op.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'flow';
-        await adminApi.saveFlow({ id: `${op.appId}-${op.platform}-${slug}`, appId: op.appId, name: op.name, category: op.category, platform: op.platform as Platform, screenIds: op.screenIds, parentId: null });
+        const id = `${op.appId}-${op.platform}-${slug}`;
+        inverse = { kind: 'delete-flow', flowId: id, name: op.name };
+        await adminApi.saveFlow({ id, appId: op.appId, name: op.name, category: op.category, platform: op.platform as Platform, screenIds: op.screenIds, parentId: null });
         break;
       }
       case 'reorder-flow': {
         const state = await adminApi.getState();
         const flow = state.flows.find((entry) => entry.id === op.flowId);
         if (!flow) throw new Error('That flow is no longer in the library.');
+        inverse = { kind: 'reorder-flow', flowId: flow.id, name: flow.name, screenIds: flow.screenIds, screenNames: namesOf(state, flow.screenIds) };
         await adminApi.saveFlow({ ...flow, screenIds: op.screenIds });
         break;
       }
       case 'create-app': {
+        inverse = { kind: 'remove-app', appId: op.id, name: op.name };
         await adminApi.saveApp({ id: op.id, name: op.name, industry: op.industry as Industry });
         break;
       }
@@ -990,6 +1051,10 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         const state = await adminApi.getState();
         const file = state.files.find((entry) => entry.appId === op.appId && entry.platform === op.platform && entry.file === qualifyScreenFile(qualifyFlowFile(op.file, op.flow), op.version));
         const next: ScreenSidecar = { ...(file?.sidecar ?? {}) };
+        const before = file?.sidecar ?? {};
+        // Only a value that had one before can be put back.
+        const restorable = (!op.capturedAt || Boolean(before.capturedAt)) && (!op.elements || Boolean(before.elements)) && (!op.style || Boolean(before.style));
+        if (restorable) inverse = { ...op, capturedAt: op.capturedAt ? before.capturedAt : undefined, elements: op.elements ? before.elements : undefined, style: op.style ? (before.style as string[] | undefined) : undefined };
         if (op.capturedAt) next.capturedAt = op.capturedAt;
         if (op.elements) next.elements = op.elements;
         if (op.style) next.style = op.style as Style[];
@@ -1034,11 +1099,14 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         const state = await adminApi.getState();
         const flow = state.flows.find((entry) => entry.id === op.flowId);
         if (!flow) throw new Error('That flow is no longer in the library.');
+        inverse = { ...op, parentId: flow.parentId ?? null, parentName: flow.parentId ? state.flows.find((entry) => entry.id === flow.parentId)?.name ?? null : null };
         await adminApi.saveFlow({ ...flow, parentId: op.parentId });
         break;
       }
       case 'set-source-status': {
         const state = await adminApi.getState();
+        const previous = state.sources[op.appId]?.status;
+        if (previous === 'pending' || previous === 'review' || previous === 'approved' || previous === 'rejected') inverse = { ...op, status: previous };
         await adminApi.saveSource(op.appId, { ...(state.sources[op.appId] ?? {}), status: op.status });
         break;
       }
@@ -1047,6 +1115,7 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         break;
       }
       case 'rename-app-version': {
+        inverse = { ...op, versionId: op.newVersionId, versionLabel: op.newVersionLabel, newVersionId: op.versionId, newVersionLabel: op.versionLabel };
         await adminApi.renameVersion(op.appId, op.versionId, op.newVersionId);
         break;
       }
@@ -1066,24 +1135,62 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         const current = aiSnapshot.status ?? (await refreshAiStatus());
         if (!current) throw new Error('The AI status could not be read.');
         const provider = current.providers.find((entry) => entry.id === current.provider)?.id ?? 'custom';
+        inverse = { kind: 'set-ai', chatModel: current.chatModel ?? null, enabled: current.enabled };
         await saveAiSettings({ provider, url: current.configuredUrl, model: current.configuredModel ?? '', chatModel: op.chatModel ?? undefined, enabled: op.enabled !== false });
         break;
       }
       case 'add-screen': {
         const file = image ?? heldFile!;
         await adminApi.uploadScreen(op.platform as Platform, op.appId, file.name, file, false, op.versionId);
+        inverse = { kind: 'delete-screen', platform: op.platform, appId: op.appId, file: file.name, version: op.versionId, name: file.name.replace(/\.[^.]+$/, '') };
         releaseImage();
         done = `“${file.name}” is now a screen of ${op.name}${op.versionLabel ? ` (${op.versionLabel})` : ''}.`;
         break;
       }
     }
-    patchMessage(working.id, { pending: false, text: done, actions: [] });
+    patchMessage(working.id, { pending: false, text: done, actions: [], undo: inverse ? { op: inverse, label: labelFor(inverse) } : undefined });
     tellAdminChanged();
     return 'done';
   } catch (error) {
     patchMessage(working.id, { pending: false, text: `That did not go through: ${(error as Error).message}`, actions: [] });
     return 'failed';
   }
+}
+
+/**
+ * Puts a change back — the Undo under the message that reported it. Runs
+ * at once, like Undo anywhere: the change it reverses was already confirmed,
+ * and this only restores what was there. The message that reports the undo
+ * carries its own Undo in turn, which is a redo.
+ */
+export async function undoChange(messageId: string): Promise<'done' | 'failed' | 'nothing'> {
+  const message = chat.messages.find((entry) => entry.id === messageId);
+  if (!message?.undo || message.undo.used) return 'nothing';
+  patchMessage(messageId, { undo: { ...message.undo, used: true } });
+  const outcome = await performAction({ type: 'confirm', op: message.undo.op, label: message.undo.label, destructive: isDestructive(message.undo.op) });
+  if (outcome !== 'done') patchMessage(messageId, { undo: { ...message.undo, used: false } });
+  return outcome === 'done' ? 'done' : 'failed';
+}
+
+/**
+ * Cuts the conversation back to just before a message — for editing what
+ * was said there and sending it again, or asking again for another answer.
+ * Whatever was offered after that point is withdrawn with it. Returns the
+ * text of the message cut, for the composer.
+ */
+export function truncateChatAt(messageId: string): string | null {
+  const index = chat.messages.findIndex((entry) => entry.id === messageId);
+  if (index === -1) return null;
+  const cut = chat.messages[index];
+  emitChat({ ...chat, messages: chat.messages.slice(0, index), pending: null, expecting: null });
+  return cut.text;
+}
+
+/** The message the admin sent before this one — what a "try again" on an answer asks again. */
+export function questionBefore(messageId: string): ChatMessage | null {
+  const index = chat.messages.findIndex((entry) => entry.id === messageId);
+  for (let i = (index === -1 ? chat.messages.length : index) - 1; i >= 0; i--) if (chat.messages[i].role === 'user') return chat.messages[i];
+  return null;
 }
 
 /** Offers an operation for the admin to confirm — the way the server does, but from the page. */

@@ -142,6 +142,12 @@ export type App = {
   versions: AppVersion[];
   /** Which version the app page opens on by default — always the newest. */
   currentVersion: string | null;
+  /**
+   * Screen ids the library admin picked for this app's card carousel, in
+   * order, at most four. Empty when nobody has picked — the card then
+   * chooses for itself (see coverScreen).
+   */
+  cardScreens: string[];
 };
 
 export type ScreenCapture = {

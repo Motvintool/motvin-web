@@ -43,6 +43,14 @@ export type AssistantAnswer = {
 };
 
 export type HistoryLine = { role: 'user' | 'assistant'; text: string };
+/**
+ * Where a reply's words go as they are written. A control instead of words:
+ * 'fold' moves what has streamed so far into the reply's thinking thread (it
+ * was the model working, not its answer); a 'step' adds one line to that
+ * thread — a lookup made, a change checked.
+ */
+export type TokenControl = { kind: 'fold' } | { kind: 'step'; text: string; detail?: string };
+export type TokenSink = (piece: string, control?: TokenControl) => void;
 
 type Counts = { screens?: number; apps?: number; flows?: number; patterns?: number };
 type StateAppVersion = { id: string; label: string; capturedAt: string; isLatest: boolean };
@@ -180,9 +188,17 @@ function screenName(file: StateFile): string {
  * not told a version need the whole set to know whether to ask which one.
  */
 function screensCalled(state: LibraryState | null, appId: string, wanted: string | undefined | null): StateFile[] {
+  const files = (state?.files ?? []).filter((file) => file.appId === appId);
+  // A screen's own link, pasted in, names it exactly:
+  // …/api/inspirations/screens/<platform>/<app>/<stored path>?v=…
+  const link = (wanted ?? '').match(/\/api\/inspirations\/screens\/([a-z]+)\/([^/\s]+)\/([^\s?#]+)/i);
+  if (link) {
+    const [, platform, , path] = link;
+    const exact = files.filter((file) => file.file === decodeURIComponent(path) && file.platform.toLowerCase() === platform.toLowerCase());
+    if (exact.length) return exact;
+  }
   const needle = norm(wanted ?? '');
   if (!needle) return [];
-  const files = (state?.files ?? []).filter((file) => file.appId === appId);
   const tiers = [
     files.filter((file) => norm(screenName(file)) === needle || norm(file.file) === needle),
     files.filter((file) => norm(screenName(file)).startsWith(needle)),
@@ -688,6 +704,33 @@ function validateOp(
       if (!to || !grounded(to, grounding.saidByAdmin, grounding.askedToInvent)) return {};
       return confirm({ kind: 'rename-screen', platform: screen.platform, appId: app.id, file: opFile.name, version: opFile.version, flow: opFile.flow, from: screenName(screen), to });
     }
+    case 'delete-screens': {
+      if (!app) return noApp;
+      const wanted = names(op.screens);
+      if (!wanted.length) return { note: `Which screens of ${app.name} should go? Name them, or pick them from the thumbnails.` };
+      const picked: StateFile[] = [];
+      for (const name of wanted) {
+        const one = pickScreen(app, name);
+        if (!one.screen) return { note: one.note };
+        if (!picked.some((entry) => entry.file === one.screen!.file && entry.platform === one.screen!.platform)) picked.push(one.screen);
+      }
+      if (picked.length === 1) {
+        const only = splitScreenFile(picked[0].file, picked[0].version ?? '');
+        return confirm({ kind: 'delete-screen', platform: picked[0].platform, appId: app.id, file: only.name, version: only.version, flow: only.flow, name: screenName(picked[0]) });
+      }
+      const platforms = [...new Set(picked.map((entry) => entry.platform))];
+      if (platforms.length > 1) return { note: `Those screens are on different platforms (${platforms.join(', ')}); delete one platform's at a time.` };
+      return confirm({
+        kind: 'delete-screens',
+        platform: platforms[0],
+        appId: app.id,
+        name: app.name,
+        screens: picked.map((entry) => {
+          const part = splitScreenFile(entry.file, entry.version ?? '');
+          return { file: part.name, version: part.version, flow: part.flow, name: screenName(entry) };
+        }),
+      });
+    }
     case 'rename-flow':
     case 'delete-flow': {
       const owner = op.app ? findApp(state, op.app) : mentioned[0] ?? null;
@@ -869,8 +912,8 @@ const PERSONA = `You are the Motvin assistant: the helper inside Motvin Inspirat
 Do not greet or say "Hi there" unless it is the very first message of the conversation; just answer. If the admin only says hello, say hello back in one line and ask what they'd like to do — do not recite the facts unless asked. The facts are for answering questions, not for announcing. You cannot change anything yourself. Each turn you are told what the assistant is offering the admin (a change with a Confirm button), or what it still needs, or that nothing is being changed. Speak to exactly that: if there is an offer, describe it in your words as something that will happen when they confirm — never as done — and end by inviting them to confirm; if something is missing, ask for that one thing; if nothing is being changed, just answer or chat. When asked for ideas — a tagline, a name — give two or three good options as a short bulleted list. You may use **bold** for the thing being changed, and "- " bullets only when listing suggested taglines or names — never to restate an offer; no headings, no tables, no code, and never write a URL or a path (the admin gets a button for links). Two or three sentences at most, plus a list when it helps.`;
 
 export async function answerQuestion(
-  input: { question: string; authorization: string | null; history?: HistoryLine[]; pending?: string | null; heldImage?: string | null; lastOp?: AdminOp | null; expecting?: Expect | null },
-  onToken?: (piece: string) => void,
+  input: { question: string; authorization: string | null; history?: HistoryLine[]; pending?: string | null; heldImage?: string | null; lastOp?: AdminOp | null; expecting?: Expect | null; signal?: AbortSignal },
+  onToken?: TokenSink,
 ): Promise<AssistantAnswer> {
   const question = input.question.trim();
   const history = (input.history ?? []).slice(-12);
@@ -952,13 +995,16 @@ export async function answerQuestion(
         describeJob,
         describeAi,
         unclaim,
+        onToken,
+        signal: input.signal,
       },
     );
     if (agentAnswer) {
-      onToken?.(agentAnswer.text);
+      if (!agentAnswer.streamed) onToken?.(agentAnswer.text);
       return { ...agentAnswer, expect: null };
     }
   } catch (error) {
+    if (input.signal?.aborted) throw new Error('Stopped.');
     console.warn('[assistant] agent turn failed, falling back to the reader:', error instanceof Error ? error.message : error);
   }
   const detail = mentioned

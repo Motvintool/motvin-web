@@ -1,6 +1,6 @@
 'use client';
 
-import { coverScreen } from '@/lib/inspirations/cover';
+import { appCardScreens } from '@/lib/inspirations/cover';
 
 import { inspirationsApi } from '@/lib/inspirations/api';
 import type { App } from '@/lib/inspirations/types';
@@ -39,10 +39,11 @@ export function AppsGrid({
 }) {
   const key = apps.map((a) => a.id).join(',');
   const { data: previews, loading: previewsLoading } = useAsync(async () => {
-    // AppCard shows one of the app's own screens on its card, the same as a
-    // screen card — so each app needs its first screen alongside its record.
+    // AppCard shows the app's own screens on its card, the same as a screen
+    // card — the admin's carousel pick when there is one, else the automatic
+    // cover — so each app needs its screens alongside its record.
     const details = await Promise.all(apps.map((app) => inspirationsApi.getApp(app.id)));
-    return new Map(apps.map((app, i) => [app.id, coverScreen(details[i]?.screens ?? [])]));
+    return new Map(apps.map((app, i) => [app.id, appCardScreens(app, details[i]?.screens ?? [])]));
   }, `apps-grid-previews:${key}`);
   const { selected, toggle, clear } = useAppSelection();
 
@@ -76,7 +77,7 @@ export function AppsGrid({
           <AppCard
             key={app.id}
             app={app}
-            preview={previews?.get(app.id)}
+            previewScreens={previews?.get(app.id)}
             selected={selected.has(app.id)}
             selectable
             onToggleSelect={() => toggle(app.id)}

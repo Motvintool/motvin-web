@@ -19,6 +19,7 @@ export type AdminOp =
   | { kind: 'set-logo'; appId: string; name: string }
   | { kind: 'rename-screen'; platform: string; appId: string; file: string; version?: string; flow?: string; from: string; to: string }
   | { kind: 'delete-screen'; platform: string; appId: string; file: string; version?: string; flow?: string; name: string }
+  | { kind: 'delete-screens'; platform: string; appId: string; name: string; screens: { file: string; version?: string; flow?: string; name: string }[] }
   | { kind: 'rename-flow'; flowId: string; from: string; to: string }
   | { kind: 'delete-flow'; flowId: string; name: string }
   | { kind: 'set-screen-type'; platform: string; appId: string; file: string; version?: string; flow?: string; name: string; screenType: string }
@@ -56,13 +57,18 @@ export type AssistantAction =
   /** A suggested next message, shown as a chip; pressing it sends it. */
   | { type: 'reply'; text: string }
   /** The admin backed out: whatever was waiting for Confirm is dropped. */
-  | { type: 'cancel' };
+  | { type: 'cancel' }
+  /** Screens shown as thumbnails to pick from — to delete, or just to see. */
+  | { type: 'screens'; appId: string; appName: string; platform: string; versionId?: string; versionLabel?: string; screens: ShownScreen[] };
+
+export type ShownScreen = { id: string; name: string; path: string; file: string; version?: string; flow?: string };
+export type ScreensAction = Extract<AssistantAction, { type: 'screens' }>;
 
 export type ConfirmAction = Extract<AssistantAction, { type: 'confirm' }>;
 
 /** Which operations remove something for good. */
 export function isDestructive(op: AdminOp): boolean {
-  return op.kind === 'remove-app' || op.kind === 'delete-screen' || op.kind === 'delete-flow' || op.kind === 'stop-run' || op.kind === 'delete-app-version';
+  return op.kind === 'remove-app' || op.kind === 'delete-screen' || op.kind === 'delete-screens' || op.kind === 'delete-flow' || op.kind === 'stop-run' || op.kind === 'delete-app-version';
 }
 
 const list = (names: string[]) => (names.length <= 3 ? names.map((name) => `“${name}”`).join(', ') : `${names.length} screens`);
@@ -87,6 +93,8 @@ export function labelFor(op: AdminOp): string {
       return `Rename screen to “${op.to}”`;
     case 'delete-screen':
       return `Delete screen “${op.name}”`;
+    case 'delete-screens':
+      return `Delete ${op.screens.length} screen${op.screens.length === 1 ? '' : 's'} from ${op.name}`;
     case 'rename-flow':
       return `Rename flow to “${op.to}”`;
     case 'delete-flow':
@@ -151,6 +159,8 @@ export function describeOp(op: AdminOp, extra: { screens?: number; flows?: numbe
       return `Rename the screen “${op.from}” to “${op.to}”?`;
     case 'delete-screen':
       return `Delete the screen “${op.name}” from ${op.appId}? The image and its data are removed for good.`;
+    case 'delete-screens':
+      return `Delete ${list(op.screens.map((screen) => screen.name))} from ${op.name}? The images and their data are removed for good.`;
     case 'rename-flow':
       return `Rename the flow “${op.from}” to “${op.to}”?`;
     case 'delete-flow':
@@ -221,6 +231,8 @@ export function doneText(op: AdminOp, result: { screens?: number; flows?: number
       return `The screen is now called “${op.to}”.`;
     case 'delete-screen':
       return `Deleted the screen “${op.name}”.`;
+    case 'delete-screens':
+      return `Deleted ${op.screens.length} screen${op.screens.length === 1 ? '' : 's'} from ${op.name}.`;
     case 'rename-flow':
       return `The flow is now called “${op.to}”.`;
     case 'delete-flow':

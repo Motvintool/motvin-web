@@ -6,6 +6,7 @@ import { adminApi, type AdminAppRecord, type AdminState } from '@/lib/inspiratio
 import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
 import { INDUSTRIES, type Industry } from '@/lib/inspirations/types';
 import { PlusIcon, TrashIcon, UploadIcon } from '../Icons';
+import { AppCardScreens } from './AppCardScreens';
 import { AppVersionScreens } from './AppVersionScreens';
 
 /**
@@ -40,7 +41,12 @@ export function AppsPanel({
   const [idTouched, setIdTouched] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [logoFor, setLogoFor] = useState<string | null>(null);
-  const [managingId, setManagingId] = useState<string | null>(null);
+  // Which app has an inline panel open under its row, and which one — the
+  // version manager or the card-carousel picker. One at a time: both are
+  // tall, and two open at once is a wall of thumbnails.
+  const [open, setOpen] = useState<{ id: string; panel: 'versions' | 'card' } | null>(null);
+  const isOpen = (id: string, panel: 'versions' | 'card') => open?.id === id && open.panel === panel;
+  const togglePanel = (id: string, panel: 'versions' | 'card') => setOpen(isOpen(id, panel) ? null : { id, panel });
 
   const startNew = () => {
     setDraft(EMPTY);
@@ -98,7 +104,8 @@ export function AppsPanel({
     <div className="ins-admin-panel">
       <p className="ins-field-hint">
         The products screenshots belong to. Open <strong>Versions</strong> on any app below to manage its dated
-        captures — add or remove one, or rename one&rsquo;s date to change which is &ldquo;Latest&rdquo;. That is
+        captures — add or remove one, or rename one&rsquo;s date to change which is &ldquo;Latest&rdquo;. Open{' '}
+        <strong>Card screens</strong> to pick the four screens its card cycles through on the Apps page. That is
         different from the <strong>Screens</strong> tab above, which lists every screen of every app in one place.
       </p>
 
@@ -227,10 +234,25 @@ export function AppsPanel({
                     type="button"
                     className="ins-btn ins-btn--sm"
                     disabled={busy}
-                    aria-expanded={managingId === app.id}
-                    onClick={() => setManagingId(managingId === app.id ? null : app.id)}
+                    aria-expanded={isOpen(app.id, 'versions')}
+                    onClick={() => togglePanel(app.id, 'versions')}
                   >
-                    {managingId === app.id ? 'Close' : 'Versions'}
+                    {isOpen(app.id, 'versions') ? 'Close' : 'Versions'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`ins-btn ins-btn--sm ${(app.cardScreens?.length ?? 0) > 0 ? 'is-active' : ''}`}
+                    disabled={busy}
+                    aria-expanded={isOpen(app.id, 'card')}
+                    title={
+                      (app.cardScreens?.length ?? 0) > 0
+                        ? `${app.cardScreens!.length} of 4 card screens picked`
+                        : 'The card picks its screens automatically'
+                    }
+                    onClick={() => togglePanel(app.id, 'card')}
+                  >
+                    {isOpen(app.id, 'card') ? 'Close' : 'Card screens'}
+                    {(app.cardScreens?.length ?? 0) > 0 && <span className="ins-chip-count">{app.cardScreens!.length}</span>}
                   </button>
                   <button
                     type="button"
@@ -257,8 +279,11 @@ export function AppsPanel({
                   </button>
                 </div>
               </div>
-              {managingId === app.id && (
+              {isOpen(app.id, 'versions') && (
                 <AppVersionScreens app={app} files={screens} busy={busy} run={run} />
+              )}
+              {isOpen(app.id, 'card') && (
+                <AppCardScreens key={`${app.id}:${(app.cardScreens ?? []).join(',')}`} app={app} files={screens} busy={busy} run={run} />
               )}
             </div>
           );

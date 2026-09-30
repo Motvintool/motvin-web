@@ -1,13 +1,13 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { inspirationsApi } from '@/lib/inspirations/api';
-import { adminApi, adminScreenImagePath, type AdminAppRecord, type AdminScreenFile } from '@/lib/inspirations/admin';
+import { adminApi, type AdminAppRecord, type AdminScreenFile } from '@/lib/inspirations/admin';
 import { splitScreenFile } from '@/lib/inspirations/screenPaths';
 import { localDateString } from '@/lib/inspirations/dates';
 import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { Platform } from '@/lib/inspirations/types';
 import { PlusIcon, TrashIcon, UploadIcon } from '../Icons';
+import { screenLabel, thumbUrl } from './screenFiles';
 
 /**
  * Per-app, per-version screen management, inline in the Apps tab.
@@ -207,25 +207,28 @@ export function AppVersionScreens({
         )}
       </div>
 
-      <div className="ins-admin-thumbgrid">
+      {/* The same portrait tiles as the flow builder's pool and the card
+          picker, so a screen looks the same in every admin tab — these used
+          to be square 84px crops, which cut every phone screen to its top
+          third and lined up with nothing else on the page. */}
+      <div className="ins-flowbuild-pool">
         {!collision && screensInVersion.map((file) => {
-          const preview = inspirationsApi.mediaUrl(adminScreenImagePath(file));
+          const url = thumbUrl(file);
           return (
-            <div key={file.id} className="ins-admin-thumb-card">
-              {file.published && preview ? (
-                <img src={preview} alt="" className="ins-admin-thumb-card-img" loading="lazy" />
-              ) : (
-                <span className="ins-admin-thumb-card-img ins-admin-thumb--none" aria-hidden />
-              )}
-              <button
-                type="button"
-                className="ins-admin-thumb-remove"
-                aria-label={`Delete ${file.sidecar?.name || file.file}`}
-                onClick={() => removeScreen(file)}
-                disabled={busy}
-              >
-                <TrashIcon size={12} />
-              </button>
+            <div key={file.id} className="ins-flowbuild-tile ins-admin-thumb-card" title={file.file}>
+              <span className="ins-flowbuild-tile-shot">
+                {url ? <img src={url} alt="" loading="lazy" /> : <span className="ins-flowbuild-noshot" aria-hidden />}
+                <button
+                  type="button"
+                  className="ins-admin-thumb-remove"
+                  aria-label={`Delete ${screenLabel(file)}`}
+                  onClick={() => removeScreen(file)}
+                  disabled={busy}
+                >
+                  <TrashIcon size={12} />
+                </button>
+              </span>
+              <span className="ins-flowbuild-tile-name">{screenLabel(file)}</span>
             </div>
           );
         })}
