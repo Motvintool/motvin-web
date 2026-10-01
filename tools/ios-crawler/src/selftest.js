@@ -830,10 +830,31 @@ export async function selfTest() {
     check('the journey is recorded as edges between distinct screens', segmented.edges.length >= 6 && segmented.edges.every((edge) => edge.from !== edge.to), `${segmented.edges.length} edges`);
     check('a revisit never gets its own edge target', !segmented.edges.some((edge) => segmented.screens.find((s) => s.id === edge.to)?.revisitOf), '');
 
-    log.heading('Review candidates — every hold, kept and dropped alike');
+    log.heading('Review candidates — every raw sample, kept and dropped alike');
     const traced = segmentRecording(timelineThumbs, { fps: 5, trace: true });
     const candidates = _internals.buildReviewCandidates(traced, timelineThumbs);
-    check('one candidate per hold the segmenter found', candidates.length === traced.holds.length, `${candidates.length} vs ${traced.holds.length} holds`);
+    const rawFrameCount = traced.holds.reduce((sum, hold) => sum + (hold.end - hold.start + 1), 0);
+    check(
+      'one candidate per raw sampled frame, not one per hold',
+      candidates.length === rawFrameCount && candidates.length > traced.holds.length,
+      `${candidates.length} candidates for ${rawFrameCount} raw frames across ${traced.holds.length} holds`,
+    );
+    const duplicateCandidates = candidates.filter((c) => c.kind === 'duplicate');
+    check(
+      'a hold held for more than one sample offers its other samples back as duplicates of its own picture',
+      duplicateCandidates.length > 0 && duplicateCandidates.every((c) => c.dropped === true && c.duplicateOf),
+      `${duplicateCandidates.length} duplicate(s)`,
+    );
+    check(
+      // A duplicate's target is whatever single candidate stands for its hold
+      // — a kept screen most of the time, but a revisit's own candidate is
+      // "dropped" too (pre-selected the same as anything else not worth
+      // publishing), so the invariant is "points at a real hold", not
+      // "points at something kept".
+      'a duplicate points back at its hold\'s own candidate, not at another duplicate',
+      duplicateCandidates.every((c) => candidates.find((other) => other.id === c.duplicateOf)?.kind !== 'duplicate' && candidates.some((other) => other.id === c.duplicateOf)),
+      JSON.stringify(duplicateCandidates.slice(0, 3)),
+    );
     const keptIds = new Set(shown.map((screen) => screen.id));
     check(
       'every kept, non-revisit screen is a candidate marked not dropped',
@@ -855,7 +876,11 @@ export async function selfTest() {
     const scrimCandidate = candidates.find((c) => c.reason === 'scrim');
     check('a system-prompt scrim is offered back with its own reason', scrimCandidate?.dropped === true, JSON.stringify(scrimCandidate));
     const droppedIds = candidates.filter((c) => c.dropped && c.reason !== 'revisit').map((c) => c.id);
-    check('a genuinely dropped hold gets its own short id, distinct from a screen id', new Set(droppedIds).size === droppedIds.length && droppedIds.every((id) => /^d\d{3}$/.test(id)), JSON.stringify(droppedIds));
+    check(
+      'every dropped or duplicate raw frame gets its own short id, distinct from a screen id',
+      new Set(droppedIds).size === droppedIds.length && droppedIds.every((id) => /^d\d{4}$/.test(id)),
+      JSON.stringify(droppedIds.slice(0, 5)),
+    );
 
     const excludeNothing = new Set();
     const toRecover = candidates.filter((c) => c.dropped && !excludeNothing.has(c.id));

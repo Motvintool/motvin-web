@@ -270,17 +270,22 @@ class Analyzer {
  *          authorization?: object, onProgress?: Function}} options
  */
 /**
- * Every moment the segmenter found while reading the recording — not just
- * the screens it decided to keep, but a transition it threw out, a repeat
- * it folded into an earlier screen, a scrim, a push caught mid-slide — each
- * standing for one hold, not one raw frame (several frames in a row showing
- * the same held screen are one candidate, the same as a kept screen's own
- * picture is one frame, not every frame it was held for).
+ * Every raw sampled frame the recording actually produced — not one per
+ * hold, but one per 0.3s sample, the same granularity a plain "extract every
+ * N seconds" tool would show. A long hold (someone reading a screen for a
+ * few seconds) turns into one real candidate — the hold's own representative
+ * frame, kept or offered back the same as before — plus a run of "duplicate"
+ * candidates for every other sample in that same span, so a screen the
+ * hold-grouping itself got wrong (two different screens folded into one
+ * hold, the fate the Swiggy splash bug took) still has every one of its raw
+ * moments on offer, not just whichever one the grouping happened to settle
+ * on as that hold's single picture.
  *
  * This is what lets "manual" mean more than picking through what the
- * segmenter already decided to publish: a screen it dropped is offered
- * back, pre-selected the same as anything else not worth keeping, so the
- * admin can recover it with one tap instead of it simply being gone.
+ * segmenter already decided to publish: any sampled moment, not just a
+ * hold's chosen representative, is offered back, pre-selected the same as
+ * anything else not worth keeping, so the admin can recover it with one tap
+ * instead of it simply being gone.
  *
  * Needs `timeline.holds` — segmentRecording's trace, only computed when
  * asked for. Candidates with `dropped: true` carry the print and colour
@@ -291,44 +296,50 @@ function buildReviewCandidates(timeline, thumbs) {
   if (!timeline.holds) return null;
   const screenById = new Map(timeline.screens.map((screen) => [screen.id, screen]));
   const candidates = [];
-  let droppedIndex = 0;
+  let extraIndex = 0;
   for (const hold of timeline.holds) {
     const screen = hold.screen ? screenById.get(hold.screen) : null;
-    const start = Math.round((hold.start / timeline.fps) * 100) / 100;
-    if (screen) {
-      // A screen came of this hold — but it may itself be a revisit, which
-      // the review grid treats the same as anything else not worth
-      // publishing again: pre-selected, and recoverable as its own screen.
-      const isRevisit = Boolean(screen.revisitOf);
+    const isRevisit = Boolean(screen?.revisitOf);
+    for (let frame = hold.start; frame <= hold.end; frame++) {
+      const start = Math.round((frame / timeline.fps) * 100) / 100;
+      if (screen && frame === hold.rep) {
+        // The hold's own picture — a kept screen, or itself a revisit, which
+        // the review grid treats the same as anything else not worth
+        // publishing again: pre-selected, and recoverable as its own screen.
+        candidates.push({
+          id: screen.id,
+          frame,
+          start,
+          holdSeconds: hold.seconds,
+          brief: Boolean(hold.brief),
+          kind: isRevisit ? 'revisit' : screen.kind,
+          dropped: isRevisit,
+          reason: isRevisit ? 'revisit' : null,
+        });
+        continue;
+      }
+      // Every other raw sample in this hold's span: either a repeat of a
+      // screen already represented above, or part of a hold the segmenter
+      // never kept at all (a transition, a scrim, a push caught mid-slide).
+      // Either way it is offered back, with what it would need to become a
+      // real screen of its own if recovered. A duplicate shares its hold's
+      // own sign-in check rather than paying for its own — it is, by
+      // definition, the same screen the representative already answered for.
+      const print = fingerprintFromThumb(thumbs[frame]);
       candidates.push({
-        id: screen.id,
-        frame: hold.rep,
+        id: `d${String(++extraIndex).padStart(4, '0')}`,
+        frame,
         start,
-        holdSeconds: hold.seconds,
-        brief: Boolean(hold.brief),
-        kind: isRevisit ? 'revisit' : screen.kind,
-        dropped: isRevisit,
-        reason: isRevisit ? 'revisit' : null,
+        holdSeconds: Math.round((1 / timeline.fps) * 100) / 100,
+        brief: false,
+        kind: screen ? 'duplicate' : 'dropped',
+        dropped: true,
+        reason: screen ? 'duplicate' : (hold.why ?? 'transition'),
+        duplicateOf: screen ? screen.id : null,
+        print: { dhash: print.dhash, ahash: print.ahash, luminance: Math.round(print.luminance), edge: Math.round(print.edge * 10) / 10 },
+        colors: dominantColors(thumbs[frame]),
       });
-      continue;
     }
-    // Nothing was published from this moment — either the segmenter never
-    // kept it, or it did and the screen was later removed entirely (a push
-    // caught mid-slide, judged one after the fact). Either way it is offered
-    // back, with what it would need to become a real screen if recovered.
-    const print = fingerprintFromThumb(thumbs[hold.rep]);
-    candidates.push({
-      id: `d${String(++droppedIndex).padStart(3, '0')}`,
-      frame: hold.rep,
-      start,
-      holdSeconds: hold.seconds,
-      brief: Boolean(hold.brief),
-      kind: 'dropped',
-      dropped: true,
-      reason: hold.why ?? 'transition',
-      print: { dhash: print.dhash, ahash: print.ahash, luminance: Math.round(print.luminance), edge: Math.round(print.edge * 10) / 10 },
-      colors: dominantColors(thumbs[hold.rep]),
-    });
   }
   return candidates;
 }
@@ -419,8 +430,14 @@ export async function ingestFolder(options) {
 
         // Cheap and on-device, unlike the real classification: catches a
         // Google/Apple/Facebook sign-in page before anything else does, so
-        // manual mode can tick it too, the same as a loading screen.
+        // manual mode can tick it too, the same as a loading screen. A
+        // duplicate is read straight off its own hold's representative
+        // instead of paying for a second OCR pass over the same content —
+        // with every raw sample now its own candidate, that representative
+        // can have a few dozen duplicates in a long-held screen.
+        const externalById = new Map();
         for (const candidate of candidates) {
+          if (candidate.duplicateOf) continue;
           const framePath = candidateFramePaths[candidate.frame];
           candidate.external = false;
           if (framePath) {
@@ -432,6 +449,10 @@ export async function ingestFolder(options) {
               // runs its own check regardless of this one.
             }
           }
+          externalById.set(candidate.id, candidate.external);
+        }
+        for (const candidate of candidates) {
+          if (candidate.duplicateOf) candidate.external = externalById.get(candidate.duplicateOf) ?? false;
         }
 
         writeFileSync(
@@ -439,10 +460,14 @@ export async function ingestFolder(options) {
           JSON.stringify({ source: basename(source), captureInfo, timeline, candidates }),
         );
         const kept = candidates.filter((candidate) => !candidate.dropped).length;
+        const duplicateCount = candidates.filter((candidate) => candidate.kind === 'duplicate').length;
+        const setAside = candidates.length - kept - duplicateCount;
         report(
           options,
           'captured',
-          `${kept} screen${kept === 1 ? '' : 's'} found, ${candidates.length - kept} more set aside — choose how to clean up`,
+          `${kept} screen${kept === 1 ? '' : 's'} found, ${setAside} more set aside` +
+            (duplicateCount ? `, ${duplicateCount} repeat sample${duplicateCount === 1 ? '' : 's'}` : '') +
+            ' — choose how to clean up',
           {
             stagingDir: staging,
             capturedScreens: candidates.map((candidate) => ({
@@ -455,6 +480,7 @@ export async function ingestFolder(options) {
               external: candidate.external,
               dropped: candidate.dropped,
               reason: candidate.reason ?? null,
+              duplicateOf: candidate.duplicateOf ?? null,
             })),
           },
         );

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type FormEvent, type Ref } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { adminApi, isAdminEmail, type AdminAppRecord, type AdminState } from '@/lib/inspirations/admin';
 import { dayLabel, localDateString, parseDateInput } from '@/lib/inspirations/dates';
@@ -1137,12 +1137,33 @@ function ReviewFrameImg({ jobId, frame, name }: { jobId: string; frame: number; 
   // a plain empty box — which on a batch of eighty reads as "broken" long
   // before the slowest few have had a chance to arrive.
   const [failed, setFailed] = useState(false);
+  // With every raw sample now its own tile, a long recording's grid can hold
+  // thousands of these — firing a blob fetch (and the thumbnail-generating
+  // sips call behind it) for every one of them on mount would mean thousands
+  // of concurrent requests and subprocesses before a single pixel is needed.
+  // Only a tile that has actually scrolled near the viewport starts fetching.
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLImageElement | HTMLSpanElement | null>(null);
   if (key !== loadedFor) {
     setLoadedFor(key);
     setSrc(null);
     setFailed(false);
+    setVisible(false);
   }
   useEffect(() => {
+    const el = ref.current;
+    if (!el || visible) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setVisible(true);
+      },
+      { rootMargin: '800px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [key, visible]);
+  useEffect(() => {
+    if (!visible) return;
     let cancelled = false;
     let objectUrl: string | null = null;
     void reviewFrameBlob(jobId, frame)
@@ -1158,12 +1179,12 @@ function ReviewFrameImg({ jobId, frame, name }: { jobId: string; frame: number; 
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [jobId, frame]);
+  }, [jobId, frame, visible]);
   if (src) {
     // eslint-disable-next-line @next/next/no-img-element -- fetched as a blob, never a static asset Next could optimise.
-    return <img src={src} alt={name} loading="lazy" />;
+    return <img ref={ref as Ref<HTMLImageElement>} src={src} alt={name} loading="lazy" />;
   }
-  return <span className={`ins-chat-screen-none ${failed ? '' : 'is-loading'}`} aria-hidden />;
+  return <span ref={ref as Ref<HTMLSpanElement>} className={`ins-chat-screen-none ${failed ? '' : 'is-loading'}`} aria-hidden />;
 }
 
 /**
@@ -1181,12 +1202,20 @@ const REASON_LABEL: Record<string, string> = {
   'still moving': 'still settling',
   absorbed: 'merged into another screen',
   revisit: 'same as an earlier screen',
+  duplicate: 'repeat sample of a kept screen',
 };
 
 export function ReviewGrid({ job }: { job: IngestJob }) {
   const screens = job.capturedScreens ?? [];
   const kept = screens.filter((screen) => !screen.dropped);
   const dropped = screens.filter((screen) => screen.dropped);
+  // Every raw sample gets its own tile, so a screen held for a few seconds
+  // can account for dozens of "dropped" entries that are just repeats of a
+  // screen already kept above — worth counting apart from a moment the
+  // segmenter genuinely never kept, so the summary line does not read as if
+  // hundreds of screens were missed when most of them are just duplicates.
+  const duplicateCount = dropped.filter((screen) => screen.kind === 'duplicate').length;
+  const setAsideCount = dropped.length - duplicateCount;
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -1231,9 +1260,14 @@ export function ReviewGrid({ job }: { job: IngestJob }) {
     <div className="ins-chat-screens">
       <p className="ins-chat-line">
         <strong>{kept.length}</strong> screen{kept.length === 1 ? '' : 's'} found
-        {dropped.length ? (
+        {setAsideCount ? (
           <>
-            , <strong>{dropped.length}</strong> more set aside
+            , <strong>{setAsideCount}</strong> more set aside
+          </>
+        ) : null}
+        {duplicateCount ? (
+          <>
+            , <strong>{duplicateCount}</strong> repeat sample{duplicateCount === 1 ? '' : 's'} of a kept screen
           </>
         ) : null}
         .{' '}

@@ -78,10 +78,12 @@ export type CapturedScreen = {
   kind: string;
   /** A free on-device text check, run before anything else: a Google/Apple/Facebook sign-in page, which is always left unpublished. */
   external: boolean;
-  /** Whether the segmenter already left this moment out — a transition, a revisit to an earlier screen, or similar. Still shown in the review grid so "manual" can recover it. */
+  /** Whether the segmenter already left this moment out — a transition, a revisit to an earlier screen, a repeat sample of an already-kept screen, or similar. Still shown in the review grid so "manual" can recover it. */
   dropped: boolean;
-  /** Why the segmenter dropped it (null when it was kept): e.g. "transition", "blank", "scrim", "still moving", "absorbed", "revisit". */
+  /** Why the segmenter dropped it (null when it was kept): e.g. "transition", "blank", "scrim", "still moving", "absorbed", "revisit", "duplicate". */
   reason: string | null;
+  /** Set when `kind` is "duplicate": the id of the real candidate — kept or a revisit — this raw sample repeats. */
+  duplicateOf: string | null;
 };
 
 export type IngestEvent =
