@@ -7133,6 +7133,16 @@ select.ins-input {
   gap: 6px;
 }
 
+/* A review grid's own decision buttons portal into .ins-dock-held-actions
+   below instead — the dock's always-visible strip above its composer, not
+   a spot inside the scrolling chat log that sticky positioning has to fight
+   to keep in view. See ReviewGrid's `slot` prop. */
+.ins-dock-held-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .ins-chip-btn {
   display: inline-flex;
   align-items: center;
@@ -7209,6 +7219,24 @@ select.ins-input {
   background: var(--ins-card-alt);
   font-size: 13px;
   color: var(--ins-sub);
+}
+
+/* A button group (the review grid's decision) is wider than the one link
+   this strip otherwise holds — stacked, not squeezed onto the text's own
+   line, where the dock's narrow width left both wrapping awkwardly. */
+.ins-dock-held:has(.ins-dock-held-actions) {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* The text-plus-Discard row every other .ins-dock-held question already is,
+   reused as the top row of the stacked layout above — Dismiss sits where
+   Discard always has, rather than being buried in the scrolling log below. */
+.ins-dock-held-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .ins-dock-held .ins-linkbtn {
@@ -7544,9 +7572,25 @@ select.ins-input {
 
 .ins-chat-screens-head {
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+/* Two different chat surfaces share this class — the review grid's summary
+   line + expand icon, and ScreenPicker's screen count + "Clear" link — with
+   different markup (p/span, iconbtn/linkbtn). Targeting the position rather
+   than a specific tag or button class covers both: the label shrinks so the
+   trailing control never gets pushed onto its own row. */
+.ins-chat-screens-head > *:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ins-chat-screens-head > button {
+  flex: 0 0 auto;
 }
 
 .ins-chat-screens-grid {
@@ -7628,6 +7672,60 @@ select.ins-input {
   border-color: #16a34a;
 }
 
+/* The expanded review popup: the same grid as the dock's narrow strip, given
+   room to actually show every raw-sample thumbnail at once instead of a thin
+   scrolling column. */
+/* Same size as .ins-screen-preview-modal (the flow/screen preview popup) —
+   .ins-search-overlay already contributes its own 24px padding; this
+   accounts for that so the modal ends up 40px from the viewport edge in
+   total, the same arithmetic that modal's own comment explains. No
+   max-width cap, for the same reason that one has none: the point of
+   expanding is to use the room actually available, not a fixed size. */
+.ins-review-modal {
+  display: flex;
+  flex-direction: column;
+  width: calc(100vw - 80px);
+  height: calc(100vh - 80px);
+  /* A solid, opaque white — this and everything inside it (the thumbnails'
+     own --ins-card/--ins-border/--ins-text) only resolve at all because the
+     overlay carries .ins-portal, which restates those tokens outside
+     .ins-root the same way every other portal-rendered sheet in this file
+     does; without it this read as a transparent sheet over the page behind. */
+  background: var(--ins-card);
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.ins-review-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+/* The decision buttons as a real, non-scrolling part of the popup's own
+   layout — scrollable body above, fixed strip below — the same shape the
+   dock uses for its own pinned strip above its composer (.ins-dock-held),
+   not a sticky element fighting the scrolling content for space. */
+.ins-review-modal-actions {
+  flex: 0 0 auto;
+  padding: 14px 20px;
+  border-top: 1px solid var(--ins-border);
+  background: var(--ins-card-alt);
+}
+
+/* Bigger tiles than the dock's own narrow strip — the point of expanding is
+   to actually be able to tell two near-identical screens apart. */
+.ins-review-modal .ins-chat-screens-grid {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.ins-review-modal .ins-chat-screen-name {
+  font-size: 13px;
+}
+
 .ins-chat-screen-name {
   font-size: 11px;
   line-height: 1.3;
@@ -7637,6 +7735,11 @@ select.ins-input {
   white-space: nowrap;
 }
 
+/* A solid circle on every tile, ticked or not, reads as noise once the grid
+   holds the hundreds of raw samples a long recording can have — barely there
+   until picked (or hovered, as a clickable hint) or the tile is dropped
+   (where it is the only way to tell "excluded" from "about to be recovered"
+   apart at a glance). */
 .ins-chat-screen-tick {
   position: absolute;
   top: 6px;
@@ -7647,12 +7750,20 @@ select.ins-input {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.35);
   color: var(--ins-text);
-  box-shadow: 0 0 0 1px var(--ins-border);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5);
+  opacity: 0;
+  transition: opacity var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease), box-shadow var(--ins-fast) var(--ins-ease);
+}
+
+.ins-chat-screen:not(:disabled):hover .ins-chat-screen-tick,
+.ins-chat-screen.is-dropped .ins-chat-screen-tick {
+  opacity: 1;
 }
 
 .ins-chat-screen.is-picked .ins-chat-screen-tick {
+  opacity: 1;
   background: var(--ins-text);
   color: var(--ins-on-accent);
 }

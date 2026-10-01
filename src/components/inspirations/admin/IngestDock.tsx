@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState, type DragEvent, type FormEvent, type Ref } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/components/shared/AuthProvider';
+import { useHydrated } from '@/components/shared/useHydrated';
 import { adminApi, isAdminEmail, type AdminAppRecord, type AdminState } from '@/lib/inspirations/admin';
 import { dayLabel, localDateString, parseDateInput } from '@/lib/inspirations/dates';
 import { describeOp, labelFor, type AdminOp, type ScreensAction } from '@/lib/inspirations/assistantActions';
@@ -211,6 +213,12 @@ export function IngestDock() {
   const running = visible.some(isActive);
   /** The one job the composer's stop control acts on, if any is going. */
   const liveJob = visible.find(isActive) ?? null;
+  /** A run paused for review, if any — its decision buttons render in the
+   * pinned strip below (`reviewSlot`), not inside the scrolling chat log, so
+   * they stay reachable no matter how far down a long raw-sample grid the
+   * admin has scrolled. */
+  const reviewJob = visible.find((job) => job.status === 'awaiting-review') ?? null;
+  const [reviewSlot, setReviewSlot] = useState<HTMLDivElement | null>(null);
 
   // The saved conversation comes back once the admin is known.
   useEffect(() => {
@@ -655,7 +663,7 @@ export function IngestDock() {
         )}
         {timeline(visible, messages).map((item) =>
           item.kind === 'job' ? (
-            <JobThread key={item.job.id} job={item.job} now={now} />
+            <JobThread key={item.job.id} job={item.job} now={now} reviewSlot={item.job.id === reviewJob?.id ? reviewSlot : null} />
           ) : (
             <ChatBubble
               key={item.message.id}
@@ -727,6 +735,27 @@ export function IngestDock() {
           <button type="button" className="ins-linkbtn" onClick={releaseImage}>
             Discard
           </button>
+        </div>
+      )}
+      {/* A paused run's decision buttons, in the same always-visible strip as
+          the questions above — not inside the scrolling chat log, where a
+          long raw-sample grid could put them hundreds of thumbnails away
+          from view. ReviewGrid portals its actual buttons into this div once
+          it mounts; the label here stays generic, since the finer detail
+          ("likely loading and sign-in screens are already ticked…") is
+          already right there above the grid, which is still worth scrolling
+          to for the grid itself even if the decision no longer requires it. */}
+      {reviewJob && (
+        <div className="ins-dock-held">
+          <div className="ins-dock-held-row">
+            <span>
+              <strong>{reviewJob.title}</strong> — clean up its screens automatically, or review them yourself?
+            </span>
+            <button type="button" className="ins-linkbtn" onClick={() => void dismissIngestJob(reviewJob.id)}>
+              Dismiss
+            </button>
+          </div>
+          <div className="ins-dock-held-actions" ref={setReviewSlot} />
         </div>
       )}
       <form className="ins-dock-composer" onSubmit={(event) => void ask(event)}>
@@ -1194,7 +1223,7 @@ function ReviewFrameImg({ jobId, frame, name }: { jobId: string; frame: number; 
  * rest of the time, now put to the admin first, before anything is spent
  * classifying a screen they would have thrown away anyway.
  */
-/** A dropped candidate's reason, in words the admin did not have to learn the segmenter's vocabulary to read. */
+/** A dropped candidate's reason, in words the admin did not have to learn the segmenter's vocabulary to read — used in the tooltip, where a full sentence fits. */
 const REASON_LABEL: Record<string, string> = {
   transition: 'mid-transition',
   blank: 'blank frame',
@@ -1205,7 +1234,21 @@ const REASON_LABEL: Record<string, string> = {
   duplicate: 'repeat sample of a kept screen',
 };
 
-export function ReviewGrid({ job }: { job: IngestJob }) {
+/** The same reasons, short enough to actually fit under a ~90px thumbnail —
+ * the tooltip's full sentence just ellipsised into the same few repeated
+ * words on every tile ("repeat sample of a…"), which read as noise rather
+ * than information across a grid of hundreds. */
+const REASON_SHORT: Record<string, string> = {
+  transition: 'transition',
+  blank: 'blank',
+  scrim: 'prompt',
+  'still moving': 'settling',
+  absorbed: 'merged',
+  revisit: 'revisit',
+  duplicate: 'duplicate',
+};
+
+export function ReviewGrid({ job, slot }: { job: IngestJob; slot?: HTMLDivElement | null }) {
   const screens = job.capturedScreens ?? [];
   const kept = screens.filter((screen) => !screen.dropped);
   const dropped = screens.filter((screen) => screen.dropped);
@@ -1220,6 +1263,24 @@ export function ReviewGrid({ job }: { job: IngestJob }) {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The dock is a narrow, pinned strip — fine for a handful of thumbnails,
+  // cramped for the hundreds a long recording's raw-sample grid can hold.
+  // Expanding opens the same grid, same state, in a full-size popup instead.
+  const [expanded, setExpanded] = useState(false);
+  const mounted = useHydrated();
+  useEffect(() => {
+    if (!expanded) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExpanded(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [expanded]);
 
   const toggle = (id: string) => {
     if (busy) return;
@@ -1256,25 +1317,97 @@ export function ReviewGrid({ job }: { job: IngestJob }) {
   const toRemove = kept.filter((screen) => picked.has(screen.id));
   const toRecover = dropped.filter((screen) => !picked.has(screen.id));
 
-  return (
-    <div className="ins-chat-screens">
-      <p className="ins-chat-line">
-        <strong>{kept.length}</strong> screen{kept.length === 1 ? '' : 's'} found
-        {setAsideCount ? (
-          <>
-            , <strong>{setAsideCount}</strong> more set aside
-          </>
-        ) : null}
-        {duplicateCount ? (
-          <>
-            , <strong>{duplicateCount}</strong> repeat sample{duplicateCount === 1 ? '' : 's'} of a kept screen
-          </>
-        ) : null}
-        .{' '}
-        {picking
-          ? `Likely loading and sign-in screens, and everything set aside, are already ticked to leave out — untick a set-aside one to recover it, or tap any other thumbnail to add or drop it. ${toRemove.length} removed, ${toRecover.length} recovered.`
-          : 'Clean them up automatically, or pick through everything — kept and set aside — yourself?'}
-      </p>
+  // Rendered either inline, right under the grid (VideoPanel's full-width
+  // page, where nothing else competes for room), or portaled into the
+  // dock's own pinned strip above its composer — the same always-visible
+  // spot a held upload's "which app?" question already uses, rather than a
+  // floating box inside the scrolling chat log. The dock's narrow column can
+  // hold hundreds of raw-sample tiles; nothing about keeping the decision
+  // visible should depend on exactly how far down that scroll the admin is.
+  const actionButtons = !picking ? (
+    <>
+      <button
+        type="button"
+        className="ins-chip-btn"
+        onClick={() => {
+          // A head start, not the final word: a screen the segmenter
+          // itself flagged as loading or already set aside, or that a
+          // quick, free, on-device text check caught as a
+          // Google/Apple/Facebook sign-in page, is ticked already —
+          // all three are what "automatic" would leave out anyway, so
+          // the admin only adjusts from there instead of rebuilding
+          // the list by hand, and recovers a wrongly set-aside screen
+          // with a single untick.
+          setPicked(new Set(screens.filter((screen) => screen.dropped || screen.kind === 'loading' || screen.external).map((screen) => screen.id)));
+          setPicking(true);
+        }}
+        disabled={busy}
+      >
+        I’ll choose myself
+      </button>
+      <button type="button" className="ins-chip-btn ins-chip-btn--primary" onClick={() => void resume({ mode: 'automatic' })} disabled={busy}>
+        Clean up automatically
+      </button>
+    </>
+  ) : (
+    <>
+      <button type="button" className="ins-chip-btn ins-chip-btn--danger" onClick={() => void resume({ mode: 'manual', excluded: [...picked] })} disabled={busy}>
+        <TrashIcon size={13} /> Apply and continue
+      </button>
+      <button type="button" className="ins-chip-btn ins-chip-btn--quiet" onClick={() => void resume({ mode: 'manual', excluded: [] })} disabled={busy}>
+        Recover everything, continue
+      </button>
+      <button
+        type="button"
+        className="ins-chip-btn"
+        onClick={() => {
+          setPicking(false);
+          setPicked(new Set());
+        }}
+        disabled={busy}
+      >
+        Back
+      </button>
+    </>
+  );
+
+  const headAndGrid = (
+    <>
+      <div className="ins-chat-screens-head">
+        {/* .ins-chat-line is a flex row (built for an icon beside one line of
+            text elsewhere in this dock) — wrapped in a span so this summary's
+            several conditional fragments are one flex item with normal
+            flowing text, not each becoming its own item and wrapping as a
+            ragged column of its own. */}
+        <p className="ins-chat-line">
+          <span>
+            <strong>{kept.length}</strong> screen{kept.length === 1 ? '' : 's'} found
+            {setAsideCount ? (
+              <>
+                , <strong>{setAsideCount}</strong> more set aside
+              </>
+            ) : null}
+            {duplicateCount ? (
+              <>
+                , <strong>{duplicateCount}</strong> repeat sample{duplicateCount === 1 ? '' : 's'} of a kept screen
+              </>
+            ) : null}
+            .{' '}
+            {picking
+              ? `Likely loading and sign-in screens, and everything set aside, are already ticked to leave out — untick a set-aside one to recover it, or tap any other thumbnail to add or drop it. ${toRemove.length} removed, ${toRecover.length} recovered.`
+              : 'Clean them up automatically, or pick through everything — kept and set aside — yourself?'}
+          </span>
+        </p>
+        <button
+          type="button"
+          className="ins-iconbtn ins-iconbtn--plain"
+          onClick={() => setExpanded((value) => !value)}
+          aria-label={expanded ? 'Close the expanded view' : 'Expand to a larger preview'}
+          title={expanded ? 'Close the expanded view' : 'Expand to a larger preview'}
+        >
+          {expanded ? <CloseIcon size={15} /> : <ExpandIcon size={15} />}
+        </button>
+      </div>
       <div className="ins-chat-screens-grid" role={picking ? 'listbox' : 'list'} aria-multiselectable={picking || undefined}>
         {screens.map((screen) => {
           const isPicked = picked.has(screen.id);
@@ -1291,7 +1424,7 @@ export function ReviewGrid({ job }: { job: IngestJob }) {
             >
               <ReviewFrameImg jobId={job.id} frame={screen.frame} name={label(screen)} />
               <span className="ins-chat-screen-name">
-                {screen.dropped ? (REASON_LABEL[screen.reason ?? ''] ?? 'set aside') : screen.brief ? 'brief' : `${screen.start.toFixed(1)}s`}
+                {screen.dropped ? (REASON_SHORT[screen.reason ?? ''] ?? 'set aside') : screen.brief ? 'brief' : `${screen.start.toFixed(1)}s`}
               </span>
               {picking && (
                 <span className="ins-chat-screen-tick" aria-hidden>
@@ -1308,59 +1441,54 @@ export function ReviewGrid({ job }: { job: IngestJob }) {
           {error}
         </p>
       )}
-      <div className="ins-chat-actions">
-        {!picking ? (
-          <>
-            <button type="button" className="ins-chip-btn ins-chip-btn--primary" onClick={() => void resume({ mode: 'automatic' })} disabled={busy}>
-              Clean up automatically
-            </button>
-            <button
-              type="button"
-              className="ins-chip-btn"
-              onClick={() => {
-                // A head start, not the final word: a screen the segmenter
-                // itself flagged as loading or already set aside, or that a
-                // quick, free, on-device text check caught as a
-                // Google/Apple/Facebook sign-in page, is ticked already —
-                // all three are what "automatic" would leave out anyway, so
-                // the admin only adjusts from there instead of rebuilding
-                // the list by hand, and recovers a wrongly set-aside screen
-                // with a single untick.
-                setPicked(new Set(screens.filter((screen) => screen.dropped || screen.kind === 'loading' || screen.external).map((screen) => screen.id)));
-                setPicking(true);
-              }}
-              disabled={busy}
-            >
-              I’ll choose myself
-            </button>
-          </>
-        ) : (
-          <>
-            <button type="button" className="ins-chip-btn ins-chip-btn--danger" onClick={() => void resume({ mode: 'manual', excluded: [...picked] })} disabled={busy}>
-              <TrashIcon size={13} /> Apply and continue
-            </button>
-            <button type="button" className="ins-chip-btn ins-chip-btn--quiet" onClick={() => void resume({ mode: 'manual', excluded: [] })} disabled={busy}>
-              Recover everything, continue
-            </button>
-            <button
-              type="button"
-              className="ins-chip-btn"
-              onClick={() => {
-                setPicking(false);
-                setPicked(new Set());
-              }}
-              disabled={busy}
-            >
-              Back
-            </button>
-          </>
-        )}
-      </div>
+    </>
+  );
+
+  // Collapsed in the dock, or standalone on VideoPanel's full-width page:
+  // actions show right under the grid, unless the dock has already given
+  // this a portal target (`slot`) to render into instead.
+  const content = (
+    <div className="ins-chat-screens">
+      {headAndGrid}
+      {!slot && <div className="ins-chat-actions">{actionButtons}</div>}
     </div>
+  );
+
+  const portalButtons = slot && !expanded ? createPortal(<>{actionButtons}</>, slot) : null;
+
+  if (!expanded) return (
+    <>
+      {content}
+      {portalButtons}
+    </>
+  );
+
+  // The same grid, same state, in a full-size popup instead of the dock's
+  // narrow strip — a long recording's raw-sample grid is easiest to pick
+  // through with room to actually see each thumbnail. The dock itself keeps
+  // a short placeholder rather than going blank where the grid used to be.
+  return (
+    <>
+      <p className="ins-chat-line ins-chat-line--soft">Reviewing in the expanded view.</p>
+      {mounted &&
+        createPortal(
+          <div className="ins-portal ins-search-overlay" role="presentation" onClick={() => setExpanded(false)}>
+            <div className="ins-review-modal" role="dialog" aria-modal="true" aria-label="Review captured screens" onClick={(e) => e.stopPropagation()}>
+              <div className="ins-review-modal-body">
+                <div className="ins-chat-screens">{headAndGrid}</div>
+              </div>
+              <div className="ins-review-modal-actions">
+                <div className="ins-chat-actions">{actionButtons}</div>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
-export function JobThread({ job, now }: { job: IngestJob; now: number }) {
+export function JobThread({ job, now, reviewSlot }: { job: IngestJob; now: number; reviewSlot?: HTMLDivElement | null }) {
   const started = Date.parse(job.startedAt);
   const ended = job.finishedAt ? Date.parse(job.finishedAt) : now;
   const elapsed = clock((ended - started) / 1000);
@@ -1369,6 +1497,30 @@ export function JobThread({ job, now }: { job: IngestJob; now: number }) {
   const bar = fraction(job);
   const app = job.result?.app ?? job.interim?.app ?? null;
   const appHref = app?.id ? `/inspirations/app/${encodeURIComponent(app.id)}` : null;
+
+  const foot = (
+    <div className="ins-chat-foot">
+      <span className="ins-chat-meta">
+        {active ? `${elapsed} elapsed` : `took ${elapsed}`}
+        {job.analyzer && active ? ` · ${job.analyzer.replace(/^free AI — /, '')}` : ''}
+      </span>
+      {/* Stop/Cancel lives in exactly one place — the pinned strip right
+          above the composer — so it doesn't repeat itself down the
+          conversation for the same run. A paused run's own Dismiss lives
+          there too now (see IngestDock's .ins-dock-held), so it isn't
+          repeated here either. */}
+      {!active && appHref && (
+        <Link href={appHref} className="ins-linkbtn">
+          Open in gallery
+        </Link>
+      )}
+      {!active && job.status !== 'awaiting-review' && (
+        <button type="button" className="ins-linkbtn" onClick={() => void dismissIngestJob(job.id)}>
+          Dismiss
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div className="ins-chat">
@@ -1417,7 +1569,7 @@ export function JobThread({ job, now }: { job: IngestJob; now: number }) {
           </>
         )}
 
-        {job.status === 'awaiting-review' && <ReviewGrid job={job} />}
+        {job.status === 'awaiting-review' && <ReviewGrid job={job} slot={reviewSlot} />}
 
         {job.status === 'done' && !job.result && (
           <p className="ins-chat-line">
@@ -1454,25 +1606,7 @@ export function JobThread({ job, now }: { job: IngestJob; now: number }) {
           </p>
         )}
 
-        <div className="ins-chat-foot">
-          <span className="ins-chat-meta">
-            {active ? `${elapsed} elapsed` : `took ${elapsed}`}
-            {job.analyzer && active ? ` · ${job.analyzer.replace(/^free AI — /, '')}` : ''}
-          </span>
-          {/* Stop/Cancel lives in exactly one place — the pinned strip right
-              above the composer — so it doesn't repeat itself down the
-              conversation for the same run. */}
-          {!active && appHref && (
-            <Link href={appHref} className="ins-linkbtn">
-              Open in gallery
-            </Link>
-          )}
-          {!active && (
-            <button type="button" className="ins-linkbtn" onClick={() => void dismissIngestJob(job.id)}>
-              Dismiss
-            </button>
-          )}
-        </div>
+        {foot}
       </div>
     </div>
   );
