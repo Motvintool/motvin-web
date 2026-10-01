@@ -49,6 +49,13 @@ are two front doors onto the same pipeline.
 because a crawl is blocked behind a 12 GB Xcode install. Screenshot an app on a
 real iPhone, or screen-record a walk through it, and point `ingest` at the result.
 
+**A video upload pauses once its screens are found**, before any of them is sent to the
+analyzer or published — `ingest --review` (what the admin page's upload always does) reports
+every captured screen and waits. The admin then chooses "automatic" (resume with nothing
+manually removed — the rules below still run) or "manual" (resume with `--drop <ids>`, so a
+screen they do not want is never even classified). `node crawl.js resume --staging <dir> …`
+is the other half of that pause; see its `--help` for the full option list.
+
 **Video is the higher-yield route.** Three minutes of tapping produces a few
 hundred frames, of which perhaps twenty are distinct screens. The recording is
 read as a *timeline*, not a pile of frames ([`src/segment.js`](src/segment.js)):
@@ -65,7 +72,7 @@ read as a *timeline*, not a pile of frames ([`src/segment.js`](src/segment.js)):
 | system prompts iOS did not record | a scrim with nothing on it (iOS leaves permission alerts out of recordings) — dropped and counted |
 | Google / Apple / Facebook sign-in pages | recognised from their text and **left out of the library**; the screens either side still publish, and the flow closes over the gap |
 
-Frames are sampled at 10 per second by default (a screen swiped past in a third of a second still leaves three identical frames, where a transition leaves three different ones), with a 32×64 thumbnail written
+Frames are sampled one every 0.3 seconds by default (about 3.33 a second) — the admin's own tradeoff of some fast-screen coverage for a shorter run; `--fps 10` (one every 0.1s) is what catches a screen swiped past in a third of a second, by leaving three identical frames where a transition leaves three different ones — with a 32×64 thumbnail written
 beside each so all of the above runs on a few thousand pixels per frame — a
 three-minute recording segments in well under a second once its frames are
 read. Tune with `--fps`, `--min-hold <seconds>` (default 0.5) and `--no-brief`.

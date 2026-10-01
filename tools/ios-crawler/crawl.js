@@ -22,7 +22,7 @@ import { Simulator } from './src/device.js';
 import { Crawler, DEFAULTS } from './src/crawler.js';
 import { assertAuthorized } from './src/safety.js';
 import { localDateString, publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
-import { classifyStored, ingestFolder, researchStored } from './src/ingest.js';
+import { classifyStored, ingestFolder, researchStored, resumeIngest } from './src/ingest.js';
 import { extractJson, pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
 import { AI_PROVIDERS, aiChat, aiChatStream, aiConfig, aiStatus, canStream, readAiSettings, writeAiSettings } from './src/ai.js';
 
@@ -42,6 +42,8 @@ ${bold('Commands')}
   run --app <file>          crawl one authorized app                        ${dim('needs Xcode + idb')}
   ingest --app <file> --from <dir>
                             a folder of screenshots → the store             ${dim('no Simulator needed')}
+  resume --staging <dir>    finish a run paused by ingest --review, keeping or
+                            dropping screens the admin chose
   classify --app-id <id>    analyse screens already stored                  ${dim('no Simulator needed')}
   ai                        which free AI is set up, and whether it answers   ${dim('--json for machines')}
   ask                       one question to the AI, JSON on stdin             ${dim('used by the admin assistant')}
@@ -79,7 +81,7 @@ ${bold('ingest options')}
   --app-id <id>             add to an app already in the library, by its slug —
                             skips identification, instead of a config file
   --authorized-by <who>     recorded in sources.json when there is no --app
-  --fps <n>                 frames per second to pull from a video          ${dim('default 10')}
+  --fps <n>                 frames per second to pull from a video          ${dim('default one every 0.3s (~3.33)')}
   --min-hold <seconds>      how long a screen must hold still to count      ${dim('default 0.5')}
   --no-brief                drop screens shown for less than --min-hold even
                             when they are distinct (splash, toasts, spinners)
@@ -88,8 +90,23 @@ ${bold('ingest options')}
   --version <YYYY-MM-DD>    which dated capture to publish into            ${dim("default: today")}
   --data-dir <path>         Inspirations store
   --no-classify             skip analysis; file everything as "other"
+  --review                  pause after capture, before anything is classified
+                            or published, and report the screens found; finish
+                            with \`resume\` once the admin has decided what to
+                            keep. Nothing is sent to the analyzer until then
   --dry-run                 report what would be written, write nothing
   --json                    print machine-readable progress and result lines
+
+${bold('resume options')}
+  --staging <dir>           the folder \`ingest --review\` reported            ${dim('required')}
+  --drop <ids>              comma-separated screen ids to remove — "manual";
+                            omit for "automatic" (nothing manually removed;
+                            the loading / third-party-sign-in rules still run)
+  --app, --app-id, --authorized-by, --authorized, --platform, --version,
+  --data-dir, --keep-loading, --dry-run, --json
+                            the same as \`ingest\` — give it whatever was given
+                            to the paused run, so the published screens land
+                            in the same place
 
 ${bold('classify options')}
   --app-id <id>             app slug as stored under screens/<platform>/    ${dim('required')}
@@ -259,27 +276,17 @@ function loadExistingApp(dataDirRaw, appId) {
   return apps.find((a) => a.id === appId) ?? null;
 }
 
-async function runIngest(flags) {
-  if (!flags.from) {
-    log.error('--from is required. See `node crawl.js` for usage.');
-    return 1;
-  }
-
-  // With --app, the config file supplies the app and its rights record. With
-  // --app-id, it names an app already in the library — its record there
-  // supplies name and industry, so these screens are added to it rather than
-  // identified as a possibly-different app of the same name. Without either,
-  // the app is identified from the screens themselves — which is what the
-  // admin page's video upload does by default, so a capture needs no form
-  // first.
-  let app = null;
+/**
+ * The app and its rights record, from --app-id (an app already in the
+ * library) or --app (a config file), or neither — in which case the screens
+ * identify it themselves once they are chosen. Shared by `ingest` and
+ * `resume`, since a paused run's decision can arrive with the same choices.
+ */
+function resolveAppFlag(flags) {
   if (flags.appId) {
     const existing = loadExistingApp(flags.dataDir, flags.appId);
-    if (!existing) {
-      log.error(`no app "${flags.appId}" in the library — check Apps for its id.`);
-      return 1;
-    }
-    app = {
+    if (!existing) throw new Error(`no app "${flags.appId}" in the library — check Apps for its id.`);
+    return {
       appId: existing.id,
       name: existing.name,
       industry: existing.industry,
@@ -287,78 +294,60 @@ async function runIngest(flags) {
       tagline: existing.tagline || '',
       authorization: { permission: '', authorizedBy: flags.authorizedBy || '', grantedAt: localDateString() },
     };
-  } else if (flags.app) {
-    app = loadAppConfig(flags.app);
+  }
+  if (flags.app) {
+    const app = loadAppConfig(flags.app);
     assertAuthorized(app, { authorized: flags.authorized === true });
+    return app;
   }
-  if (!app && flags.authorized !== true) {
-    log.error('pass --authorized to confirm you hold the rights to capture this app.');
-    return 1;
-  }
+  return null;
+}
 
-  const folder = resolve(flags.from.replace(/^~/, process.env.HOME ?? '~'));
-  log.heading(`${app ? app.name : 'Identifying the app'} ← ${folder}`);
-  if (app) {
-    log.info(`authorization: ${app.authorization.permission} — ${app.authorization.authorizedBy}, ${app.authorization.grantedAt}`);
-  } else if (flags.authorizedBy) {
-    log.info(`captured by: ${flags.authorizedBy}`);
-  }
-  // Checked before the video is touched. Without an analyzer every screen
-  // files as "other" and the flows collapse into one bucket, so the run is
-  // stopped here rather than allowed to produce that.
+/**
+ * The analyzer to classify with, probed and logged once. Without one every
+ * screen files as "other" and the flows collapse into one bucket, so the
+ * caller stops rather than being allowed to produce that — unless
+ * --no-classify asked for exactly that.
+ */
+async function resolveAnalyzer(flags) {
   let backend = flags.classify === false ? 'none' : await resolveBackend(flags.backend);
-  if (backend !== 'none') {
-    const probe = await probeAnalyzer(backend);
-    if (!probe.usable) {
-      log.error(`No analyzer available — ${probe.reason}`);
-      log.raw('');
-      log.raw(dim('  Screen names, types and flow grouping all come from the analyzer.'));
-      log.raw(dim('  Without one, nothing is published.'));
-      log.raw('');
-      log.raw(dim('  --backend local   reads the screens on-device. No key, no network.'));
-      log.raw(dim('  --no-classify     files the screens with no analysis at all.'));
-      return 1;
-    }
-    log.info(
-      probe.backend === 'local'
-        ? 'analyzer: on-device text recognition (no model — types and flows from rules)'
-        : probe.backend === 'ai'
-          ? `analyzer: free AI — ${probe.provider} / ${probe.model}${probe.vision ? ' (reads screenshots)' : ' (text only)'}`
-          : `analyzer: ${probe.backend} ✓`,
-    );
-    backend = probe.backend;
-    flags.__vision = probe.vision !== false;
-    flags.__analyzerLabel = probe.backend === 'ai' ? `${probe.provider}/${probe.model}` : probe.backend;
-    flags.__journeyModel = probe.journeyModel ?? null;
-    if (probe.journeyModel && probe.journeyModel !== probe.model) log.info(`journey names: ${probe.journeyModel}`);
-  } else {
+  if (backend === 'none') {
     log.info('analyzer: off (--no-classify)');
+    return { backend, vision: undefined, analyzerLabel: undefined, journeyModel: undefined };
   }
+  const probe = await probeAnalyzer(backend);
+  if (!probe.usable) {
+    log.error(`No analyzer available — ${probe.reason}`);
+    log.raw('');
+    log.raw(dim('  Screen names, types and flow grouping all come from the analyzer.'));
+    log.raw(dim('  Without one, nothing is published.'));
+    log.raw('');
+    log.raw(dim('  --backend local   reads the screens on-device. No key, no network.'));
+    log.raw(dim('  --no-classify     files the screens with no analysis at all.'));
+    return null;
+  }
+  log.info(
+    probe.backend === 'local'
+      ? 'analyzer: on-device text recognition (no model — types and flows from rules)'
+      : probe.backend === 'ai'
+        ? `analyzer: free AI — ${probe.provider} / ${probe.model}${probe.vision ? ' (reads screenshots)' : ' (text only)'}`
+        : `analyzer: ${probe.backend} ✓`,
+  );
+  if (probe.journeyModel && probe.journeyModel !== probe.model) log.info(`journey names: ${probe.journeyModel}`);
+  return {
+    backend: probe.backend,
+    vision: probe.vision !== false,
+    analyzerLabel: probe.backend === 'ai' ? `${probe.provider}/${probe.model}` : probe.backend,
+    journeyModel: probe.journeyModel ?? null,
+  };
+}
 
-  const result = await ingestFolder({
-    folder,
-    app,
-    authorization: app
-      ? app.authorization
-      : { permission: '', authorizedBy: flags.authorizedBy || '', grantedAt: localDateString() },
-    dataDir: flags.dataDir,
-    backend,
-    vision: flags.__vision,
-    analyzerLabel: flags.__analyzerLabel,
-    journeyModel: flags.__journeyModel,
-    fps: flags.fps === undefined ? undefined : Number(flags.fps),
-    minHoldSeconds: flags.minHold === undefined ? undefined : Number(flags.minHold),
-    minRun: flags.minRun === undefined ? undefined : Number(flags.minRun),
-    keepBrief: flags.brief !== false,
-    keepLoading: flags.keepLoading === true,
-    platform: flags.platform,
-    version: flags.version,
-    dryRun: flags.dryRun === true,
-    onProgress: flags.json
-      ? (event) => process.stdout.write(`${PROGRESS_MARKER} ${JSON.stringify(event)}\n`)
-      : undefined,
-  });
-
+/**
+ * The summary lines, the manifest rebuild, and the machine-readable tail a
+ * subprocess caller reads back — identical whether the run went straight
+ * through or was resumed after a review pause.
+ */
+async function reportIngestResult(result, flags, app) {
   log.raw('');
   log.info(
     `${result.ingested} unique screen(s), ${result.duplicates.length} repeat(s) dropped` +
@@ -409,9 +398,139 @@ async function runIngest(flags) {
   if (!result.analyzerUsable) {
     log.raw('');
     log.warn('Screens were filed as "other" because no analyzer was reachable.');
-    log.raw(dim(`  Once ANTHROPIC_API_KEY is set: node crawl.js classify --app-id ${app.appId}`));
+    if (app) log.raw(dim(`  Once ANTHROPIC_API_KEY is set: node crawl.js classify --app-id ${app.appId}`));
   }
   reportGate();
+}
+
+async function runIngest(flags) {
+  if (!flags.from) {
+    log.error('--from is required. See `node crawl.js` for usage.');
+    return 1;
+  }
+
+  // With --app, the config file supplies the app and its rights record. With
+  // --app-id, it names an app already in the library — its record there
+  // supplies name and industry, so these screens are added to it rather than
+  // identified as a possibly-different app of the same name. Without either,
+  // the app is identified from the screens themselves — which is what the
+  // admin page's video upload does by default, so a capture needs no form
+  // first.
+  let app;
+  try {
+    app = resolveAppFlag(flags);
+  } catch (error) {
+    log.error(error.message);
+    return 1;
+  }
+  if (!app && flags.authorized !== true) {
+    log.error('pass --authorized to confirm you hold the rights to capture this app.');
+    return 1;
+  }
+
+  const folder = resolve(flags.from.replace(/^~/, process.env.HOME ?? '~'));
+  log.heading(`${app ? app.name : 'Identifying the app'} ← ${folder}`);
+  if (app) {
+    log.info(`authorization: ${app.authorization.permission} — ${app.authorization.authorizedBy}, ${app.authorization.grantedAt}`);
+  } else if (flags.authorizedBy) {
+    log.info(`captured by: ${flags.authorizedBy}`);
+  }
+  // Checked before the video is touched — reviewing a batch that is never
+  // going to be classified anyway would waste the admin's time.
+  const analyzerInfo = flags.review ? { backend: 'deferred' } : await resolveAnalyzer(flags);
+  if (!analyzerInfo) return 1;
+
+  const result = await ingestFolder({
+    folder,
+    app,
+    authorization: app
+      ? app.authorization
+      : { permission: '', authorizedBy: flags.authorizedBy || '', grantedAt: localDateString() },
+    dataDir: flags.dataDir,
+    backend: analyzerInfo.backend,
+    vision: analyzerInfo.vision,
+    analyzerLabel: analyzerInfo.analyzerLabel,
+    journeyModel: analyzerInfo.journeyModel,
+    fps: flags.fps === undefined ? undefined : Number(flags.fps),
+    minHoldSeconds: flags.minHold === undefined ? undefined : Number(flags.minHold),
+    minRun: flags.minRun === undefined ? undefined : Number(flags.minRun),
+    keepBrief: flags.brief !== false,
+    keepLoading: flags.keepLoading === true,
+    platform: flags.platform,
+    version: flags.version,
+    dryRun: flags.dryRun === true,
+    reviewOnly: flags.review === true,
+    onProgress: flags.json
+      ? (event) => process.stdout.write(`${PROGRESS_MARKER} ${JSON.stringify(event)}\n`)
+      : undefined,
+  });
+
+  if (result.pausedForReview) {
+    // Nothing is published yet — reportGate()'s "live in the gallery" line
+    // would be wrong here, since resolving this run is what makes that true.
+    log.raw('');
+    log.info(`${result.screens} screen(s) captured — waiting for the admin to choose how to clean them up.`);
+    return 0;
+  }
+
+  await reportIngestResult(result, flags, app);
+  return 0;
+}
+
+/**
+ * Finishes a run that paused after capture: the admin's "automatic" (nothing
+ * dropped) or "manual" (--drop names the screens to remove) decision, read
+ * back from the staging dir `ingest --review` left behind.
+ */
+async function runResume(flags) {
+  if (!flags.staging) {
+    log.error('--staging is required — the folder `ingest --review` reported when it paused.');
+    return 1;
+  }
+  let app;
+  try {
+    app = resolveAppFlag(flags);
+  } catch (error) {
+    log.error(error.message);
+    return 1;
+  }
+  if (!app && flags.authorized !== true) {
+    log.error('pass --authorized to confirm you hold the rights to capture this app.');
+    return 1;
+  }
+  const analyzerInfo = await resolveAnalyzer(flags);
+  if (!analyzerInfo) return 1;
+
+  const drop = flags.drop
+    ? String(flags.drop)
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean)
+    : [];
+  log.heading(drop.length ? `Removing ${drop.length} screen(s) and continuing` : 'Cleaning up automatically and continuing');
+
+  const result = await resumeIngest({
+    stagingDir: resolve(flags.staging),
+    drop,
+    app,
+    authorization: app
+      ? app.authorization
+      : { permission: '', authorizedBy: flags.authorizedBy || '', grantedAt: localDateString() },
+    dataDir: flags.dataDir,
+    backend: analyzerInfo.backend,
+    vision: analyzerInfo.vision,
+    analyzerLabel: analyzerInfo.analyzerLabel,
+    journeyModel: analyzerInfo.journeyModel,
+    keepLoading: flags.keepLoading === true,
+    platform: flags.platform,
+    version: flags.version,
+    dryRun: flags.dryRun === true,
+    onProgress: flags.json
+      ? (event) => process.stdout.write(`${PROGRESS_MARKER} ${JSON.stringify(event)}\n`)
+      : undefined,
+  });
+
+  await reportIngestResult(result, flags, app);
   return 0;
 }
 
@@ -613,6 +732,8 @@ async function main() {
         return await runCrawl(flags);
       case 'ingest':
         return await runIngest(flags);
+      case 'resume':
+        return await runResume(flags);
       case 'classify':
         return await runClassify(flags);
       case 'research':

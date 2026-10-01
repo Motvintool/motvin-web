@@ -18,6 +18,7 @@ import {
   type IngestJob,
 } from '@/lib/inspirations/ingestJobs';
 import { CheckIcon, CloseIcon, UploadIcon } from '../Icons';
+import { ReviewGrid } from './IngestDock';
 import { AppModeSelect } from './AppModeSelect';
 import { IngestSummary, interimResult } from './IngestSummary';
 
@@ -357,6 +358,17 @@ function RunCard({ job, now, showLog, onToggleLog }: { job: IngestJob; now: numb
   const started = Date.parse(job.startedAt);
   const ended = job.finishedAt ? Date.parse(job.finishedAt) : now;
   const elapsed = clock((ended - started) / 1000);
+
+  // Waiting on the admin, not the crawler — the step chips and progress bar
+  // below have nothing to show while nothing is running, so the review grid
+  // stands in their place until a choice is made.
+  if (job.status === 'awaiting-review') {
+    return (
+      <div className="ins-ingest" role="status">
+        <ReviewGrid job={job} />
+      </div>
+    );
+  }
 
   if (!active && job.status === 'done') {
     return (

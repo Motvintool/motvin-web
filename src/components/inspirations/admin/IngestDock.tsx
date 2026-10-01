@@ -28,6 +28,8 @@ import {
   releaseImage,
   offerAction,
   releaseUpload,
+  resumeIngest,
+  reviewFrameBlob,
   setUploadPlan,
   stopActiveRun,
   stopAssistant,
@@ -1115,6 +1117,187 @@ function timeline(jobs: IngestJob[], messages: ChatMessage[]): ({ kind: 'job'; a
   return items.sort((a, b) => a.at - b.at);
 }
 
+/**
+ * One captured screen's full-size picture, while its job is still waiting
+ * on a decision. These sit in the crawler's own staging dir — nothing has
+ * been published yet, not even looked at by an analyzer — so they are
+ * fetched with the admin's own credentials rather than linked to directly,
+ * the way an already-published screen's image can be.
+ */
+function ReviewFrameImg({ jobId, frame, name }: { jobId: string; frame: number; name: string }) {
+  // Each thumbnail keeps the same component instance for its whole life in
+  // the grid in practice, but React does not promise that — so a change of
+  // which screen this is showing has to reset state during render, the same
+  // "adjust state when a prop changes" pattern used elsewhere in this dock,
+  // rather than an effect calling setState on mount.
+  const key = `${jobId}:${frame}`;
+  const [loadedFor, setLoadedFor] = useState(key);
+  const [src, setSrc] = useState<string | null>(null);
+  // Still fetching and genuinely missing look the same without this — both
+  // a plain empty box — which on a batch of eighty reads as "broken" long
+  // before the slowest few have had a chance to arrive.
+  const [failed, setFailed] = useState(false);
+  if (key !== loadedFor) {
+    setLoadedFor(key);
+    setSrc(null);
+    setFailed(false);
+  }
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    void reviewFrameBlob(jobId, frame)
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [jobId, frame]);
+  if (src) {
+    // eslint-disable-next-line @next/next/no-img-element -- fetched as a blob, never a static asset Next could optimise.
+    return <img src={src} alt={name} loading="lazy" />;
+  }
+  return <span className={`ins-chat-screen-none ${failed ? '' : 'is-loading'}`} aria-hidden />;
+}
+
+/**
+ * What a video upload pauses on once its screens are found: every one of
+ * them, for the admin to look at, and a choice of how to clean them up —
+ * the same choice the admin page's own cleanup rules make on their own the
+ * rest of the time, now put to the admin first, before anything is spent
+ * classifying a screen they would have thrown away anyway.
+ */
+export function ReviewGrid({ job }: { job: IngestJob }) {
+  const screens = job.capturedScreens ?? [];
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const toggle = (id: string) => {
+    if (busy) return;
+    setPicked((set) => {
+      const next = new Set(set);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const resume = async (decision: { mode: 'automatic' } | { mode: 'manual'; drop: string[] }) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await resumeIngest(job.id, decision);
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  };
+
+  const label = (screen: NonNullable<IngestJob['capturedScreens']>[number]) =>
+    `Screen at ${screen.start.toFixed(1)}s${screen.kind === 'overlay' ? ', over another screen' : screen.kind === 'scrolled' ? ', scrolled' : ''}${screen.external ? ' — looks like a sign-in page' : ''}`;
+
+  return (
+    <div className="ins-chat-screens">
+      <p className="ins-chat-line">
+        <strong>{screens.length}</strong> screen{screens.length === 1 ? '' : 's'} found.{' '}
+        {picking
+          ? `Likely loading and sign-in screens are already ticked — tap any thumbnail to add or drop it. ${picked.size} selected.`
+          : 'Clean them up automatically, or pick through them yourself?'}
+      </p>
+      <div className="ins-chat-screens-grid" role={picking ? 'listbox' : 'list'} aria-multiselectable={picking || undefined}>
+        {screens.map((screen) => {
+          const isPicked = picked.has(screen.id);
+          return (
+            <button
+              key={screen.id}
+              type="button"
+              role={picking ? 'option' : undefined}
+              aria-selected={picking ? isPicked : undefined}
+              className={`ins-chat-screen ${isPicked ? 'is-picked' : ''}`}
+              onClick={() => picking && toggle(screen.id)}
+              disabled={!picking || busy}
+              title={label(screen)}
+            >
+              <ReviewFrameImg jobId={job.id} frame={screen.frame} name={label(screen)} />
+              <span className="ins-chat-screen-name">{screen.brief ? 'brief' : `${screen.start.toFixed(1)}s`}</span>
+              {picking && (
+                <span className="ins-chat-screen-tick" aria-hidden>
+                  {isPicked ? <CheckIcon size={12} /> : null}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {error && (
+        <p className="ins-chat-line is-error">
+          <CloseIcon size={13} />
+          {error}
+        </p>
+      )}
+      <div className="ins-chat-actions">
+        {!picking ? (
+          <>
+            <button type="button" className="ins-chip-btn ins-chip-btn--primary" onClick={() => void resume({ mode: 'automatic' })} disabled={busy}>
+              Clean up automatically
+            </button>
+            <button
+              type="button"
+              className="ins-chip-btn"
+              onClick={() => {
+                // A head start, not the final word: a screen the segmenter
+                // itself flagged as loading, or that a quick, free, on-device
+                // text check caught as a Google/Apple/Facebook sign-in page,
+                // is ticked already — both are what "automatic" would have
+                // removed anyway, so the admin only adjusts from there
+                // instead of rebuilding the list by hand.
+                setPicked(new Set(screens.filter((screen) => screen.kind === 'loading' || screen.external).map((screen) => screen.id)));
+                setPicking(true);
+              }}
+              disabled={busy}
+            >
+              I’ll choose what to remove
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="ins-chip-btn ins-chip-btn--danger"
+              onClick={() => void resume({ mode: 'manual', drop: [...picked] })}
+              disabled={busy || picked.size === 0}
+            >
+              <TrashIcon size={13} /> Remove {picked.size || ''} and continue
+            </button>
+            <button type="button" className="ins-chip-btn ins-chip-btn--quiet" onClick={() => void resume({ mode: 'manual', drop: [] })} disabled={busy}>
+              Keep all, continue
+            </button>
+            <button
+              type="button"
+              className="ins-chip-btn"
+              onClick={() => {
+                setPicking(false);
+                setPicked(new Set());
+              }}
+              disabled={busy}
+            >
+              Back
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function JobThread({ job, now }: { job: IngestJob; now: number }) {
   const started = Date.parse(job.startedAt);
   const ended = job.finishedAt ? Date.parse(job.finishedAt) : now;
@@ -1171,6 +1354,8 @@ export function JobThread({ job, now }: { job: IngestJob; now: number }) {
             )}
           </>
         )}
+
+        {job.status === 'awaiting-review' && <ReviewGrid job={job} />}
 
         {job.status === 'done' && !job.result && (
           <p className="ins-chat-line">

@@ -63,13 +63,36 @@ export type IngestResult = {
   screens: IngestScreen[];
 };
 
+/**
+ * One screen as it exists the moment a recording finishes being read — found
+ * and held still long enough to count, but not yet looked at by anything
+ * that reads words or pictures. What the review step shows the admin before
+ * any of that runs.
+ */
+export type CapturedScreen = {
+  id: string;
+  frame: number;
+  start: number;
+  holdSeconds: number;
+  brief: boolean;
+  kind: string;
+  /** A free on-device text check, run before anything else: a Google/Apple/Facebook sign-in page, which is always left unpublished. */
+  external: boolean;
+};
+
 export type IngestEvent =
-  | { type: 'progress'; stage: string; message: string; done?: number; total?: number; frames?: number; screens?: number; result?: Partial<IngestResult> }
+  | { type: 'progress'; stage: string; message: string; done?: number; total?: number; frames?: number; screens?: number; result?: Partial<IngestResult>; capturedScreens?: CapturedScreen[]; stagingDir?: string }
   | { type: 'log'; line: string }
   | { type: 'result'; data: IngestResult }
   | { type: 'error'; message: string };
 
-export type IngestJobStatus = 'uploading' | 'running' | 'done' | 'failed';
+/**
+ * `awaiting-review` sits between a recording being read and anything in it
+ * being classified or published: the screens are found, and the run is
+ * paused until the admin says whether to clean them up automatically or
+ * pick through them — see `tools/ios-crawler`'s `ingest --review`.
+ */
+export type IngestJobStatus = 'uploading' | 'running' | 'awaiting-review' | 'done' | 'failed';
 
 export type IngestJob = {
   id: string;
@@ -95,10 +118,15 @@ export type IngestJob = {
   log: string[];
   /** The screens once published, before the AI has written their content. */
   interim: Partial<IngestResult> | null;
+  /** Every screen found, while the job is `awaiting-review` and waiting on a decision. */
+  capturedScreens: CapturedScreen[] | null;
   result: IngestResult | null;
   error: string | null;
   dismissed: boolean;
 };
+
+/** What the admin chose, once they have seen the captured screens. */
+export type ReviewDecision = { mode: 'automatic' } | { mode: 'manual'; drop: string[] };
 
 export type AiProvider = { id: string; name: string; url: string; needsKey: boolean; hint: string; model?: string };
 
@@ -139,6 +167,7 @@ export const INGEST_STAGES: { id: string; label: string }[] = [
   { id: 'upload', label: 'Uploading' },
   { id: 'extract', label: 'Reading frames' },
   { id: 'segment', label: 'Finding screens' },
+  { id: 'review', label: 'Waiting for your choice' },
   { id: 'classify', label: 'Naming and typing' },
   { id: 'identify', label: 'Identifying the app' },
   { id: 'flows', label: 'Grouping journeys' },
@@ -303,6 +332,7 @@ export function startIngest(video: File, startedBy: string, options: StartIngest
     analyzer: null,
     log: [],
     interim: null,
+    capturedScreens: null,
     result: null,
     error: null,
     dismissed: false,
@@ -392,6 +422,30 @@ export async function dismissIngestJob(id: string): Promise<void> {
   // Gone from the screen at once; the server catches up.
   emit({ ...snapshot, jobs: snapshot.jobs.filter((job) => job.id !== id) });
   await fetch(`/api/crawler/jobs/${encodeURIComponent(id)}`, { method: 'DELETE', headers: await authHeaders() }).catch(() => undefined);
+}
+
+/**
+ * The admin's answer to a run waiting at `awaiting-review`: "automatic"
+ * (clean up with the usual rules, nothing hand-picked) or "manual" (drop
+ * exactly these screens). Finishes the run; its progress keeps arriving on
+ * the same job id, the same way as before the pause.
+ */
+export async function resumeIngest(id: string, decision: ReviewDecision): Promise<void> {
+  const res = await fetch(`/api/crawler/jobs/${encodeURIComponent(id)}/resume`, {
+    method: 'POST',
+    headers: await authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(decision),
+  });
+  const payload = (await res.json().catch(() => ({}))) as { job?: IngestJob; message?: string };
+  if (!res.ok || !payload.job) throw new Error(payload.message || `Could not continue that run (${res.status}).`);
+  upsert(payload.job);
+}
+
+/** A captured screen's full-size image, while its job is still waiting for a decision — fetched with the admin's own credentials, since it is not public. */
+export async function reviewFrameBlob(jobId: string, frame: number): Promise<Blob> {
+  const res = await fetch(`/api/crawler/jobs/${encodeURIComponent(jobId)}/frame/${frame}`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`Could not load that screen (${res.status}).`);
+  return res.blob();
 }
 
 // ─── Where the dock shows ───────────────────────────────────────────────────

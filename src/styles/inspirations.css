@@ -7587,6 +7587,24 @@ select.ins-input {
   transition: border-color var(--ins-fast) var(--ins-ease), transform var(--ins-fast) var(--ins-ease);
 }
 
+/* A screen still being fetched — on a big batch, most of the grid, briefly —
+   reads as broken next to one that truly has nothing; this is what tells
+   them apart while the rest of the row catches up. */
+.ins-chat-screen-none.is-loading {
+  background: linear-gradient(100deg, var(--ins-card) 35%, var(--ins-hover) 50%, var(--ins-card) 65%);
+  background-size: 200% 100%;
+  animation: insReviewShimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes insReviewShimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
 .ins-chat-screen:not(:disabled):hover img {
   transform: translateY(-1px);
 }

@@ -6,6 +6,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fail, verifyAdmin } from '@/lib/server/adminAuth';
 import { activeJob, startJob } from '@/lib/server/ingestJobs';
+import type { ResumeConfig } from '@/lib/server/ingestJobs';
 
 /**
  * POST /api/crawler/ingest — a screen recording in, a run started.
@@ -38,14 +39,21 @@ export async function POST(request: Request) {
   if (!admin) return fail('This account may not administer the library.', 403);
 
   const running = activeJob();
-  if (running) return fail(`A run is already in progress (${running.title}). Wait for it to finish before starting another.`, 409);
+  if (running) {
+    return fail(
+      running.status === 'awaiting-review'
+        ? `“${running.title}” is waiting for a decision — automatic or manual — before another upload can start.`
+        : `A run is already in progress (${running.title}). Wait for it to finish before starting another.`,
+      409,
+    );
+  }
 
   const params = new URL(request.url).searchParams;
   const extension = (params.get('ext')?.trim().toLowerCase() || 'mov').replace(/^\./, '');
-  // Ten frames a second by default: a screen swiped past in a third of a
-  // second still leaves three identical frames, where a transition leaves
-  // three different ones (see tools/ios-crawler/src/ingest.js).
-  const fps = Number(params.get('fps') ?? 10);
+  // One frame every 0.3 seconds by default (about 3.33 a second) — the
+  // admin's own choice, trading some fast-screen coverage for a shorter
+  // run; see the note on DEFAULT_FPS in tools/ios-crawler/src/ingest.js.
+  const fps = Number(params.get('fps') ?? 10 / 3);
   const minHold = Number(params.get('minHold') ?? 0.5);
   const keepBrief = params.get('brief') !== '0';
   const keepLoading = params.get('loading') === '1';
@@ -95,6 +103,10 @@ export async function POST(request: Request) {
 
   // No --app: the app is identified from the screens, so an upload needs no
   // form first. The signed-in admin's address is recorded as who captured it.
+  // --review: every upload pauses once its screens are found, before any of
+  // them is sent to the analyzer, so the admin sees what was captured and
+  // chooses "automatic" or "manual" before anything is classified or
+  // published. resumeJob finishes it with exactly these same choices.
   const args = [
     'ingest',
     '--from', videoPath,
@@ -108,7 +120,16 @@ export async function POST(request: Request) {
     ...(appId ? ['--app-id', appId] : []),
     ...(keepBrief ? [] : ['--no-brief']),
     ...(keepLoading ? ['--keep-loading'] : []),
+    '--review',
   ];
+  const resumeConfig: ResumeConfig = {
+    appId,
+    authorizedBy: admin.email,
+    platform,
+    version,
+    keepLoading,
+    dryRun: false,
+  };
 
   const job = startJob({
     title: originalName || `${sourceName}.${extension}`,
@@ -116,6 +137,7 @@ export async function POST(request: Request) {
     startedBy: admin.email,
     workDir,
     args,
+    resumeConfig,
   });
 
   return Response.json({ success: true, jobId: job.id, job }, { headers: { 'Cache-Control': 'no-store' } });

@@ -53,13 +53,18 @@ const WATCHABLE = ['.mov', '.mp4', '.m4v', '.avi', '.mkv'];
 const CANONICAL = '.png';
 
 /**
- * Frames pulled per second of recording. Ten: a screen swiped past in a
- * third of a second leaves three identical frames, where a push or a fade
- * of the same length leaves three different ones, and that is what tells
- * them apart. Five lost those screens; reading faster costs only thumbnail
- * time, since full frames are read for the chosen screens alone.
+ * Frames pulled per second of recording. Expressed here as an interval —
+ * one frame every 0.3 seconds — because that is the number the admin
+ * chose, with the tradeoff spelled out first: at 10 frames a second (one
+ * every 0.1s) a screen swiped past in a third of a second still left three
+ * identical frames to tell it apart from a transition; at one every 0.3s
+ * it leaves at most one, so a screen held for less than that is no longer
+ * distinguishable from a push or a fade and can be missed. Chosen anyway,
+ * for the shorter run and smaller upload it buys. Raise the rate again
+ * (lower the interval) if fast screens start going missing.
  */
-const DEFAULT_FPS = 10;
+const SAMPLE_INTERVAL_SECONDS = 0.3;
+const DEFAULT_FPS = 1 / SAMPLE_INTERVAL_SECONDS;
 
 /** Above this many extracted frames, stop and tell the user to trim or slow the rate. */
 const MAX_FRAMES = 6000;
@@ -272,15 +277,15 @@ export async function ingestFolder(options) {
   const graph = new ScreenGraph();
   const duplicates = [];
   const excluded = [];
-  let identified = null;
   let captureInfo = null;
   let timeline = null;
-  /** What the researcher pass changed, when it ran. */
-  let researched = null;
-  /** The tree to hand the researcher once the screens are in the store. */
-  let pendingResearch = null;
   /** Every screen the recording showed, in order, revisits included. */
   let visits = null;
+  // Set when the run stops after capture to let the admin choose what to
+  // keep. The staging dir — its extracted frames, its manifest — has to
+  // survive that pause, so the usual cleanup below is skipped for it; the
+  // resumed run (resumeIngest, below) removes it when it is actually done.
+  let pausedForReview = false;
 
   try {
     // One --from for both sources: a folder of screenshots, or a recording.
@@ -325,6 +330,55 @@ export async function ingestFolder(options) {
         throw new Error('no frame held still long enough to be a screen — try a slower walk through the app');
       }
 
+      if (options.reviewOnly) {
+        // Nothing has been classified yet — on purpose. Classification (and
+        // the AI calls it can make) is the slow part of a run, and the admin
+        // judges "unwanted" by looking at the picture, not by a type label;
+        // asking them before spending that time also means a screen they
+        // drop is never sent to the analyzer at all.
+        //
+        // One exception, and it is cheap rather than slow: on-device text
+        // recognition (no model, no network — the same reader the real
+        // classify pass uses) checks each screen for a third-party sign-in
+        // page, the other thing that is always filed away unpublished. The
+        // review grid can then tick it for the admin before they even look,
+        // the same as it already does for a screen the segmenter itself
+        // called a loading state.
+        const capturedScreens = [];
+        for (const screen of distinct) {
+          const framePath = frames[screen.frame];
+          let external = false;
+          if (framePath) {
+            try {
+              const lines = await readText(framePath);
+              external = Boolean(isExternalAuthScreen(lines.map((line) => line.text).join('\n')));
+            } catch {
+              // No hint, no harm — the real classify pass after resume still
+              // runs its own check regardless of this one.
+            }
+          }
+          capturedScreens.push({
+            id: screen.id,
+            frame: screen.frame,
+            start: screen.start,
+            holdSeconds: screen.holdSeconds,
+            brief: Boolean(screen.brief),
+            kind: screen.kind,
+            external,
+          });
+        }
+        writeFileSync(
+          join(staging, 'review.json'),
+          JSON.stringify({ source: basename(source), captureInfo, timeline }),
+        );
+        report(options, 'captured', `${distinct.length} screen${distinct.length === 1 ? '' : 's'} captured — choose how to clean them up`, {
+          stagingDir: staging,
+          capturedScreens,
+        });
+        pausedForReview = true;
+        return { pausedForReview: true, stagingDir: staging, screens: distinct.length };
+      }
+
       visits = await ingestTimeline({ timeline, frames, analyzer, graph, duplicates, excluded, options, captureInfo });
     } else {
       const files = listImages(source);
@@ -341,6 +395,30 @@ export async function ingestFolder(options) {
     }
 
     if (!graph.size) throw new Error('every file was a duplicate — nothing to publish');
+    return await finishIngest({ app, source, graph, visits, analyzer, duplicates, excluded, options, captureInfo, timeline });
+  } finally {
+    // The staged PNGs have been copied into the store by now — except when
+    // paused for review, where they are still waiting to be. resumeIngest
+    // removes the staging dir once that run actually finishes.
+    if (!pausedForReview) rmSync(staging, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Everything after the screens are chosen: naming the app, grouping the
+ * walk into journeys, publishing, and the researcher's slower pass over
+ * what got published. Shared by a run that goes straight through and one
+ * resumed after the admin reviewed what was captured — by the time either
+ * reaches here, `graph` holds exactly the screens going in, and nothing
+ * about how they got there matters any more.
+ */
+async function finishIngest({ app, source, graph, visits, analyzer, duplicates, excluded, options, captureInfo, timeline }) {
+    if (!graph.size) throw new Error('every file was a duplicate — nothing to publish');
+    let identified = null;
+    /** What the researcher pass changed, when it ran. */
+    let researched = null;
+    /** The tree to hand the researcher once the screens are in the store. */
+    let pendingResearch = null;
 
     // Identification runs after the screens are chosen, so the model sees real
     // screens rather than whatever happened to be the first frame.
@@ -553,8 +631,78 @@ export async function ingestFolder(options) {
       // types and flow names from rules only.
       backend: analyzer.usable ? pickBackend(options.backend) : 'none',
     };
+}
+
+
+/**
+ * Resumes a run that paused after capture to let the admin choose what to
+ * keep — the other half of `ingestFolder`'s video path, picked up from the
+ * staging dir a review-paused run left behind.
+ *
+ * Nothing has been classified yet at this point, which is the reason to
+ * pause here rather than later: a screen the admin drops in `drop` is never
+ * sent to the analyzer at all, and "automatic" (`drop` empty) costs nothing
+ * extra over a run that was never paused — it is classified exactly as
+ * before, and the already-tested loading/third-party-sign-in rules in
+ * `ingestTimeline` are what remove the rest.
+ *
+ * @param {{stagingDir: string, drop?: string[], app?: object, dataDir?: string,
+ *          backend?: string, platform?: string, version?: string, dryRun?: boolean,
+ *          keepLoading?: boolean, vision?: boolean, analyzerLabel?: string,
+ *          journeyModel?: string, authorization?: object, onProgress?: Function}} options
+ */
+export async function resumeIngest(options) {
+  const staging = options.stagingDir;
+  const manifestPath = join(staging, 'review.json');
+  if (!existsSync(manifestPath)) {
+    throw new Error('this run is no longer waiting for a decision — it may already have been resumed, or too much time passed and its captured screens were cleaned up');
+  }
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+  const { captureInfo, timeline: capturedTimeline } = manifest;
+  const source = manifest.source;
+  const dropIds = new Set(options.drop ?? []);
+
+  const analyzer = new Analyzer(options.backend);
+  const graph = new ScreenGraph();
+  const duplicates = [];
+  const excluded = [];
+
+  // The full-size frames already sit on disk from the capture phase — read
+  // back by the same naming extractFramesAt wrote them under.
+  const framesDir = join(staging, 'frames');
+  const frames = [];
+  if (existsSync(framesDir)) {
+    for (const file of readdirSync(framesDir)) {
+      const match = file.match(/^frame-(\d+)\.png$/);
+      if (match) frames[Number(match[1]) - 1] = join(framesDir, file);
+    }
+  }
+
+  let timeline = capturedTimeline;
+  if (dropIds.size) {
+    // A screen dropped here is gone for good, not folded into a neighbour —
+    // so is any screen that only existed as a later return to it, and any
+    // edge either side of it; the admin asked for it removed, not merged.
+    const cascaded = new Set(dropIds);
+    for (const screen of timeline.screens) {
+      if (screen.revisitOf && cascaded.has(screen.revisitOf)) cascaded.add(screen.id);
+    }
+    timeline = {
+      ...timeline,
+      screens: timeline.screens.filter((screen) => !cascaded.has(screen.id)),
+      edges: timeline.edges.filter((edge) => !cascaded.has(edge.from) && !cascaded.has(edge.to)),
+    };
+  }
+
+  const distinct = timeline.screens.filter((screen) => !screen.revisitOf);
+  if (!distinct.length) throw new Error('every captured screen was removed — nothing left to publish');
+  report(options, 'segment', `${distinct.length} screen${distinct.length === 1 ? '' : 's'} going forward`, { screens: distinct.length });
+
+  try {
+    const visits = await ingestTimeline({ timeline, frames, analyzer, graph, duplicates, excluded, options, captureInfo });
+    if (!graph.size) throw new Error('every remaining screen was a duplicate — nothing to publish');
+    return await finishIngest({ app: options.app, source, graph, visits, analyzer, duplicates, excluded, options, captureInfo, timeline });
   } finally {
-    // The staged PNGs have been copied into the store by now.
     rmSync(staging, { recursive: true, force: true });
   }
 }
