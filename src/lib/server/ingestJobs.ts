@@ -125,9 +125,36 @@ export function stopJob(id: string): boolean {
   const job = store.jobs.get(id);
   const child = children.get(id);
   if (!job || job.status !== 'running') return false;
-  job.error = 'Stopped by the admin.';
-  job.message = 'Stopped by the admin.';
-  job.status = 'failed';
+  // Stopped after the screens were published — during the naming pass —
+  // the run did its work; only the names it would have improved are missing.
+  const published = job.interim;
+  if (published) {
+    const screens = published.ingested ?? published.screens?.length ?? 0;
+    job.result = {
+      ingested: screens,
+      duplicates: published.duplicates ?? 0,
+      status: 'stopped-after-publish',
+      classified: published.classified ?? false,
+      backend: published.backend ?? 'unknown',
+      grouped: published.grouped ?? false,
+      app: published.app ?? { id: '', name: job.title, industry: '' },
+      identified: published.identified ?? null,
+      excluded: published.excluded ?? [],
+      skipped: published.skipped ?? [],
+      capture: published.capture ?? null,
+      timeline: published.timeline ?? null,
+      researched: null,
+      flows: published.flows ?? [],
+      screens: published.screens ?? [],
+    };
+    job.status = 'done';
+    job.stage = 'done';
+    job.message = `${job.result.app.name} — ${screens} screens published; stopped before the AI finished naming them`;
+  } else {
+    job.error = 'Stopped by the admin.';
+    job.message = 'Stopped by the admin.';
+    job.status = 'failed';
+  }
   job.finishedAt = new Date().toISOString();
   persist();
   if (child) child.kill('SIGTERM');
@@ -172,7 +199,7 @@ export function startJob(input: StartJobInput): IngestJob {
 
   runCrawler(input.args, (event) => apply(job, event), input.mode ?? 'ingest', (child) => children.set(id, child))
     .then((outcome) => {
-      if (job.status === 'failed') return; // stopped by the admin meanwhile
+      if (job.status !== 'running') return; // stopped by the admin meanwhile
       if (outcome.ok) {
         job.result = outcome.data;
         job.status = 'done';

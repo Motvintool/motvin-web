@@ -246,6 +246,25 @@ export function fingerprintFromThumb(rgb, width = THUMB.width, height = THUMB.he
   };
 }
 
+/**
+ * Share of the frame with nothing drawn on it: pixels whose neighbours to
+ * the right and below are within a few levels of them. A blank, a spinner
+ * on white, or a skeleton is mostly flat; a page with text and images is
+ * not, however light it is.
+ */
+export function flatShare(gray, width, height, tolerance = 4) {
+  let flat = 0;
+  let count = 0;
+  for (let y = 0; y < height - 1; y++) {
+    for (let x = 0; x < width - 1; x++) {
+      const i = y * width + x;
+      count++;
+      if (Math.abs(gray[i] - gray[i + 1]) <= tolerance && Math.abs(gray[i] - gray[i + width]) <= tolerance) flat++;
+    }
+  }
+  return count ? flat / count : 1;
+}
+
 const POPCOUNT = Array.from({ length: 16 }, (_, n) => (n.toString(2).match(/1/g) || []).length);
 
 /** Number of differing bits between two hex hashes of equal length. */

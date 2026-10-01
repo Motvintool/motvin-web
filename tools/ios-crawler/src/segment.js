@@ -43,7 +43,9 @@ import {
   changedBox,
   changedFraction,
   dominantColors,
+  edgeEnergy,
   fingerprintFromThumb,
+  flatShare,
   hamming,
   meanAbsDiff,
   THUMB,
@@ -60,9 +62,12 @@ const SOFT_MAD = 12;
 const SETTLED_MAD = 8;
 const SETTLED_CHANGED = 0.1;
 
-/** Two adjacent holds this close are one screen that was still drawing. */
+/** Two adjacent holds this close are one screen that was still drawing… */
 const MERGE_MAD = 14;
 const MERGE_CHANGED = 0.15;
+/** …unless the first had already been still this long and this much of it then changed: a new state of the page. */
+const SETTLED_SECONDS = 1.5;
+const STATE_CHANGED = 0.08;
 
 /** A vertical shift that removes this share of the difference is a scroll. */
 const SCROLL_RESIDUAL_RATIO = 0.45;
@@ -70,6 +75,48 @@ const SCROLL_RESIDUAL_MAX = 10;
 
 /** How long a screen has to hold to be believed without further evidence. */
 const DEFAULT_MIN_HOLD_SECONDS = 0.5;
+
+/**
+ * A hold of a single frame is never a screen. At the rates recordings are
+ * read (2–10 a second) one frame is at most half a second, and a push, a
+ * fade or a sheet sliding up takes about a third of a second — so a lone
+ * frame between two settled screens is, in practice, always a picture of
+ * the transition: half of one screen and half of the next. A screen someone
+ * actually looked at holds still for a good part of a tenth of a second, so
+ * at a faster read it leaves several identical frames where a transition
+ * leaves several different ones — which is what lets a screen swiped past
+ * in a third of a second be kept when the recording is read at ten or
+ * fifteen frames a second. The first hold — the launch state — is the one
+ * exception, since a recording can start on it.
+ */
+const MIN_BRIEF_SECONDS = 0.15;
+/** …as frames at the rate the recording was read, never fewer than two. */
+const briefFramesAt = (fps) => Math.max(2, Math.ceil(MIN_BRIEF_SECONDS * fps));
+
+/**
+ * A lone frame right after a settled screen, with the same header and
+ * footer and more drawn on it, is that screen finishing its drawing — the
+ * images landing on a feed a beat before the tap — and becomes its
+ * picture instead of being thrown away.
+ */
+const ABSORB_MAD = 24;
+const ABSORB_EDGE_GAIN = 1.05;
+
+/**
+ * A skeleton page: light grey placeholder blocks on a lighter background,
+ * nothing dark drawn (no text, no button), almost no structure. Read from
+ * the frame alone, so it is caught even when the page it was loading into
+ * never appears in the recording.
+ */
+const SKELETON_LIGHT_SHARE = 0.9;
+const SKELETON_DARK_SHARE = 0.02;
+const SKELETON_MAX_EDGE = 6;
+/** A skeleton is gone in a moment; a pale page someone read for longer is a page. */
+const SKELETON_MAX_SECONDS = 2;
+
+/** A brief hold is the next screen still moving when its header matches and this little of the frame differs. */
+const STILL_MOVING_HEADER_MAD = 2;
+const STILL_MOVING_CHANGED = 0.35;
 
 /** A brief hold must differ from both neighbours by at least this much. */
 const BRIEF_DISTINCT_MAD = 12;
@@ -93,6 +140,8 @@ const OVERLAY_STRUCTURE = 0.5;
 /** Overlay geometry, as fractions of the screen. */
 const TOAST_MAX_HEIGHT = 0.14;
 const SHEET_MAX_HEIGHT = 0.8;
+/** An undimmed bottom sheet's box must reach at least this close to the bottom edge. */
+const SHEET_BOTTOM_MARGIN = 0.82;
 const OVERLAY_UNCHANGED_FRACTION = 0.6;
 
 /** Loading state: same chrome, content this much emptier, gone this quickly. */
@@ -101,6 +150,14 @@ const LOADING_MAX_SECONDS = 4;
 const LOADING_CONTENT_MAD = 15;
 /** A loading screen is sparse in absolute terms too; a dense page is never one. */
 const LOADING_MAX_EDGE = 10;
+/** Below this structure a frame is a loading state on its own evidence… */
+const LOADING_SURE_EDGE = 6;
+/** …above it, only when this much of it is flat, on a pale or a dark ground. */
+const LOADING_FLAT_SHARE = 0.45;
+/** This flat, a frame needs no shared chrome to be loading into what follows… */
+const LOADING_BARE_FLAT = 0.55;
+/** …as long as it was gone this quickly; a sparse panel someone read is a design. */
+const LOADING_BARE_MAX_SECONDS = 1.5;
 const CHROME_MAD = 8;
 /** Loading allows a little more chrome movement: a tab indicator sliding over. */
 const LOADING_CHROME_MAD = 14;
@@ -110,6 +167,12 @@ const REVISIT_MAD = 6;
 const REVISIT_BITS = 8;
 const REVISIT_LOOSE_MAD = 10;
 const REVISIT_LOOSE_SAME = 0.8;
+const REVISIT_LOOSE_BITS = 16;
+/** Of the ink in either frame, the share that has to agree for a revisit… */
+const REVISIT_INK_SAME = 0.7;
+/** …and, unless this much agrees, how little of the whole frame may have changed (at a 10-level tolerance). */
+const REVISIT_INK_SURE = 0.85;
+const REVISIT_MAX_CHANGED = 0.15;
 
 /** Bands of the screen, as fractions of its height. */
 const HEADER_BAND = 0.12;
@@ -127,8 +190,10 @@ const FOOTER_BAND = 0.12;
  * @property {{kind: 'dialog'|'bottom_sheet'|'toast', dimmed: boolean, box: object}|null} overlay
  * @property {string|null} overlayOf   id of the screen underneath
  * @property {string|null} loadingOf   id of the screen this was loading into
+ * @property {'chrome'|'skeleton'|'bare'|'chain'|undefined} loadingEvidence  why it was taken for a loading state; 'bare' and 'chain' are the weaker grounds
  * @property {string|null} scrolledFrom id of the screen this is a scrolled view of
  * @property {string|null} revisitOf   id of the earlier screen this repeats
+ * @property {string|undefined} variantOf  id of the screen right before, when this is the same page in a new state
  * @property {number} visits
  * @property {boolean} flat
  * @property {{dhash: string, ahash: string, luminance: number, edge: number}} print
@@ -137,7 +202,7 @@ const FOOTER_BAND = 0.12;
 
 /**
  * @param {Buffer[]} thumbs raw RGB thumbnails, one per frame, in order
- * @param {{fps: number, width?: number, height?: number, minHoldSeconds?: number, keepBrief?: boolean}} options
+ * @param {{fps: number, width?: number, height?: number, minHoldSeconds?: number, keepBrief?: boolean, trace?: boolean}} options
  */
 export function segmentRecording(thumbs, options) {
   const fps = options.fps;
@@ -145,6 +210,7 @@ export function segmentRecording(thumbs, options) {
   const height = options.height ?? THUMB.height;
   const minHold = options.minHoldSeconds ?? DEFAULT_MIN_HOLD_SECONDS;
   const keepBrief = options.keepBrief !== false;
+  const briefFrames = briefFramesAt(fps);
   if (!fps || fps <= 0) throw new Error('segmentRecording needs the frame rate the thumbnails were sampled at');
 
   const n = thumbs.length;
@@ -197,6 +263,7 @@ export function segmentRecording(thumbs, options) {
   }
   holds.push({ start, end: n - 1 });
 
+  const merges = [];
   // Merge holds that were only settling into each other. A step that is a
   // compact change near an edge of the screen is left alone: that is how a
   // toast or a banner looks, and merging it would lose it.
@@ -218,13 +285,22 @@ export function segmentRecording(thumbs, options) {
         const inChrome = box && (box.y >= 0.86 || box.y + box.h <= 0.13);
         const compact =
           box && !inChrome && box.h <= TOAST_MAX_HEIGHT * 1.5 && (box.y < 0.25 || box.y + box.h > 0.75);
+        // A page settles in its first second or so. A change of any size
+        // after it has been still longer than that is something the person
+        // did — a section opened, a tab within the page, an option chosen —
+        // and the screen in its new state is its own screen. Small changes
+        // (a toggle, a radio, typed text) still fold in; so does chrome.
+        const previousSeconds = (previous.end - previous.start + 1) / fps;
+        const stateChange = previousSeconds >= SETTLED_SECONDS && step.changed >= STATE_CHANGED && !inChrome;
         if (
           step.label !== 'scroll' &&
           step.mad <= MERGE_MAD &&
           step.changed <= MERGE_CHANGED &&
           !compact &&
+          !stateChange &&
           scrim(a, b, width).fraction < OVERLAY_DIM_FRACTION
         ) {
+          if (options.trace) merges.push({ at: hold.start, previousFrames: previous.end - previous.start + 1, frames: hold.end - hold.start + 1, mad: Math.round(step.mad * 10) / 10, changed: Math.round(step.changed * 100) / 100, box: box ? { y: Math.round(box.y * 100) / 100, h: Math.round(box.h * 100) / 100, w: Math.round(box.w * 100) / 100 } : null });
           previous.end = hold.end;
           dropped.merged++;
           mergedSomething = true;
@@ -239,7 +315,7 @@ export function segmentRecording(thumbs, options) {
   for (const hold of holds) {
     hold.frames = hold.end - hold.start + 1;
     hold.seconds = hold.frames / fps;
-    hold.rep = representative(hold, steps, prints);
+    hold.rep = representative(hold, steps, prints, fps);
     hold.print = prints[hold.rep];
   }
 
@@ -279,6 +355,71 @@ export function segmentRecording(thumbs, options) {
       dropped.transitions++;
       continue;
     }
+    if (hold.frames < briefFrames) {
+      // One frame. Either the screen before it, drawn more fully — then it
+      // is the better picture of that screen; or something drawn over that
+      // screen, which it leaves standing — a toast, a card on a scrim — and
+      // then it is an overlay however short; or a transition.
+      const before = nearestKept(holds, h, -1);
+      const following = holds[h + 1] ?? null;
+      // …and the screen it was drawn over is what is on screen again right
+      // after it. A dialog that is there for one frame and then, fuller, for
+      // two seconds is a dialog fading in, and that first frame is not it.
+      const overPrevious =
+        before &&
+        following &&
+        following.seconds >= minHold &&
+        sameScreen(before.print, following.print, width, height) &&
+        relate(before, hold, steps, width, height).overlay &&
+        meanAbsDiff(hold.print.gray, following.print.gray, width, height) >= BRIEF_DISTINCT_MAD;
+      if (overPrevious) {
+        hold.keep = true;
+        hold.brief = true;
+        continue;
+      }
+      if (before && !before.brief && absorbs(before, hold, steps, width, height)) {
+        before.rep = hold.rep;
+        before.print = hold.print;
+        before.end = hold.end;
+        before.frames = before.end - before.start + 1;
+        before.seconds = before.frames / fps;
+        hold.keep = false;
+        hold.why = 'absorbed';
+        dropped.merged++;
+        continue;
+      }
+      hold.keep = false;
+      hold.why = 'transition';
+      dropped.transitions++;
+      continue;
+    }
+    // A brief hold that is the next screen already on its way — the same
+    // header, most of the frame the same, nothing dimmed — is that screen
+    // still moving: a video playing in it, a carousel advancing, a pause
+    // mid-scroll before it settles. It is folded into that screen rather
+    // than kept as a second, third and fourth picture of it. A toast or a
+    // card over the screen before it is drawn over that screen, and stays.
+    {
+      const following = holds[h + 1] ?? null;
+      const before = nearestKept(holds, h, -1);
+      const overBefore = before && relate(before, hold, steps, width, height).overlay;
+      if (
+        following &&
+        !overBefore &&
+        meanAbsDiff(print.gray, following.print.gray, width, height, 0, Math.floor(height * HEADER_BAND)) <= STILL_MOVING_HEADER_MAD &&
+        changedFraction(print.gray, following.print.gray) <= STILL_MOVING_CHANGED &&
+        scrim(following.print.gray, print.gray, width).fraction < OVERLAY_DIM_FRACTION &&
+        scrim(print.gray, following.print.gray, width).fraction < OVERLAY_DIM_FRACTION
+      ) {
+        following.start = hold.start;
+        following.frames = following.end - following.start + 1;
+        following.seconds = following.frames / fps;
+        hold.keep = false;
+        hold.why = 'still moving';
+        dropped.merged++;
+        continue;
+      }
+    }
     // A brief hold is only believable when it sits directly between two
     // settled screens. A frame in the middle of a run of changing frames is a
     // transition, however different it looks from what came before and after
@@ -288,8 +429,12 @@ export function segmentRecording(thumbs, options) {
     const following = holds[h + 1] ?? null;
     // …and a brief hold at the very end of a recording has nothing after it
     // to prove it was a screen rather than the cut where recording stopped.
+    // "Settled" here means still for long enough to be a screen itself, not
+    // necessarily long enough to be believed on duration alone: a run of
+    // onboarding pages swiped through in half a second each is a run of
+    // brief screens, each bracketed by motion, and each is kept.
     const settledNeighbours =
-      (!previous || previous.seconds >= minHold || previous.keep) && Boolean(following) && following.seconds >= minHold;
+      (!previous || previous.frames >= briefFrames || previous.keep) && Boolean(following) && following.frames >= briefFrames;
     const toPrevious = previous ? meanAbsDiff(previous.print.gray, print.gray, width, height) : Infinity;
     const toNext = following ? meanAbsDiff(print.gray, following.print.gray, width, height) : Infinity;
     const across = previous && following ? meanAbsDiff(previous.print.gray, following.print.gray, width, height) : 0;
@@ -343,6 +488,7 @@ export function segmentRecording(thumbs, options) {
       loadingOf: null,
       scrolledFrom: null,
       revisitOf: null,
+      variantOf: undefined,
       visits: 1,
       flat: hold.flat,
       print: {
@@ -350,6 +496,7 @@ export function segmentRecording(thumbs, options) {
         ahash: hold.print.ahash,
         luminance: Math.round(hold.print.luminance),
         edge: Math.round(hold.print.edge * 10) / 10,
+        flat: Math.round(flatShare(hold.print.gray, width, height) * 100) / 100,
       },
       colors: dominantColors(thumbs[hold.rep], width, height),
       hold,
@@ -367,6 +514,7 @@ export function segmentRecording(thumbs, options) {
       } else if (relation.previousWasLoading && !previous.revisitOf && !previous.overlayOf) {
         previous.kind = 'loading';
         previous.loadingOf = screen.id;
+        previous.loadingEvidence = relation.loadingEvidence;
       } else if (previous.overlayOf) {
         // Dismissing an overlay lands back on the screen beneath it. If that
         // screen was still loading when the overlay came up, what we see now
@@ -377,6 +525,7 @@ export function segmentRecording(thumbs, options) {
           if (under.previousWasLoading) {
             beneath.kind = 'loading';
             beneath.loadingOf = screen.id;
+            beneath.loadingEvidence = under.loadingEvidence;
           }
         }
       }
@@ -385,16 +534,27 @@ export function segmentRecording(thumbs, options) {
     // Seen before? Compare against every earlier distinct screen, nearest
     // first, so a return to the home tab is recorded as a return rather than
     // as a new screen.
+    // …except the screen right before this one when nothing was navigated
+    // in between: the same page in a new state — a section opened, a tab
+    // within the page — is a screen of its own, not a return to the page.
+    let cutBetween = !previous;
+    if (previous) {
+      for (let frame = previous.hold.end + 1; frame <= hold.start; frame++) if (steps[frame]?.label === 'cut') cutBetween = true;
+    }
     for (let e = screens.length - 1; e >= 0; e--) {
       const earlier = screens[e];
       if (earlier.revisitOf) continue;
+      if (earlier === previous && !cutBetween && screen.kind === 'screen') {
+        if (sameScreen(earlier.hold.print, hold.print, width, height)) screen.variantOf = canonical(earlier);
+        continue;
+      }
       if (sameScreen(earlier.hold.print, hold.print, width, height)) {
         screen.revisitOf = earlier.id;
         earlier.visits++;
         dropped.revisits++;
         // The first sighting may have been a glimpse; a later, longer look at
         // the same screen is the better picture of it.
-        if (earlier.brief && !screen.brief) {
+        if ((earlier.brief && !screen.brief) || screen.holdSeconds >= 2 * earlier.holdSeconds) {
           earlier.frame = screen.frame;
           earlier.brief = false;
           earlier.holdSeconds = screen.holdSeconds;
@@ -407,7 +567,20 @@ export function segmentRecording(thumbs, options) {
       }
     }
 
+    // A skeleton is a loading state whatever came before or after it.
+    if (!screen.revisitOf && !hold.first && screen.kind === 'screen' && hold.seconds <= SKELETON_MAX_SECONDS && skeletonLike(hold.print, width, height)) {
+      screen.kind = 'loading';
+      screen.skeleton = true;
+      screen.loadingEvidence = 'skeleton';
+    }
+
     screens.push(screen);
+  }
+  // A skeleton loads into whatever settled next.
+  for (let i = 0; i < screens.length; i++) {
+    if (!screens[i].skeleton || screens[i].loadingOf) continue;
+    const after = screens.slice(i + 1).find((entry) => entry.kind !== 'loading');
+    screens[i].loadingOf = after ? canonical(after) : null;
   }
 
   // ─── Slide-ins that looked like sheets ───────────────────────────────────
@@ -440,7 +613,10 @@ export function segmentRecording(thumbs, options) {
       if (gone.has(screen.loadingOf)) screen.loadingOf = null;
       if (gone.has(screen.overlayOf)) screen.overlayOf = null;
       if (gone.has(screen.scrolledFrom)) screen.scrolledFrom = null;
-      if (screen.loadingOf === null && screen.kind === 'loading') screen.kind = 'screen';
+      if (screen.loadingOf === null && screen.kind === 'loading' && !screen.skeleton) {
+        screen.kind = 'screen';
+        delete screen.loadingEvidence;
+      }
       if (screen.overlayOf === null && screen.kind === 'overlay') {
         screen.kind = 'screen';
         screen.overlay = null;
@@ -482,8 +658,27 @@ export function segmentRecording(thumbs, options) {
       if (under.previousWasLoading) {
         before.kind = 'loading';
         before.loadingOf = canonical(after);
+        before.loadingEvidence = under.loadingEvidence;
       }
     }
+  }
+
+  // ─── Loading states in a row ─────────────────────────────────────────────
+  // A page arrives in stages — a blank, then a skeleton, then the content.
+  // The skeleton is tied to the content by the relation above; the blank
+  // before it, sparse and short and followed by a loading state, was
+  // loading into the same page.
+  for (let i = screens.length - 2; i >= 0; i--) {
+    const screen = screens[i];
+    const after = screens[i + 1];
+    if (after.kind !== 'loading' || screen.kind !== 'screen' || screen.revisitOf || screen.hold.first) continue;
+    const print = screen.hold.print;
+    const sparse = print.edge <= LOADING_SURE_EDGE || skeletonLike(print, width, height);
+    if (!sparse || screen.hold.seconds > LOADING_MAX_SECONDS) continue;
+    if (!chromeStable(print.gray, after.hold.print.gray, width, height, LOADING_CHROME_MAD) && !(flatShare(print.gray, width, height) >= LOADING_BARE_FLAT && screen.hold.seconds <= LOADING_BARE_MAX_SECONDS)) continue;
+    screen.kind = 'loading';
+    screen.loadingOf = after.loadingOf;
+    screen.loadingEvidence = skeletonLike(print, width, height) ? 'skeleton' : 'chain';
   }
 
   // ─── Edges: the journey, with revisits resolved to the screen they repeat ──
@@ -514,6 +709,11 @@ export function segmentRecording(thumbs, options) {
     });
   }
 
+  // Every hold and what became of it — for the trace tool, so a screen that
+  // went missing can be found in the timeline it was dropped from.
+  const trace = options.trace
+    ? holds.map((hold) => ({ start: hold.start, end: hold.end, frames: hold.frames, seconds: Math.round(hold.seconds * 100) / 100, rep: hold.rep, keep: Boolean(hold.keep), why: hold.why ?? null, brief: Boolean(hold.brief), edge: Math.round(hold.print.edge * 10) / 10, screen: screens.find((screen) => screen.hold === hold)?.id ?? null }))
+    : undefined;
   for (const screen of screens) delete screen.hold;
 
   return {
@@ -523,6 +723,7 @@ export function segmentRecording(thumbs, options) {
     edges,
     dropped,
     steps: steps.map((step, index) => (step ? { frame: index, ...step } : null)).filter(Boolean),
+    ...(trace ? { holds: trace, merges } : {}),
   };
 }
 
@@ -534,47 +735,117 @@ function canonical(screen) {
 }
 
 /**
- * The frame that best represents a hold: the settled frame with the most
- * drawn on it.
+ * The frame that best represents a hold: the last state it settled into.
  *
  * A hold often spans a screen still completing itself — a splash whose logo
  * fades in, a page whose header and tab bar arrive a beat after its list, a
- * feed whose images land one by one. The frame someone would screenshot is the
- * last one of those, not the first. So the candidates are the end of every
- * still run inside the hold plus the hold's last frame, and the one with the
- * most structure wins; later frames win ties. Taking structure rather than
- * simply the last frame keeps a fade-out at the end of a hold from being
- * chosen over the screen before it.
+ * dialog fading in and, after the tap, fading out again. Inside the hold
+ * these are stretches of settled frames (each arriving with little change)
+ * separated by frames caught in motion. The frame someone would screenshot
+ * is the end of the last settled stretch that lasted: the state the screen
+ * reached and stayed in before it left. A stretch of one frame does not
+ * count — that is a fade-out or the first frame of the transition — and if
+ * the stretch's own tail is losing structure (a slow fade), the frame with
+ * the most drawn on it stands in for its end.
  */
-function representative(hold, steps, prints) {
-  // The hold's last frame counts only when it is itself settled: the step
-  // into it was small. A hold merged across settling can end on the first
-  // frame of the transition out, and that frame is mid-motion however much
-  // is drawn on it.
-  const lastStep = steps[hold.end];
-  const candidates = new Set();
-  if (hold.end === hold.start || !lastStep || (lastStep.mad <= SETTLED_MAD && lastStep.changed <= SETTLED_CHANGED)) {
-    candidates.add(hold.end);
-  }
-  let runStart = hold.start;
+function representative(hold, steps, prints, fps) {
+  const lastingFrames = briefFramesAt(fps);
+  // Settled stretches: consecutive frames that each arrived with little change.
+  const stretches = [];
+  let start = hold.start;
   for (let frame = hold.start + 1; frame <= hold.end + 1; frame++) {
-    const still = frame <= hold.end && steps[frame] && steps[frame].label === 'still';
-    if (!still) {
-      if (frame - 1 > runStart) candidates.add(frame - 1);
-      runStart = frame;
+    const step = frame <= hold.end ? steps[frame] : null;
+    const settled = step && step.mad <= SETTLED_MAD && step.changed <= SETTLED_CHANGED;
+    if (!settled) {
+      stretches.push({ start, end: frame - 1, length: frame - start });
+      start = frame;
     }
   }
-  if (!candidates.size) candidates.add(hold.start);
-  let best = hold.end;
-  let bestEdge = -1;
-  for (const frame of [...candidates].sort((a, b) => a - b)) {
-    const edge = prints[frame].edge;
-    if (edge >= bestEdge * 0.98) {
-      bestEdge = Math.max(bestEdge, edge);
-      best = frame;
+  const lasting = stretches.filter((stretch) => stretch.length >= lastingFrames);
+  // When nothing ever settled for long enough to be believed — a custom
+  // cross-fade, a push whose animation ran past the hold, a sheet still
+  // sliding up when the person moved on — there is no genuinely resolved
+  // moment to fall back on, so the hold's own last stretch is taken: by
+  // construction it ends on the hold's final frame, the closest thing to
+  // "arrived" that was actually recorded. The previous rule took the
+  // longest stretch regardless of where it sat, which on a continuous,
+  // never-plateauing change meant the very first sliver of it — the least
+  // finished frame available, not the most.
+  const chosen = lasting.length ? lasting[lasting.length - 1] : stretches[stretches.length - 1];
+  if (!chosen) return hold.start;
+  let best = chosen.end;
+  let most = prints[best].edge;
+  for (let frame = chosen.end - 1; frame >= chosen.start; frame--) {
+    if (prints[frame].edge > most) {
+      most = prints[frame].edge;
+      if (most >= prints[chosen.end].edge * 1.25) best = frame;
     }
+  }
+  // Content that lands late — the images of a feed arriving one by one just
+  // before the tap — makes every frame after the settled stretch a large
+  // change, so none of them counts as settled; yet the hold's last frame is
+  // then the finished page. It is taken when it has clearly more drawn on it
+  // and the chrome has not moved: a dialog fading out lightens the whole
+  // frame, bands included, and a scroll shifts it, and neither qualifies.
+  const last = hold.end;
+  if (last > best && prints[last].edge >= prints[best].edge * 1.25 && steps[last]?.label !== 'scroll') {
+    const a = prints[best].gray;
+    const b = prints[last].gray;
+    const darkened = scrim(a, b, prints[best].width);
+    const lightened = scrim(b, a, prints[best].width);
+    const scrimmed = (side) => side.fraction >= OVERLAY_DIM_FRACTION && side.structure >= OVERLAY_STRUCTURE;
+    if (chromeDiff(a, b, prints[best].width, prints[best].height) <= CHROME_MAD && !scrimmed(darkened) && !scrimmed(lightened)) best = last;
   }
   return best;
+}
+
+/**
+ * Whether a lone frame is the kept hold before it, drawn more fully: same
+ * header and footer, nothing scrolled, more structure, and not far from it.
+ */
+function absorbs(before, hold, steps, width, height) {
+  const a = before.print;
+  const b = hold.print;
+  if (b.edge < a.edge * ABSORB_EDGE_GAIN) return false;
+  if (chromeDiff(a.gray, b.gray, width, height) > CHROME_MAD) return false;
+  const mad = meanAbsDiff(a.gray, b.gray, width, height);
+  if (mad > ABSORB_MAD) return false;
+  const shifted = bestVerticalShift(a.gray, b.gray, width, height);
+  if (shifted.shift !== 0 && shifted.mad < 0.6 * shifted.madAtZero) return false;
+  return scrim(a.gray, b.gray, width).fraction < OVERLAY_DIM_FRACTION;
+}
+
+/**
+ * Whether a frame is a light skeleton page: nearly all of it pale, none of
+ * it dark, and next to no structure. The status bar rows are left out — the
+ * clock is dark on every screen.
+ */
+function skeletonLike(print, width, height) {
+  // The header and footer bands are left out: a skeleton often keeps the
+  // real page's title, back arrow and tab bar around its placeholder blocks
+  // — and those carry most of the structure such a frame has.
+  const fromRow = Math.ceil(height * HEADER_BAND);
+  const toRow = height - Math.ceil(height * FOOTER_BAND);
+  if (edgeEnergy(print.gray, width, height, fromRow, toRow) >= SKELETON_MAX_EDGE) return false;
+  const from = fromRow * width;
+  const to = toRow * width;
+  let light = 0;
+  let dark = 0;
+  let dim = 0;
+  let bright = 0;
+  let count = 0;
+  for (let i = from; i < to; i++) {
+    const value = print.gray[i];
+    count++;
+    if (value >= 196) light++;
+    else if (value < 110) dark++;
+    if (value <= 60) dim++;
+    else if (value >= 170) bright++;
+  }
+  if (!count) return false;
+  // Pale blocks on a paler ground with nothing dark drawn — or, in a dark
+  // theme, dim blocks on a darker ground with nothing bright drawn.
+  return (light / count >= SKELETON_LIGHT_SHARE && dark / count <= SKELETON_DARK_SHARE) || (dim / count >= SKELETON_LIGHT_SHARE && bright / count <= SKELETON_DARK_SHARE);
 }
 
 function nearestKept(holds, index, direction) {
@@ -584,16 +855,62 @@ function nearestKept(holds, index, direction) {
   return null;
 }
 
-/** Whether two prints are the same screen, allowing for a carousel having moved on. */
+/**
+ * Whether two prints are the same screen, allowing for a carousel having
+ * moved on.
+ *
+ * Whole-frame measures are not enough on their own. Two sparse pages on a
+ * white ground — Settings and Addresses, Profile and Account — agree on
+ * nine pixels in ten because nine in ten are the ground, and a difference of
+ * a few levels is all the mean shows. So the comparison that decides is made
+ * over the ink: the pixels that stand out from the background in either
+ * frame. The same screen has the same ink in the same places; a different
+ * page with the same ground does not.
+ */
 function sameScreen(a, b, width, height) {
   const mad = meanAbsDiff(a.gray, b.gray, width, height);
-  if (mad <= REVISIT_MAD && hamming(a.dhash, b.dhash) <= REVISIT_BITS && hamming(a.ahash, b.ahash) <= REVISIT_BITS) {
-    return true;
-  }
-  if (mad <= REVISIT_LOOSE_MAD && 1 - changedFraction(a.gray, b.gray, 10) >= REVISIT_LOOSE_SAME) {
-    return true;
-  }
+  // Two steps of the same flow — the phone number page and the OTP page
+  // that follows it — share a whole hero and differ only in the card below
+  // it. Most of their ink agrees, yet a fifth of the frame has moved. The
+  // same screen seen again agrees on most of its ink and, unless it agrees
+  // on nearly all of it, has hardly a pixel changed elsewhere (a carousel
+  // moved on; nothing else did).
+  const agree = () => {
+    const ink = inkMatch(a.gray, b.gray);
+    return ink >= REVISIT_INK_SAME && (ink >= REVISIT_INK_SURE || changedFraction(a.gray, b.gray, 10) <= REVISIT_MAX_CHANGED);
+  };
+  if (mad <= REVISIT_MAD && hamming(a.dhash, b.dhash) <= REVISIT_BITS && hamming(a.ahash, b.ahash) <= REVISIT_BITS) return agree();
+  if (mad <= REVISIT_LOOSE_MAD && 1 - changedFraction(a.gray, b.gray, 10) >= REVISIT_LOOSE_SAME && hamming(a.dhash, b.dhash) <= REVISIT_LOOSE_BITS) return agree();
   return false;
+}
+
+/**
+ * Of the pixels that are ink in either frame — more than a little away from
+ * that frame's background level — the share that agree between the two.
+ * 1 when neither frame has any ink to compare.
+ */
+function inkMatch(a, b, away = 24, agree = 24) {
+  const backgroundA = medianOf(a);
+  const backgroundB = medianOf(b);
+  let ink = 0;
+  let same = 0;
+  for (let i = 0; i < a.length; i++) {
+    if (Math.abs(a[i] - backgroundA) <= away && Math.abs(b[i] - backgroundB) <= away) continue;
+    ink++;
+    if (Math.abs(a[i] - b[i]) <= agree) same++;
+  }
+  return ink < a.length * 0.01 ? 1 : same / ink;
+}
+
+function medianOf(gray) {
+  const counts = new Uint32Array(256);
+  for (const value of gray) counts[value]++;
+  let seen = 0;
+  for (let level = 0; level < 256; level++) {
+    seen += counts[level];
+    if (seen * 2 >= gray.length) return level;
+  }
+  return 255;
 }
 
 /** Mean difference over the header and footer bands — the app's chrome. */
@@ -754,12 +1071,12 @@ function scrimBase(hold, previousHold, nextHold, width, height) {
 /**
  * How a kept screen relates to the kept screen before it.
  *
- * @returns {{overlay: object|null, scrolled: boolean, previousWasLoading: boolean}}
+ * @returns {{overlay: object|null, scrolled: boolean, previousWasLoading: boolean, loadingEvidence: 'chrome'|'bare'|null}}
  */
 function relate(previousHold, hold, steps, width, height) {
   const a = previousHold.print;
   const b = hold.print;
-  const result = { overlay: null, scrolled: false, previousWasLoading: false };
+  const result = { overlay: null, scrolled: false, previousWasLoading: false, loadingEvidence: null };
 
   // Overlay: a scrim with something drawn on it, or a compact region changing
   // against an otherwise untouched screen.
@@ -778,7 +1095,12 @@ function relate(previousHold, hold, steps, width, height) {
       result.overlay = { kind: 'toast', dimmed: false, box };
       return result;
     }
-    if (box && box.y + box.h >= 0.9 && box.y > 0.3 && box.h <= 0.55) {
+    // A system sheet — the iOS share sheet among them — does not always
+    // dim what is behind it, and its card can stop a little short of the
+    // very bottom edge (a safe-area inset, a drag handle, rounded corners).
+    // Anchored to the bottom and tall enough to be a sheet rather than a
+    // toast is enough; it need not reach the last pixel.
+    if (box && box.y + box.h >= SHEET_BOTTOM_MARGIN && box.y > 0.3 && box.h <= 0.6) {
       result.overlay = { kind: 'bottom_sheet', dimmed: false, box };
       return result;
     }
@@ -803,18 +1125,31 @@ function relate(previousHold, hold, steps, width, height) {
   }
 
   // Loading: the previous screen had the same chrome but far less in it, and
-  // did not stay long — a skeleton, a spinner, a page still fetching.
+  // did not stay long — a skeleton, a spinner, a page still fetching. What
+  // it had less of is the point: a loading state is mostly empty, and empty
+  // means pale or dark. A light page of products, or a landing page whose
+  // top half is a block of brand colour, has the same chrome as what
+  // follows and less structure, and is a finished design all the same.
   const sparse = a.edge < SPARSE_EDGE;
   const sameChrome = chromeStable(a.gray, b.gray, width, height, LOADING_CHROME_MAD);
+  const flat = flatShare(a.gray, width, height);
+  const mostlyEmpty = a.edge <= LOADING_SURE_EDGE || (flat >= LOADING_FLAT_SHARE && (a.luminance >= 200 || a.luminance <= 60)) || skeletonLike(a, width, height);
   if (
     !previousHold.first &&
     previousHold.seconds <= LOADING_MAX_SECONDS &&
     a.edge <= LOADING_MAX_EDGE &&
+    mostlyEmpty &&
     b.edge >= LOADING_EDGE_RATIO * Math.max(a.edge, 0.5) &&
     contentDiff(a.gray, b.gray, width, height) >= LOADING_CONTENT_MAD &&
-    (sameChrome || (sparse && b.edge >= 3 * Math.max(a.edge, 0.5)))
+    // Same chrome, or so little on the frame that chrome is beside the
+    // point: a spinner on white, a skeleton, an interstitial with one line
+    // of copy — followed by a page with several times its structure.
+    (sameChrome || ((sparse || (flat >= LOADING_BARE_FLAT && previousHold.seconds <= LOADING_BARE_MAX_SECONDS)) && b.edge >= 3 * Math.max(a.edge, 0.5)))
   ) {
     result.previousWasLoading = true;
+    // Same chrome with the content arriving is strong evidence; a bare frame
+    // followed by a fuller one is weaker, and the text pass may overrule it.
+    result.loadingEvidence = sameChrome ? 'chrome' : 'bare';
   }
 
   return result;

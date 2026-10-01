@@ -79,7 +79,7 @@ ${bold('ingest options')}
   --app-id <id>             add to an app already in the library, by its slug —
                             skips identification, instead of a config file
   --authorized-by <who>     recorded in sources.json when there is no --app
-  --fps <n>                 frames per second to pull from a video          ${dim('default 5')}
+  --fps <n>                 frames per second to pull from a video          ${dim('default 10')}
   --min-hold <seconds>      how long a screen must hold still to count      ${dim('default 0.5')}
   --no-brief                drop screens shown for less than --min-hold even
                             when they are distinct (splash, toasts, spinners)

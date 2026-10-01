@@ -338,7 +338,16 @@ export async function researchTree(journeys, graph, options) {
   let doneScreens = 0;
   let screenCalls = 0;
 
+  // A model that answers nothing three times running is not going to start;
+  // the names read off the screens stand, and the run finishes instead of
+  // asking a smaller question every twenty seconds for ten minutes.
+  let emptyInARow = 0;
   while (queue.length) {
+    if (emptyInARow >= 3) {
+      log?.(`researcher: the model returned nothing ${emptyInARow} times running — keeping the names read off the screens for the ${queue.reduce((n, b) => n + b.length, 0)} left`);
+      doneScreens = nodes.length;
+      break;
+    }
     const batch = queue.shift();
     const total = Math.max(planned, screenCalls + queue.length + 1);
     screenCalls++;
@@ -381,6 +390,7 @@ export async function researchTree(journeys, graph, options) {
     }
     const missing = batch.filter((node) => !got.includes(node.id));
     doneScreens += got.length;
+    emptyInARow = got.length ? 0 : emptyInARow + 1;
     if (missing.length && missing.length < batch.length) {
       // The reply covered some of the six: only the rest go again.
       queue.unshift(missing);

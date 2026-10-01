@@ -42,7 +42,10 @@ export async function POST(request: Request) {
 
   const params = new URL(request.url).searchParams;
   const extension = (params.get('ext')?.trim().toLowerCase() || 'mov').replace(/^\./, '');
-  const fps = Number(params.get('fps') ?? 5);
+  // Ten frames a second by default: a screen swiped past in a third of a
+  // second still leaves three identical frames, where a transition leaves
+  // three different ones (see tools/ios-crawler/src/ingest.js).
+  const fps = Number(params.get('fps') ?? 10);
   const minHold = Number(params.get('minHold') ?? 0.5);
   const keepBrief = params.get('brief') !== '0';
   const keepLoading = params.get('loading') === '1';
@@ -72,7 +75,7 @@ export async function POST(request: Request) {
       .slice(0, 60) || 'recording';
 
   if (!VIDEO_EXT.has(extension)) return fail(`Unsupported video type ".${extension}".`, 400);
-  if (!Number.isFinite(fps) || fps < 1 || fps > 10) return fail('fps must be between 1 and 10.', 400);
+  if (!Number.isFinite(fps) || fps < 1 || fps > 15) return fail('fps must be between 1 and 15.', 400);
   if (!Number.isFinite(minHold) || minHold < 0.1 || minHold > 5) return fail('minHold must be between 0.1 and 5 seconds.', 400);
   if (!request.body) return fail('No video in the request body.', 400);
 

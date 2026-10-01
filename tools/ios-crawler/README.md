@@ -55,16 +55,17 @@ read as a *timeline*, not a pile of frames ([`src/segment.js`](src/segment.js)):
 
 | It finds | How |
 |---|---|
-| every screen the UI held still on | runs of near-identical frames, merged across settling (a header drawing a beat late, a carousel advancing) |
-| splash, toasts, spinners shown only briefly | a short hold is kept when it sits between two settled screens and is not a blend of them |
-| dialogs, bottom sheets, toasts | a scrim (uniform darkening that keeps the picture underneath) with something drawn on it; or a compact change against an untouched screen |
-| loading and skeleton states | same chrome as the screen that followed, far less in it, gone quickly — recognised so they are **left out** (`--keep-loading` publishes them as "*X* — loading") |
+| every screen the UI held still on | runs of near-identical frames, merged across settling (a header drawing a beat late, a carousel advancing); the picture of each is the last state it settled into — or, when nothing ever truly settled (a custom cross-fade, a push whose animation outlasted the hold), the hold's own last frame, the closest thing to "arrived" that was actually recorded — so a dialog fading in or out never stands for the dialog, a feed is shown with its images, and a slow in-app transition is shown finished rather than half-composited |
+| a page in a new state | a change to a page that had already settled for a second and a half — a section opened, a chip selected, a tab within the page — is its own screen, not the page still drawing; a toggle or typed text (under 8% of the frame) folds in |
+| splash, toasts, spinners, screens swiped past quickly | a short hold is kept when it sits between two still holds and is not a blend of them — but never a single frame, which is always a push or a fade caught half-way; a lone frame that is the previous screen drawn more fully becomes its picture instead; a lone toast over a screen that is back right after it is kept as a toast; and a short hold that is the previous screen still moving (a video playing, a carousel, a pause mid-scroll) folds into it |
+| dialogs, bottom sheets, toasts | a scrim (uniform darkening that keeps the picture underneath) with something drawn on it; or a compact change against an untouched screen — including a system sheet that does not dim what is behind it, or whose card stops a little short of the very bottom edge (a safe-area inset, a drag handle) |
+| loading and skeleton states | same chrome as the screen that followed, far less in it and mostly empty (pale or dark), gone quickly; a brief skeleton — pale blocks, nothing dark, next to no structure — is recognised on its own, and so is a page with no words at all. **Left out only when the text pass agrees** — a spinner, a blank, a skeleton with at most its title. A page that had its words and was still fetching the rest is published as a screen in a loading state (`--keep-loading` publishes the rest too) |
 | scrolled views | content shifted under fixed chrome; folded into the origin when the text barely changed |
-| revisits | the same screen seen again is one screen with a recorded return, not a duplicate |
+| revisits | the same screen seen again is one screen with a recorded return, not a duplicate — judged on the ink (what stands out from the background), so two sparse pages on the same white ground are never taken for one |
 | system prompts iOS did not record | a scrim with nothing on it (iOS leaves permission alerts out of recordings) — dropped and counted |
 | Google / Apple / Facebook sign-in pages | recognised from their text and **left out of the library**; the screens either side still publish, and the flow closes over the gap |
 
-Frames are sampled at 5 per second by default, with a 32×64 thumbnail written
+Frames are sampled at 10 per second by default (a screen swiped past in a third of a second still leaves three identical frames, where a transition leaves three different ones), with a 32×64 thumbnail written
 beside each so all of the above runs on a few thousand pixels per frame — a
 three-minute recording segments in well under a second once its frames are
 read. Tune with `--fps`, `--min-hold <seconds>` (default 0.5) and `--no-brief`.

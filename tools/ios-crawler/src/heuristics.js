@@ -173,8 +173,14 @@ const RULES = [
     type: 'loading',
     when: (s, c) =>
       /\b(loading|please wait|just a (sec|second|moment)|hang tight|fetching|getting things ready|one moment)\b/.test(s.all) ||
-      (c.kind === 'loading' && s.lineCount <= 12) ||
-      (c.brief && !c.isFirst && s.lineCount <= 3 && c.edge < 6),
+      // The segmenter's loading call, when the page also has next to no
+      // words: a spinner, a skeleton with its title. A page with copy on it
+      // that was still fetching is published as a screen in a loading state.
+      (c.kind === 'loading' && s.lineCount <= (c.loadingWeak ? 3 : 5)) ||
+      (c.brief && !c.isFirst && s.lineCount <= 3 && c.edge < 6) ||
+      // No words at all and next to no structure: a skeleton, whatever the
+      // segmenter made of it. A page of only images has far more structure.
+      (!c.isFirst && !c.overlay && s.lineCount === 0 && c.edge < 8),
   },
   {
     type: 'coach_mark',
@@ -450,6 +456,8 @@ export function classifyScreen(lines, options = {}) {
     brief: false,
     holdSeconds: null,
     kind: 'screen',
+    loadingWeak: false,
+    loadingEvidence: null,
     overlay: null,
     loadingOfName: null,
     scrolledFromName: null,
@@ -474,8 +482,15 @@ export function classifyScreen(lines, options = {}) {
   // not loading; it was simply sparse against a very dense neighbour. The
   // segmenter's evidence is structural (same chrome, content arriving), so it
   // takes a lot of text to overrule it.
-  if (context.kind === 'loading' && screenType !== 'loading' && signals.lineCount > 20) context.kind = 'screen';
-  if (context.kind === 'loading' && screenType !== 'loading' && !['splash', 'external_auth'].includes(screenType)) screenType = 'loading';
+  // …unless the evidence was the weak kind — a bare frame before a fuller
+  // one — where a few lines of real copy (an empty state, a logged-out
+  // notice) are enough to say it was a screen.
+  // A skeleton read off the pixels alone can also be a pale page with light
+  // fields and grey copy; a page has words a skeleton does not (a skeleton
+  // keeps at most its title and a chip or two), so six lines settle it.
+  if (context.kind === 'loading' && screenType !== 'loading' && (signals.lineCount > 20 || (context.loadingWeak && signals.lineCount >= 4) || (context.loadingEvidence === 'skeleton' && signals.lineCount >= 6))) context.kind = 'screen';
+  // The segmenter's call otherwise stays a state on the screen, not its type:
+  // a checkout with one spinner is a checkout.
 
   const elements = [];
   if (signals.tabBar) elements.push('tab-bar');

@@ -483,6 +483,15 @@ export async function selfTest() {
     const named = classifyScreen([line('09:41', 0.01), line('•l =', 0.02), line('Discover', 0.12, 0.05), line('Trending now', 0.3)]);
     check('a title is taken from real words, not OCR noise', named.name === 'Discover', named.name);
     check('a dark screen is styled dark', classifyScreen([line('Hello', 0.3)], { luminance: 20 }).style[0] === 'dark');
+    {
+      // The segmenter's weaker loading call — a bare frame before a fuller
+      // one — yields to a few lines of real copy; its strong call does not.
+      const copy = [line('Select your location', 0.05), line('Search an area or address', 0.12), line("Looks like you're logged out", 0.5), line('Please log in to see saved addresses', 0.55)];
+      const weak = classifyScreen(copy, { context: { kind: 'loading', loadingWeak: true, edge: 3 } });
+      const strong = classifyScreen(copy, { context: { kind: 'loading', loadingWeak: false, edge: 3 } });
+      check('weak loading evidence yields to readable copy', weak.screenType !== 'loading', weak.screenType);
+      check('strong loading evidence stands against a few lines', strong.screenType === 'loading', strong.screenType);
+    }
     check('a light screen is styled light', classifyScreen([line('Hello', 0.3)], { luminance: 230 }).style[0] === 'light');
     check('a tab bar is reported as an element', classifyScreen([...tabBar, line('Feed', 0.2)]).elements.includes('tab-bar'));
     check('nothing readable still classifies without throwing', typeOf([]) === 'other');
@@ -714,6 +723,78 @@ export async function selfTest() {
     check('content moving under fixed chrome is a scroll', shown.some((screen) => screen.kind === 'scrolled' && screen.scrolledFrom === shown[2]?.id), kinds);
     check('a panel rising from the bottom is a bottom sheet', shown.some((screen) => screen.overlay?.kind === 'bottom_sheet'), kinds);
     check('a one-frame toast between settled screens is kept as a toast', shown.some((screen) => screen.overlay?.kind === 'toast' && screen.brief), kinds);
+    // A lone frame that is half of one screen and half of the next — a push
+    // caught mid-slide — is distinct from both and a blend of neither pixel
+    // for pixel, yet no one saw it.
+    {
+      const slide = (u, v) => (u < 0.5 ? pageHome(Math.min(0.999, u + 0.5), v) : other(u - 0.5, v));
+      const pushed = segmentRecording([...Array(5).fill(pageHome), slide, ...Array(5).fill(other)].map(thumb), { fps: 5 });
+      const seen = pushed.screens.filter((screen) => !screen.revisitOf);
+      check('a single mid-slide frame between two screens is a transition, not a screen', seen.length === 2 && pushed.dropped.transitions >= 1, `${seen.length} screens, ${JSON.stringify(pushed.dropped)}`);
+    }
+    // A page still for two seconds, then a tenth of it redrawn — a section
+    // opened — and held again: two states, two screens. The same change a
+    // beat after the page arrived is the page still settling: one screen.
+    {
+      const opened = (u, v) => (v > 0.47 && v < 0.57 ? (u < 0.5 ? [30, 30, 30] : [200, 200, 200]) : pageHome(u, v));
+      const settled = segmentRecording([...Array(12).fill(pageHome), ...Array(8).fill(opened)].map(thumb), { fps: 5 });
+      const settling = segmentRecording([...Array(3).fill(pageHome), ...Array(8).fill(opened)].map(thumb), { fps: 5 });
+      check('a change to a page that had settled is a new state of it', settled.screens.filter((screen) => !screen.revisitOf).length === 2, `${settled.screens.length} screens, merged ${settled.dropped.merged}`);
+      check('the same change while the page was still arriving is the page settling', settling.screens.filter((screen) => !screen.revisitOf).length === 1, `${settling.screens.length} screens`);
+    }
+    // A skeleton page — pale blocks on a paler ground, nothing dark — is a
+    // loading state on its own evidence, whatever came before or after.
+    {
+      const skeleton = (u, v) => (v < 0.06 ? [242, 242, 247] : (v > 0.14 && v < 0.2) || (v > 0.28 && v < 0.42) || (v > 0.5 && v < 0.62) ? (u > 0.05 && u < 0.95 ? [216, 216, 222] : [242, 242, 247]) : [242, 242, 247]);
+      const done = segmentRecording([...Array(5).fill(other), halfway(other, skeleton), ...Array(6).fill(skeleton), halfway(skeleton, pageHome), ...Array(5).fill(pageHome)].map(thumb), { fps: 5 });
+      const bones = done.screens.find((screen) => screen.skeleton);
+      check('a skeleton page is a loading state on its own evidence', Boolean(bones) && bones.kind === 'loading', done.screens.map((screen) => `${screen.kind}${screen.skeleton ? '*' : ''}`).join(' '));
+    }
+    // The frame that stands for a hold is the one the UI held longest, not
+    // the one with the most drawn on it: a dialog fading out is brighter
+    // underneath, so has more gradient, and must not win over the dialog.
+    {
+      const fades = [0.55, 0.75, 0.9].map((k) => (u, v) => dialog(u, v).map((c, i) => Math.round(c * k + pageHome(u, v)[i] * (1 - k))));
+      const held = segmentRecording([...Array(5).fill(pageHome), ...fades, ...Array(6).fill(dialog), ...[...fades].reverse(), ...Array(5).fill(pageHome)].map(thumb), { fps: 5 });
+      const card = held.screens.find((screen) => screen.kind === 'overlay');
+      check('the picture of a hold is its longest-held frame', Boolean(card) && card.frame >= 8 && card.frame <= 13, JSON.stringify(held.screens.map((screen) => [screen.kind, screen.frame])));
+    }
+    // A custom cross-fade, or a push whose animation outlasts the hold, may
+    // never settle at all before the person moves on — every step differs
+    // from the last. There is then no genuinely resolved frame to prefer by
+    // duration; the fade's own last frame, however it got there, is still
+    // the most finished state anyone saw, and must be chosen over an early,
+    // barely-begun moment of the same fade (which is what picking "the
+    // longest run, wherever it sits" used to do — it fell back to the first
+    // sliver of an unsettled hold).
+    {
+      const target = other;
+      const fadeFrames = 8;
+      const crossfade = Array.from({ length: fadeFrames }, (_, i) => {
+        const k = (i + 1) / fadeFrames;
+        return (u, v) => pageHome(u, v).map((c, idx) => Math.round(c * (1 - k) + target(u, v)[idx] * k));
+      });
+      const neverSettled = segmentRecording([pageHome, ...crossfade, white, white, white].map(thumb), { fps: 5, trace: true });
+      const fadeHold = neverSettled.holds.find((hold) => hold.end === fadeFrames);
+      check(
+        'a fade that never settles is pictured by its last, most-resolved frame',
+        fadeHold?.rep === fadeFrames,
+        `rep=${fadeHold?.rep}, hold ${fadeHold ? `${fadeHold.start}-${fadeHold.end}` : 'missing'}`,
+      );
+    }
+    // An undimmed system sheet — the iOS share sheet among them — can stop
+    // short of the very bottom pixel (a safe-area inset, a drag handle) and
+    // still be the same kind of thing as a sheet flush to the edge.
+    {
+      const shareSheet = (u, v) => (v >= 0.6 && v <= 0.88 ? [210, 40, 40] : pageHome(u, v));
+      const withSheet = segmentRecording([...Array(6).fill(pageHome), ...Array(6).fill(shareSheet)].map(thumb), { fps: 5 });
+      const seenSheet = withSheet.screens.filter((screen) => !screen.revisitOf);
+      check(
+        'a share sheet short of the bottom edge is still a bottom sheet',
+        seenSheet.some((screen) => screen.overlay?.kind === 'bottom_sheet' && !screen.overlay.dimmed),
+        seenSheet.map((screen) => screen.kind).join(' '),
+      );
+    }
     check('a scrim with nothing drawn on it is a system prompt and is dropped', segmented.dropped.scrims >= 1, JSON.stringify(segmented.dropped));
     check('a blended transition frame is dropped', segmented.dropped.transitions >= 2, JSON.stringify(segmented.dropped));
     check('a blank white tail is dropped', segmented.dropped.blank >= 1 && !shown.some((screen) => screen.print.luminance > 250), JSON.stringify(segmented.dropped));

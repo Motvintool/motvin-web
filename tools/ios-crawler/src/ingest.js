@@ -53,11 +53,13 @@ const WATCHABLE = ['.mov', '.mp4', '.m4v', '.avi', '.mkv'];
 const CANONICAL = '.png';
 
 /**
- * Frames pulled per second of recording. Five is enough to catch a screen
- * shown for a fifth of a second — a toast, a flash of a spinner — while
- * keeping a three-minute walk to under a thousand frames.
+ * Frames pulled per second of recording. Ten: a screen swiped past in a
+ * third of a second leaves three identical frames, where a push or a fade
+ * of the same length leaves three different ones, and that is what tells
+ * them apart. Five lost those screens; reading faster costs only thumbnail
+ * time, since full frames are read for the chosen screens alone.
  */
-const DEFAULT_FPS = 5;
+const DEFAULT_FPS = 10;
 
 /** Above this many extracted frames, stop and tell the user to trim or slow the rate. */
 const MAX_FRAMES = 6000;
@@ -538,6 +540,8 @@ export async function ingestFolder(options) {
               kind: screen.kind,
               brief: screen.brief,
               revisitOf: screen.revisitOf,
+              variantOf: screen.variantOf ?? null,
+              loadingEvidence: screen.loadingEvidence ?? null,
             })),
             edges: timeline.edges,
           }
@@ -602,6 +606,10 @@ async function ingestTimeline({ timeline, frames, analyzer, graph, duplicates, e
       brief: screen.brief,
       holdSeconds: screen.holdSeconds,
       kind: screen.kind,
+      // A loading state read off a bare frame, or off the loading state that
+      // followed it, is the segmenter's weaker call; readable text overrules it.
+      loadingWeak: screen.loadingEvidence === 'bare' || screen.loadingEvidence === 'chain',
+      loadingEvidence: screen.loadingEvidence ?? null,
       overlay: screen.overlay,
       flat: screen.flat,
       edge: screen.print.edge,
@@ -683,7 +691,11 @@ async function ingestTimeline({ timeline, frames, analyzer, graph, duplicates, e
     // A page still loading is a moment, not a design: it is left out of the
     // library unless --keep-loading asks for it. It stays in the graph either
     // way so the journey and the naming of what came after still read right.
-    if ((analysis.screenType === 'loading' || screen.kind === 'loading') && options.keepLoading !== true) {
+    // "Still loading" here means the text pass agreed — a spinner, a blank, a
+    // skeleton with at most its title. A page that had its words and was
+    // fetching the rest is a screen, published with a loading state on it;
+    // leaving those out is how whole checkouts went missing.
+    if (analysis.screenType === 'loading' && options.keepLoading !== true) {
       node.skipPublish = true;
       node.skipReason = 'loading state — not published (pass --keep-loading to include)';
       excluded.push({ file: fileName, name: analysis.name, reason: 'loading state' });
