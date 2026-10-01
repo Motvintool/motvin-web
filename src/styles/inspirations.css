@@ -7613,6 +7613,21 @@ select.ins-input {
   border-color: var(--ins-text);
 }
 
+/* A moment the segmenter already set aside — shown dimmed so the grid still
+   reads at a glance as "found" vs "found, but left out", the same way
+   convert.town's raw dump would, minus actually looking like a mistake. */
+.ins-chat-screen.is-dropped img {
+  opacity: 0.45;
+}
+
+/* Unticked while picking: the admin is recovering it as a real screen,
+   overriding the segmenter — worth a visibly different state from "still
+   excluded", which is otherwise identical to simply not having picked it. */
+.ins-chat-screens-grid[role='listbox'] .ins-chat-screen.is-dropped:not(.is-picked) img {
+  opacity: 1;
+  border-color: #16a34a;
+}
+
 .ins-chat-screen-name {
   font-size: 11px;
   line-height: 1.3;

@@ -1173,8 +1173,20 @@ function ReviewFrameImg({ jobId, frame, name }: { jobId: string; frame: number; 
  * rest of the time, now put to the admin first, before anything is spent
  * classifying a screen they would have thrown away anyway.
  */
+/** A dropped candidate's reason, in words the admin did not have to learn the segmenter's vocabulary to read. */
+const REASON_LABEL: Record<string, string> = {
+  transition: 'mid-transition',
+  blank: 'blank frame',
+  scrim: 'system prompt iOS did not record',
+  'still moving': 'still settling',
+  absorbed: 'merged into another screen',
+  revisit: 'same as an earlier screen',
+};
+
 export function ReviewGrid({ job }: { job: IngestJob }) {
   const screens = job.capturedScreens ?? [];
+  const kept = screens.filter((screen) => !screen.dropped);
+  const dropped = screens.filter((screen) => screen.dropped);
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -1190,7 +1202,7 @@ export function ReviewGrid({ job }: { job: IngestJob }) {
     });
   };
 
-  const resume = async (decision: { mode: 'automatic' } | { mode: 'manual'; drop: string[] }) => {
+  const resume = async (decision: { mode: 'automatic' } | { mode: 'manual'; excluded: string[] }) => {
     setBusy(true);
     setError(null);
     try {
@@ -1202,15 +1214,32 @@ export function ReviewGrid({ job }: { job: IngestJob }) {
   };
 
   const label = (screen: NonNullable<IngestJob['capturedScreens']>[number]) =>
-    `Screen at ${screen.start.toFixed(1)}s${screen.kind === 'overlay' ? ', over another screen' : screen.kind === 'scrolled' ? ', scrolled' : ''}${screen.external ? ' — looks like a sign-in page' : ''}`;
+    `${screen.dropped ? 'Set aside' : 'Screen'} at ${screen.start.toFixed(1)}s${
+      screen.kind === 'overlay' ? ', over another screen' : screen.kind === 'scrolled' ? ', scrolled' : ''
+    }${screen.external ? ' — looks like a sign-in page' : ''}${screen.reason ? ` — ${REASON_LABEL[screen.reason] ?? screen.reason}` : ''}`;
+
+  // What ticking actually does, since kept and set-aside screens start from
+  // opposite defaults: ticking a kept one removes it, same as before this
+  // "show everything" grid existed; ticking a set-aside one simply leaves it
+  // out, which is already where it was — the only new, useful move is
+  // *untick* one, recovering it as a real screen when the segmenter was wrong
+  // to drop it in the first place.
+  const toRemove = kept.filter((screen) => picked.has(screen.id));
+  const toRecover = dropped.filter((screen) => !picked.has(screen.id));
 
   return (
     <div className="ins-chat-screens">
       <p className="ins-chat-line">
-        <strong>{screens.length}</strong> screen{screens.length === 1 ? '' : 's'} found.{' '}
+        <strong>{kept.length}</strong> screen{kept.length === 1 ? '' : 's'} found
+        {dropped.length ? (
+          <>
+            , <strong>{dropped.length}</strong> more set aside
+          </>
+        ) : null}
+        .{' '}
         {picking
-          ? `Likely loading and sign-in screens are already ticked — tap any thumbnail to add or drop it. ${picked.size} selected.`
-          : 'Clean them up automatically, or pick through them yourself?'}
+          ? `Likely loading and sign-in screens, and everything set aside, are already ticked to leave out — untick a set-aside one to recover it, or tap any other thumbnail to add or drop it. ${toRemove.length} removed, ${toRecover.length} recovered.`
+          : 'Clean them up automatically, or pick through everything — kept and set aside — yourself?'}
       </p>
       <div className="ins-chat-screens-grid" role={picking ? 'listbox' : 'list'} aria-multiselectable={picking || undefined}>
         {screens.map((screen) => {
@@ -1221,13 +1250,15 @@ export function ReviewGrid({ job }: { job: IngestJob }) {
               type="button"
               role={picking ? 'option' : undefined}
               aria-selected={picking ? isPicked : undefined}
-              className={`ins-chat-screen ${isPicked ? 'is-picked' : ''}`}
+              className={`ins-chat-screen ${isPicked ? 'is-picked' : ''} ${screen.dropped ? 'is-dropped' : ''}`}
               onClick={() => picking && toggle(screen.id)}
               disabled={!picking || busy}
               title={label(screen)}
             >
               <ReviewFrameImg jobId={job.id} frame={screen.frame} name={label(screen)} />
-              <span className="ins-chat-screen-name">{screen.brief ? 'brief' : `${screen.start.toFixed(1)}s`}</span>
+              <span className="ins-chat-screen-name">
+                {screen.dropped ? (REASON_LABEL[screen.reason ?? ''] ?? 'set aside') : screen.brief ? 'brief' : `${screen.start.toFixed(1)}s`}
+              </span>
               {picking && (
                 <span className="ins-chat-screen-tick" aria-hidden>
                   {isPicked ? <CheckIcon size={12} /> : null}
@@ -1254,31 +1285,28 @@ export function ReviewGrid({ job }: { job: IngestJob }) {
               className="ins-chip-btn"
               onClick={() => {
                 // A head start, not the final word: a screen the segmenter
-                // itself flagged as loading, or that a quick, free, on-device
-                // text check caught as a Google/Apple/Facebook sign-in page,
-                // is ticked already — both are what "automatic" would have
-                // removed anyway, so the admin only adjusts from there
-                // instead of rebuilding the list by hand.
-                setPicked(new Set(screens.filter((screen) => screen.kind === 'loading' || screen.external).map((screen) => screen.id)));
+                // itself flagged as loading or already set aside, or that a
+                // quick, free, on-device text check caught as a
+                // Google/Apple/Facebook sign-in page, is ticked already —
+                // all three are what "automatic" would leave out anyway, so
+                // the admin only adjusts from there instead of rebuilding
+                // the list by hand, and recovers a wrongly set-aside screen
+                // with a single untick.
+                setPicked(new Set(screens.filter((screen) => screen.dropped || screen.kind === 'loading' || screen.external).map((screen) => screen.id)));
                 setPicking(true);
               }}
               disabled={busy}
             >
-              I’ll choose what to remove
+              I’ll choose myself
             </button>
           </>
         ) : (
           <>
-            <button
-              type="button"
-              className="ins-chip-btn ins-chip-btn--danger"
-              onClick={() => void resume({ mode: 'manual', drop: [...picked] })}
-              disabled={busy || picked.size === 0}
-            >
-              <TrashIcon size={13} /> Remove {picked.size || ''} and continue
+            <button type="button" className="ins-chip-btn ins-chip-btn--danger" onClick={() => void resume({ mode: 'manual', excluded: [...picked] })} disabled={busy}>
+              <TrashIcon size={13} /> Apply and continue
             </button>
-            <button type="button" className="ins-chip-btn ins-chip-btn--quiet" onClick={() => void resume({ mode: 'manual', drop: [] })} disabled={busy}>
-              Keep all, continue
+            <button type="button" className="ins-chip-btn ins-chip-btn--quiet" onClick={() => void resume({ mode: 'manual', excluded: [] })} disabled={busy}>
+              Recover everything, continue
             </button>
             <button
               type="button"

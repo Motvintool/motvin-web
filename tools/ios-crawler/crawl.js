@@ -99,9 +99,14 @@ ${bold('ingest options')}
 
 ${bold('resume options')}
   --staging <dir>           the folder \`ingest --review\` reported            ${dim('required')}
-  --drop <ids>              comma-separated screen ids to remove — "manual";
-                            omit for "automatic" (nothing manually removed;
-                            the loading / third-party-sign-in rules still run)
+  --excluded <ids>          comma-separated candidate ids to leave out of the
+                            library — "manual", the admin's full word on every
+                            screen the review showed, kept and dropped alike.
+                            A dropped one left off this list is recovered and
+                            published; a kept one on it is removed. Omit the
+                            flag entirely for "automatic" (the segmenter's own
+                            choices stand untouched; the loading / third-party
+                            sign-in rules still run)
   --app, --app-id, --authorized-by, --authorized, --platform, --version,
   --data-dir, --keep-loading, --dry-run, --json
                             the same as \`ingest\` — give it whatever was given
@@ -479,8 +484,10 @@ async function runIngest(flags) {
 
 /**
  * Finishes a run that paused after capture: the admin's "automatic" (nothing
- * dropped) or "manual" (--drop names the screens to remove) decision, read
- * back from the staging dir `ingest --review` left behind.
+ * changed from what the segmenter captured) or "manual" (--excluded names,
+ * from every candidate the review showed, which ones should not be in the
+ * library) decision, read back from the staging dir `ingest --review` left
+ * behind.
  */
 async function runResume(flags) {
   if (!flags.staging) {
@@ -501,17 +508,21 @@ async function runResume(flags) {
   const analyzerInfo = await resolveAnalyzer(flags);
   if (!analyzerInfo) return 1;
 
-  const drop = flags.drop
-    ? String(flags.drop)
+  // --excluded present at all, even empty, is "manual" — the admin's full
+  // word on every candidate shown. Its absence is "automatic": the
+  // segmenter's own kept/dropped split stands untouched.
+  const manual = flags.excluded !== undefined;
+  const excluded = manual
+    ? String(flags.excluded)
         .split(',')
         .map((id) => id.trim())
         .filter(Boolean)
     : [];
-  log.heading(drop.length ? `Removing ${drop.length} screen(s) and continuing` : 'Cleaning up automatically and continuing');
+  log.heading(manual ? `Applying ${excluded.length} exclusion(s) and continuing` : 'Cleaning up automatically and continuing');
 
   const result = await resumeIngest({
     stagingDir: resolve(flags.staging),
-    drop,
+    excluded: manual ? excluded : undefined,
     app,
     authorization: app
       ? app.authorization

@@ -810,6 +810,14 @@ function absorbs(before, hold, steps, width, height) {
   if (chromeDiff(a.gray, b.gray, width, height) > CHROME_MAD) return false;
   const mad = meanAbsDiff(a.gray, b.gray, width, height);
   if (mad > ABSORB_MAD) return false;
+  // A splash and the onboarding screen right after it can share a plain,
+  // similarly-coloured background — orange on orange — close enough that the
+  // whole-frame difference and the header/footer bands both read as "the same
+  // screen, just clearer now", the two checks above. Absorbing is a stronger
+  // claim than that: it says this later frame IS the very screen already on
+  // show, so its ink — the logo, the text, the imagery, wherever it actually
+  // sits — has to agree in place, not merely be close on average.
+  if (inkMatch(a.gray, b.gray) < REVISIT_INK_SAME) return false;
   const shifted = bestVerticalShift(a.gray, b.gray, width, height);
   if (shifted.shift !== 0 && shifted.mad < 0.6 * shifted.madAtZero) return false;
   return scrim(a.gray, b.gray, width).fraction < OVERLAY_DIM_FRACTION;
@@ -1169,4 +1177,9 @@ export const _thresholds = {
   DEFAULT_MIN_HOLD_SECONDS,
   BRIEF_DISTINCT_MAD,
   SCRIM_FRACTION,
+  ABSORB_MAD,
+  REVISIT_INK_SAME,
 };
+
+/** Exported for the self-test, to check a merge decision without staging a whole recording around it. */
+export const _internals = { absorbs, inkMatch };

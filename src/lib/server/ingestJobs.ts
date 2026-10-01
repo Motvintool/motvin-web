@@ -390,7 +390,13 @@ export function resumeJob(id: string, decision: ReviewDecision): IngestJob | nul
   const job = store.jobs.get(id);
   if (!job || job.status !== 'awaiting-review' || !job.stagingDir) return null;
   const config = job.resumeConfig;
-  const drop = decision.mode === 'manual' ? decision.drop : [];
+  // --excluded has to be passed for "manual" even when nothing is excluded —
+  // that still means something different from "automatic": every candidate
+  // the segmenter had dropped gets recovered and published. Aliasing the two
+  // on an empty list, as an earlier version of this did, silently turned
+  // "manual, everything recovered" into "automatic, nothing recovered".
+  const manual = decision.mode === 'manual';
+  const excluded = manual ? decision.excluded : [];
   const args = [
     'resume',
     '--staging', job.stagingDir,
@@ -404,11 +410,11 @@ export function resumeJob(id: string, decision: ReviewDecision): IngestJob | nul
     ...(config?.version ? ['--version', config.version] : []),
     ...(config?.keepLoading ? ['--keep-loading'] : []),
     ...(config?.dryRun ? ['--dry-run'] : []),
-    ...(drop.length ? ['--drop', drop.join(',')] : []),
+    ...(manual ? ['--excluded', excluded.join(',')] : []),
   ];
   job.status = 'running';
   job.stage = 'classify';
-  job.message = drop.length ? `Removing ${drop.length} screen${drop.length === 1 ? '' : 's'} and continuing` : 'Cleaning up automatically and continuing';
+  job.message = manual ? `Applying ${excluded.length} exclusion${excluded.length === 1 ? '' : 's'} and continuing` : 'Cleaning up automatically and continuing';
   job.capturedScreens = null;
   persist();
 

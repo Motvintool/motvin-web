@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { log, bold, dim } from './log.js';
-import { fingerprint, hamming, jaccard } from './hash.js';
+import { fingerprint, hamming, jaccard, meanAbsDiff } from './hash.js';
 import { ScreenGraph, actionKey } from './graph.js';
 import { actionSafety, assertAuthorized, isBlockingScreen } from './safety.js';
 import { extractJson, normaliseAnalysis, normaliseFlows } from './analyze.js';
@@ -23,7 +23,7 @@ import { publishCrawl, safeName } from './publish.js';
 import { ingestFolder, selectStableFrames, slugify, _internals, validateTabBars } from './ingest.js';
 import { parseIdbElements } from './device.js';
 import { buildSections, classifyScreen, cleanTitle, groupFlowsLocally, guessBrand } from './heuristics.js';
-import { segmentRecording } from './segment.js';
+import { segmentRecording, _internals as _segmentInternals, _thresholds as _segmentThresholds } from './segment.js';
 import { buildJourneys, journeyName, taskPhrase } from './journeys.js';
 import { describeAction, actionPhrase } from './actions.js';
 import { applyProposals, describeTree, researchTree, salvageJson, BRIEF } from './researcher.js';
@@ -717,6 +717,35 @@ export async function selfTest() {
     const shown = segmented.screens.filter((screen) => !screen.revisitOf);
     const kinds = shown.map((screen) => screen.kind).join(' ');
     check('the launch screen is kept although it is flat', shown[0]?.flat === true && shown[0]?.frame <= 2, JSON.stringify(shown[0]));
+
+    // A splash and the screen that follows it can share a dominant colour —
+    // both mostly the brand's own orange, say — close enough that a naive
+    // whole-frame or header/footer comparison reads them as "the same
+    // screen, just a clearer frame of it", and absorbs() quietly swaps the
+    // splash's own picture for the next screen's. They are only told apart by
+    // where their ink actually sits. (Caught from a real recording: a Swiggy
+    // splash's own captured frame turned out to be its onboarding screen,
+    // because absorbs() had merged the two before either was classified.)
+    const sameHueBg = [255, 90, 20];
+    const sameHueSplash = (u, v) => (u > 0.35 && u < 0.65 && v > 0.35 && v < 0.55 ? [250, 250, 250] : sameHueBg);
+    const sameHueOnboarding = (u, v) => {
+      if (u > 0.35 && u < 0.65 && v > 0.15 && v < 0.25) return [250, 250, 250]; // an icon, not where the splash's mark sits
+      if (u > 0.15 && u < 0.85 && v > 0.62 && v < 0.68) return [250, 250, 250]; // a line of text, lower down
+      return sameHueBg;
+    };
+    const splashPrint = fingerprintFromThumb(thumb(sameHueSplash));
+    const onboardingPrint = fingerprintFromThumb(thumb(sameHueOnboarding));
+    check(
+      'two screens sharing a background colour still fool the whole-frame check absorbs() starts with',
+      meanAbsDiff(splashPrint.gray, onboardingPrint.gray, THUMB.width, THUMB.height) <= _segmentThresholds.ABSORB_MAD,
+      `mad ${meanAbsDiff(splashPrint.gray, onboardingPrint.gray, THUMB.width, THUMB.height)} vs limit ${_segmentThresholds.ABSORB_MAD}`,
+    );
+    check(
+      "but their ink — where it actually sits — tells absorbs() they are not the same screen",
+      _segmentInternals.inkMatch(splashPrint.gray, onboardingPrint.gray) < _segmentThresholds.REVISIT_INK_SAME,
+      `ink agreement ${_segmentInternals.inkMatch(splashPrint.gray, onboardingPrint.gray)}`,
+    );
+
     check('a page still loading is tied to the page it became', shown[1]?.kind === 'loading' && shown[1]?.loadingOf === shown[2]?.id, kinds);
     check('a card on a scrim is a dialog over the screen beneath', shown[3]?.overlay?.kind === 'dialog' && shown[3]?.overlay?.dimmed && shown[3]?.overlayOf === shown[2]?.id, JSON.stringify(shown[3]?.overlay));
     check('returning to a screen is a revisit, not a new screen', segmented.screens.some((screen) => screen.revisitOf === shown[2]?.id));
@@ -800,6 +829,41 @@ export async function selfTest() {
     check('a blank white tail is dropped', segmented.dropped.blank >= 1 && !shown.some((screen) => screen.print.luminance > 250), JSON.stringify(segmented.dropped));
     check('the journey is recorded as edges between distinct screens', segmented.edges.length >= 6 && segmented.edges.every((edge) => edge.from !== edge.to), `${segmented.edges.length} edges`);
     check('a revisit never gets its own edge target', !segmented.edges.some((edge) => segmented.screens.find((s) => s.id === edge.to)?.revisitOf), '');
+
+    log.heading('Review candidates — every hold, kept and dropped alike');
+    const traced = segmentRecording(timelineThumbs, { fps: 5, trace: true });
+    const candidates = _internals.buildReviewCandidates(traced, timelineThumbs);
+    check('one candidate per hold the segmenter found', candidates.length === traced.holds.length, `${candidates.length} vs ${traced.holds.length} holds`);
+    const keptIds = new Set(shown.map((screen) => screen.id));
+    check(
+      'every kept, non-revisit screen is a candidate marked not dropped',
+      [...keptIds].every((id) => candidates.find((c) => c.id === id)?.dropped === false),
+      JSON.stringify(candidates.filter((c) => keptIds.has(c.id))),
+    );
+    const revisitCandidate = candidates.find((c) => c.reason === 'revisit');
+    check(
+      'a revisit is offered back too, pre-marked dropped so it reads as "already not worth keeping"',
+      revisitCandidate?.dropped === true && segmented.screens.find((s) => s.id === revisitCandidate?.id)?.revisitOf != null,
+      JSON.stringify(revisitCandidate),
+    );
+    const transitionCandidate = candidates.find((c) => c.reason === 'transition');
+    check(
+      'a dropped transition candidate carries a print and colours, so it can be recovered without re-reading the video',
+      transitionCandidate?.dropped === true && transitionCandidate?.print?.dhash?.length === 16 && Array.isArray(transitionCandidate?.colors),
+      JSON.stringify(transitionCandidate),
+    );
+    const scrimCandidate = candidates.find((c) => c.reason === 'scrim');
+    check('a system-prompt scrim is offered back with its own reason', scrimCandidate?.dropped === true, JSON.stringify(scrimCandidate));
+    const droppedIds = candidates.filter((c) => c.dropped && c.reason !== 'revisit').map((c) => c.id);
+    check('a genuinely dropped hold gets its own short id, distinct from a screen id', new Set(droppedIds).size === droppedIds.length && droppedIds.every((id) => /^d\d{3}$/.test(id)), JSON.stringify(droppedIds));
+
+    const excludeNothing = new Set();
+    const toRecover = candidates.filter((c) => c.dropped && !excludeNothing.has(c.id));
+    check(
+      '"manual" with nothing excluded means recovering every dropped candidate, not "automatic" over again',
+      toRecover.length === candidates.filter((c) => c.dropped).length && toRecover.length > 0,
+      `${toRecover.length} recoverable`,
+    );
 
     const colors = dominantColors(thumb(splash));
     check('a flat screen has one dominant background colour', colors[0]?.role === 'background' && colors[0]?.hex === '#ff5200', JSON.stringify(colors[0]));

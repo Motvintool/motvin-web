@@ -30,7 +30,7 @@ import { tmpdir } from 'node:os';
 import { run } from './exec.js';
 import { log, dim } from './log.js';
 import { extractFramesAt, extractThumbs } from './frames.js';
-import { fingerprint, fingerprintFromThumb, jaccard, THUMB } from './hash.js';
+import { dominantColors, fingerprint, fingerprintFromThumb, jaccard, THUMB } from './hash.js';
 import { ScreenGraph } from './graph.js';
 import { segmentRecording } from './segment.js';
 import { analyseScreen, complete, encodeForModel, groupIntoFlows, identifyApp, pickBackend } from './analyze.js';
@@ -269,6 +269,70 @@ class Analyzer {
  *          minRun?: number, keepBrief?: boolean, existingApps?: object[],
  *          authorization?: object, onProgress?: Function}} options
  */
+/**
+ * Every moment the segmenter found while reading the recording — not just
+ * the screens it decided to keep, but a transition it threw out, a repeat
+ * it folded into an earlier screen, a scrim, a push caught mid-slide — each
+ * standing for one hold, not one raw frame (several frames in a row showing
+ * the same held screen are one candidate, the same as a kept screen's own
+ * picture is one frame, not every frame it was held for).
+ *
+ * This is what lets "manual" mean more than picking through what the
+ * segmenter already decided to publish: a screen it dropped is offered
+ * back, pre-selected the same as anything else not worth keeping, so the
+ * admin can recover it with one tap instead of it simply being gone.
+ *
+ * Needs `timeline.holds` — segmentRecording's trace, only computed when
+ * asked for. Candidates with `dropped: true` carry the print and colour
+ * data a recovered screen needs, since no full-size frame existed for them
+ * before review and nothing else will compute it later.
+ */
+function buildReviewCandidates(timeline, thumbs) {
+  if (!timeline.holds) return null;
+  const screenById = new Map(timeline.screens.map((screen) => [screen.id, screen]));
+  const candidates = [];
+  let droppedIndex = 0;
+  for (const hold of timeline.holds) {
+    const screen = hold.screen ? screenById.get(hold.screen) : null;
+    const start = Math.round((hold.start / timeline.fps) * 100) / 100;
+    if (screen) {
+      // A screen came of this hold — but it may itself be a revisit, which
+      // the review grid treats the same as anything else not worth
+      // publishing again: pre-selected, and recoverable as its own screen.
+      const isRevisit = Boolean(screen.revisitOf);
+      candidates.push({
+        id: screen.id,
+        frame: hold.rep,
+        start,
+        holdSeconds: hold.seconds,
+        brief: Boolean(hold.brief),
+        kind: isRevisit ? 'revisit' : screen.kind,
+        dropped: isRevisit,
+        reason: isRevisit ? 'revisit' : null,
+      });
+      continue;
+    }
+    // Nothing was published from this moment — either the segmenter never
+    // kept it, or it did and the screen was later removed entirely (a push
+    // caught mid-slide, judged one after the fact). Either way it is offered
+    // back, with what it would need to become a real screen if recovered.
+    const print = fingerprintFromThumb(thumbs[hold.rep]);
+    candidates.push({
+      id: `d${String(++droppedIndex).padStart(3, '0')}`,
+      frame: hold.rep,
+      start,
+      holdSeconds: hold.seconds,
+      brief: Boolean(hold.brief),
+      kind: 'dropped',
+      dropped: true,
+      reason: hold.why ?? 'transition',
+      print: { dhash: print.dhash, ahash: print.ahash, luminance: Math.round(print.luminance), edge: Math.round(print.edge * 10) / 10 },
+      colors: dominantColors(thumbs[hold.rep]),
+    });
+  }
+  return candidates;
+}
+
 export async function ingestFolder(options) {
   const { app } = options;
   const source = options.folder;
@@ -337,46 +401,65 @@ export async function ingestFolder(options) {
         // asking them before spending that time also means a screen they
         // drop is never sent to the analyzer at all.
         //
-        // One exception, and it is cheap rather than slow: on-device text
-        // recognition (no model, no network — the same reader the real
-        // classify pass uses) checks each screen for a third-party sign-in
-        // page, the other thing that is always filed away unpublished. The
-        // review grid can then tick it for the admin before they even look,
-        // the same as it already does for a screen the segmenter itself
-        // called a loading state.
-        const capturedScreens = [];
-        for (const screen of distinct) {
-          const framePath = frames[screen.frame];
-          let external = false;
+        // What is reviewed is every hold the segmenter found, not just the
+        // ones it kept — a transition, a scrim, a repeat of an earlier
+        // screen is offered back, pre-selected the same as anything else not
+        // worth publishing, so a screen the segmenter got wrong can be
+        // recovered with one tap rather than simply being gone. This needed
+        // a second pass of full-size frames beyond the ones distinct alone
+        // would have asked for — segmenting twice (fast) rather than
+        // re-reading the video (slow) is why `trace: true` is on only here.
+        const traced = segmentRecording(thumbs, { fps, minHoldSeconds, keepBrief: options.keepBrief, trace: true });
+        const candidates = buildReviewCandidates(traced, thumbs);
+        const candidateFrames = [...new Set(candidates.map((candidate) => candidate.frame))];
+        report(options, 'extract', `Reading ${candidateFrames.length} screens at full size, kept and dropped alike`, { frames: count });
+        const candidateByIndex = await extractFramesAt(source, join(staging, 'frames'), fps, candidateFrames);
+        const candidateFramePaths = [];
+        for (const [index, path] of candidateByIndex) candidateFramePaths[index] = path;
+
+        // Cheap and on-device, unlike the real classification: catches a
+        // Google/Apple/Facebook sign-in page before anything else does, so
+        // manual mode can tick it too, the same as a loading screen.
+        for (const candidate of candidates) {
+          const framePath = candidateFramePaths[candidate.frame];
+          candidate.external = false;
           if (framePath) {
             try {
               const lines = await readText(framePath);
-              external = Boolean(isExternalAuthScreen(lines.map((line) => line.text).join('\n')));
+              candidate.external = Boolean(isExternalAuthScreen(lines.map((line) => line.text).join('\n')));
             } catch {
               // No hint, no harm — the real classify pass after resume still
               // runs its own check regardless of this one.
             }
           }
-          capturedScreens.push({
-            id: screen.id,
-            frame: screen.frame,
-            start: screen.start,
-            holdSeconds: screen.holdSeconds,
-            brief: Boolean(screen.brief),
-            kind: screen.kind,
-            external,
-          });
         }
+
         writeFileSync(
           join(staging, 'review.json'),
-          JSON.stringify({ source: basename(source), captureInfo, timeline }),
+          JSON.stringify({ source: basename(source), captureInfo, timeline, candidates }),
         );
-        report(options, 'captured', `${distinct.length} screen${distinct.length === 1 ? '' : 's'} captured — choose how to clean them up`, {
-          stagingDir: staging,
-          capturedScreens,
-        });
+        const kept = candidates.filter((candidate) => !candidate.dropped).length;
+        report(
+          options,
+          'captured',
+          `${kept} screen${kept === 1 ? '' : 's'} found, ${candidates.length - kept} more set aside — choose how to clean up`,
+          {
+            stagingDir: staging,
+            capturedScreens: candidates.map((candidate) => ({
+              id: candidate.id,
+              frame: candidate.frame,
+              start: candidate.start,
+              holdSeconds: candidate.holdSeconds,
+              brief: candidate.brief,
+              kind: candidate.kind,
+              external: candidate.external,
+              dropped: candidate.dropped,
+              reason: candidate.reason ?? null,
+            })),
+          },
+        );
         pausedForReview = true;
-        return { pausedForReview: true, stagingDir: staging, screens: distinct.length };
+        return { pausedForReview: true, stagingDir: staging, screens: kept };
       }
 
       visits = await ingestTimeline({ timeline, frames, analyzer, graph, duplicates, excluded, options, captureInfo });
@@ -658,9 +741,8 @@ export async function resumeIngest(options) {
     throw new Error('this run is no longer waiting for a decision — it may already have been resumed, or too much time passed and its captured screens were cleaned up');
   }
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
-  const { captureInfo, timeline: capturedTimeline } = manifest;
+  const { captureInfo, timeline: capturedTimeline, candidates } = manifest;
   const source = manifest.source;
-  const dropIds = new Set(options.drop ?? []);
 
   const analyzer = new Analyzer(options.backend);
   const graph = new ScreenGraph();
@@ -679,24 +761,85 @@ export async function resumeIngest(options) {
   }
 
   let timeline = capturedTimeline;
-  if (dropIds.size) {
-    // A screen dropped here is gone for good, not folded into a neighbour —
-    // so is any screen that only existed as a later return to it, and any
-    // edge either side of it; the admin asked for it removed, not merged.
-    const cascaded = new Set(dropIds);
-    for (const screen of timeline.screens) {
-      if (screen.revisitOf && cascaded.has(screen.revisitOf)) cascaded.add(screen.id);
+  let recovered = 0;
+
+  // "automatic": options.excluded is not even present, and the segmenter's
+  // own distinct/dropped split stands exactly as captured — the same result
+  // as a run that was never paused for review at all.
+  //
+  // "manual": options.excluded is the admin's final, explicit word on every
+  // candidate they were shown, kept and dropped alike. Left unselected when
+  // the segmenter had dropped it recovers that moment as a real screen —
+  // the admin's whole reason for reviewing by hand instead of trusting
+  // "automatic". Selected when the segmenter had kept it removes that
+  // screen, the same as before this review step existed.
+  if (Array.isArray(options.excluded)) {
+    const excludedIds = new Set(options.excluded);
+    if (!candidates) {
+      // A staging dir from before this candidate list existed: fall back to
+      // the narrower "remove only what was kept" behaviour it still supports.
+      const cascaded = new Set(excludedIds);
+      for (const screen of timeline.screens) if (screen.revisitOf && cascaded.has(screen.revisitOf)) cascaded.add(screen.id);
+      timeline = {
+        ...timeline,
+        screens: timeline.screens.filter((screen) => !cascaded.has(screen.id)),
+        edges: timeline.edges.filter((edge) => !cascaded.has(edge.from) && !cascaded.has(edge.to)),
+      };
+    } else {
+      const toRecover = candidates.filter((candidate) => candidate.dropped && !excludedIds.has(candidate.id));
+      const toDrop = new Set(candidates.filter((candidate) => !candidate.dropped && excludedIds.has(candidate.id)).map((candidate) => candidate.id));
+      // A screen dropped here is gone for good, not folded into a neighbour —
+      // so is any screen that only existed as a later return to it, and any
+      // edge either side of it; the admin asked for it removed, not merged.
+      for (const screen of timeline.screens) if (screen.revisitOf && toDrop.has(screen.revisitOf)) toDrop.add(screen.id);
+
+      let screens = timeline.screens.filter((screen) => !toDrop.has(screen.id));
+      for (const candidate of toRecover) {
+        recovered++;
+        if (candidate.reason === 'revisit') {
+          // Already a fully-analysed screen, just folded into an earlier
+          // one — recovering it is only a matter of no longer folding it.
+          const screen = screens.find((entry) => entry.id === candidate.id);
+          if (screen) screen.revisitOf = null;
+          continue;
+        }
+        // A moment the segmenter never kept, given a screen of its own —
+        // the print and colours it needs came with it in the manifest,
+        // computed at capture time since no full-size frame existed for it
+        // before now to compute them from.
+        screens.push({
+          id: candidate.id,
+          frame: candidate.frame,
+          start: candidate.start,
+          end: Math.round((candidate.start + candidate.holdSeconds) * 100) / 100,
+          holdSeconds: candidate.holdSeconds,
+          brief: candidate.brief,
+          kind: 'screen',
+          overlay: null,
+          overlayOf: null,
+          loadingOf: null,
+          scrolledFrom: null,
+          revisitOf: null,
+          visits: 1,
+          flat: false,
+          print: candidate.print ?? { dhash: '', ahash: '', luminance: 128, edge: 10 },
+          colors: candidate.colors ?? [],
+        });
+      }
+      // Chronological order matters downstream — flow order comes from it.
+      screens = screens.sort((a, b) => a.start - b.start);
+      timeline = { ...timeline, screens, edges: timeline.edges.filter((edge) => !toDrop.has(edge.from) && !toDrop.has(edge.to)) };
     }
-    timeline = {
-      ...timeline,
-      screens: timeline.screens.filter((screen) => !cascaded.has(screen.id)),
-      edges: timeline.edges.filter((edge) => !cascaded.has(edge.from) && !cascaded.has(edge.to)),
-    };
   }
 
   const distinct = timeline.screens.filter((screen) => !screen.revisitOf);
   if (!distinct.length) throw new Error('every captured screen was removed — nothing left to publish');
-  report(options, 'segment', `${distinct.length} screen${distinct.length === 1 ? '' : 's'} going forward`, { screens: distinct.length });
+  report(
+    options,
+    'segment',
+    `${distinct.length} screen${distinct.length === 1 ? '' : 's'} going forward${recovered ? `, ${recovered} recovered` : ''}`,
+    { screens: distinct.length },
+  );
 
   try {
     const visits = await ingestTimeline({ timeline, frames, analyzer, graph, duplicates, excluded, options, captureInfo });
@@ -1412,4 +1555,4 @@ function classifyLines(lines, sidecar) {
 }
 
 /** Exported for the self-test. */
-export const _internals = { listImages, titleFrom, unclassified, PUBLISHED_TYPES, wordsOf, labelFor, isPublishable, fingerprintFromThumb };
+export const _internals = { listImages, titleFrom, unclassified, PUBLISHED_TYPES, wordsOf, labelFor, isPublishable, fingerprintFromThumb, buildReviewCandidates };

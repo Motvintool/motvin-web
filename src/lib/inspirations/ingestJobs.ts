@@ -78,6 +78,10 @@ export type CapturedScreen = {
   kind: string;
   /** A free on-device text check, run before anything else: a Google/Apple/Facebook sign-in page, which is always left unpublished. */
   external: boolean;
+  /** Whether the segmenter already left this moment out — a transition, a revisit to an earlier screen, or similar. Still shown in the review grid so "manual" can recover it. */
+  dropped: boolean;
+  /** Why the segmenter dropped it (null when it was kept): e.g. "transition", "blank", "scrim", "still moving", "absorbed", "revisit". */
+  reason: string | null;
 };
 
 export type IngestEvent =
@@ -125,8 +129,13 @@ export type IngestJob = {
   dismissed: boolean;
 };
 
-/** What the admin chose, once they have seen the captured screens. */
-export type ReviewDecision = { mode: 'automatic' } | { mode: 'manual'; drop: string[] };
+/**
+ * What the admin chose, once they have seen the captured screens. "manual"
+ * carries every candidate id — kept and dropped alike — they left ticked to
+ * exclude from the library; one the segmenter had dropped and they left
+ * unticked is recovered and published instead.
+ */
+export type ReviewDecision = { mode: 'automatic' } | { mode: 'manual'; excluded: string[] };
 
 export type AiProvider = { id: string; name: string; url: string; needsKey: boolean; hint: string; model?: string };
 
@@ -426,9 +435,10 @@ export async function dismissIngestJob(id: string): Promise<void> {
 
 /**
  * The admin's answer to a run waiting at `awaiting-review`: "automatic"
- * (clean up with the usual rules, nothing hand-picked) or "manual" (drop
- * exactly these screens). Finishes the run; its progress keeps arriving on
- * the same job id, the same way as before the pause.
+ * (clean up with the usual rules, nothing hand-picked) or "manual" (exclude
+ * exactly these candidates — kept or dropped — from the library). Finishes
+ * the run; its progress keeps arriving on the same job id, the same way as
+ * before the pause.
  */
 export async function resumeIngest(id: string, decision: ReviewDecision): Promise<void> {
   const res = await fetch(`/api/crawler/jobs/${encodeURIComponent(id)}/resume`, {

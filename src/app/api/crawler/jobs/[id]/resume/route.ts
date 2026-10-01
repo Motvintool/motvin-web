@@ -4,16 +4,17 @@ import type { ReviewDecision } from '@/lib/inspirations/ingestJobs';
 
 /**
  * POST /api/crawler/jobs/:id/resume — the admin's answer to a run that
- * paused after capture: `{ mode: "automatic" }` or `{ mode: "manual", drop:
- * [screenId, …] }`. Finishes the same job, picking up from the staging dir
- * it left behind — see `resumeJob` and `tools/ios-crawler`'s `resume`.
+ * paused after capture: `{ mode: "automatic" }` or `{ mode: "manual",
+ * excluded: [candidateId, …] }`. Finishes the same job, picking up from the
+ * staging dir it left behind — see `resumeJob` and `tools/ios-crawler`'s
+ * `resume`.
  */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const admin = await verifyAdmin(request);
   if (!admin) return fail('This account may not administer the library.', 403);
   const { id } = await context.params;
 
-  let body: { mode?: string; drop?: unknown };
+  let body: { mode?: string; excluded?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -22,8 +23,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   let decision: ReviewDecision;
   if (body.mode === 'manual') {
-    const drop = Array.isArray(body.drop) ? body.drop.filter((id): id is string => typeof id === 'string') : [];
-    decision = { mode: 'manual', drop };
+    const excluded = Array.isArray(body.excluded) ? body.excluded.filter((id): id is string => typeof id === 'string') : [];
+    decision = { mode: 'manual', excluded };
   } else if (body.mode === 'automatic') {
     decision = { mode: 'automatic' };
   } else {
