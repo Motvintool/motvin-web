@@ -7296,6 +7296,31 @@ select.ins-input {
   font-weight: 500;
 }
 
+/* A reply question's chips once the chat has moved past them: no longer
+   buttons (clicking an old "iOS" again would answer whatever step the
+   chat is on now, not the platform question it actually came from). */
+.ins-chip-btn--static {
+  cursor: default;
+}
+
+.ins-chip-btn--static:hover {
+  background: var(--ins-card);
+}
+
+.ins-chip-btn--static.ins-chip-btn--selected:hover {
+  background: var(--ins-text);
+}
+
+.ins-chip-btn--static.ins-chip-btn--quiet {
+  opacity: 0.5;
+}
+
+.ins-chip-btn--selected {
+  background: var(--ins-text);
+  color: var(--ins-on-accent);
+  border-color: var(--ins-text);
+}
+
 /* iOS / Android / Web — a small segmented control. */
 .ins-segmented {
   display: inline-flex;

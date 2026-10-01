@@ -133,6 +133,12 @@ function matchHeldVersion(versions: { id: string; label: string; isLatest: boole
   );
 }
 
+/** Apps that already have at least one screen filed under the given platform — an app's platform isn't a field on AdminAppRecord itself, only on its screen files. */
+function appsOnPlatform(state: AdminState, platform: 'ios' | 'android' | 'web'): AdminAppRecord[] {
+  const ids = new Set(state.files.filter((file) => file.platform === platform).map((file) => file.appId));
+  return state.apps.filter((app) => ids.has(app.id));
+}
+
 export function IngestDock() {
   const { user, ready } = useAuth();
   const admin = ready && Boolean(user && !user.isAnonymous && isAdminEmail(user.email));
@@ -141,6 +147,16 @@ export function IngestDock() {
   // Only the newest answer can be asked again — earlier ones already have
   // what came after them.
   const lastAnswerId = [...messages].reverse().find((message) => message.role === 'assistant' && !message.pending && message.text)?.id ?? null;
+  // Which reply chip, if any, the admin actually picked for a question that
+  // has since moved on — the chat's next message is the chip's own text,
+  // sent as if typed (see `act`'s 'reply' branch) — so the chosen one can be
+  // shown picked instead of every option still looking equally pickable.
+  const answeredReply = new Map<string, string>();
+  messages.forEach((message, index) => {
+    if (message.role !== 'assistant' || !message.actions?.some((action) => action.type === 'reply')) return;
+    const next = messages[index + 1];
+    if (next?.role === 'user') answeredReply.set(message.id, next.text);
+  });
   const [logoFor, setLogoFor] = useState<ConfirmAction | null>(null);
   const { status: ai, loading: aiLoading } = useAiStatus(admin);
   const [collapsed, setCollapsed] = useState(() => {
@@ -352,13 +368,14 @@ export function IngestDock() {
 
   const askApp = async (plan: UploadPlan) => {
     const state = await library();
-    if (!state.apps.length) {
+    const apps = appsOnPlatform(state, plan.platform!);
+    if (!apps.length) {
       if (heldUpload?.kind === 'screens') askName(plan);
       else offerHeld({ platform: plan.platform! });
       return;
     }
     setUploadPlan({ ...plan, step: 'app' });
-    assistantSays('Is this a new app, or more screens of one already in the library?', [chip('New app'), ...state.apps.slice(0, 8).map((app) => chip(app.name)), chip('Cancel')]);
+    assistantSays('Is this a new app, or more screens of one already in the library?', [chip('New app'), ...apps.slice(0, 8).map((app) => chip(app.name)), chip('Cancel')]);
   };
 
   /** Screenshots for an app that does not exist yet: a recording identifies its app itself; screenshots cannot. */
@@ -411,12 +428,14 @@ export function IngestDock() {
         return;
       }
       const state = await library();
+      const apps = appsOnPlatform(state, plan.platform!);
       const needle = text.toLowerCase();
       const app =
-        state.apps.find((entry) => entry.name.toLowerCase() === needle || entry.id === needle) ??
-        state.apps.find((entry) => needle.includes(entry.name.toLowerCase()) || entry.name.toLowerCase().includes(needle));
+        apps.find((entry) => entry.name.toLowerCase() === needle || entry.id === needle) ??
+        apps.find((entry) => needle.includes(entry.name.toLowerCase()) || entry.name.toLowerCase().includes(needle));
       if (!app) {
-        assistantSays(`I don’t know an app called “${text}”. Pick one, or say “new app”.`, [chip('New app'), ...state.apps.slice(0, 8).map((entry) => chip(entry.name)), chip('Cancel')]);
+        const platformLabel = PLATFORM_CHOICES.find((choice) => choice.id === plan.platform)?.label ?? '';
+        assistantSays(`I don’t know a ${platformLabel} app called “${text}”. Pick one, or say “new app”.`, [chip('New app'), ...apps.slice(0, 8).map((entry) => chip(entry.name)), chip('Cancel')]);
         return;
       }
       askVersion(plan, app);
@@ -677,6 +696,7 @@ export function IngestDock() {
               canRetry={!asking && !liveJob && item.message.id === lastAnswerId}
               busy={asking || Boolean(liveJob)}
               newest={item.message.id === lastAnswerId}
+              answeredWith={answeredReply.get(item.message.id)}
             />
           ),
         )}
@@ -973,6 +993,7 @@ function ChatBubble({
   canRetry,
   busy,
   newest,
+  answeredWith,
 }: {
   message: ChatMessage;
   onAction: (action: AssistantAction) => void;
@@ -985,6 +1006,8 @@ function ChatBubble({
   busy: boolean;
   /** This is the newest answer: a screen grid in it still takes picks. */
   newest: boolean;
+  /** The chip text actually picked for this message's reply choices, once the chat has moved past them. */
+  answeredWith?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.text);
@@ -1101,6 +1124,18 @@ function ChatBubble({
                 return <ScreenPicker key={index} action={action} live={isLatestGrid} disabled={busy} />;
               }
               if (action.type === 'reply') {
+                // Once the chat has moved past this question, show which
+                // chip was actually picked instead of leaving every option
+                // looking equally choosable forever.
+                if (answeredWith !== undefined) {
+                  const picked = action.text.trim().toLowerCase() === answeredWith.trim().toLowerCase();
+                  return (
+                    <span key={index} className={`ins-chip-btn ins-chip-btn--static ${picked ? 'ins-chip-btn--selected' : 'ins-chip-btn--quiet'}`}>
+                      {picked && <CheckIcon size={12} />}
+                      {action.text}
+                    </span>
+                  );
+                }
                 return (
                   <button key={index} type="button" className="ins-chip-btn ins-chip-btn--quiet" onClick={() => onAction(action)}>
                     {action.text}
