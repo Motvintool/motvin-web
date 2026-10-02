@@ -70,7 +70,7 @@ export function ScreenLightbox({ screen, onClose }: { screen: Screen; onClose: (
         </button>
 
         <div
-          className={`ins-lightbox-shot ${zoomed ? 'is-zoomed' : ''}`}
+          className={`ins-lightbox-shot ${screen.platform === 'web' ? 'ins-lightbox-shot--web' : ''} ${zoomed ? 'is-zoomed' : ''}`}
           onClick={() => setZoomed((z) => !z)}
           title={zoomed ? 'Click to zoom out' : 'Click to zoom in'}
         >

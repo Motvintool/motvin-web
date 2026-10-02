@@ -2317,8 +2317,7 @@ select.ins-input {
 }
 
 .ins-shot-panel .ins-grid.ins-web-grid .ins-card-shot {
-  aspect-ratio: auto;
-  height: 330px;
+  aspect-ratio: 420 / 260.19;
   border: 1px solid #eee;
   border-radius: 1% / 1.75%;
 }
@@ -2345,7 +2344,7 @@ select.ins-input {
 
 .ins-shot-panel .ins-grid.ins-web-grid .ins-card-inset {
   border: 0;
-  height: auto;
+  height: 100%;
   border-radius: 1% / 1.75%;
 }
 
@@ -2353,7 +2352,8 @@ select.ins-input {
 .ins-shot-panel .ins-grid.ins-web-grid .ins-card-inset .ins-shot-img,
 .ins-shot-panel .ins-grid.ins-web-grid .ins-card-inset .ins-shot-missing {
   display: block;
-  height: auto;
+  height: 100%;
+  border-radius: 1% / 1.75%;
 }
 
 .ins-shot-panel .ins-card.is-selected .ins-card-shot::after {
@@ -4661,6 +4661,10 @@ select.ins-input {
      content), so a fixed-px border-radius stays a constant 92px at either
      size instead of visually stretching along with it. */
   transition: max-width 200ms var(--ins-ease), max-height 200ms var(--ins-ease);
+}
+
+.ins-lightbox-shot--web {
+  border-radius: 1% / 1.75%;
 }
 
 .ins-lightbox-shot.is-zoomed {
