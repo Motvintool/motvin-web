@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
+import { storeAction } from '@/lib/inspirations/storeAction';
 import { INDUSTRY_LABEL, PLATFORM_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from '@/lib/inspirations/taxonomy';
 import type { Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
@@ -245,6 +246,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     setMoreOpen(false);
   };
 
+  const store = storeAction(screen.platform, app?.website);
+
   const recording =
     screen.capture && screen.capture.atSeconds !== null ? (
       <>
@@ -289,7 +292,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   {screens.map((s) => (
                     <div
                       key={s.id}
-                      className="ins-screen-preview-shot"
+                      className={`ins-screen-preview-shot ${s.platform === 'web' ? 'ins-screen-preview-shot--web' : ''}`}
                       data-screen-id={s.id}
                       onClick={() => setZoomScreen(s)}
                     >
@@ -300,7 +303,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               ) : (
                 <div className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--single">
                   <div
-                    className="ins-screen-preview-shot"
+                    className={`ins-screen-preview-shot ${(screens[activeIndex] ?? screen).platform === 'web' ? 'ins-screen-preview-shot--web' : ''}`}
                     data-screen-id={screens[activeIndex]?.id ?? screen.id}
                     onClick={() => setZoomScreen(screens[activeIndex] ?? screen)}
                   >
@@ -346,15 +349,12 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   app={app ?? undefined}
                   className="ins-screen-preview-foot-btn ins-screen-preview-foot-btn--save"
                 />
-                <a
-                  className="ins-screen-preview-foot-btn"
-                  href={app?.website || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <img src="/ASSET/Icons/Motvin/view-apps.svg" alt="" width={18} height={16} />
-                  View in App Store
-                </a>
+                {store && (
+                  <a className="ins-screen-preview-foot-btn" href={store.href} target="_blank" rel="noopener noreferrer">
+                    <img src={store.icon} alt="" width={18} height={16} />
+                    {store.label}
+                  </a>
+                )}
               </div>
               <div className="ins-screen-preview-foot-secondary">
                 {screens.length > 1 && (

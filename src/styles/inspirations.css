@@ -1006,6 +1006,14 @@ body {
   border-radius: 12px;
 }
 
+/* A Web screen is landscape — drawn wide, top-aligned, not squeezed into a
+   phone's proportions. */
+.ins-explore-cursor-logo.is-screen.is-web {
+  width: 240px;
+  aspect-ratio: 16 / 10;
+  object-position: top center;
+}
+
 .ins-explore-cursor-title {
   margin: 0;
   font-family: var(--font-outfit), sans-serif;
@@ -2129,6 +2137,139 @@ select.ins-input {
   align-items: start;
 }
 
+.ins-app-grid { gap: 20px; }
+
+/* Figma Web Screen Preview (1220:9209): web cards retain the shared grid
+  layout while replacing only the mobile-screen card geometry. */
+.ins-grid.ins-web-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 1650px) {
+  .ins-grid.ins-web-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1500px) {
+  .ins-main,
+  .ins-header-content {
+    padding-inline: 40px;
+  }
+
+  .ins-ftoolbar.is-docked {
+    padding-inline: 40px;
+  }
+}
+
+.ins-web-card {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.ins-web-card-shot {
+  position: relative;
+  padding: 32px;
+  overflow: hidden;
+  border-radius: 9.09% / 13.57%;
+  background: #f5f5f5;
+}
+
+.ins-web-card-inset {
+  aspect-ratio: 420 / 260.19;
+  overflow: hidden;
+  border: 1px solid #eee;
+  border-radius: 3.81% / 6.15%;
+  background: #e5e5e5;
+}
+
+.ins-web-card-link {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ins-web-card-inset .ins-shot-img,
+.ins-web-card-inset .ins-shot-missing {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  object-fit: cover;
+}
+
+.ins-web-card-inset .ins-app-logo {
+  position: relative;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.ins-web-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 16px;
+}
+
+.ins-web-card-logo { border-radius: 10.4px; }
+
+.ins-web-card-meta-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ins-web-card-app,
+.ins-web-card-name {
+  overflow: hidden;
+  color: #121212;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28.8px;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ins-web-card-tagline {
+  margin: 0;
+  overflow: hidden;
+  color: #626262;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ins-web-card-controls {
+  background: linear-gradient(to bottom, transparent, #fafafa);
+}
+
+.ins-explore-view .ins-web-card .ins-card-select-ring {
+  top: 32px;
+  left: 32px;
+}
+
+.ins-card-hover-controls.ins-web-card-controls {
+  gap: 110px;
+}
+
+.ins-web-card:hover .ins-card-select-ring,
+.ins-web-card:has(:focus-visible) .ins-card-select-ring,
+.ins-web-card:hover .ins-web-card-controls,
+.ins-web-card:has(:focus-visible) .ins-web-card-controls { opacity: 1; transform: translateY(0); }
+
+.ins-web-card:hover .ins-card-select-ring,
+.ins-web-card:has(:focus-visible) .ins-card-select-ring { pointer-events: auto; }
+
+.ins-web-card:hover .ins-web-card-controls { background: linear-gradient(to bottom, rgba(245, 245, 245, 0), rgba(245, 245, 245, 0.98) 48%, #f5f5f5); }
+
 .ins-grid-sentinel {
   height: 48px;
   display: flex;
@@ -2162,11 +2303,8 @@ select.ins-input {
   position: relative;
   width: 100%;
   aspect-ratio: 346 / 674;
-  padding: 32px;
-  border-radius: 116px;
-  /* Same continuous "squircle" corner as .ins-screen-preview-shot, for
-     visual consistency between the preview modal and every card grid. */
-  corner-shape: squircle;
+  padding: 36px;
+  border-radius: 19.65% / 10.09%;
   overflow: hidden;
   background: #f5f5f5;
 }
@@ -2174,30 +2312,65 @@ select.ins-input {
 .ins-shot-panel .ins-card-shot {
   padding: 0;
   aspect-ratio: 282 / 611;
-  border-radius: 62px;
+  border-radius: 12.06% / 5.56%;
   background: transparent;
+}
+
+.ins-shot-panel .ins-grid.ins-web-grid .ins-card-shot {
+  aspect-ratio: auto;
+  height: 330px;
+  border: 1px solid #eee;
+  border-radius: 1% / 1.75%;
 }
 
 .ins-shot-panel .ins-grid {
   grid-template-columns: repeat(5, minmax(0, 380px));
 }
 
+.ins-shot-panel .ins-grid.ins-web-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 1650px) {
+  .ins-shot-panel .ins-grid.ins-web-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .ins-shot-panel .ins-card-inset {
   border: 1px solid #eee;
-  border-radius: 62px;
-  corner-shape: squircle;
+  border-radius: 12.41% / 5.65%;
+}
+
+.ins-shot-panel .ins-grid.ins-web-grid .ins-card-inset {
+  border: 0;
+  height: auto;
+  border-radius: 1% / 1.75%;
+}
+
+.ins-shot-panel .ins-grid.ins-web-grid .ins-card-link,
+.ins-shot-panel .ins-grid.ins-web-grid .ins-card-inset .ins-shot-img,
+.ins-shot-panel .ins-grid.ins-web-grid .ins-card-inset .ins-shot-missing {
+  display: block;
+  height: auto;
 }
 
 .ins-shot-panel .ins-card.is-selected .ins-card-shot::after {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 62px;
-  corner-shape: squircle;
+  border-radius: 19.65% / 10.09%;
   border: 1px solid #0b0c0e;
   box-shadow: inset 0 0 0 1px #0b0c0e;
   z-index: 4;
   pointer-events: none;
+}
+
+/* The selected stroke on a Web card follows the card's own corner, so it
+   isn't clipped by the shot's rounder edge. */
+.ins-shot-panel .ins-grid.ins-web-grid .ins-card.is-selected .ins-card-shot::after {
+  border-radius: 1% / 1.75%;
 }
 
 .ins-shot-panel .ins-card-inset .ins-shot-img {
@@ -2212,8 +2385,7 @@ select.ins-input {
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: 62px;
-  corner-shape: squircle;
+  border-radius: 12.41% / 5.65%;
   overflow: hidden;
   background: #e5e5e5;
 }
@@ -2288,8 +2460,8 @@ select.ins-input {
    52px; ScreenCard's ring elsewhere (App Detail Screens tab, Screens
    listing) stays at this rule's default 16px above. */
 .ins-explore-view .ins-card-select-ring {
-  top: 52px;
-  left: 52px;
+  top: 32px;
+  left: 32px;
 }
 
 /* Active state — stays visible and clickable without hovering, so a
@@ -2380,9 +2552,26 @@ select.ins-input {
 }
 
 .ins-card:hover .ins-card-select-ring,
-.ins-card:has(:focus-visible) .ins-card-select-ring,
-.ins-card:hover .ins-card-hover-footer,
-.ins-card:has(:focus-visible) .ins-card-hover-footer {
+.ins-card:has(:focus-visible) .ins-card-select-ring {
+  pointer-events: auto;
+}
+
+/* The footer is a visual overlay on the screenshot — a gradient, the app's
+   name and the Save/Copy buttons — so only the buttons take the pointer.
+   Everything else on it, including the gradient that can reach well up the
+   card (all of a short Web card), lets the click fall through to the
+   screenshot link beneath, which opens the preview. When the whole footer
+   was clickable, a hovered card opened its preview only from the strip of
+   screenshot above the gradient — and from nowhere at all on a Web card. */
+.ins-card-hover-footer .ins-btn-save,
+.ins-card-hover-footer .ins-btn-copy {
+  pointer-events: none;
+}
+
+.ins-card:hover .ins-card-hover-footer .ins-btn-save,
+.ins-card:hover .ins-card-hover-footer .ins-btn-copy,
+.ins-card:has(:focus-visible) .ins-card-hover-footer .ins-btn-save,
+.ins-card:has(:focus-visible) .ins-card-hover-footer .ins-btn-copy {
   pointer-events: auto;
 }
 
@@ -2694,15 +2883,15 @@ select.ins-input {
      scrolling into view (see .ins-screen-preview-filmstrip). */
   box-sizing: border-box;
   border: 1px solid #eee;
-  border-radius: 62px;
+  border-radius: 12.41% / 5.65%;
   cursor: zoom-in;
-  /* Plain border-radius is a constant-curvature circular arc — this is the
-     continuous, G2-smooth "squircle" corner iOS actually uses (visibly
-     rounder through the corner, flatter along the straight edges leading
-     into it). Unsupported browsers just keep the plain radius above; no
-     fallback needed. */
-  corner-shape: squircle;
   overflow: hidden;
+}
+
+/* A Web screen is wide, so it takes the gentle corner Web cards use rather
+   than the phone's deep one. */
+.ins-screen-preview-shot--web {
+  border-radius: 1% / 1.75%;
 }
 
 .ins-screen-preview-shot img {
@@ -3432,8 +3621,7 @@ select.ins-input {
   overflow: hidden;
   background: var(--ins-card);
   border: 1px solid var(--ins-border);
-  border-radius: 52px;
-  corner-shape: squircle;
+  border-radius: 34px;
   scroll-snap-align: start;
 }
 
@@ -4465,11 +4653,7 @@ select.ins-input {
 .ins-lightbox-shot {
   max-width: 100%;
   max-height: calc(100vh - 96px);
-  border-radius: 92px;
-  /* Same continuous "squircle" corner as .ins-screen-preview-shot, rather
-     than a plain constant-curvature radius — unsupported browsers just keep
-     the radius above with no fallback needed. */
-  corner-shape: squircle;
+  border-radius: 12.41% / 5.65%;
   overflow: hidden;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
   cursor: zoom-in;
@@ -5988,6 +6172,13 @@ select.ins-input {
 
 }
 
+@media (max-width: 1100px) {
+  .ins-pagehead,
+  .ins-explore-taxonomy {
+    display: none;
+  }
+}
+
 @media (max-width: 899px) {
 
   .ins-info {
@@ -5999,6 +6190,11 @@ select.ins-input {
 @media (max-width: 759px) {
   .ins-main {
     padding: 24px 20px 60px;
+  }
+
+  .ins-header-content,
+  .ins-ftoolbar.is-docked {
+    padding-inline: 20px;
   }
 
   .ins-header-inner {
@@ -6069,6 +6265,13 @@ select.ins-input {
     justify-content: flex-end;
   }
 
+
+@media (max-width: 640px) {
+  .ins-grid,
+  .ins-grid.ins-web-grid {
+    grid-template-columns: 1fr;
+  }
+}
   /* Docked rows don't wrap, so the right side stays inline on its row edge. */
   .ins-ftoolbar.is-docked .ins-ftoolbar-right {
     margin-left: auto;

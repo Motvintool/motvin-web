@@ -100,6 +100,7 @@ export function AppsView() {
       <AppsGrid
         apps={visible}
         loading={loading}
+        webLayout={platform === 'web'}
         emptyTitle={industry || params.get('platform') ? 'No apps match these filters' : 'No apps in the library yet'}
         emptyDescription={
           industry || params.get('platform')

@@ -5,6 +5,7 @@ import { appCardScreens } from '@/lib/inspirations/cover';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import type { App } from '@/lib/inspirations/types';
 import { AppCard } from './AppCard';
+import { WebCard } from './WebCard';
 import { EmptyState } from './EmptyState';
 import { FloatCollectionBar } from './FloatCollectionBar';
 import { FolderIcon } from './Icons';
@@ -30,12 +31,14 @@ export function AppsGrid({
   emptyTitle = 'No apps to show',
   emptyDescription,
   emptyAction,
+  webLayout = false,
 }: {
   apps: App[];
   loading?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
   emptyAction?: { label: string; href?: string; onClick?: () => void };
+  webLayout?: boolean;
 }) {
   const key = apps.map((a) => a.id).join(',');
   const { data: previews, loading: previewsLoading } = useAsync(async () => {
@@ -72,9 +75,16 @@ export function AppsGrid({
 
   return (
     <>
-      <div className="ins-grid" role="list">
+      <div className={`ins-grid ins-app-grid ${webLayout ? 'ins-web-grid' : ''}`} role="list">
         {apps.map((app) => (
-          <AppCard
+          webLayout ? <WebCard
+            key={app.id}
+            app={app}
+            previewScreens={previews?.get(app.id)}
+            selected={selected.has(app.id)}
+            selectable
+            onToggleSelect={() => toggle(app.id)}
+          /> : <AppCard
             key={app.id}
             app={app}
             previewScreens={previews?.get(app.id)}

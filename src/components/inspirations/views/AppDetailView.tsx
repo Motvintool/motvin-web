@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { elementLabel, INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { App, ElementKind, Flow, Pattern, Screen } from '@/lib/inspirations/types';
+import { appPlatform, storeAction } from '@/lib/inspirations/storeAction';
 import { AppLogo } from '../AppLogo';
 import { AppMenu } from '../AppMenu';
 import { AppRating } from '../AppRating';
@@ -493,6 +494,8 @@ export function AppDetailView({
   const tab: AppTab = TABS.some((t) => t.id === rawTab) ? (rawTab as AppTab) : 'screens';
   const setTab = (t: AppTab) => router.replace(t === 'screens' ? pathname : `${pathname}?tab=${t}`, { scroll: false });
 
+  // "View in App Store" for a phone app, "Visit website" for a Web one.
+  const store = storeAction(appPlatform(app), app.website);
   const screenIds = new Set(screens.map((s) => s.id));
   const screenById = new Map(screens.map((s) => [s.id, s]));
   const appsMap = new Map([[app.id, app]]);
@@ -772,10 +775,12 @@ export function AppDetailView({
             <img src={`/ASSET/Icons/Motvin/${saved ? 'saved.svg' : 'unsaved.svg'}`} alt="" width={16} height={16} />
             <span>{saved ? 'Saved' : 'Save'}</span>
           </button>
-          <a href={app.website || '#'} target="_blank" rel="noopener noreferrer" className="ins-btn ins-btn--masthead-store">
-            <img src="/ASSET/Icons/Motvin/view-apps.svg" alt="" width={16} height={16} />
-            <span>View in App Store</span>
-          </a>
+          {store && (
+            <a href={store.href} target="_blank" rel="noopener noreferrer" className="ins-btn ins-btn--masthead-store">
+              <img src={store.icon} alt="" width={16} height={16} />
+              <span>{store.label}</span>
+            </a>
+          )}
           <AppMenu app={app} screens={screens} />
         </div>
       </header>
@@ -812,6 +817,7 @@ export function AppDetailView({
             <ScreenGrid
               screens={sortedScreens}
               apps={appsMap}
+              webGrid={app.platforms.includes('web')}
               showApp={false}
               showMeta={false}
               selectable
@@ -857,6 +863,7 @@ export function AppDetailView({
             <ScreenGrid
               screens={sortedUiElementScreens}
               apps={appsMap}
+              webGrid={app.platforms.includes('web')}
               showApp={false}
               showMeta={false}
               selectable
@@ -881,6 +888,7 @@ export function AppDetailView({
             <ScreenGrid
               screens={sortedPatternScreens}
               apps={appsMap}
+              webGrid={app.platforms.includes('web')}
               showApp={false}
               showMeta={false}
               selectable

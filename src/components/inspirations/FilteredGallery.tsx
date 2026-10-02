@@ -232,6 +232,7 @@ export function FilteredGallery({
           <AppsGrid
             apps={apps}
             loading={appsLoading}
+            webLayout={filters.platforms.length === 1 && filters.platforms[0] === 'web'}
             emptyTitle={appsLibraryEmpty ? 'No apps in the library yet' : 'No apps match these filters'}
             emptyDescription={
               appsLibraryEmpty
@@ -255,9 +256,10 @@ export function FilteredGallery({
           />
           {/* .ins-shot-panel applies the app-page gallery treatment: five
               frameless, hairline-bordered shots per row. */}
-          <div className="ins-shot-panel">
+          <div className={filters.platforms.length === 1 && filters.platforms[0] === 'web' ? '' : 'ins-shot-panel'}>
             <ScreenGrid
               screens={items}
+              webLayout={filters.platforms.length === 1 && filters.platforms[0] === 'web'}
               showMeta={false}
               selectable
               loading={!ready || loadingMore}

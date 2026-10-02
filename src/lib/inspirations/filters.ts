@@ -54,6 +54,16 @@ function parseList<T extends string>(raw: string | null, allowed: readonly T[]):
   return Array.from(new Set(raw.split(',').filter((v): v is T => set.has(v))));
 }
 
+/**
+ * The platforms a URL is actually browsing: the validated `?platform=` list,
+ * or the default when it names none. What feeds, the header nav and the
+ * platform-scoped meta all agree on.
+ */
+export function browsedPlatforms(params: { get(name: string): string | null }): Platform[] {
+  const named = parseList(params.get('platform'), PLATFORMS);
+  return named.length ? named : [DEFAULT_PLATFORM];
+}
+
 export function parseFilters(params: URLSearchParams): ScreenFilters {
   return {
     platforms: parseList(params.get('platform'), PLATFORMS),

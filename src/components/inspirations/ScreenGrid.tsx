@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { App, Screen } from '@/lib/inspirations/types';
 import { FloatCollectionBar } from './FloatCollectionBar';
 import { ScreenCard } from './ScreenCard';
+import { WebScreenCard } from './WebScreenCard';
 
 import { useApps } from './useApps';
 
@@ -30,6 +31,8 @@ export function ScreenGrid({
   textHighlights,
   empty,
   onRemoveItem,
+  webLayout = false,
+  webGrid = false,
 }: {
   screens: Screen[];
   /** Overrides the shared app lookup; omit and the grid fetches it itself. */
@@ -43,6 +46,8 @@ export function ScreenGrid({
   textHighlights?: Record<string, Array<{ left: number; top: number; width: number; height: number }>>;
   empty?: ReactNode;
   onRemoveItem?: (id: string) => void;
+  webLayout?: boolean;
+  webGrid?: boolean;
 }) {
   const fetchedApps = useApps();
   const apps = appsOverride ?? fetchedApps;
@@ -86,9 +91,18 @@ export function ScreenGrid({
 
   return (
     <>
-      <div className="ins-grid" role="list">
+      <div className={`ins-grid ${webLayout || webGrid ? 'ins-web-grid' : ''}`} role="list">
         {screens.map((screen, index) => (
-          <ScreenCard
+          webLayout ? <WebScreenCard
+            key={screen.id}
+            screen={screen}
+            app={apps.get(screen.appId)}
+            showApp={showApp}
+            showMeta={showMeta}
+            selectable={selectable}
+            selected={selectedIds.has(screen.id)}
+            onToggleSelect={() => toggleSelection(screen.id)}
+          /> : <ScreenCard
             key={screen.id}
             screen={screen}
             app={apps.get(screen.appId)}

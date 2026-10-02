@@ -7,6 +7,7 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import { PLATFORMS } from '@/lib/inspirations/types';
 import { GlobalSearch } from './GlobalSearch';
+import { useApps } from './useApps';
 import { CloseIcon } from './Icons';
 import { ProfileMenu } from './ProfileMenu';
 import { AudioMenu } from './AudioMenu';
@@ -32,8 +33,21 @@ export function Header() {
   // feed applies DEFAULT_PLATFORM (iOS) when the URL names no platform, so
   // this nav, the toolbar's Platform pill and the docked Apps/Web switcher
   // always describe the same single-platform view.
+  //
+  // An app's own page has no `?platform=` — but a Web-only product is not an
+  // iOS page, so there the nav shows the platform the app lives on instead of
+  // the default (an app on iOS keeps iOS, as it always did).
+  const routeSlug = pathname.match(/^\/inspirations\/app\/([^/]+)/)?.[1];
+  const apps = useApps();
+  const routeApp = routeSlug ? apps.get(routeSlug) : undefined;
+  const routePlatform =
+    routeApp && activePlatforms.length === 0 && !routeApp.platforms.includes('ios') ? routeApp.platforms[0] : undefined;
   const visuallyActivePlatform =
-    activePlatforms.length === 1 ? activePlatforms[0] : activePlatforms.length === 0 ? 'ios' : null;
+    activePlatforms.length === 1
+      ? activePlatforms[0]
+      : activePlatforms.length === 0
+        ? (routePlatform ?? 'ios')
+        : null;
 
   // Close the drawer whenever the route changes. Adjusting state during
   // render (rather than in an effect) avoids an extra paint with the menu

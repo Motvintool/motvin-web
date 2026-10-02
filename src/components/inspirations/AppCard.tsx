@@ -280,7 +280,7 @@ export function AppCard({
         )}
       </div>
       <div className="ins-card-meta">
-        <AppLogo app={app} size={40} className="ins-card-logo" />
+        <AppLogo app={app} size={50} className="ins-card-logo" />
         <div className="ins-card-meta-text">
           <Link href={href} className="ins-card-app">{app.name}</Link>
           {app.tagline && <p className="ins-card-tagline">{app.tagline}</p>}

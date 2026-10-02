@@ -1,50 +1,69 @@
 'use client';
 
-import type { Screen } from '@/lib/inspirations/types';
+import type { Platform, Screen } from '@/lib/inspirations/types';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { INDUSTRY_LABEL, SCREEN_TYPE_LABEL, elementLabel, flowCategoryLabel } from '@/lib/inspirations/taxonomy';
 import { FilteredGallery } from '../FilteredGallery';
 import { PageHeading } from '../PageHeading';
-import { useMeta } from '../useMeta';
+import { usePlatformMeta } from '../useMeta';
 import { ExploreSkeleton } from '../Skeletons';
 import { useAsync } from '../useAsync';
 import { AppLogo } from '../AppLogo';
-import { EMPTY_META, inspirationsApi } from '@/lib/inspirations/api';
-import { EMPTY_FILTERS } from '@/lib/inspirations/filters';
+import { inspirationsApi } from '@/lib/inspirations/api';
+import { EMPTY_FILTERS, browsedPlatforms } from '@/lib/inspirations/filters';
 
-function HoverPreview({ category, mousePos }: { category: { id: string, title: string }, mousePos: { x: number, y: number } }) {
+/**
+ * The cursor card beside a taxonomy link. Everything it previews is scoped to
+ * the platform being browsed — apps, screens and flows from Web when Web is
+ * chosen — so what it shows is what the link leads to, and a Web screen is
+ * drawn landscape rather than squeezed into a phone frame.
+ */
+function HoverPreview({
+  category,
+  mousePos,
+  platforms,
+}: {
+  category: { id: string; title: string };
+  mousePos: { x: number; y: number };
+  platforms: Platform[];
+}) {
+  const platformKey = platforms.join(',');
+  const isWeb = platforms.length === 1 && platforms[0] === 'web';
   const isScreens = category.title === 'Screens' || category.title === 'Flows' || category.title === 'UI Elements';
   const isFlows = category.title === 'Flows';
   const isCategories = category.title === 'Categories';
   const isElements = category.title === 'UI Elements';
   
-  const { data: appsData } = useAsync(() => 
-    isCategories ? inspirationsApi.listApps(category.id) : Promise.resolve([]), 
-    `preview-apps-${category.id}`
-  );
-  
+  const { data: appsData } = useAsync(async () => {
+    if (!isCategories) return [];
+    const apps = await inspirationsApi.listApps(category.id);
+    return apps.filter((a) => a.platforms.some((p) => platforms.includes(p)));
+  }, `preview-apps-${category.id}-${platformKey}`);
+
   const { data: screensData } = useAsync(() => {
+    const scoped = { ...EMPTY_FILTERS, platforms };
     if (category.title === 'Screens') {
-      return inspirationsApi.listScreens({ ...EMPTY_FILTERS, screenTypes: [category.id as any] }, 0, 'curated');
+      return inspirationsApi.listScreens({ ...scoped, screenTypes: [category.id as any] }, 0, 'curated');
     }
     if (isElements) {
-      return inspirationsApi.listScreens(EMPTY_FILTERS, 0, 'curated', { element: category.id });
+      return inspirationsApi.listScreens(scoped, 0, 'curated', { element: category.id });
     }
     return Promise.resolve({ items: [] } as any);
-  }, `preview-screens-${category.id}-${category.title}`);
+  }, `preview-screens-${category.id}-${category.title}-${platformKey}`);
 
   const { data: flowsScreensData } = useAsync(async (): Promise<Screen[]> => {
     if (!isFlows) return [];
-    const flows = await inspirationsApi.listFlows(category.id);
+    const flows = (await inspirationsApi.listFlows(category.id)).filter((f) => platforms.includes(f.platform));
     if (!flows.length) return [];
     // Grab the top flow in this category and preview its actual sequence of screens!
     const screenIds = flows[0].screenIds.slice(0, 5).filter(Boolean);
     return inspirationsApi.getScreens(screenIds);
-  }, `preview-flows-${category.id}`);
+  }, `preview-flows-${category.id}-${platformKey}`);
 
   const [cycleIndex, setCycleIndex] = useState(0);
   useEffect(() => {
@@ -72,7 +91,7 @@ function HoverPreview({ category, mousePos }: { category: { id: string, title: s
 
   return createPortal(
     <div 
-      className={`ins-explore-cursor-preview ${isScreens ? 'is-screen' : ''}`} 
+      className={`ins-explore-cursor-preview ${isScreens ? 'is-screen' : ''} ${isWeb ? 'is-web' : ''}`}
       style={{ position: 'fixed', top, left }}
     >
       {preview.type === 'screen' && preview.url ? (
@@ -80,7 +99,7 @@ function HoverPreview({ category, mousePos }: { category: { id: string, title: s
           key={preview.id}
           src={inspirationsApi.mediaUrl(preview.url) ?? preview.url} 
           alt="" 
-          className="ins-explore-cursor-logo is-screen" 
+          className={`ins-explore-cursor-logo is-screen ${isWeb ? 'is-web' : ''}`}
         />
       ) : preview.app ? (
         <AppLogo key={preview.id} app={preview.app} size={84} className="ins-explore-cursor-logo" />
@@ -106,8 +125,16 @@ const MAX_TAXONOMY_ITEMS = 5;
  * the first viewport.
  */
 export function ExploreView() {
-  const { data, loading } = useAsync(() => inspirationsApi.getMeta(), 'meta');
-  const meta = data ?? EMPTY_META;
+  // The taxonomy below is the browsed platform's own (see usePlatformMeta):
+  // choose Web in the header and these four columns are what Web holds.
+  const { meta, loading } = usePlatformMeta();
+  const params = useSearchParams();
+  const platforms = browsedPlatforms(params);
+  // Each link lands on a page that applies the URL's platform, so the choice
+  // is carried across — and left off for the iOS default, which pages assume.
+  const rawPlatform = params.get('platform');
+  const withPlatform = (href: string) =>
+    rawPlatform ? `${href}${href.includes('?') ? '&' : '?'}platform=${encodeURIComponent(rawPlatform)}` : href;
 
   const [hoveredCategory, setHoveredCategory] = useState<{ id: string, title: string } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -127,7 +154,7 @@ export function ExploreView() {
       items: meta.taxonomy.industries.slice(0, MAX_TAXONOMY_ITEMS).map((industry) => ({
         key: industry,
         label: INDUSTRY_LABEL[industry] ?? industry,
-        href: `${INSPIRATIONS_ROUTES.screens}?industry=${industry}`,
+        href: withPlatform(`${INSPIRATIONS_ROUTES.screens}?industry=${industry}`),
       })),
     },
     {
@@ -135,7 +162,7 @@ export function ExploreView() {
       items: meta.taxonomy.screenTypes.slice(0, MAX_TAXONOMY_ITEMS).map((type) => ({
         key: type,
         label: SCREEN_TYPE_LABEL[type] ?? type,
-        href: `${INSPIRATIONS_ROUTES.screens}?type=${type}`,
+        href: withPlatform(`${INSPIRATIONS_ROUTES.screens}?type=${type}`),
       })),
     },
     {
@@ -143,7 +170,7 @@ export function ExploreView() {
       items: meta.taxonomy.elements.slice(0, MAX_TAXONOMY_ITEMS).map((kind) => ({
         key: kind,
         label: elementLabel(kind),
-        href: `${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(kind)}`,
+        href: withPlatform(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(kind)}`),
       })),
     },
     {
@@ -151,7 +178,7 @@ export function ExploreView() {
       items: meta.taxonomy.flowCategories.slice(0, MAX_TAXONOMY_ITEMS).map((category) => ({
         key: category,
         label: flowCategoryLabel(category),
-        href: `${INSPIRATIONS_ROUTES.flows}?category=${encodeURIComponent(category)}`,
+        href: withPlatform(`${INSPIRATIONS_ROUTES.flows}?category=${encodeURIComponent(category)}`),
       })),
     },
   ].filter((group) => group.items.length > 0);
@@ -205,7 +232,7 @@ export function ExploreView() {
       </Suspense>
 
       {mounted && hoveredCategory && (
-        <HoverPreview category={hoveredCategory} mousePos={mousePos} />
+        <HoverPreview category={hoveredCategory} mousePos={mousePos} platforms={platforms} />
       )}
     </div>
   );

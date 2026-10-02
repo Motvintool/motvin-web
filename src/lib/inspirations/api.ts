@@ -142,9 +142,16 @@ const EMPTY_SEARCH: SearchResults = {
 export const PAGE_SIZE = 30;
 
 export const inspirationsApi = {
-  /** Counts and the taxonomy actually present in the store. */
-  getMeta(): Promise<LibraryMeta> {
-    return request('/meta', TTL.meta, EMPTY_META);
+  /**
+   * Counts and the taxonomy actually present in the store — for everything,
+   * or, given platforms, only what exists on those (so Web is offered Web's
+   * own screen types and categories rather than every platform's union).
+   */
+  getMeta(platforms?: string[]): Promise<LibraryMeta> {
+    const params = new URLSearchParams();
+    listParam('platform', platforms, params);
+    const qs = params.toString();
+    return request(qs ? `/meta?${qs}` : '/meta', TTL.meta, EMPTY_META);
   },
 
   listScreens(
