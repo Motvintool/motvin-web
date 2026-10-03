@@ -63,11 +63,22 @@ const SETTLED_MAD = 8;
 const SETTLED_CHANGED = 0.1;
 
 /** Two adjacent holds this close are one screen that was still drawing… */
-const MERGE_MAD = 14;
-const MERGE_CHANGED = 0.15;
+const MERGE_MAD = 10;
+const MERGE_CHANGED = 0.10;
 /** …unless the first had already been still this long and this much of it then changed: a new state of the page. */
 const SETTLED_SECONDS = 1.5;
-const STATE_CHANGED = 0.08;
+const STATE_CHANGED = 0.06;
+/**
+ * …or that much changed inside a tall block of real content: two screens that
+ * share most of their chrome (the same logo, the same centred white card) can
+ * replace almost all of what sits inside that card — different fields,
+ * different buttons — while the frame-wide changed share stays under
+ * STATE_CHANGED, because so much of the rest of the frame (margins, the
+ * shared chrome) never moved. A change this tall is not a toggle or typed
+ * text; it is the content of the page being swapped out.
+ */
+const BIG_BOX_HEIGHT = 0.4;
+const BIG_BOX_CHANGED = 0.03;
 
 /** A vertical shift that removes this share of the difference is a scroll. */
 const SCROLL_RESIDUAL_RATIO = 0.45;
@@ -289,9 +300,17 @@ export function segmentRecording(thumbs, options) {
         // after it has been still longer than that is something the person
         // did — a section opened, a tab within the page, an option chosen —
         // and the screen in its new state is its own screen. Small changes
-        // (a toggle, a radio, typed text) still fold in; so does chrome.
+        // (a toggle, a radio, typed text) still fold in; so does chrome. A
+        // change that is not compact and runs tall down the frame counts even
+        // under STATE_CHANGED's bar — two screens built from the same shared
+        // chrome around a different card of content can swap nearly all of
+        // that card while the frame-wide share stays low.
         const previousSeconds = (previous.end - previous.start + 1) / fps;
-        const stateChange = previousSeconds >= SETTLED_SECONDS && step.changed >= STATE_CHANGED && !inChrome;
+        const bigBox = box && !inChrome && !compact && box.h >= BIG_BOX_HEIGHT;
+        const stateChange =
+          previousSeconds >= SETTLED_SECONDS &&
+          !inChrome &&
+          (step.changed >= STATE_CHANGED || (bigBox && step.changed >= BIG_BOX_CHANGED));
         if (
           step.label !== 'scroll' &&
           step.mad <= MERGE_MAD &&
@@ -507,10 +526,10 @@ export function segmentRecording(thumbs, options) {
       if (relation.overlay) {
         screen.kind = 'overlay';
         screen.overlay = relation.overlay;
-        screen.overlayOf = canonical(previous);
+        screen.overlayOf = previous.id;
       } else if (relation.scrolled) {
         screen.kind = 'scrolled';
-        screen.scrolledFrom = canonical(previous);
+        screen.scrolledFrom = previous.id;
       } else if (relation.previousWasLoading && !previous.revisitOf && !previous.overlayOf) {
         previous.kind = 'loading';
         previous.loadingOf = screen.id;
@@ -580,7 +599,7 @@ export function segmentRecording(thumbs, options) {
   for (let i = 0; i < screens.length; i++) {
     if (!screens[i].skeleton || screens[i].loadingOf) continue;
     const after = screens.slice(i + 1).find((entry) => entry.kind !== 'loading');
-    screens[i].loadingOf = after ? canonical(after) : null;
+    screens[i].loadingOf = after ? after.id : null;
   }
 
   // ─── Slide-ins that looked like sheets ───────────────────────────────────
@@ -595,7 +614,11 @@ export function segmentRecording(thumbs, options) {
     const screen = screens[i];
     if (screen.kind !== 'overlay' || screen.overlay.dimmed) continue;
     const after = screens[i + 1];
-    if (canonical(after) === screen.overlayOf) continue;
+    // "Its own base" means the same screen content, not necessarily the
+    // exact same occurrence of it — the base itself might be a return to
+    // an even earlier sighting of the same screen.
+    const base = screens.find((entry) => entry.id === screen.overlayOf);
+    if (base && canonical(after) === canonical(base)) continue;
     let onlyMoving = true;
     for (let frame = screen.hold.end + 1; frame <= after.hold.start; frame++) {
       const step = steps[frame];
@@ -646,18 +669,18 @@ export function segmentRecording(thumbs, options) {
     if (!box || box.h > SHEET_MAX_HEIGHT) continue;
     screen.kind = 'overlay';
     screen.overlay = { kind: overlayKind(box), dimmed: true, box };
-    screen.overlayOf = canonical(after);
+    screen.overlayOf = after.id;
     // Whatever was flagged as loading into the overlay was loading into the
     // screen beneath it.
     const before = screens[i - 1];
-    if (before && before.loadingOf === screen.id) before.loadingOf = canonical(after);
+    if (before && before.loadingOf === screen.id) before.loadingOf = after.id;
     // And the screen before the overlay, if it shares chrome with the screen
     // after, may have been the same page still loading.
     if (before && before.kind === 'screen' && !before.revisitOf) {
       const under = relate(before.hold, after.hold, steps, width, height);
       if (under.previousWasLoading) {
         before.kind = 'loading';
-        before.loadingOf = canonical(after);
+        before.loadingOf = after.id;
         before.loadingEvidence = under.loadingEvidence;
       }
     }
@@ -681,13 +704,17 @@ export function segmentRecording(thumbs, options) {
     screen.loadingEvidence = skeletonLike(print, width, height) ? 'skeleton' : 'chain';
   }
 
-  // ─── Edges: the journey, with revisits resolved to the screen they repeat ──
+  // ─── Edges: the journey, each screen under its own id ───────────────────
+  // A later return to an earlier screen gets its own edge into and out of
+  // it, same as any other step — the admin's own request, so a walk of
+  // A → B → C → A keeps that final A as a real step the edges actually
+  // reach, not a redirect back to the first sighting of A.
   const edges = [];
   for (let i = 1; i < screens.length; i++) {
     const previous = screens[i - 1];
     const next = screens[i];
-    const from = canonical(previous);
-    const to = canonical(next);
+    const from = previous.id;
+    const to = next.id;
     if (from === to) continue;
     // The press: the frame right after the hold, before the screen leaves,
     // usually differs in one small region — the control redrawing under the
@@ -698,13 +725,16 @@ export function segmentRecording(thumbs, options) {
       const box = changedBox(prints[last].gray, prints[last + 1].gray, width, height, 20);
       if (box && box.w * box.h <= 0.2 && steps[last + 1] && steps[last + 1].label !== 'scroll') pressBox = box;
     }
+    // "Dismissed" means the overlay's own base, content-wise — the base
+    // itself might be a return to an even earlier sighting of that screen.
+    const overlayBase = previous.overlayOf ? screens.find((entry) => entry.id === previous.overlayOf) : null;
     edges.push({
       from,
       to,
       atSeconds: next.start,
       pressBox,
       revisit: Boolean(next.revisitOf),
-      dismissed: Boolean(previous.overlayOf && canonical(next) === previous.overlayOf),
+      dismissed: Boolean(overlayBase && canonical(next) === canonical(overlayBase)),
       scrolled: next.scrolledFrom === from,
     });
   }
@@ -729,7 +759,16 @@ export function segmentRecording(thumbs, options) {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** The id a screen stands for: itself, or the earlier screen it repeats. */
+/**
+ * The screen a hold's content matches, for telling "is this the same
+ * screen as that one" apart from "what id does this get published under":
+ * itself, or the earlier screen it looks like. Used only to compare
+ * content (did an overlay return to its own base; is a cut-between state
+ * the same page) — never to decide what a screen is actually stored or
+ * linked as. A later return to an earlier screen is published under its
+ * own id regardless of what this says; see the call sites that use
+ * `screen.id` directly instead of this for exactly that reason.
+ */
 function canonical(screen) {
   return screen.revisitOf ?? screen.id;
 }

@@ -78,11 +78,11 @@ export type CapturedScreen = {
   kind: string;
   /** A free on-device text check, run before anything else: a Google/Apple/Facebook sign-in page — published like any other screen, just flagged so the review grid doesn't pre-tick it for removal the way a loading or already-dropped moment is. */
   external: boolean;
-  /** Whether the segmenter already left this moment out — a transition, a revisit to an earlier screen, a repeat sample of an already-kept screen, or similar. Still shown in the review grid so "manual" can recover it. */
+  /** Whether the segmenter already left this moment out — a transition, a repeat sample of an already-kept screen, or similar. A later return to an earlier screen is not one of these: it is kept, like any other settled hold. Still shown in the review grid so "manual" can recover it. */
   dropped: boolean;
-  /** Why the segmenter dropped it (null when it was kept): e.g. "transition", "blank", "scrim", "still moving", "absorbed", "revisit", "duplicate". */
+  /** Why the segmenter dropped it (null when it was kept): e.g. "transition", "blank", "scrim", "still moving", "absorbed", "duplicate". */
   reason: string | null;
-  /** Set when `kind` is "duplicate": the id of the real candidate — kept or a revisit — this raw sample repeats. */
+  /** Set when `kind` is "duplicate": the id of the real candidate this raw sample repeats. */
   duplicateOf: string | null;
   /** How fully drawn this raw sample looks — higher for a settled frame, lower for one still fading in, mid-transition, or a loading skeleton. Used to default-pick the clearest of a hold's near-identical raw samples. */
   quality: number;

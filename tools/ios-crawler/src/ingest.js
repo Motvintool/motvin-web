@@ -317,7 +317,6 @@ function buildReviewCandidates(timeline, thumbs) {
   let extraIndex = 0;
   for (const hold of timeline.holds) {
     const screen = hold.screen ? screenById.get(hold.screen) : null;
-    const isRevisit = Boolean(screen?.revisitOf);
     for (let frame = hold.start; frame <= hold.end; frame++) {
       const start = Math.round((frame / timeline.fps) * 100) / 100;
       // Every raw sample's own fingerprint, representative or not — cheap on
@@ -326,18 +325,21 @@ function buildReviewCandidates(timeline, thumbs) {
       const print = fingerprintFromThumb(thumbs[frame]);
       const quality = frameQuality(print);
       if (screen && frame === hold.rep) {
-        // The hold's own picture — a kept screen, or itself a revisit, which
-        // the review grid treats the same as anything else not worth
-        // publishing again: pre-selected, and recoverable as its own screen.
+        // The hold's own picture — a settled screen the recording actually
+        // held on, published like any other one even when it is a later
+        // return to a screen seen earlier: the admin's own request, so a
+        // walk of A → B → C → A keeps that final A as its own real step
+        // instead of being folded back into the first sighting of A and
+        // dropped by default.
         candidates.push({
           id: screen.id,
           frame,
           start,
           holdSeconds: hold.seconds,
           brief: Boolean(hold.brief),
-          kind: isRevisit ? 'revisit' : screen.kind,
-          dropped: isRevisit,
-          reason: isRevisit ? 'revisit' : null,
+          kind: screen.kind,
+          dropped: false,
+          reason: null,
           quality,
         });
         continue;
@@ -408,17 +410,22 @@ export async function ingestFolder(options) {
       timeline = segmentRecording(thumbs, { fps, minHoldSeconds, keepBrief: options.keepBrief });
       captureInfo = { source: basename(source), fps, frames: count, durationSeconds: Math.round((count / fps) * 10) / 10 };
 
-      const wanted = timeline.screens.filter((screen) => !screen.revisitOf).map((screen) => screen.frame);
+      // A later return to an earlier screen is published as its own real
+      // step, same as any other settled hold — the admin's own request, so
+      // a walk of A → B → C → A keeps that final A rather than folding it
+      // back into the first sighting and leaving it out. Its frame is
+      // extracted here the same as any other kept screen's.
+      const wanted = timeline.screens.map((screen) => screen.frame);
       report(options, 'extract', `Reading ${wanted.length} screen frames at full size`, { frames: count });
       const byIndex = await extractFramesAt(source, join(staging, 'frames'), fps, wanted);
       const frames = [];
       for (const [index, path] of byIndex) frames[index] = path;
       if (!byIndex.size) throw new Error('none of the chosen frames could be read from the video');
 
-      const distinct = timeline.screens.filter((screen) => !screen.revisitOf);
+      const distinct = timeline.screens;
       const { dropped } = timeline;
       log.info(
-        `${distinct.length} screen(s) — ${dropped.transitions} transition frame(s), ${dropped.revisits} revisit(s), ` +
+        `${distinct.length} screen(s), ${dropped.revisits} of them a later return to one seen earlier — ${dropped.transitions} transition frame(s), ` +
           `${dropped.scrims} system prompt(s) iOS did not record, ${dropped.blank} blank frame(s) set aside`,
       );
       report(options, 'segment', `${distinct.length} screens found in the recording`, {
@@ -964,7 +971,7 @@ export async function resumeIngest(options) {
     }
   }
 
-  const distinct = timeline.screens.filter((screen) => !screen.revisitOf);
+  const distinct = timeline.screens;
   if (!distinct.length) throw new Error('every captured screen was removed — nothing left to publish');
   report(
     options,
@@ -1000,7 +1007,11 @@ function representativeFrames(nodes) {
  * the edges the recording actually walked.
  */
 async function ingestTimeline({ timeline, frames, analyzer, graph, duplicates, excluded, options, captureInfo }) {
-  const distinct = timeline.screens.filter((screen) => !screen.revisitOf);
+  // Every settled hold is classified and published, a later return to an
+  // earlier screen included — the admin's own request, so the walk the
+  // recording actually took (A → B → C → A) keeps its real final step
+  // instead of that return being folded back into the first sighting.
+  const distinct = timeline.screens;
   const nodeByScreen = new Map();
   const nameByScreen = new Map();
   let firstTabBarSeen = false;
@@ -1173,19 +1184,12 @@ async function ingestTimeline({ timeline, frames, analyzer, graph, duplicates, e
   }
   graph.actions = actions;
 
-  // Revisits, as the graph understands them.
-  for (const screen of timeline.screens) {
-    if (!screen.revisitOf) continue;
-    const original = nodeByScreen.get(screen.revisitOf);
-    if (original) duplicates.push({ file: `frame ${screen.frame} at ${clock(screen.start)}`, sameAs: original.id, reason: 'revisit' });
-  }
-
   if (captureInfo) captureInfo.excluded = excluded.length;
 
-  // The walk, screen by screen, returns included — what the flow tree is
-  // built from.
+  // The walk, screen by screen, returns included as their own real steps —
+  // each one maps to its own node now, not back to the screen it repeats.
   return timeline.screens
-    .map((screen) => ({ screen, node: nodeByScreen.get(screen.revisitOf ?? screen.id) ?? null }))
+    .map((screen) => ({ screen, node: nodeByScreen.get(screen.id) ?? null }))
     .filter((visit) => visit.node);
 }
 

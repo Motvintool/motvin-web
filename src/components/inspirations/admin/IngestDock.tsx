@@ -1265,7 +1265,6 @@ const REASON_LABEL: Record<string, string> = {
   scrim: 'system prompt iOS did not record',
   'still moving': 'still settling',
   absorbed: 'merged into another screen',
-  revisit: 'same as an earlier screen',
   duplicate: 'repeat sample of a kept screen',
 };
 
@@ -1279,8 +1278,7 @@ const REASON_SHORT: Record<string, string> = {
   scrim: 'prompt',
   'still moving': 'settling',
   absorbed: 'merged',
-  revisit: 'revisit',
-  duplicate: 'duplicate',
+  duplicate: '',
 };
 
 /** How much higher a duplicate's quality score has to be than its hold's own representative before a pick is swapped — see the comment at its use in defaultExcluded() below. */
@@ -1298,16 +1296,25 @@ const QUALITY_MARGIN = 3;
  * whichever the segmenter happened to land on.
  */
 function defaultExcluded(screens: NonNullable<IngestJob['capturedScreens']>): Set<string> {
-  const base = new Set(screens.filter((screen) => screen.dropped || screen.kind === 'loading').map((screen) => screen.id));
+  const base = new Set(screens.filter((screen) => {
+    if (screen.dropped || screen.reason === 'loading') return true;
+    // For transitions: exclude only if dropped or duplicate, keep proper ones selected
+    if (screen.reason === 'transition') {
+      return screen.dropped || screen.duplicateOf;
+    }
+    return false;
+  }).map((screen) => screen.id));
   // A hold's own picture and every raw-sample duplicate of it are the same
   // screen — defaulting to "keep the one the segmenter happened to land
   // on, drop every duplicate" means a duplicate that is actually more
   // fully drawn (no fade, no transition, no loading placeholder still up)
   // gets thrown out just because it wasn't the segmenter's pick. Only
   // applies to a family worth keeping at all — one already excluded above
-  // (loading, a sign-in page, a revisit) stays fully excluded regardless
-  // of which member looks clearest, since none of them should publish
-  // either way.
+  // (loading, or a genuinely incomplete moment) stays fully excluded
+  // regardless of which member looks clearest, since none of them should
+  // publish either way. A later return to an earlier screen is not in this
+  // excluded set at all any more — it is a real step in the walk, kept by
+  // default like any other screen.
   const families = new Map<string, NonNullable<IngestJob['capturedScreens']>>();
   for (const screen of screens) {
     const familyId = screen.kind === 'duplicate' ? (screen.duplicateOf ?? screen.id) : screen.id;
@@ -1501,8 +1508,51 @@ export function ReviewGrid({ job, slot }: { job: IngestJob; slot?: HTMLDivElemen
         </button>
       </div>
       <div className="ins-chat-screens-grid" role={picking ? 'listbox' : 'list'} aria-multiselectable={picking || undefined}>
-        {screens.map((screen) => {
+        {screens.map((screen, index) => {
           const isPicked = picked.has(screen.id);
+          let screenLabel = '';
+
+          // Check if this is a representative frame (kept, not a duplicate)
+          const isRepresentative = !screen.dropped && !screen.duplicateOf;
+
+          if (screen.reason === 'transition') {
+            // Transition frames: use "TransitionN/Frame X" pattern
+            const transitionSequenceStart = screens.slice(0, index).findLastIndex((s) => !s.dropped && !s.duplicateOf && s.reason !== 'transition' && s.reason !== 'loading') + 1;
+            const frameNum = index - transitionSequenceStart + 1;
+            // Count transition sequences before this one (each sequence ends when we hit a non-transition screen)
+            let transitionGroupNum = 1;
+            for (let i = transitionSequenceStart - 1; i >= 0; i--) {
+              if (screens[i].reason === 'transition' && (i === 0 || screens[i - 1].reason !== 'transition')) {
+                break; // Found start of current transition group
+              }
+            }
+            // Count how many completed transition groups came before
+            for (let i = 0; i < transitionSequenceStart - 1; i++) {
+              if (screens[i].reason === 'transition' && (i === 0 || screens[i - 1].reason !== 'transition')) {
+                transitionGroupNum++;
+              }
+            }
+            screenLabel = `Transition${transitionGroupNum}/Frame ${frameNum}`;
+          } else if (screen.dropped && screen.reason !== 'duplicate') {
+            // Non-duplicate dropped frames (blank, loading, etc.)
+            screenLabel = REASON_SHORT[screen.reason ?? ''] ?? 'set aside';
+          } else if (screen.reason === 'duplicate' || isRepresentative) {
+            // Both duplicates and representative: use "Screen X/Frame Y" format
+            const holdId = isRepresentative ? screen.id : screen.duplicateOf;
+            if (holdId) {
+              const repScreenIndex = screens.findIndex((s) => s.id === holdId);
+              if (repScreenIndex >= 0) {
+                const screenNum = screens.slice(0, repScreenIndex).filter((s) => !s.dropped).length + 1;
+                // Count all frames in this hold (both representative and duplicates)
+                const allFramesInHold = screens.filter((s) => (isRepresentative && s.id === holdId) || s.duplicateOf === holdId);
+                const frameNum = allFramesInHold.findIndex((s) => s.id === screen.id) + 1;
+                const mark = isRepresentative ? ' ✓' : '';
+                screenLabel = `Screen ${screenNum}/Frame ${frameNum}${mark}`;
+              }
+            }
+          } else {
+            screenLabel = screen.brief ? 'brief' : `${screen.start.toFixed(1)}s`;
+          }
           return (
             <button
               key={screen.id}
@@ -1515,9 +1565,15 @@ export function ReviewGrid({ job, slot }: { job: IngestJob; slot?: HTMLDivElemen
               title={label(screen)}
             >
               <ReviewFrameImg jobId={job.id} frame={screen.frame} name={label(screen)} />
-              <span className="ins-chat-screen-name">
-                {screen.dropped ? (REASON_SHORT[screen.reason ?? ''] ?? 'set aside') : screen.brief ? 'brief' : `${screen.start.toFixed(1)}s`}
-              </span>
+              {isRepresentative || (screen.reason === 'transition' && screenLabel.includes('Frame 1')) ? (
+                <span className={`ins-chat-screen-chip ${isRepresentative ? 'ins-chat-screen-chip--best' : 'ins-chat-screen-chip--transition'}`}>
+                  {screenLabel}
+                </span>
+              ) : (
+                <span className="ins-chat-screen-name">
+                  {screenLabel}
+                </span>
+              )}
               {picking && (
                 <span className="ins-chat-screen-tick" aria-hidden>
                   {isPicked ? <CheckIcon size={12} /> : null}

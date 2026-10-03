@@ -748,8 +748,15 @@ export async function selfTest() {
 
     check('a page still loading is tied to the page it became', shown[1]?.kind === 'loading' && shown[1]?.loadingOf === shown[2]?.id, kinds);
     check('a card on a scrim is a dialog over the screen beneath', shown[3]?.overlay?.kind === 'dialog' && shown[3]?.overlay?.dimmed && shown[3]?.overlayOf === shown[2]?.id, JSON.stringify(shown[3]?.overlay));
-    check('returning to a screen is a revisit, not a new screen', segmented.screens.some((screen) => screen.revisitOf === shown[2]?.id));
-    check('content moving under fixed chrome is a scroll', shown.some((screen) => screen.kind === 'scrolled' && screen.scrolledFrom === shown[2]?.id), kinds);
+    // A revisit is recognised (revisitOf set, for naming and the "seen N×"
+    // count on the original) but, at the admin's request, is no longer
+    // folded away: it is published as its own real step, under its own id,
+    // and anything that happened right after it (a scroll, here) is linked
+    // from that specific occurrence, not redirected back to the first
+    // sighting of the screen.
+    const homeRevisit = segmented.screens.find((screen) => screen.revisitOf === shown[2]?.id);
+    check('returning to a screen is recognised as a revisit of it, under its own id', Boolean(homeRevisit) && homeRevisit.id !== shown[2]?.id);
+    check('content moving under fixed chrome is a scroll, from the actual screen it scrolled from', shown.some((screen) => screen.kind === 'scrolled' && screen.scrolledFrom === homeRevisit?.id), kinds);
     check('a panel rising from the bottom is a bottom sheet', shown.some((screen) => screen.overlay?.kind === 'bottom_sheet'), kinds);
     check('a one-frame toast between settled screens is kept as a toast', shown.some((screen) => screen.overlay?.kind === 'toast' && screen.brief), kinds);
     // A lone frame that is half of one screen and half of the next — a push
@@ -828,7 +835,12 @@ export async function selfTest() {
     check('a blended transition frame is dropped', segmented.dropped.transitions >= 2, JSON.stringify(segmented.dropped));
     check('a blank white tail is dropped', segmented.dropped.blank >= 1 && !shown.some((screen) => screen.print.luminance > 250), JSON.stringify(segmented.dropped));
     check('the journey is recorded as edges between distinct screens', segmented.edges.length >= 6 && segmented.edges.every((edge) => edge.from !== edge.to), `${segmented.edges.length} edges`);
-    check('a revisit never gets its own edge target', !segmented.edges.some((edge) => segmented.screens.find((s) => s.id === edge.to)?.revisitOf), '');
+    const revisitEdge = segmented.edges.find((edge) => edge.revisit);
+    check(
+      'a revisit gets its own edge target now, not a redirect to the screen it repeats',
+      Boolean(revisitEdge) && revisitEdge.to === homeRevisit?.id && revisitEdge.to !== homeRevisit?.revisitOf,
+      JSON.stringify(revisitEdge),
+    );
 
     log.heading('Review candidates — every raw sample, kept and dropped alike');
     const traced = segmentRecording(timelineThumbs, { fps: 5, trace: true });
@@ -861,12 +873,36 @@ export async function selfTest() {
       [...keptIds].every((id) => candidates.find((c) => c.id === id)?.dropped === false),
       JSON.stringify(candidates.filter((c) => keptIds.has(c.id))),
     );
-    const revisitCandidate = candidates.find((c) => c.reason === 'revisit');
+    // A revisit is a real step in the walk, not a moment to default to
+    // excluding — the admin's own request, so a return to an earlier
+    // screen is offered back selected, exactly like any other kept screen,
+    // not pre-ticked as if it were a duplicate or a transition.
+    const revisitCandidate = candidates.find((c) => c.id === homeRevisit?.id);
     check(
-      'a revisit is offered back too, pre-marked dropped so it reads as "already not worth keeping"',
-      revisitCandidate?.dropped === true && segmented.screens.find((s) => s.id === revisitCandidate?.id)?.revisitOf != null,
+      'a revisit is a candidate too, not pre-marked dropped',
+      revisitCandidate?.dropped === false && revisitCandidate?.reason === null && homeRevisit?.revisitOf != null,
       JSON.stringify(revisitCandidate),
     );
+    {
+      // The admin's own example, literally: A → B → C → A must keep the
+      // final A as a real, selected journey step — not merged back into
+      // the first sighting of A, not pre-ticked for removal, and reachable
+      // by its own edge from C.
+      const screenA = (u, v) => (v < 0.1 ? [40, 40, 50] : v > 0.9 ? [30, 30, 40] : u < 0.3 ? [120, 90, 160] : [225, 225, 230]);
+      const screenB = (u, v) => (v < 0.1 || v > 0.9 ? screenA(u, v) : u < 0.5 ? [200, 60, 60] : [60, 60, 200]);
+      const screenC = (u, v) => (v < 0.1 || v > 0.9 ? screenA(u, v) : u < 0.5 ? [20, 160, 90] : [250, 210, 40]);
+      const abcaTimeline = [...Array(5).fill(screenA), ...Array(5).fill(screenB), ...Array(5).fill(screenC), ...Array(5).fill(screenA)].map(thumb);
+      const abca = segmentRecording(abcaTimeline, { fps: 5 });
+      const abcaTraced = segmentRecording(abcaTimeline, { fps: 5, trace: true });
+      const abcaCandidates = _internals.buildReviewCandidates(abcaTraced, abcaTimeline);
+      const firstA = abca.screens[0];
+      const finalA = abca.screens.find((screen) => screen.revisitOf === firstA?.id);
+      check('A → B → C → A keeps the final A as its own screen, distinct from the first', Boolean(finalA) && finalA.id !== firstA?.id);
+      const finalAEdge = abca.edges.find((edge) => edge.revisit);
+      check('…reached by its own edge from C, not redirected back to the first A', finalAEdge?.to === finalA?.id, JSON.stringify(finalAEdge));
+      const finalACandidate = abcaCandidates.find((c) => c.id === finalA?.id);
+      check('…and selected by default in the review grid, not pre-ticked for removal', finalACandidate?.dropped === false, JSON.stringify(finalACandidate));
+    }
     const transitionCandidate = candidates.find((c) => c.reason === 'transition');
     check(
       'a dropped transition candidate carries a print and colours, so it can be recovered without re-reading the video',
@@ -875,7 +911,7 @@ export async function selfTest() {
     );
     const scrimCandidate = candidates.find((c) => c.reason === 'scrim');
     check('a system-prompt scrim is offered back with its own reason', scrimCandidate?.dropped === true, JSON.stringify(scrimCandidate));
-    const droppedIds = candidates.filter((c) => c.dropped && c.reason !== 'revisit').map((c) => c.id);
+    const droppedIds = candidates.filter((c) => c.dropped).map((c) => c.id);
     check(
       'every dropped or duplicate raw frame gets its own short id, distinct from a screen id',
       new Set(droppedIds).size === droppedIds.length && droppedIds.every((id) => /^d\d{4}$/.test(id)),
