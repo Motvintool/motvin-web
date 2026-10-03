@@ -117,8 +117,8 @@ ${bold('classify options')}
   --app-id <id>             app slug as stored under screens/<platform>/    ${dim('required')}
   --platform <p>            ios | android | web                             ${dim('default ios')}
   --overwrite               re-analyse screens that already have a screenType
-  --keep-external           leave Google/Apple/Facebook sign-in pages in the
-                            store instead of removing them
+  --remove-external         remove Google/Apple/Facebook sign-in pages found
+                            in the store (kept by default, same as an ingest)
   --dry-run                 report without writing
 
 ${bold('Examples')}
@@ -557,7 +557,7 @@ async function runClassify(flags) {
     dataDir: flags.dataDir,
     backend: flags.backend,
     overwrite: flags.overwrite === true,
-    keepExternal: flags.keepExternal === true,
+    removeExternal: flags.removeExternal === true,
     dryRun: flags.dryRun === true,
   });
 

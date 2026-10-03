@@ -19,8 +19,11 @@
  * navigates to but conditions a screen can be in. The gallery filters on state
  * separately from type, so "empty states across all apps" is one click.
  *
- * `publish: false` marks a type the pipeline recognises in order to leave it
- * out — a Google or Apple sign-in page is not the app's design.
+ * `publish: false` marks a type the pipeline recognises but never files as a
+ * real screen — reserved for a future type nobody should see in the gallery
+ * at all. A Google/Apple/Facebook sign-in page used to be one of these; it
+ * is published like any other screen now, at the admin's request, so its
+ * place in the user's journey isn't lost.
  */
 
 /** The values motvin-backend/src/modules/inspirations/manifest.builder.ts accepts. */
@@ -52,7 +55,7 @@ export const SCREEN_TYPES = {
   login:            { publishedAs: 'login',        flow: 'authentication', label: 'Login' },
   otp:              { publishedAs: 'login',        flow: 'authentication', label: 'Verification code' },
   signup:           { publishedAs: 'signup',       flow: 'authentication', label: 'Sign up' },
-  external_auth:    { publishedAs: 'login',        flow: 'authentication', label: 'External sign-in', publish: false },
+  external_auth:    { publishedAs: 'login',        flow: 'authentication', label: 'External sign-in' },
   home:             { publishedAs: 'home',         flow: 'discovery',      label: 'Home' },
   dashboard:        { publishedAs: 'dashboard',    flow: 'discovery',      label: 'Dashboard' },
   feed:             { publishedAs: 'feed',         flow: 'discovery',      label: 'Feed' },

@@ -39,8 +39,11 @@
  * is available, is asked to rename the tree afterwards in task language; the
  * structure stays what the walk showed.
  *
- * Loading states and third-party sign-in pages are transparent: they neither
- * start nor end a journey.
+ * A loading state is transparent: it neither starts nor ends a journey, just
+ * rides along as a moment in whichever one it falls inside. A third-party
+ * sign-in page is published and walked through like any other screen now —
+ * it is still where it was reached, so a journey can open or close on it
+ * same as any other step.
  */
 
 import { cleanTitle, looksLikeNavTitle } from './heuristics.js';
@@ -50,7 +53,7 @@ import { flowCategoryFor, labelFor } from './taxonomy.js';
 const SECTION_TYPES = new Set(['profile', 'settings']);
 
 /** Types that never start a journey of their own; they ride along. */
-const TRANSPARENT_TYPES = new Set(['loading', 'external_auth']);
+const TRANSPARENT_TYPES = new Set(['loading']);
 
 /**
  * @typedef {object} Visit

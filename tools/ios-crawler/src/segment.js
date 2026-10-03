@@ -828,7 +828,7 @@ function absorbs(before, hold, steps, width, height) {
  * it dark, and next to no structure. The status bar rows are left out — the
  * clock is dark on every screen.
  */
-function skeletonLike(print, width, height) {
+export function skeletonLike(print, width, height) {
   // The header and footer bands are left out: a skeleton often keeps the
   // real page's title, back arrow and tab bar around its placeholder blocks
   // — and those carry most of the structure such a frame has.

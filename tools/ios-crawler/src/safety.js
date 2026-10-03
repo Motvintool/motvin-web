@@ -77,32 +77,40 @@ const BLOCKING_TEXT = [
  * chooser, the "to continue to <App>" line, Apple ID prompts, the Facebook
  * login form, and the iOS alert that precedes a web sign-in.
  */
+// Each pattern carries the plain-English name the screen it matches should
+// actually be known by — "External sign-in" told every one of these apart
+// as the same generic name, which is how a flow with three or four of them
+// in a row ended up numbering them "(2)", "(3)" instead of saying what each
+// one actually was.
 const EXTERNAL_AUTH_TEXT = [
-  /\bchoose an account\b/i,
-  /\bto continue to\b/i,
-  /\buse another account\b/i,
-  /\bforgot email\?/i,
-  /\baccounts\.google\.com\b/i,
-  /\bsign in with google\b[\s\S]*\b(email or phone|create account|next)\b/i,
-  /\buse your google account\b/i,
-  /\bsign in with (your )?apple ?id\b/i,
-  /\bapple ?id\b[\s\S]*\b(hide my email|share my email|use a different|continue with password)\b/i,
-  /\b(hide my email|share my email)\b/i,
-  /\blog ?in (to|with) facebook\b/i,
-  /\bcontinue as [a-z]+\b[\s\S]*\bfacebook\b/i,
-  /\bwants to use\b[\s\S]*\bto sign in\b/i,
-  /\b(google|apple|facebook)\.com\b/i,
+  { label: 'Choose an account', pattern: /\bchoose an account\b/i },
+  { label: 'Confirm access', pattern: /\bto continue to\b/i },
+  { label: 'Use another account', pattern: /\buse another account\b/i },
+  { label: 'Forgot email', pattern: /\bforgot email\?/i },
+  { label: 'Google sign-in', pattern: /\baccounts\.google\.com\b/i },
+  { label: 'Google sign-in', pattern: /\bsign in with google\b[\s\S]*\b(email or phone|create account|next)\b/i },
+  { label: 'Confirm Google account', pattern: /\buse your google account\b/i },
+  { label: 'Apple sign-in', pattern: /\bsign in with (your )?apple ?id\b/i },
+  { label: 'Apple ID options', pattern: /\bapple ?id\b[\s\S]*\b(hide my email|share my email|use a different|continue with password)\b/i },
+  { label: 'Hide or share email', pattern: /\b(hide my email|share my email)\b/i },
+  { label: 'Facebook sign-in', pattern: /\blog ?in (to|with) facebook\b/i },
+  { label: 'Continue with Facebook', pattern: /\bcontinue as [a-z]+\b[\s\S]*\bfacebook\b/i },
+  { label: 'Permission request', pattern: /\bwants to use\b[\s\S]*\bto sign in\b/i },
+  { label: 'Third-party sign-in', pattern: /\b(google|apple|facebook)\.com\b/i },
 ];
 
 /**
- * Whether the visible text is a third-party sign-in page.
+ * Whether the visible text is a third-party sign-in page — and if so, which
+ * specific moment of it (the account chooser, the Apple ID prompt, the
+ * provider's own consent screen…), so a run of these in one flow reads as
+ * distinct, real steps rather than one generic name repeated with a count.
  * @param {string} text all visible text, newline- or space-separated
  */
 export function isExternalAuthScreen(text) {
   const haystack = String(text || '');
   if (!haystack.trim()) return false;
-  const pattern = EXTERNAL_AUTH_TEXT.find((rule) => rule.test(haystack));
-  return pattern ? { external: true, reason: `third-party sign-in UI (${pattern.source.slice(0, 40)})` } : false;
+  const match = EXTERNAL_AUTH_TEXT.find((rule) => rule.pattern.test(haystack));
+  return match ? { external: true, reason: `third-party sign-in UI (${match.label})`, label: match.label } : false;
 }
 
 /**

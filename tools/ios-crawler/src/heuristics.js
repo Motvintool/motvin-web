@@ -624,7 +624,7 @@ function nameFor(screenType, signals, context, fallbackName) {
   const locationPicker = LOCATION_PICKER.test(text);
 
   if (screenType === 'splash') return 'Splash screen';
-  if (screenType === 'external_auth') return 'External sign-in';
+  if (screenType === 'external_auth') return isExternalAuthScreen(text).label || 'External sign-in';
   if (screenType === 'loading' || context.kind === 'loading') {
     return context.loadingOfName ? `${context.loadingOfName} — loading` : 'Loading state';
   }

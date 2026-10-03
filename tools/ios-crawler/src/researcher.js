@@ -107,11 +107,19 @@ export function describeTree(journeys, graph, options = {}) {
  * The tree at a glance, for naming the journeys: every journey with where it
  * sits and its steps as names and the taps between them. No recognised text
  * — a small model handed the text copies it back instead of naming things.
+ *
+ * `journeys` is what gets a line and a "J{index}" label each; `all` (default:
+ * `journeys` itself) is the wider set a parent's own name is looked up
+ * against — the two differ when this is one batch of a larger tree split
+ * across several calls, so a child whose parent sits in a different batch
+ * still says what it is inside, not the parent's raw key.
  */
-export function describeJourneys(journeys, graph) {
-  const nameOfKey = new Map(journeys.map((journey) => [journey.key ?? journey.name, journey.name]));
+export function describeJourneys(journeys, graph, all = journeys) {
+  const nameOfKey = new Map(all.map((journey) => [journey.key ?? journey.name, journey.name]));
+  const indexOfJourney = new Map(all.map((journey, index) => [journey, index]));
   const lines = [];
-  journeys.forEach((journey, index) => {
+  for (const journey of journeys) {
+    const index = indexOfJourney.get(journey);
     const parent = journey.parent ? nameOfKey.get(journey.parent) ?? journey.parent : null;
     const steps = (journey.steps ?? journey.nodeIds.map((nodeId) => ({ nodeId, action: null })))
       .map((step) => {
@@ -125,7 +133,7 @@ export function describeJourneys(journeys, graph) {
     // Bare keys on purpose: a key that carried the guessed name came back as
     // the answer, word for word. The guess is given separately, as a guess.
     lines.push(`J${index} — ${parent ? `inside "${parent}"` : 'top-level section'} — machine guess "${journey.name}" — steps: ${steps.join(' → ')}`);
-  });
+  }
   return lines.join('\n');
 }
 
@@ -315,19 +323,57 @@ export async function researchTree(journeys, graph, options) {
   const proposals = { journeys: {}, screens: {} };
   let calls = 0;
 
-  // ── Pass one: journey names ────────────────────────────────────────────────
+  // ── Pass one: journey names, a batch at a time ─────────────────────────────
+  // One call for the whole tree used to mean a long recording's 40-odd
+  // journeys all had to fit the reply in a single maxTokens budget — a model
+  // that ran out of room partway through simply left everything after the
+  // cut unrenamed, the heuristic guess (often a stray name or label off the
+  // screen) standing uncorrected. Batched and retried the same way the
+  // screens pass already is, so every journey gets an actual naming attempt.
   if (only !== 'screens') {
+    const JOURNEY_BATCH = 15;
+    const journeyQueue = [];
+    for (let i = 0; i < journeys.length; i += JOURNEY_BATCH) journeyQueue.push(journeys.slice(i, i + JOURNEY_BATCH));
     log?.(`researcher: naming ${journeys.length} journey(s) from the tree${journeyModel ? ` with ${journeyModel}` : ''}`);
     onBatch?.(0, nodes.length, 0, 'journeys');
-    try {
+    let journeyEmptyInARow = 0;
+    while (journeyQueue.length) {
+      if (journeyEmptyInARow >= 3) {
+        log?.(`researcher: the model returned nothing ${journeyEmptyInARow} times running — keeping the names read off the screens for the ${journeyQueue.reduce((n, b) => n + b.length, 0)} journey(s) left`);
+        break;
+      }
+      const batch = journeyQueue.shift();
       calls++;
-      const tree = describeJourneys(journeys, graph);
-      const reply = await complete({ system: `${BRIEF}\n${JOURNEY_RULES}`, blocks: [{ type: 'text', text: `${header}${tree}` }], maxTokens: 1200, ...(journeyModel ? { model: journeyModel } : {}) });
-      debug(reply);
-      const raw = parse(reply);
-      if (raw && typeof raw.journeys === 'object') Object.assign(proposals.journeys, raw.journeys);
-    } catch (error) {
-      log?.(`researcher: journey names failed — ${String(error.message).split('\n')[0]}; keeping the names read off the screens`);
+      let got = [];
+      try {
+        const tree = describeJourneys(batch, graph, journeys);
+        const reply = await complete({ system: `${BRIEF}\n${JOURNEY_RULES}`, blocks: [{ type: 'text', text: `${header}${tree}` }], maxTokens: 1200, ...(journeyModel ? { model: journeyModel } : {}) });
+        debug(reply);
+        const raw = parse(reply);
+        if (raw && typeof raw.journeys === 'object') {
+          for (const journey of batch) {
+            const index = journeys.indexOf(journey);
+            const proposal = raw.journeys[journeyKey(journey, index)] ?? raw.journeys[String(index)] ?? raw.journeys[`J${index}`];
+            if (proposal !== undefined) {
+              proposals.journeys[`J${index}`] = proposal;
+              got.push(journey);
+            }
+          }
+        }
+      } catch (error) {
+        log?.(`researcher: journey names failed — ${String(error.message).split('\n')[0]}`);
+      }
+      const missing = batch.filter((journey) => !got.includes(journey));
+      journeyEmptyInARow = got.length ? 0 : journeyEmptyInARow + 1;
+      if (missing.length && missing.length < batch.length) {
+        journeyQueue.unshift(missing);
+        log?.(`researcher: ${got.length} of ${batch.length} journey name(s) came back; asking again for ${missing.length}`);
+      } else if (missing.length && batch.length > 1) {
+        const half = Math.ceil(batch.length / 2);
+        journeyQueue.unshift(batch.slice(0, half), batch.slice(half));
+        log?.(`researcher: retrying those ${batch.length} journey name(s) as two smaller calls`);
+      }
+      // One journey, refused after already being halved down to it: it keeps the name read off the screen.
     }
   }
 

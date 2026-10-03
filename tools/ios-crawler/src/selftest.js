@@ -895,6 +895,125 @@ export async function selfTest() {
     const homePrint = fingerprintFromThumb(thumb(pageHome));
     check('a thumbnail fingerprint has both hashes and an edge measure', homePrint.dhash.length === 16 && homePrint.ahash.length === 16 && homePrint.edge > 0);
 
+    log.heading('Picking the clearest of a hold\'s raw samples');
+    check('every review candidate carries a quality score', candidates.every((c) => typeof c.quality === 'number'), '');
+    // A plain mark on a blank ground, not a shape fading over an already
+    // busy page — fading a translucent scrim toward a textured background
+    // underneath can read as *more* edge content, not less (more of the
+    // page's own structure shows through), which is exactly the kind of
+    // false positive this score exists to avoid chasing.
+    const plainBg = () => [245, 245, 245];
+    const markAt = (k) => (u, v) => {
+      const fg = u > 0.35 && u < 0.65 && v > 0.4 && v < 0.6 ? [20, 20, 20] : plainBg();
+      const bg = plainBg();
+      return fg.map((c, i) => Math.round(c * k + bg[i] * (1 - k)));
+    };
+    const logoPrint = fingerprintFromThumb(thumb(markAt(1)));
+    const fadedLogoPrint = fingerprintFromThumb(thumb(markAt(0.3)));
+    check(
+      'a fully-drawn mark scores higher than the same mark 70% faded into a blank background',
+      _internals.frameQuality(logoPrint) > _internals.frameQuality(fadedLogoPrint),
+      `drawn ${_internals.frameQuality(logoPrint)} vs faded ${_internals.frameQuality(fadedLogoPrint)}`,
+    );
+    const skeletonPrint = fingerprintFromThumb(
+      thumb((u, v) => (v < 0.06 ? [242, 242, 247] : (v > 0.14 && v < 0.2) || (v > 0.28 && v < 0.42) || (v > 0.5 && v < 0.62) ? (u > 0.05 && u < 0.95 ? [216, 216, 222] : [242, 242, 247]) : [242, 242, 247])),
+    );
+    check(
+      'a loading skeleton scores lower than a real, fully-drawn page',
+      _internals.frameQuality(skeletonPrint) < _internals.frameQuality(homePrint),
+      `skeleton ${_internals.frameQuality(skeletonPrint)} vs page ${_internals.frameQuality(homePrint)}`,
+    );
+    const blankPrint = fingerprintFromThumb(thumb(white));
+    check(
+      'a near-blank frame scores lower than a normal page',
+      _internals.frameQuality(blankPrint) < _internals.frameQuality(homePrint),
+      `blank ${_internals.frameQuality(blankPrint)} vs page ${_internals.frameQuality(homePrint)}`,
+    );
+    {
+      // Swapping a kept screen's picture for one of its own duplicates must
+      // not cost it its place in the flow graph — caught by actually tracing
+      // resumeIngest's real exclude/recover logic against a real capture
+      // (~/Downloads/Airbnb.mp4, forcing a screen with an incoming edge, an
+      // outgoing edge, and a later revisit of it to swap to a duplicate) and
+      // finding it came back as a disconnected new screen with none of the
+      // three. Reproduced here as a fixture so the fix stays caught by
+      // `self-test` alone.
+      const timeline = {
+        screens: [
+          { id: 'a', frame: 0, start: 0, end: 1, revisitOf: null },
+          { id: 'b', frame: 10, start: 1, end: 2, revisitOf: null, overlay: { kind: 'dialog' } },
+          { id: 'c', frame: 20, start: 2, end: 3, revisitOf: null },
+          { id: 'b-again', frame: 30, start: 3, end: 4, revisitOf: 'b' },
+          { id: 'd', frame: 40, start: 4, end: 5, revisitOf: null },
+        ],
+        edges: [
+          { from: 'a', to: 'b', atSeconds: 1 },
+          { from: 'b', to: 'c', atSeconds: 2 },
+          { from: 'c', to: 'b', atSeconds: 3, revisit: true },
+          { from: 'b', to: 'd', atSeconds: 4 },
+        ],
+      };
+      const candidates = [
+        { id: 'a', kind: 'screen', dropped: false, duplicateOf: null },
+        { id: 'b', kind: 'screen', dropped: false, duplicateOf: null },
+        { id: 'd-b1', kind: 'duplicate', dropped: true, duplicateOf: 'b', frame: 11, print: { edge: 9 }, colors: ['x'] },
+        { id: 'c', kind: 'screen', dropped: false, duplicateOf: null },
+        { id: 'b-again', kind: 'revisit', reason: 'revisit', dropped: true, duplicateOf: null },
+        { id: 'd', kind: 'screen', dropped: false, duplicateOf: null },
+      ];
+      // 'b-again' stays excluded (folded into 'b', as a revisit is by
+      // default) — only 'b' itself is swapped for its clearer duplicate.
+      const { timeline: swapped, recovered: swapCount } = _internals.applyExclusions(timeline, candidates, new Set(['b', 'b-again']));
+      const swappedB = swapped.screens.find((screen) => screen.id === 'b');
+      check('a screen swapped for its own duplicate keeps its id', Boolean(swappedB), JSON.stringify(swapped.screens.map((s) => s.id)));
+      check('…and actually points at the duplicate\'s frame', swappedB?.frame === 11, JSON.stringify(swappedB));
+      check('…and keeps whatever else it carried (its overlay, here)', swappedB?.overlay?.kind === 'dialog', JSON.stringify(swappedB));
+      check('its incoming, outgoing and revisit edges all survive the swap', swapped.edges.length === 4, JSON.stringify(swapped.edges));
+      check('the later revisit of it is not cascade-dropped', swapped.screens.some((screen) => screen.id === 'b-again' && screen.revisitOf === 'b'), JSON.stringify(swapped.screens.find((s) => s.id === 'b-again')));
+      check('the swap counts as one recovery, not a drop plus an unrelated new screen', swapCount === 1, `recovered ${swapCount}`);
+    }
+    {
+      // A run of excluded screens — a whole Google/Apple/Facebook sign-in
+      // detour, say — must not just vanish along with its own edges: the
+      // screens either side of it still need to show one leads to the
+      // other, or "which screen does the user land on next" is lost for
+      // that step exactly the way a plain filter was caught doing above for
+      // a single swapped screen. Caught the same way: traced by hand first
+      // (a bare filter leaves zero edges between the survivors), then
+      // locked in here.
+      const chain = [
+        { from: 'A', to: 'google1', atSeconds: 1 },
+        { from: 'google1', to: 'google2', atSeconds: 2 },
+        { from: 'google2', to: 'B', atSeconds: 3 },
+      ];
+      const bridged = _internals.bridgeEdges(chain, new Set(['google1', 'google2']));
+      check('a chain of excluded screens leaves a single edge connecting what is still there', bridged.length === 1 && bridged[0].from === 'A' && bridged[0].to === 'B', JSON.stringify(bridged));
+
+      // A screen revisited then dropped must not leave a false "A led back
+      // to A" loop once the thing in between it is gone.
+      const loop = [
+        { from: 'A', to: 'google', atSeconds: 1 },
+        { from: 'google', to: 'A', atSeconds: 2 },
+      ];
+      check('a round trip through a dropped screen creates no self-loop', _internals.bridgeEdges(loop, new Set(['google'])).length === 0);
+    }
+    {
+      // A hold's own raw samples settle to nearly the same quality once
+      // they share a hold at all, confirmed separately against a real
+      // recording (~/Downloads/Airbnb.mp4) where every family's spread
+      // between the segmenter's own pick and its best-scoring duplicate
+      // was under a point. This is why the admin dock's own re-pick
+      // (IngestDock.tsx, "I'll choose myself") requires a clear margin
+      // before swapping away from the segmenter's choice, rather than
+      // always taking whichever sample happens to score highest — on a
+      // flat or near-flat family (like this one) that would just be
+      // noise, and could just as easily swap away a deliberately-kept
+      // frame (the launch screen among them) for no real reason.
+      const family = candidates.filter((c) => c.id === shown[2]?.id || c.duplicateOf === shown[2]?.id);
+      const spread = Math.max(...family.map((c) => c.quality)) - Math.min(...family.map((c) => c.quality));
+      check("a hold's own raw samples stay close in quality to each other", family.length > 1 && spread < 3, `${family.length} members, spread ${spread}`);
+    }
+
     log.heading('Offline classification, with capture context');
     const ctx = (context) => ({ context });
     check('the first flat frame is a splash', classifyScreen([], { ...ctx({ isFirst: true, flat: true, edge: 0.2 }) }).screenType === 'splash');
@@ -926,6 +1045,14 @@ export async function selfTest() {
     check('a Google account chooser is a third-party sign-in page', typeOf([line('Sign in with Google', 0.1, 0.03), line('Choose an account', 0.2, 0.03), line('to continue to Acme', 0.25)]) === 'external_auth');
     check("the app's own “Continue with Google” button is not", typeOf([line('Log in or sign up', 0.4, 0.03), line('Continue with Google', 0.6), line('Continue with Apple', 0.66)]) !== 'external_auth');
     check('external sign-in text is caught by the safety rules too', Boolean(isExternalAuthScreen('Sign in with Apple ID\nHide My Email')));
+    check(
+      'a third-party sign-in page is named for the specific moment it is, not a generic label run after run',
+      classifyScreen([line('Sign in with Google', 0.1, 0.03), line('Choose an account', 0.2, 0.03), line('to continue to Acme', 0.25)]).name === 'Choose an account',
+    );
+    check(
+      "an Apple ID prompt is named for itself, not the account chooser's name",
+      classifyScreen([line('Continue with Apple', 0.1, 0.03), line('Sign in with your Apple ID', 0.2, 0.03)]).name === 'Apple sign-in',
+    );
     check(
       'promo pills in the tab-bar zone do not inflate the tab count',
       classifyScreen([...tabBar, line('NEW', 0.92, 0.008), line('15 MIN', 0.92, 0.008), line('Pick Your Offer!', 0.92, 0.008), line('For you', 0.2, 0.04)]).signals.tabLabels.length === 3,
@@ -1030,6 +1157,11 @@ export async function selfTest() {
         return t.every((j) => !j.parent || byKey.get(j.parent).name.toLowerCase() !== j.name.replace(/ \(.*\)$/, '').toLowerCase());
       })(), '');
       check('loading states are transparent to the tree', !tree.some((j) => j.nodeIds.includes(loading.id)));
+      check("a third-party sign-in page is not transparent — it is a real step in the journey (the admin's own request, so the hand-off to Google/Apple/Facebook still shows)", (() => {
+        const googleAuth = mk('external_auth', 'External sign-in');
+        const t = buildJourneys([login, googleAuth, otp].map((node) => ({ node })));
+        return t.some((j) => j.nodeIds.includes(googleAuth.id));
+      })(), '');
       check('no screen appears in two journeys at the same level', tree.every((j) => new Set(j.nodeIds).size === j.nodeIds.length));
       check('a permission prompt is named for what it asks', journeyName(mk('permission', 'Allow location', [], { analysis: { screenType: 'permission', name: 'Allow', signals: { title: 'Allow "Swiggy" to use your location?', headline: null, ctas: [], tabLabels: [] }, tags: [], description: '' } })) === 'Allowing location access');
     }
@@ -1148,6 +1280,41 @@ export async function selfTest() {
         });
         return calls[0] === 'journeys' && calls[1] === 4 && calls[2] === 2 && calls[3] === 2 && outcome.batches === 4 && outcome.screensUpdated === 4 && tree2[0].name === 'Food';
       })(), '');
+      check(
+        'a long tree gets every journey named, not just however many fit the first reply before it was cut off',
+        await (async () => {
+          const g3 = new ScreenGraph();
+          const node = g3.add({ fingerprint: { dhash: '0', ahash: '0' }, labels: [], screenshot: home, analysis: { ...analysisFor('Screen', 'feed'), lines: [], signals: {} } });
+          const tree3 = Array.from({ length: 20 }, (_, i) => ({
+            key: `k${i}`,
+            name: `Guess ${i}`,
+            category: 'discovery',
+            parent: null,
+            section: false,
+            nodeIds: [node.id],
+            steps: [{ nodeId: node.id, action: null }],
+          }));
+          let journeyCalls = 0;
+          const outcome = await researchTree(tree3, g3, {
+            only: 'journeys',
+            app: { name: 'Test' },
+            extractJson: (text) => JSON.parse(text),
+            // The tree is 20 journeys, more than one batch's worth — the
+            // second batch (J15..J19) comes back empty the first time it is
+            // asked, the way a real reply cut off mid-way would, and has to
+            // be retried as smaller calls before every journey has a name.
+            complete: async ({ blocks }) => {
+              journeyCalls++;
+              if (journeyCalls === 2) return '{}';
+              const text = blocks.map((block) => block.text ?? '').join(' ');
+              const ids = [...text.matchAll(/\bJ(\d+)\b/g)].map((m) => Number(m[1]));
+              return JSON.stringify({ journeys: Object.fromEntries(ids.map((i) => [`J${i}`, `Named ${i}`])) });
+            },
+          });
+          return journeyCalls > 1 && tree3.every((journey, i) => journey.name === `Named ${i}`);
+        })(),
+        '',
+      );
       const outcome = applyProposals(tree, g, {
         journeys: { 'J0 Food': { name: 'Groceries', summary: 'x' }, 'J1 Searching Food': { name: 'Food - Searching Dishes & Restaurants', summary: 'The person opens search from the Food home and looks for a dish.' } },
         screens: { [b.id]: { name: 'Dish search', purpose: 'Lets the person find dishes and restaurants by name.', primaryAction: 'Type a dish name', description: 'A search field with recent searches beneath it and the keyboard open.' }, [a.id]: { name: '', description: '' } },
@@ -1194,6 +1361,10 @@ export async function selfTest() {
     check('the report places the screen in its journey', sections[2].points.some((p) => p.includes('Step 1 of 5')));
 
     log.heading('Publishing capture facts');
+    check(
+      'a third-party sign-in page is a publishable type — the admin asked to keep these in the flow, not have them always excluded',
+      SCREEN_TYPES.external_auth.publish !== false,
+    );
     const captureStore = join(dir, 'capture-store');
     mkdirSync(join(captureStore, 'screens', 'ios'), { recursive: true });
     mkdirSync(join(captureStore, 'analysis'), { recursive: true });

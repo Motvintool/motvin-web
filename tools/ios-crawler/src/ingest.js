@@ -32,7 +32,7 @@ import { log, dim } from './log.js';
 import { extractFramesAt, extractThumbs } from './frames.js';
 import { dominantColors, fingerprint, fingerprintFromThumb, jaccard, THUMB } from './hash.js';
 import { ScreenGraph } from './graph.js';
-import { segmentRecording } from './segment.js';
+import { segmentRecording, skeletonLike } from './segment.js';
 import { analyseScreen, complete, encodeForModel, groupIntoFlows, identifyApp, pickBackend } from './analyze.js';
 import { researchTree } from './researcher.js';
 import { extractJson } from './analyze.js';
@@ -292,6 +292,24 @@ class Analyzer {
  * data a recovered screen needs, since no full-size frame existed for them
  * before review and nothing else will compute it later.
  */
+
+/**
+ * How fully drawn a raw sample looks — higher for a screen that finished
+ * loading and settled, lower for one still fading in, mid-transition, or a
+ * loading skeleton. Used to pick which of a hold's near-identical raw
+ * samples is the one actually worth keeping, instead of defaulting to
+ * whichever frame the segmenter happened to pick as the hold's own
+ * representative (usually right, but not always — a push animation or a
+ * slow network fetch can leave the "representative" moment itself
+ * half-drawn while a later duplicate sample of the same hold is not).
+ */
+function frameQuality(print) {
+  let score = print.edge;
+  if (print.luminance > 245 || print.luminance < 10) score -= 5;
+  if (skeletonLike(print, print.width, print.height)) score -= 5;
+  return Math.round(score * 10) / 10;
+}
+
 function buildReviewCandidates(timeline, thumbs) {
   if (!timeline.holds) return null;
   const screenById = new Map(timeline.screens.map((screen) => [screen.id, screen]));
@@ -302,6 +320,11 @@ function buildReviewCandidates(timeline, thumbs) {
     const isRevisit = Boolean(screen?.revisitOf);
     for (let frame = hold.start; frame <= hold.end; frame++) {
       const start = Math.round((frame / timeline.fps) * 100) / 100;
+      // Every raw sample's own fingerprint, representative or not — cheap on
+      // a 32x64 thumbnail, and the only way to score a duplicate against the
+      // hold's chosen picture rather than just against the other duplicates.
+      const print = fingerprintFromThumb(thumbs[frame]);
+      const quality = frameQuality(print);
       if (screen && frame === hold.rep) {
         // The hold's own picture — a kept screen, or itself a revisit, which
         // the review grid treats the same as anything else not worth
@@ -315,6 +338,7 @@ function buildReviewCandidates(timeline, thumbs) {
           kind: isRevisit ? 'revisit' : screen.kind,
           dropped: isRevisit,
           reason: isRevisit ? 'revisit' : null,
+          quality,
         });
         continue;
       }
@@ -325,7 +349,6 @@ function buildReviewCandidates(timeline, thumbs) {
       // real screen of its own if recovered. A duplicate shares its hold's
       // own sign-in check rather than paying for its own — it is, by
       // definition, the same screen the representative already answered for.
-      const print = fingerprintFromThumb(thumbs[frame]);
       candidates.push({
         id: `d${String(++extraIndex).padStart(4, '0')}`,
         frame,
@@ -338,6 +361,7 @@ function buildReviewCandidates(timeline, thumbs) {
         duplicateOf: screen ? screen.id : null,
         print: { dhash: print.dhash, ahash: print.ahash, luminance: Math.round(print.luminance), edge: Math.round(print.edge * 10) / 10 },
         colors: dominantColors(thumbs[frame]),
+        quality,
       });
     }
   }
@@ -481,6 +505,7 @@ export async function ingestFolder(options) {
               dropped: candidate.dropped,
               reason: candidate.reason ?? null,
               duplicateOf: candidate.duplicateOf ?? null,
+              quality: candidate.quality,
             })),
           },
         );
@@ -760,6 +785,127 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
  *          keepLoading?: boolean, vision?: boolean, analyzerLabel?: string,
  *          journeyModel?: string, authorization?: object, onProgress?: Function}} options
  */
+
+/**
+ * "Manual" review's full word on every candidate, applied to the captured
+ * timeline: a kept screen named in `excludedIds` is removed; a dropped one
+ * left out of it is recovered.
+ *
+ * A duplicate recovered in the same breath as its own hold's representative
+ * is dropped is not a newly-discovered screen — it is the exact same screen
+ * the segmenter already identified, just a clearer raw sample of it (the
+ * review grid's own "pick the most complete duplicate" default, in
+ * IngestDock.tsx). Handled as an ordinary recovery it would come back under
+ * its own new id with none of the original's edges, overlay/revisit links,
+ * or classification hints: a disconnected node the flow graph has never
+ * heard of, even though it sits exactly where the original did in the walk
+ * the recording took. So it is not recovered as a new screen at all — the
+ * original's own record simply changes which frame it points to, keeping
+ * its id and so everything already wired to that id (confirmed against a
+ * real capture: a revisited, mid-journey screen kept its incoming edge, its
+ * outgoing edge, and its later revisit, after swapping to a clearer
+ * duplicate of itself).
+ */
+/**
+ * Reconnects a walk's edges around every screen being dropped, so "A led to
+ * B" survives even when everything between them — a whole Google sign-in
+ * detour, say — is excluded. A plain filter would just delete any edge
+ * touching a dropped screen, leaving its surviving neighbours with no edge
+ * between them at all, as if the walk had never passed through there — the
+ * same loss the quality-swap fix above exists to avoid, just for a screen
+ * that is genuinely being removed rather than re-pictured.
+ */
+function bridgeEdges(edges, toDrop) {
+  let current = edges;
+  for (const id of toDrop) {
+    const incoming = current.filter((edge) => edge.to === id);
+    const outgoing = current.filter((edge) => edge.from === id);
+    const bridged = [];
+    for (const into of incoming) {
+      for (const out of outgoing) {
+        if (into.from === out.to) continue; // a round trip through the dropped screen, not a real next step
+        bridged.push({ ...out, from: into.from });
+      }
+    }
+    current = [...current.filter((edge) => edge.from !== id && edge.to !== id), ...bridged];
+  }
+  const seen = new Set();
+  return current.filter((edge) => {
+    const key = `${edge.from}->${edge.to}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function applyExclusions(timeline, candidates, excludedIds) {
+  const toRecover = candidates.filter((candidate) => candidate.dropped && !excludedIds.has(candidate.id));
+  const toDrop = new Set(candidates.filter((candidate) => !candidate.dropped && excludedIds.has(candidate.id)).map((candidate) => candidate.id));
+
+  const replacementFor = new Map(); // original screen id -> the duplicate candidate standing in for it
+  for (const candidate of toRecover) {
+    if (candidate.kind === 'duplicate' && candidate.duplicateOf && toDrop.has(candidate.duplicateOf)) {
+      replacementFor.set(candidate.duplicateOf, candidate);
+    }
+  }
+  for (const originalId of replacementFor.keys()) toDrop.delete(originalId);
+
+  // A screen dropped here is gone for good, not folded into a neighbour —
+  // so is any screen that only existed as a later return to it, and any
+  // edge either side of it; the admin asked for it removed, not merged.
+  // A screen only being re-pictured, not dropped, keeps its revisits too.
+  for (const screen of timeline.screens) if (screen.revisitOf && toDrop.has(screen.revisitOf)) toDrop.add(screen.id);
+
+  let recovered = 0;
+  let screens = timeline.screens
+    .filter((screen) => !toDrop.has(screen.id))
+    .map((screen) => {
+      const replacement = replacementFor.get(screen.id);
+      if (!replacement) return screen;
+      recovered++;
+      return { ...screen, frame: replacement.frame, print: replacement.print ?? screen.print, colors: replacement.colors ?? screen.colors };
+    });
+  for (const candidate of toRecover) {
+    if (replacementFor.get(candidate.duplicateOf) === candidate) continue; // already re-pictured in place above, not a standalone recovery
+    recovered++;
+    if (candidate.reason === 'revisit') {
+      // Already a fully-analysed screen, just folded into an earlier one —
+      // recovering it is only a matter of no longer folding it.
+      const screen = screens.find((entry) => entry.id === candidate.id);
+      if (screen) screen.revisitOf = null;
+      continue;
+    }
+    // A moment the segmenter never kept, given a screen of its own — the
+    // print and colours it needs came with it in the manifest, computed at
+    // capture time since no full-size frame existed for it before now to
+    // compute them from.
+    screens.push({
+      id: candidate.id,
+      frame: candidate.frame,
+      start: candidate.start,
+      end: Math.round((candidate.start + candidate.holdSeconds) * 100) / 100,
+      holdSeconds: candidate.holdSeconds,
+      brief: candidate.brief,
+      kind: 'screen',
+      overlay: null,
+      overlayOf: null,
+      loadingOf: null,
+      scrolledFrom: null,
+      revisitOf: null,
+      visits: 1,
+      flat: false,
+      print: candidate.print ?? { dhash: '', ahash: '', luminance: 128, edge: 10 },
+      colors: candidate.colors ?? [],
+    });
+  }
+  // Chronological order matters downstream — flow order comes from it.
+  screens = screens.sort((a, b) => a.start - b.start);
+  return {
+    recovered,
+    timeline: { ...timeline, screens, edges: bridgeEdges(timeline.edges, toDrop) },
+  };
+}
+
 export async function resumeIngest(options) {
   const staging = options.stagingDir;
   const manifestPath = join(staging, 'review.json');
@@ -809,52 +955,12 @@ export async function resumeIngest(options) {
       timeline = {
         ...timeline,
         screens: timeline.screens.filter((screen) => !cascaded.has(screen.id)),
-        edges: timeline.edges.filter((edge) => !cascaded.has(edge.from) && !cascaded.has(edge.to)),
+        edges: bridgeEdges(timeline.edges, cascaded),
       };
     } else {
-      const toRecover = candidates.filter((candidate) => candidate.dropped && !excludedIds.has(candidate.id));
-      const toDrop = new Set(candidates.filter((candidate) => !candidate.dropped && excludedIds.has(candidate.id)).map((candidate) => candidate.id));
-      // A screen dropped here is gone for good, not folded into a neighbour —
-      // so is any screen that only existed as a later return to it, and any
-      // edge either side of it; the admin asked for it removed, not merged.
-      for (const screen of timeline.screens) if (screen.revisitOf && toDrop.has(screen.revisitOf)) toDrop.add(screen.id);
-
-      let screens = timeline.screens.filter((screen) => !toDrop.has(screen.id));
-      for (const candidate of toRecover) {
-        recovered++;
-        if (candidate.reason === 'revisit') {
-          // Already a fully-analysed screen, just folded into an earlier
-          // one — recovering it is only a matter of no longer folding it.
-          const screen = screens.find((entry) => entry.id === candidate.id);
-          if (screen) screen.revisitOf = null;
-          continue;
-        }
-        // A moment the segmenter never kept, given a screen of its own —
-        // the print and colours it needs came with it in the manifest,
-        // computed at capture time since no full-size frame existed for it
-        // before now to compute them from.
-        screens.push({
-          id: candidate.id,
-          frame: candidate.frame,
-          start: candidate.start,
-          end: Math.round((candidate.start + candidate.holdSeconds) * 100) / 100,
-          holdSeconds: candidate.holdSeconds,
-          brief: candidate.brief,
-          kind: 'screen',
-          overlay: null,
-          overlayOf: null,
-          loadingOf: null,
-          scrolledFrom: null,
-          revisitOf: null,
-          visits: 1,
-          flat: false,
-          print: candidate.print ?? { dhash: '', ahash: '', luminance: 128, edge: 10 },
-          colors: candidate.colors ?? [],
-        });
-      }
-      // Chronological order matters downstream — flow order comes from it.
-      screens = screens.sort((a, b) => a.start - b.start);
-      timeline = { ...timeline, screens, edges: timeline.edges.filter((edge) => !toDrop.has(edge.from) && !toDrop.has(edge.to)) };
+      const applied = applyExclusions(timeline, candidates, excludedIds);
+      timeline = applied.timeline;
+      recovered = applied.recovered;
     }
   }
 
@@ -993,17 +1099,12 @@ async function ingestTimeline({ timeline, frames, analyzer, graph, duplicates, e
     nameByScreen.set(screen.id, analysis.name);
 
     // A third-party sign-in page is recognised from its text whichever
-    // analyzer ran; it is kept in the graph so the journey through it holds
-    // together, and left out of the store.
+    // analyzer ran. Published like any other screen, kept exactly where the
+    // recording reached it — at the admin's own request, so the user's
+    // actual route through the app, hand-off to Google/Apple/Facebook
+    // included, reads straight through instead of jumping a gap.
     const external = analysis.external || isExternalAuthScreen(lines.map((line) => line.text).join('\n'));
-    if (external) {
-      node.skipPublish = true;
-      node.skipReason = typeof external === 'string' ? external : external.reason;
-      node.analysis.screenType = 'external_auth';
-      excluded.push({ file: fileName, name: analysis.name, reason: node.skipReason });
-      log.blocked(`${node.id} ${analysis.name} — ${node.skipReason} (not published)`);
-      continue;
-    }
+    if (external) node.analysis.screenType = 'external_auth';
 
     // A page still loading is a moment, not a design: it is left out of the
     // library unless --keep-loading asks for it. It stays in the graph either
@@ -1118,14 +1219,10 @@ async function ingestFiles({ staged, analyzer, graph, duplicates, excluded, opti
       path: [],
     });
 
+    // Published like any other screen — see the matching comment in the
+    // recording path above for why.
     const external = analysis.external || isExternalAuthScreen((analysis.lines ?? []).map((line) => line.text).join('\n'));
-    if (external) {
-      node.skipPublish = true;
-      node.skipReason = typeof external === 'string' ? external : external.reason;
-      excluded.push({ file: fileName, name: analysis.name, reason: node.skipReason });
-      log.blocked(`${node.id} ${analysis.name} — ${node.skipReason} (not published)`);
-      continue;
-    }
+    if (external) node.analysis.screenType = 'external_auth';
 
     const verdict = isBlockingScreen({
       screenType: analysis.screenType,
@@ -1291,7 +1388,7 @@ async function identifyFrom(frames, sourcePath, backend, existingApps, lineSets 
  * from recordings can be reclassified when the rules improve.
  *
  * @param {{appId: string, platform?: string, dataDir?: string, backend?: string,
- *          overwrite?: boolean, dryRun?: boolean}} options
+ *          overwrite?: boolean, removeExternal?: boolean, dryRun?: boolean}} options
  */
 export async function classifyStored(options) {
   const dataDir = resolveDataDir(options.dataDir);
@@ -1344,22 +1441,24 @@ export async function classifyStored(options) {
         continue;
       }
 
-      // A third-party sign-in page already in the store — captured before the
-      // pipeline learnt to recognise one — is removed rather than relabelled:
-      // it is not the app's design and never belonged in the library. Its
-      // flow closes over the gap. --keep-external leaves it in place.
+      // A third-party sign-in page is published like any other screen by
+      // default, same as a fresh ingest — --remove-external asks for the
+      // old behaviour instead, for whoever still wants these out.
       const external = analysis.external || isExternalAuthScreen((analysis.lines ?? []).map((line) => line.text).join('\n'));
-      if (external && options.keepExternal !== true) {
-        const reason = typeof external === 'string' ? external : external.reason;
-        if (!options.dryRun) {
-          rmSync(join(appDir, image), { force: true });
-          rmSync(sidecarPath, { force: true });
-          rmSync(join(analysisDir, `${screenId}.json`), { force: true });
-          dropFromFlows(dataDir, screenId);
+      if (external) {
+        if (options.removeExternal === true) {
+          const reason = typeof external === 'string' ? external : external.reason;
+          if (!options.dryRun) {
+            rmSync(join(appDir, image), { force: true });
+            rmSync(sidecarPath, { force: true });
+            rmSync(join(analysisDir, `${screenId}.json`), { force: true });
+            dropFromFlows(dataDir, screenId);
+          }
+          log.blocked(`${withoutExt} — ${reason}; removed from the store`);
+          results.push({ screenId, removed: true, reason });
+          continue;
         }
-        log.blocked(`${withoutExt} — ${reason}; removed from the store`);
-        results.push({ screenId, removed: true, reason });
-        continue;
+        analysis.screenType = 'external_auth';
       }
 
       const publishedType = publishedTypeFor(analysis.screenType);
@@ -1581,4 +1680,4 @@ function classifyLines(lines, sidecar) {
 }
 
 /** Exported for the self-test. */
-export const _internals = { listImages, titleFrom, unclassified, PUBLISHED_TYPES, wordsOf, labelFor, isPublishable, fingerprintFromThumb, buildReviewCandidates };
+export const _internals = { listImages, titleFrom, unclassified, PUBLISHED_TYPES, wordsOf, labelFor, isPublishable, fingerprintFromThumb, buildReviewCandidates, frameQuality, applyExclusions, bridgeEdges };

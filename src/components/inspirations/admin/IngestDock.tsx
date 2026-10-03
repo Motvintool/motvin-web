@@ -1283,6 +1283,61 @@ const REASON_SHORT: Record<string, string> = {
   duplicate: 'duplicate',
 };
 
+/** How much higher a duplicate's quality score has to be than its hold's own representative before a pick is swapped — see the comment at its use in defaultExcluded() below. */
+const QUALITY_MARGIN = 3;
+
+/**
+ * The excluded set both "I'll choose myself" (a starting point to adjust
+ * from) and "Clean up automatically" (the final word, sent as-is) begin
+ * from: a screen the segmenter itself flagged as loading or already set
+ * aside is ticked already — a Google/Apple/Facebook sign-in page is left
+ * unticked on purpose, so it publishes like any other screen and the
+ * user's actual route through the app, hand-off included, still shows in
+ * the flow — plus, for any family worth keeping at all, swapping to
+ * whichever raw sample is clearly the most complete one, not just
+ * whichever the segmenter happened to land on.
+ */
+function defaultExcluded(screens: NonNullable<IngestJob['capturedScreens']>): Set<string> {
+  const base = new Set(screens.filter((screen) => screen.dropped || screen.kind === 'loading').map((screen) => screen.id));
+  // A hold's own picture and every raw-sample duplicate of it are the same
+  // screen — defaulting to "keep the one the segmenter happened to land
+  // on, drop every duplicate" means a duplicate that is actually more
+  // fully drawn (no fade, no transition, no loading placeholder still up)
+  // gets thrown out just because it wasn't the segmenter's pick. Only
+  // applies to a family worth keeping at all — one already excluded above
+  // (loading, a sign-in page, a revisit) stays fully excluded regardless
+  // of which member looks clearest, since none of them should publish
+  // either way.
+  const families = new Map<string, NonNullable<IngestJob['capturedScreens']>>();
+  for (const screen of screens) {
+    const familyId = screen.kind === 'duplicate' ? (screen.duplicateOf ?? screen.id) : screen.id;
+    const family = families.get(familyId);
+    if (family) family.push(screen);
+    else families.set(familyId, [screen]);
+  }
+  for (const family of families.values()) {
+    if (family.length < 2) continue;
+    const anchor = family.find((screen) => screen.kind !== 'duplicate');
+    if (!anchor || base.has(anchor.id)) continue;
+    const best = family.reduce((a, b) => (b.quality > a.quality ? b : a));
+    // A real hold's own raw samples settle to nearly the same quality
+    // (confirmed against a real recording: every family's spread was
+    // under a point once the segmenter had grouped them at all) — so
+    // swapping on any technically-higher score, including a tie broken
+    // only by array order, would mean this "safety net" fires on
+    // effectively every hold instead of the rare one the segmenter got
+    // wrong, and could just as easily swap away a frame kept on purpose
+    // (the launch screen among them) for no real difference at all. Only
+    // a clearly, not marginally, more complete duplicate is worth the swap.
+    if (best.id === anchor.id || best.quality <= anchor.quality + QUALITY_MARGIN) continue;
+    for (const screen of family) {
+      if (screen.id === best.id) base.delete(screen.id);
+      else base.add(screen.id);
+    }
+  }
+  return base;
+}
+
 export function ReviewGrid({ job, slot }: { job: IngestJob; slot?: HTMLDivElement | null }) {
   const screens = job.capturedScreens ?? [];
   const kept = screens.filter((screen) => !screen.dropped);
@@ -1365,22 +1420,24 @@ export function ReviewGrid({ job, slot }: { job: IngestJob; slot?: HTMLDivElemen
         type="button"
         className="ins-chip-btn"
         onClick={() => {
-          // A head start, not the final word: a screen the segmenter
-          // itself flagged as loading or already set aside, or that a
-          // quick, free, on-device text check caught as a
-          // Google/Apple/Facebook sign-in page, is ticked already —
-          // all three are what "automatic" would leave out anyway, so
-          // the admin only adjusts from there instead of rebuilding
-          // the list by hand, and recovers a wrongly set-aside screen
-          // with a single untick.
-          setPicked(new Set(screens.filter((screen) => screen.dropped || screen.kind === 'loading' || screen.external).map((screen) => screen.id)));
+          setPicked(defaultExcluded(screens));
           setPicking(true);
         }}
         disabled={busy}
       >
         I’ll choose myself
       </button>
-      <button type="button" className="ins-chip-btn ins-chip-btn--primary" onClick={() => void resume({ mode: 'automatic' })} disabled={busy}>
+      <button
+        type="button"
+        className="ins-chip-btn ins-chip-btn--primary"
+        // Not the bare "automatic" signal any more: sent as the same
+        // default exclusions "I'll choose myself" starts from, admin
+        // review skipped — so a clearer duplicate still gets picked over
+        // whichever frame the segmenter happened to land on, without
+        // making the admin step through the grid to get it.
+        onClick={() => void resume({ mode: 'manual', excluded: [...defaultExcluded(screens)] })}
+        disabled={busy}
+      >
         Clean up automatically
       </button>
     </>
