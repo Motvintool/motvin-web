@@ -404,6 +404,9 @@ export async function publishCrawl(options) {
       flow_position: placed?.position ?? null,
       name,
       description: analysis.description,
+      // Everything the on-device reader saw on the frame, one line per row, so the
+      // gallery's "search text in screenshot" is a string match, not a re-read.
+      text: (analysis.lines ?? []).map((line) => String(line.text ?? '').trim()).filter(Boolean).join('\n'),
       purpose: analysis.purpose ?? null,
       primary_action: analysis.primaryAction ?? null,
       tags: sidecar.tags,
