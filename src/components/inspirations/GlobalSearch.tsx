@@ -11,7 +11,7 @@ import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { App, Flow, Industry, Platform, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { FLOW_PARAM } from './FlowPreview';
-import { AndroidIcon, AppleIcon, CloseIcon, SearchIcon, WebIcon } from './Icons';
+import { AndroidIcon, AppleIcon, ChevronDownIcon, CloseIcon, SearchIcon, WebIcon } from './Icons';
 import { SCREEN_PARAM } from './ScreenPreviewModal';
 
 const FIGMA_APP_ART = '/ASSET/search-modal/figma-02.png';
@@ -115,6 +115,8 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   const [active, setActive] = useState(-1);
   const [activeSearchAction, setActiveSearchAction] = useState<'search' | 'screenshot' | null>('search');
   const [section, setSection] = useState<'top' | 'categories' | 'screens' | 'elements' | 'flows'>('top');
+  // Phones swap the section tab list for a dropdown pill (see .ins-search-nav-dropdown).
+  const [navMenuOpen, setNavMenuOpen] = useState(false);
   // Arrow-key position within whichever single-column section (Categories,
   // Screens, UI Elements, Flows) is currently showing — separate from
   // `active`, which is the same idea for the live-typing suggestions list,
@@ -529,6 +531,11 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
           onClick={(event) => event.stopPropagation()}
         >
           <form className="ins-search-modal-head" onSubmit={submit}>
+            <button type="button" className="ins-search-modal-back" aria-label="Close search" onClick={close}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M19 12H5M11 18l-6-6 6-6" />
+              </svg>
+            </button>
             <div className="ins-search-modal-field">
               <img src={FIGMA_MODAL_ICONS.search} alt="" width={26} height={26} />
               <input
@@ -539,7 +546,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                 autoComplete="off"
                 spellCheck={false}
                 aria-label="Search apps, flows and screens"
-                onChange={(e) => setValue(e.target.value)}
+                onChange={(e) => { setValue(e.target.value); setNavMenuOpen(false); }}
                 onKeyDown={handleKeyDownRef.current as any}
               />
             </div>
@@ -558,14 +565,51 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
               ))}
             </div>
           </form>
-          {!value.trim() && recentSearches.length > 0 && (
-            <div className="ins-search-chips" aria-label="Recent searches">
-              {recentSearches.map(({ query, icon, iconSrc }) => (
-                <div key={query} className="ins-search-chip">
-                  <button type="button" className="ins-search-chip-query" onClick={() => runSearch(query)}><img className={`ins-search-chip-icon ${iconSrc ? 'is-app-logo' : ''}`} src={iconSrc ?? RECENT_SEARCH_ICON_SOURCES[icon]} alt="" width={icon === 'app' || iconSrc ? 28 : 20} height={icon === 'app' || iconSrc ? 28 : 20} />{query}</button>
-                  <button type="button" className="ins-search-chip-remove" aria-label={`Remove ${query} from recent searches`} onClick={() => removeRecentSearch(query)}><CloseIcon size={14} /></button>
-                </div>
-              ))}
+          {!value.trim() && (
+            <div className="ins-search-subbar">
+              {recentSearches.length > 0 && (
+              <div className="ins-search-chips" aria-label="Recent searches">
+                {recentSearches.map(({ query, icon, iconSrc }) => (
+                  <div key={query} className="ins-search-chip">
+                    <button type="button" className="ins-search-chip-query" onClick={() => runSearch(query)}><img className={`ins-search-chip-icon ${iconSrc ? 'is-app-logo' : ''}`} src={iconSrc ?? RECENT_SEARCH_ICON_SOURCES[icon]} alt="" width={icon === 'app' || iconSrc ? 28 : 20} height={icon === 'app' || iconSrc ? 28 : 20} />{query}</button>
+                    <button type="button" className="ins-search-chip-remove" aria-label={`Remove ${query} from recent searches`} onClick={() => removeRecentSearch(query)}><CloseIcon size={14} /></button>
+                  </div>
+                ))}
+              </div>
+              )}
+              <div className="ins-popwrap ins-search-nav-dropdown">
+                <button
+                  type="button"
+                  className="ins-fpill"
+                  aria-haspopup="listbox"
+                  aria-expanded={navMenuOpen}
+                  aria-label="Search section"
+                  onClick={() => setNavMenuOpen((o) => !o)}
+                >
+                  {modalSections.find((item) => item.key === section)?.label}
+                  <ChevronDownIcon size={14} />
+                </button>
+                {navMenuOpen && (
+                  <>
+                    <div className="ins-search-nav-scrim" onClick={() => setNavMenuOpen(false)} />
+                    <div className="ins-popover ins-fmenu" role="listbox" aria-label="Search section">
+                      {modalSections.map(({ key, label, icon }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          role="option"
+                          aria-selected={section === key}
+                          className={`ins-fmenu-item ${section === key ? 'is-selected' : ''}`}
+                          onClick={() => { setSection(key); setBrowseActive(-1); setNavMenuOpen(false); }}
+                        >
+                          <img src={icon} alt="" width={20} height={20} />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
           <div className={`ins-search-modal-body ${!value.trim() ? 'has-nav' : ''}`}>

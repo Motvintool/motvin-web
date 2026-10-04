@@ -130,6 +130,8 @@ function persist() {
 
 function publicView(job: ServerJob): IngestJob {
   const view: ServerJob = { ...job };
+  const platform = job.resumeConfig?.platform;
+  if (platform === 'ios' || platform === 'android' || platform === 'web') view.platform = platform;
   delete (view as Partial<ServerJob>).workDir;
   delete (view as Partial<ServerJob>).stagingDir;
   delete (view as Partial<ServerJob>).resumeConfig;

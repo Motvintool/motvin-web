@@ -108,6 +108,8 @@ export type IngestJob = {
   title: string;
   /** Reading a recording, or rewriting an app's names with the AI. */
   mode?: 'ingest' | 'research';
+  /** The platform the recording was started for — decides whether its screens are shown as phone (portrait) or web (landscape) thumbnails. Absent on older runs and on research runs. */
+  platform?: 'ios' | 'android' | 'web';
   sizeBytes: number | null;
   startedBy: string;
   startedAt: string;

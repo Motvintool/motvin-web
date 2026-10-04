@@ -52,7 +52,7 @@ import {
   type IngestJob,
   type UploadPlan,
 } from '@/lib/inspirations/ingestJobs';
-import { ArrowRightIcon, CheckIcon, ChevronDownIcon, CloseIcon, CopyIcon, ExpandIcon, ExternalIcon, MinusIcon, PencilIcon, PlusIcon, RetryIcon, SparklesIcon, StopIcon, TrashIcon, UndoIcon, UploadIcon } from '../Icons';
+import { ArrowRightIcon, CheckIcon, ChevronDownIcon, CloseIcon, CopyIcon, ExpandIcon, ExternalIcon, MinusIcon, PencilIcon, PlusIcon, RetryIcon, StopIcon, TrashIcon, UndoIcon, UploadIcon } from '../Icons';
 import { tone } from './AiPicker';
 
 /**
@@ -183,6 +183,7 @@ export function IngestDock() {
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const focusWhenOpen = useRef(false);
+  const dockRef = useRef<HTMLElement>(null);
 
   // ⌘/ (Ctrl+/ elsewhere) opens the assistant and puts the cursor in the
   // composer from anywhere on the page; Esc in the composer folds it away.
@@ -222,6 +223,27 @@ export function IngestDock() {
       inputRef.current?.focus();
     }
   }, [collapsed]);
+
+  // A press anywhere outside the open dock folds it away, like Esc in the
+  // composer. Presses inside it, or inside anything it opens (the review
+  // modal, menus, dialogs, toasts — most are portaled out of the dock), don't.
+  useEffect(() => {
+    if (!admin || collapsed) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (dockRef.current?.contains(target)) return;
+      if (target.closest('.ins-portal, .ins-popover, .ins-toast, [role="dialog"], [role="menu"], [role="listbox"]')) return;
+      setCollapsed(true);
+      try {
+        localStorage.setItem(COLLAPSED_KEY, '1');
+      } catch {
+        // Private mode or blocked storage.
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [admin, collapsed]);
   /** The library as it stood when a recording was dropped — apps and their versions, for the questions that follow. */
   const libraryRef = useRef<AdminState | null>(null);
 
@@ -602,8 +624,14 @@ export function IngestDock() {
       <>
         {picker}
         <button type="button" className={`ins-dock-pill ${latest && isActive(latest) ? 'is-running' : ''}`} onClick={toggle} aria-label="Open the assistant" title="Open the assistant (⌘/)">
-          {latest && isActive(latest) ? <span className="ins-spinner" /> : <SparklesIcon size={15} />}
-          <span className="ins-dock-pill-text">{latest && isActive(latest) ? pillText(latest) : 'Motvin assistant'}</span>
+          {latest && isActive(latest) ? (
+            <>
+              <span className="ins-spinner" />
+              <span className="ins-dock-pill-text">{pillText(latest)}</span>
+            </>
+          ) : (
+            <img src="/ASSET/Icons/Motvin/bot-Illustration.svg" alt="" width={33} height={33} />
+          )}
         </button>
       </>
     );
@@ -611,9 +639,10 @@ export function IngestDock() {
 
   return (
     <aside
+      ref={dockRef}
       className={`ins-dock ${dragging ? 'is-dragging' : ''} ${wide ? 'is-wide' : ''}`}
       role="complementary"
-      aria-label="Motvin assistant"
+      aria-label="Motvin agent"
       onDragOver={(e: DragEvent) => {
         e.preventDefault();
         setDragging(true);
@@ -629,10 +658,10 @@ export function IngestDock() {
       {picker}
       <header className="ins-dock-head">
         <span className="ins-dock-avatar" aria-hidden>
-          <SparklesIcon size={16} />
+          <img src="/ASSET/Icons/Motvin/bot-Illustration.svg" alt="" width={24} height={24} />
         </span>
         <div className="ins-dock-title">
-          <strong>Motvin assistant</strong>
+          <strong>Motvin agent</strong>
           <span className={`ins-dock-ai is-${tone(ai, aiLoading)}`}>
             <span className="ins-ai-dot" aria-hidden />
             {aiLabel(ai)}
@@ -780,7 +809,7 @@ export function IngestDock() {
       )}
       <form className="ins-dock-composer" onSubmit={(event) => void ask(event)}>
         <button type="button" className="ins-iconbtn ins-iconbtn--plain" onClick={() => fileRef.current?.click()} aria-label="Upload a video or an image" title="Upload a video or a logo image">
-          <PlusIcon size={16} />
+          <PlusIcon size={20} />
         </button>
         <input
           className="ins-dock-input"
@@ -823,11 +852,11 @@ export function IngestDock() {
             aria-label={asking ? 'Stop generating' : liveJob?.status === 'uploading' ? 'Cancel the upload' : 'Stop the run'}
             title={asking ? 'Stop generating' : liveJob?.status === 'uploading' ? 'Cancel the upload' : 'Stop the run'}
           >
-            <StopIcon size={13} />
+            <StopIcon size={32} />
           </button>
         ) : (
           <button type="submit" className="ins-dock-send" disabled={!question.trim()} aria-label="Send">
-            <ArrowRightIcon size={15} />
+            <ArrowRightIcon size={20} />
           </button>
         )}
       </form>
@@ -1507,7 +1536,7 @@ export function ReviewGrid({ job, slot }: { job: IngestJob; slot?: HTMLDivElemen
           {expanded ? <CloseIcon size={15} /> : <ExpandIcon size={15} />}
         </button>
       </div>
-      <div className={`ins-chat-screens-grid ${job.mode !== 'research' ? 'is-apps-platform' : ''}`} role={picking ? 'listbox' : 'list'} aria-multiselectable={picking || undefined}>
+      <div className={`ins-chat-screens-grid ${job.mode !== 'research' && job.platform !== 'web' ? 'is-apps-platform' : ''}`} role={picking ? 'listbox' : 'list'} aria-multiselectable={picking || undefined}>
         {screens.map((screen, index) => {
           const isPicked = picked.has(screen.id);
           let screenLabel = '';

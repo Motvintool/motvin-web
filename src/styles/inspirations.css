@@ -872,7 +872,77 @@ body {
    touching its `left/top/width/height` — those are the percentage coords
    the backend measured, not something to recompute here just to pad them. */
 .ins-card-text-highlight { position: absolute; z-index: 2; border-radius: 3px; background: rgba(255, 220, 72, 0.4); transform: scale(1.15); pointer-events: none; }
-@media (max-width: 720px) { .ins-header-center .ins-search-modal, .ins-search-overlay .ins-search-modal { width: calc(100vw - 24px); height: min(700px, calc(100vh - 24px)); border-radius: 22px; } .ins-header-center .ins-search-modal.is-searching, .ins-search-overlay .ins-search-modal.is-searching { height: auto; max-height: calc(100vh - 24px); } .ins-search-modal-head { padding: 0 16px; } .ins-search-modal-field { margin-right: 98px; } .ins-search-modal-field input { width: 100%; max-width: none; } .ins-search-modal-platforms { right: 16px; gap: 10px; } .ins-search-modal-body.has-nav { display: grid; grid-template-columns: 1fr; } .ins-search-modal-nav { flex-direction: row; padding: 12px; overflow-x: auto; } .ins-search-modal-nav button { flex: none; padding: 0 16px; } .ins-search-modal-results { padding: 16px; } }
+.ins-search-modal-back { display: none; }
+.ins-search-subbar { display: contents; }
+.ins-popwrap.ins-search-nav-dropdown, .ins-search-nav-scrim { display: none; }
+@media (max-width: 759px) {
+  /* On a phone the search opens as its own full-screen page rather than a
+     floating card: no overlay padding, backdrop, radius or blur, and a Back
+     button in the head to leave it (a modal's click-outside isn't available). */
+  .ins-search-overlay { padding: 0; background: #fff; backdrop-filter: none; place-items: stretch; }
+  .ins-header-center .ins-search-modal,
+  .ins-search-overlay .ins-search-modal,
+  .ins-header-center .ins-search-modal.is-searching,
+  .ins-search-overlay .ins-search-modal.is-searching {
+    width: 100vw; height: 100vh; height: 100dvh; max-height: none; margin-top: 0;
+    border-radius: 0; background: #fff; backdrop-filter: none; align-self: stretch;
+    display: flex; flex-direction: column;
+  }
+  /* One row: [Back][ search pill ][platform icons], closed off from the
+     content by a hairline. */
+  .ins-search-modal-head { flex: none; flex-wrap: nowrap; box-sizing: border-box; height: 82px; padding: 0 8px; gap: 4px; border-bottom: 1px solid #efefef; }
+  .ins-search-modal-back { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 44px; height: 44px; border-radius: 999px; color: #111; }
+  .ins-search-modal-back:active { background: #eee; }
+  .ins-search-modal-field { flex: 1 1 0; margin-right: 0; height: 52px; padding: 0 14px; gap: 8px; border-radius: 999px; background: #f2f2f2; color: #6b6b6b; }
+  .ins-search-modal-field > img { width: 18px; height: 18px; }
+  .ins-search-modal.is-searching .ins-search-modal-field { gap: 8px; }
+  .ins-search-modal.is-searching .ins-search-modal-field > img { width: 18px; opacity: 1; transform: none; }
+  .ins-search-modal-field input { width: 100%; max-width: none; height: 52px; text-overflow: ellipsis; }
+  .ins-search-modal-platforms { position: static; flex: none; gap: 0; }
+  /* Under the head: recent-search chips pinned to the left corner (scrolling
+     if they overflow) and the section dropdown pill at the right. */
+  .ins-search-subbar { display: flex; align-items: center; flex: none; gap: 10px; padding: 12px 16px; }
+  .ins-search-subbar .ins-search-chips { flex: 1 1 0; min-width: 0; height: auto; padding: 0; gap: 8px; align-items: center; justify-content: flex-start; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent); }
+  .ins-search-subbar .ins-search-chips::-webkit-scrollbar { display: none; }
+  .ins-search-subbar .ins-search-chip { height: 40px; }
+  .ins-search-subbar .ins-search-chip-query { padding: 0 4px 0 12px; font-size: 14px; }
+  .ins-search-subbar .ins-search-chip-remove { margin-right: 4px; width: 28px; height: 28px; }
+  .ins-popwrap.ins-search-nav-dropdown { display: inline-flex; flex: none; margin-left: auto; }
+  /* This overlay is portaled to <body>, outside the scope that defines the
+     --ins-* tokens the filter pill normally reads, so the pill's colours are
+     spelled out (same values as the Explore filter pills). */
+  .ins-search-nav-dropdown .ins-fpill { height: 40px; padding: 0 14px; border: 1px solid #ecedef; background: #fff; color: #0b0c0e; border-radius: 999px; font-size: 15px; font-weight: 600; }
+  .ins-search-nav-dropdown .ins-fpill { transition: border-color 150ms ease, background 150ms ease; }
+  .ins-search-nav-dropdown .ins-fpill:hover { border-color: #d6d8dd; }
+  .ins-search-nav-scrim { display: block; position: fixed; inset: 0; z-index: 205; background: rgba(0, 0, 0, 0.25); }
+  .ins-search-nav-dropdown .ins-fmenu-item { justify-content: flex-start; gap: 12px; }
+  .ins-search-nav-dropdown .ins-fmenu-item img { display: block; flex: none; width: 20px; height: 20px; object-fit: contain; }
+  .ins-search-modal-body,
+  .ins-search-modal-head + .ins-search-modal-body,
+  .ins-search-modal.is-searching .ins-search-modal-body { flex: 1 1 0; min-height: 0; height: auto; }
+  .ins-search-modal-body.has-nav { grid-template-rows: minmax(0, 1fr); }
+  .ins-search-modal.is-searching .ins-search-modal-results { height: 100%; max-height: none; }
+  .ins-search-modal-body.has-nav { display: grid; grid-template-columns: 1fr; }
+  /* The section tabs become the dropdown pill in .ins-search-subbar. */
+  .ins-search-modal-nav { display: none; }
+  .ins-search-modal-results { padding: 16px; overflow-x: hidden; }
+  /* Two-up Top Rated screens (the featured tile then fills a row) instead of
+     four slivers. */
+  .ins-search-top-screens { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ins-search-top-apps { flex-wrap: wrap; }
+  /* List rows (Categories / Screens / UI Elements / Flows): no side padding,
+     so the text lines up with the page's own 16px gutter. */
+  .ins-search-categories button,
+  .ins-search-resource-list button { padding-left: 0; padding-right: 0; }
+  .ins-search-categories span,
+  .ins-search-resource-list span { padding-left: 0; padding-right: 0; }
+  .ins-search-modal-title { padding-left: 0; padding-right: 0; }
+  /* UI Elements / Flows chips: same compact size as the other phone chips. */
+  .ins-search-top-elements { gap: 8px; }
+  .ins-search-top-elements button { height: 40px; gap: 6px; padding: 0 14px 0 8px; font-size: 14px; }
+  .ins-search-top-elements button > span { width: 24px; height: 24px; padding: 4px; border-radius: 8px; }
+  .ins-search-top-elements button > span img { height: 16px; max-width: 16px; }
+}
 
 /* =========================================================
    LAYOUT
@@ -2328,7 +2398,9 @@ select.ins-input {
   position: relative;
   width: 100%;
   aspect-ratio: 346 / 674;
-  padding: 36px;
+  /* 36px on the 346px design card; below that it shrinks with the card
+     (10.4%) so the grey frame never looks heavier on a narrow card. */
+  padding: min(36px, 10.4%);
   border-radius: 19.65% / 10.09%;
   overflow: hidden;
   background: #f5f5f5;
@@ -2463,14 +2535,19 @@ select.ins-input {
    pointer-events note below. */
 .ins-card-select-ring {
   position: absolute;
-  top: 16px;
-  left: 16px;
+  /* A share of the frame (346:674), capped at the original 16px offset and
+     34px size: it keeps its spot on the screenshot as the card shrinks, and
+     wide cards look exactly as before. The top share is the left share x
+     346/674 because % of `top` is of the height. */
+  top: clamp(8px, 2.36%, 16px);
+  left: clamp(8px, 4.6%, 16px);
   z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: clamp(24px, 9.83%, 34px);
+  height: auto;
+  aspect-ratio: 1;
   padding: 0;
   border: 3px solid #b5b5b5;
   border-radius: 18px;
@@ -2485,8 +2562,14 @@ select.ins-input {
    52px; ScreenCard's ring elsewhere (App Detail Screens tab, Screens
    listing) stays at this rule's default 16px above. */
 .ins-explore-view .ins-card-select-ring {
-  top: 32px;
-  left: 32px;
+  top: clamp(10px, 4.75%, 32px);
+  left: clamp(10px, 9.25%, 32px);
+}
+
+/* App Detail's Screens panel has no frame padding and a 282:611 frame. */
+.ins-shot-panel .ins-card-shot .ins-card-select-ring {
+  top: clamp(8px, 1.94%, 16px);
+  left: clamp(8px, 4.2%, 16px);
 }
 
 /* Active state — stays visible and clickable without hovering, so a
@@ -2501,8 +2584,9 @@ select.ins-input {
 }
 
 .ins-card-select-check {
-  width: 8px;
-  height: 15px;
+  width: 28%;
+  height: auto;
+  aspect-ratio: 8 / 15;
   border-bottom: 2px solid #fff;
   border-right: 2px solid #fff;
   transform: translateY(-1px) rotate(45deg);
@@ -3067,6 +3151,17 @@ select.ins-input {
 }
 
 @media (max-width: 640px) {
+  .ins-screen-preview-modal {
+    width: calc(100vw - 24px);
+    height: calc(100vh - 24px);
+  }
+
+  /* The desktop details pane keeps its 320px width even after the ≤900px
+     rules stack the panes — let it fill the column instead. */
+  .ins-screen-preview-details {
+    width: auto;
+  }
+
   .ins-screen-preview-foot {
     flex-direction: column;
     align-items: stretch;
@@ -3079,6 +3174,18 @@ select.ins-input {
     position: static;
     transform: none;
     flex-wrap: wrap;
+  }
+
+  /* Save + "View in App Store" together are wider than the pane; wrap and
+     share the row instead of clipping at its edge. */
+  .ins-screen-preview-foot-primary {
+    flex-wrap: wrap;
+  }
+
+  .ins-screen-preview-foot-primary .ins-screen-preview-foot-btn {
+    flex: 1 1 auto;
+    padding: 12px 16px;
+    font-size: 15px;
   }
 }
 
@@ -4597,6 +4704,10 @@ select.ins-input {
   }
 
   .ins-tabbar-row.is-docked {
+    /* inset: 0 pins the box to the header's 82px; the wrapped rows are
+       taller than that, so release the bottom edge and let the row's own
+       glass grow with them instead of content floating past it. */
+    bottom: auto;
     height: auto;
     min-height: var(--ins-header-h, 82px);
     padding: 12px 16px;
@@ -6199,6 +6310,22 @@ select.ins-input {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* Below ~1140px the full header no longer fits: the platform toggle's
+     "Android / Web" labels overflow their column into the search bar and
+     "Try Icons" runs into the right-hand icons. Use the compact header
+     (logo | search | profile) from here down; platform switching stays
+     available in the toolbar's platform pill. */
+  .ins-platform-nav,
+  .ins-header-action-links,
+  .ins-header-try-icons {
+    display: none;
+  }
+
+  .ins-header-content,
+  .ins-ftoolbar.is-docked {
+    padding-inline: 24px;
+  }
+
 }
 
 @media (max-width: 1100px) {
@@ -6214,16 +6341,30 @@ select.ins-input {
     position: static;
   }
 
+  /* Flows: the 310px journey list beside the stream leaves ~30px for the
+     stream itself on a phone. Stack them — the list becomes its own capped,
+     scrollable block above the flows it navigates. */
+  .ins-flows-layout {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .ins-flows-nav {
+    position: static;
+    max-height: 300px;
+    padding-right: 0;
+  }
+
 }
 
 @media (max-width: 759px) {
   .ins-main {
-    padding: 24px 20px 60px;
+    padding: 16px 16px 60px;
   }
 
   .ins-header-content,
   .ins-ftoolbar.is-docked {
-    padding-inline: 20px;
+    padding-inline: 16px;
   }
 
   .ins-header-inner {
@@ -6231,16 +6372,110 @@ select.ins-input {
     gap: 8px;
   }
 
-  .ins-header-center,
+  /* The phone header keeps the search (logo | search | profile) — the
+     platform nav, Try Icons and action links are what step aside. */
+  .ins-header-content {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
   .ins-platform-nav,
-  .ins-header-action-links {
+  .ins-header-action-links,
+  .ins-header-try-icons,
+  .ins-kbd-group {
     display: none;
+  }
+
+  .ins-header-center {
+    min-width: 0;
+  }
+
+  .ins-header-center .ins-search {
+    width: 100%;
+  }
+
+  .ins-brand-logo-img {
+    width: 40px;
+    height: 40px;
   }
 
   .ins-app-grid,
   .ins-pattern-grid-wrap,
   .ins-collection-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Screens stay two-up on a phone (Mobbin-style) instead of one giant
+     device frame per row; the frame's mat scales with the card via a
+     percentage inset (36/346 of the desktop card). */
+  .ins-grid,
+  .ins-shot-panel .ins-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+    row-gap: 24px;
+  }
+
+  .ins-card {
+    contain-intrinsic-size: 170px 420px;
+  }
+
+  /* No hover on a phone: the stepper is always on, sized for the smaller
+     card instead of the desktop 64px discs. */
+  .ins-card-hover-controls {
+    height: 88px;
+    gap: 16px;
+    opacity: 1;
+    transform: none;
+  }
+
+  .ins-card-hover-controls::before {
+    height: 176px;
+  }
+
+  .ins-card-control {
+    width: 40px;
+    height: 40px;
+  }
+
+  .ins-card-hover-footer .ins-btn-save,
+  .ins-card-hover-footer .ins-btn-copy {
+    pointer-events: auto;
+  }
+
+  /* The app row under a half-width card: smaller logo and type so the name
+     and tagline fit instead of truncating after a few characters. */
+  .ins-card-meta {
+    padding: 12px 2px 16px;
+    gap: 10px;
+  }
+
+  /* !important: AppLogo sizes itself via an inline style (its `size` prop),
+     which would otherwise always beat a stylesheet rule. */
+  .ins-card-meta .ins-app-logo {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 9px;
+  }
+
+  .ins-card-app {
+    font-size: 15px;
+    line-height: 1.3;
+  }
+
+  .ins-card-tagline {
+    font-size: 12px;
+  }
+
+  /* Save/Copy footer: desktop-sized buttons (16px text, 24px side padding)
+     are wider than a half-width card and spilled past its edge. */
+  .ins-card-hover-footer {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .ins-card-hover-actions button {
+    padding: 8px 10px;
+    font-size: 13px;
   }
 
   .ins-flow-grid {
@@ -6287,28 +6522,71 @@ select.ins-input {
     line-height: 25px;
   }
 
-  /* On narrow screens the toolbar wraps; the count hides so pills keep room. */
+  /* The toolbar never wraps on a phone — it becomes one horizontally
+     scrollable row of pills (scrollbar hidden), with the sort pill riding at
+     the end of the strip; the count hides so pills keep room. */
+  .ins-ftoolbar,
+  .ins-ftoolbar.is-docked {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ins-ftoolbar::-webkit-scrollbar {
+    display: none;
+  }
+
   .ins-ftoolbar-right {
-    margin-left: 0;
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-
-@media (max-width: 640px) {
-  .ins-grid,
-  .ins-grid.ins-web-grid {
-    grid-template-columns: 1fr;
-  }
-}
-  /* Docked rows don't wrap, so the right side stays inline on its row edge. */
-  .ins-ftoolbar.is-docked .ins-ftoolbar-right {
     margin-left: auto;
-    width: auto;
+    flex: none;
+  }
+
+  .ins-ftoolbar-divider {
+    margin: 0 10px;
+  }
+
+  .ins-fpill,
+  .ins-fsort,
+  .ins-ftoolbar-context {
+    height: 38px;
+    font-size: 15px;
+  }
+
+  .ins-fpill,
+  .ins-fsort {
+    padding: 0 14px;
+  }
+
+  /* Busy screenshots sit right under the wrapped docked bars on a phone, so
+     the glass goes more opaque than the desktop 0.75 to keep them legible. */
+  .ins-ftoolbar.is-docked,
+  .ins-tabbar-row.is-docked {
+    background: rgba(255, 255, 255, 0.92);
   }
 
   .ins-fshowing {
     display: none;
+  }
+
+  /* Filter/sort menus can't hang off a pill inside a scroll strip (the
+     strip would clip them) — they open as a bottom sheet instead. */
+  .ins-popwrap .ins-popover,
+  .ins-popwrap .ins-popover.ins-fmenu,
+  .ins-popwrap .ins-popover--right,
+  .ins-popwrap .ins-popover--left,
+  .ins-screen-preview-foot .ins-popover {
+    position: fixed;
+    top: auto;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    min-width: 0;
+    max-height: min(420px, 60vh);
+    overflow-y: auto;
+    z-index: 210;
+    box-shadow: 0 -8px 60px rgba(0, 0, 0, 0.2);
   }
 
   .ins-detail-head {
@@ -6332,8 +6610,27 @@ select.ins-input {
   }
 }
 
+@media (max-width: 640px) {
+  /* Web (landscape) shots are too wide to pair up on a phone. */
+  .ins-grid.ins-web-grid,
+  .ins-shot-panel .ins-grid.ins-web-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  /* One app per row on a small phone only; wider than this the grid keeps two
+     columns so a card never stretches past ~350px (a stretched card made the
+     grey frame and select ring balloon). */
+  .ins-grid.ins-app-grid,
+  .ins-shot-panel .ins-grid.ins-app-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 459px) {
-  .ins-app-grid,
+  /* App/screen cards stay two-up (Mobbin-style) — only the wide pattern and
+     collection cards drop to a single column this narrow. */
   .ins-pattern-grid-wrap,
   .ins-collection-grid {
     grid-template-columns: 1fr;
@@ -6976,20 +7273,23 @@ select.ins-input {
   flex-wrap: wrap;
 }
 
-/* The dock: a fixed card in the corner, ChatGPT-sized. */
+/* The dock: a tall rounded panel in the corner, in the style of appshots' help
+   widget — a dark header that fades into a light body, white cards on a soft
+   grey ground. */
 .ins-dock {
   position: fixed;
   right: 20px;
   bottom: 20px;
   z-index: 75;
-  width: min(380px, calc(100vw - 32px));
-  max-height: min(70vh, 640px);
+  width: min(400px, calc(100vw - 32px));
+  min-height: min(520px, 78vh);
+  max-height: min(78vh, 704px);
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--ins-border);
-  border-radius: 18px;
-  background: var(--ins-card);
-  box-shadow: 0 24px 64px -16px rgba(0, 0, 0, 0.35), 0 4px 12px -4px rgba(0, 0, 0, 0.18);
+  border: 0;
+  border-radius: 28px;
+  background: var(--ins-card-alt);
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.16), 0 2px 8px -2px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   animation: insToastIn 200ms var(--ins-ease);
 }
@@ -6997,21 +7297,54 @@ select.ins-input {
 .ins-dock-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 12px 12px 14px;
-  border-bottom: 1px solid var(--ins-border);
+  gap: 12px;
+  flex: none;
+  padding: 18px 14px 170px 18px;
+  /* Solid #0b0c0e only behind the title row, then a long, eased fade (many
+     stops, so there is no visible band) into the body colour. */
+  background:
+    linear-gradient(
+      180deg,
+      #0b0c0e 0%,
+      #0b0c0e 24%,
+      rgba(11, 12, 14, 0.78) 36%,
+      rgba(11, 12, 14, 0.52) 49%,
+      rgba(11, 12, 14, 0.3) 62%,
+      rgba(11, 12, 14, 0.14) 76%,
+      rgba(11, 12, 14, 0.04) 90%,
+      rgba(11, 12, 14, 0) 100%
+    ),
+    var(--ins-card-alt);
+  color: #fff;
+}
+
+.ins-dock-head .ins-iconbtn--plain {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.ins-dock-head .ins-iconbtn--plain:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
 }
 
 .ins-dock-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: var(--ins-text);
-  color: var(--ins-on-accent);
+  /* The same bot circle as the collapsed .ins-dock-pill (Figma "chatbot"): the
+     design's own #0b0c0e, with the illustration at the design's 60% of the
+     circle (33 of 55px). */
+  background: #0b0c0e;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
   flex: 0 0 auto;
+}
+
+.ins-dock-avatar img {
+  display: block;
+  flex: none;
 }
 
 .ins-dock-title {
@@ -7020,8 +7353,9 @@ select.ins-input {
   gap: 1px;
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1.25;
+  color: #fff;
 }
 
 .ins-dock-ai {
@@ -7029,7 +7363,7 @@ select.ins-input {
   align-items: center;
   gap: 7px;
   font-size: 13px;
-  color: var(--ins-sub);
+  color: rgba(255, 255, 255, 0.72);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7045,8 +7379,12 @@ select.ins-input {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 14px;
+  /* Pulled up under the header's fade so the first message sits on it. */
+  margin-top: -140px;
+  padding: 0 16px 14px;
   overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .ins-chat {
@@ -7057,8 +7395,8 @@ select.ins-input {
 
 .ins-chat-msg {
   max-width: 92%;
-  padding: 10px 12px;
-  border-radius: 16px;
+  padding: 12px 14px;
+  border-radius: 18px;
   font-size: 14px;
   line-height: 1.45;
 }
@@ -7068,8 +7406,8 @@ select.ins-input {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: var(--ins-text);
-  color: var(--ins-on-accent);
+  background: #0b0c0e;
+  color: #fff;
   border-bottom-right-radius: 6px;
 }
 
@@ -7085,9 +7423,12 @@ select.ins-input {
   gap: 10px;
   width: 100%;
   max-width: 100%;
-  background: var(--ins-card-alt);
+  /* A white card with a hairline and a soft shadow, like appshots' option
+     cards, rather than a grey bubble. */
+  background: var(--ins-card);
   color: var(--ins-text);
   border-bottom-left-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
 }
 
 .ins-chat-msg--assistant.is-failed {
@@ -7223,6 +7564,11 @@ select.ins-input {
   30% { opacity: 1; transform: translateY(-2px); }
 }
 
+/* Figma "chatbot" (node 1248:2369): a 55px #0b0c0e circle, drop shadow
+   0 8px 12px rgba(0,0,0,.22), with the 33px bot illustration centred. The
+   dark fill is the design's own, not a theme token, so it stays dark in both
+   themes. Padding/width only apply while idle; the running state below keeps
+   the pill shape for its spinner and progress text. */
 .ins-dock-pill {
   position: fixed;
   right: 20px;
@@ -7230,16 +7576,18 @@ select.ins-input {
   z-index: 75;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  height: 40px;
-  padding: 0 14px 0 12px;
+  width: 55px;
+  height: 55px;
+  padding: 0;
   border: 0;
   border-radius: 999px;
-  background: var(--ins-text);
-  color: var(--ins-on-accent);
+  background: #0b0c0e;
+  color: #fff;
   font-size: 14px;
   font-weight: 600;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.22);
   cursor: pointer;
   animation: insToastIn 180ms var(--ins-ease);
 }
@@ -7299,28 +7647,36 @@ select.ins-input {
 .ins-dock-composer {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 10px 10px 8px;
-  border-top: 1px solid var(--ins-border);
-  background: var(--ins-card);
+  gap: 8px;
+  flex: none;
+  padding: 12px 16px 16px 12px;
+  border-top: 0;
+  background: var(--ins-card-alt);
 }
 
 .ins-dock-input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 38px;
-  padding: 0 12px;
-  border: 1px solid var(--ins-border-strong);
+  height: 44px;
+  padding: 0 16px;
+  border: 0;
   border-radius: 999px;
-  background: var(--ins-input);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  background: var(--ins-card);
   color: var(--ins-text);
   font-size: 14px;
 }
 
 .ins-dock-input:focus {
   outline: none;
-  border-color: var(--ins-text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(11, 12, 14, 0.2);
   background: var(--ins-card);
+}
+
+/* The input has a <datalist> for suggestions; hide the browser's own dropdown
+   arrow on it (the suggestions still show as you type or press ↓). */
+.ins-dock-input::-webkit-calendar-picker-indicator {
+  display: none !important;
 }
 
 .ins-dock-input::placeholder {
@@ -7331,13 +7687,13 @@ select.ins-input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
   border: 0;
   border-radius: 50%;
-  background: var(--ins-text);
-  color: var(--ins-on-accent);
+  background: #0b0c0e;
+  color: #fff;
   cursor: pointer;
   transition: opacity var(--ins-fast) var(--ins-ease);
 }
@@ -7402,7 +7758,13 @@ select.ins-input {
 }
 
 .ins-dock-pill.is-running {
-  padding-right: 16px;
+  width: auto;
+  padding: 0 22px;
+}
+
+.ins-dock-pill img {
+  display: block;
+  flex: none;
 }
 
 /* The answer as it is typed: a blinking caret after the last word. */
@@ -7998,6 +8360,12 @@ select.ins-input {
 .ins-review-modal .ins-chat-screens-grid {
   grid-template-columns: repeat(6, 1fr);
   gap: 16px;
+}
+
+/* Web screens are landscape, so the expanded view fits fewer, wider tiles per
+   row than the six narrow phone columns above. */
+.ins-review-modal .ins-chat-screens-grid:not(.is-apps-platform) {
+  grid-template-columns: repeat(4, 1fr);
 }
 
 .ins-review-modal .ins-chat-screen-name {
