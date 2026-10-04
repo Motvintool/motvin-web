@@ -52,22 +52,22 @@ import {
 } from './hash.js';
 
 /** A step with less change than this is the UI holding still. */
-const STILL_MAD = 3.5;
-const STILL_CHANGED = 0.03;
+const STILL_MAD = 0.8;
+const STILL_CHANGED = 0.005;
 
 /** Up to this much change is something settling rather than a navigation. */
 const SOFT_MAD = 12;
 
 /** A hold's last frame is a candidate to represent it only if it arrived this quietly. */
-const SETTLED_MAD = 8;
-const SETTLED_CHANGED = 0.1;
+const SETTLED_MAD = 2;
+const SETTLED_CHANGED = 0.02;
 
 /** Two adjacent holds this close are one screen that was still drawing… */
-const MERGE_MAD = 10;
-const MERGE_CHANGED = 0.10;
+const MERGE_MAD = 2;
+const MERGE_CHANGED = 0.01;
 /** …unless the first had already been still this long and this much of it then changed: a new state of the page. */
 const SETTLED_SECONDS = 1.5;
-const STATE_CHANGED = 0.06;
+const STATE_CHANGED = 0.01;
 /**
  * …or that much changed inside a tall block of real content: two screens that
  * share most of their chrome (the same logo, the same centred white card) can
@@ -78,7 +78,7 @@ const STATE_CHANGED = 0.06;
  * text; it is the content of the page being swapped out.
  */
 const BIG_BOX_HEIGHT = 0.4;
-const BIG_BOX_CHANGED = 0.03;
+const BIG_BOX_CHANGED = 0.01;
 
 /** A vertical shift that removes this share of the difference is a scroll. */
 const SCROLL_RESIDUAL_RATIO = 0.45;

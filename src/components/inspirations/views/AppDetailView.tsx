@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { elementLabel, INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
@@ -24,7 +23,7 @@ import {
 } from '../FilterToolbar';
 import { buildTree, prune, FlowsBrowser, type Entry as FlowTreeEntry, type Node as FlowTreeNode } from '../FlowsBrowser';
 import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, CloseIcon, ExternalIcon, SearchIcon } from '../Icons';
-import { SCREEN_PARAM } from '../ScreenPreviewModal';
+
 
 import { ScreenGrid } from '../ScreenGrid';
 import { ScreenGridSkeleton } from '../Skeletons';
@@ -212,8 +211,6 @@ function FlowTreePill({
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<string[]>(selected);
-  const params = useSearchParams();
-  const pathname = usePathname();
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
@@ -240,7 +237,7 @@ function FlowTreePill({
   const tree = useMemo(() => buildTree(entries), [entries]);
   const q = query.trim().toLowerCase();
   const visible = q
-    ? prune(tree, (entry) => entry.flow.name.toLowerCase().includes(q) || entry.screens.some((s) => s.name.toLowerCase().includes(q)))
+    ? prune(tree, (entry) => entry.flow.name.toLowerCase().includes(q))
     : tree;
 
   const toggleCollapsed = (flowId: string) => {
@@ -261,19 +258,13 @@ function FlowTreePill({
     ? flows.find((f) => f.id === selected[0])?.name ?? selected[0]
     : null;
 
-  // Same merge FlowsBrowser's own renderNode does: a flow's screens as leaves
-  // and its child flows as branches, interleaved in the order they were
-  // walked, with a screen a child flow also lists shown once, under the child.
+  // Same rows as FlowsBrowser's own renderNode: journey names only, with the
+  // journeys that branch from one nested beneath it. Screens aren't listed.
   const renderNode = (node: FlowTreeNode) => {
-    const { flow, screens } = node.entry;
+    const { flow } = node.entry;
+    const hasChildren = node.children.length > 0;
     const isCollapsed = collapsed.has(flow.id) && !q;
     const checked = pending.includes(flow.id);
-    const inChild = new Set(node.children.flatMap((child) => child.entry.flow.screenIds));
-    const items: { at: number; screen?: Screen; child?: FlowTreeNode }[] = [
-      ...screens.filter((s) => !inChild.has(s.id)).map((s) => ({ at: flow.screenIds.indexOf(s.id), screen: s })),
-      ...node.children.map((child) => ({ at: flow.screenIds.indexOf(child.entry.flow.screenIds[0]), child })),
-    ].sort((a, b) => a.at - b.at);
-    const collapsible = items.length > 0;
     return (
       <li key={flow.id} className="ins-flowtree-node" style={{ '--depth': node.depth } as React.CSSProperties}>
         <div className={`ins-flowtree-row ${checked ? 'is-active' : ''} ${node.depth === 0 ? 'is-root' : ''}`}>
@@ -287,9 +278,9 @@ function FlowTreePill({
             <span className={`ins-uielements-checkbox ${checked ? 'is-checked' : ''}`} aria-hidden="true">
               {checked && <CheckIcon size={12} strokeWidth={3} />}
             </span>
-            {flow.name}
+            <span className="ins-flowtree-label" title={flow.name}>{flow.name}</span>
           </button>
-          {collapsible && (
+          {hasChildren && (
             <button
               type="button"
               className="ins-flowtree-toggle"
@@ -301,33 +292,7 @@ function FlowTreePill({
             </button>
           )}
         </div>
-        {!isCollapsed && items.length > 0 && (
-          <ul className="ins-flowtree-children">
-            {items.map((item) =>
-              item.child ? (
-                renderNode(item.child)
-              ) : (
-                <li key={item.screen!.id} className="ins-flowtree-node" style={{ '--depth': node.depth + 1 } as React.CSSProperties}>
-                  <div className="ins-flowtree-row is-leaf">
-                    <Link
-                      href={(() => {
-                        const sp = new URLSearchParams(params.toString());
-                        sp.set(SCREEN_PARAM, item.screen!.id);
-                        return `${pathname}?${sp.toString()}`;
-                      })()}
-                      scroll={false}
-                      role="menuitem"
-                      className="ins-flowtree-name ins-flowtree-leaf"
-                      onClick={() => setOpen(false)}
-                    >
-                      {item.screen!.name}
-                    </Link>
-                  </div>
-                </li>
-              ),
-            )}
-          </ul>
-        )}
+        {hasChildren && !isCollapsed && <ul className="ins-flowtree-children">{node.children.map(renderNode)}</ul>}
       </li>
     );
   };
@@ -467,8 +432,8 @@ export function AppDetailView({
 
   const textActive = debouncedTextQuery.trim().length > 0;
   const { data: textSearchData } = useAsync(
-    () => (textActive ? inspirationsApi.search(debouncedTextQuery, 'text') : Promise.resolve(null)),
-    `app-text-search:${debouncedTextQuery}`,
+    () => (textActive ? inspirationsApi.search(debouncedTextQuery, 'text', app.id) : Promise.resolve(null)),
+    `app-text-search:${app.id}:${debouncedTextQuery}`,
   );
   const textLoading = textActive && textSearchData === null;
   const textMatchedIds = textActive && textSearchData ? new Set(textSearchData.screens.map((s) => s.id)) : null;
@@ -705,7 +670,14 @@ export function AppDetailView({
             <span className="ins-ftoolbar-divider" aria-hidden="true" />
           </>
         )}
-        <SortPill value={version} options={versionOptions(app.versions)} onChange={setVersion} />
+        <SortPill
+          value={version}
+          options={versionOptions(app.versions)}
+          onChange={(v) => {
+            setVersion(v);
+            setFlowFilter([]);
+          }}
+        />
       </div>
     </div>
   );

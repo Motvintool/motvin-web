@@ -1771,6 +1771,31 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   gap: 8px;
 }
 
+/* A text node inside the flex button can't ellipsize; the label span can. */
+.ins-flowtree-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ins-uielements-menu .ins-flowtree-row,
+.ins-uielements-menu .ins-flowtree-node {
+  min-width: 0;
+}
+
+/* Inside the filter menu only the top level reads bold and dark; the journeys
+   nested beneath stay regular grey until checked. */
+.ins-uielements-menu .ins-flowtree-row:not(.is-root) .ins-flowtree-name {
+  font-weight: 400;
+  color: var(--ins-muted);
+}
+
+.ins-uielements-menu .ins-flowtree-row:not(.is-root) .ins-flowtree-name:hover,
+.ins-uielements-menu .ins-flowtree-row:not(.is-root).is-active .ins-flowtree-name {
+  color: var(--ins-text);
+}
+
 .ins-flowtree-menu-footer {
   display: flex;
   align-items: center;
@@ -2360,7 +2385,7 @@ select.ins-input {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 19.65% / 10.09%;
+  border-radius: 12.06% / 5.56%;
   border: 1px solid #0b0c0e;
   box-shadow: inset 0 0 0 1px #0b0c0e;
   z-index: 4;
@@ -6658,6 +6683,11 @@ select.ins-input {
   font-weight: 600;
 }
 
+/* Flows tab: the clicked row keeps the same fill as hover. */
+.ins-flows-nav .ins-flowtree-row.is-active .ins-flowtree-name {
+  background: var(--ins-card-alt);
+}
+
 /* Down when the branch is closed, up when it is open. */
 
 .ins-flowtree-toggle {
@@ -7827,6 +7857,14 @@ select.ins-input {
 
 .ins-chat-screens-grid {
   display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* For Apps platform, use original responsive cards */
+.ins-chat-screens-grid.is-apps-platform {
   grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
   gap: 8px;
 }
@@ -7843,6 +7881,8 @@ select.ins-input {
   text-align: left;
   cursor: pointer;
   border-radius: 10px;
+  width: 100%;
+  min-width: 0;
 }
 
 .ins-chat-screen:disabled {
@@ -7853,7 +7893,7 @@ select.ins-input {
 .ins-chat-screen-none {
   display: block;
   width: 100%;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 88 / 55;
   object-fit: cover;
   object-position: top;
   border-radius: 10px;
@@ -7861,6 +7901,12 @@ select.ins-input {
   background: var(--ins-card);
   box-shadow: 0 0 0 1px var(--ins-border);
   transition: border-color var(--ins-fast) var(--ins-ease), transform var(--ins-fast) var(--ins-ease);
+}
+
+/* Apps platform: restore original 9/16 aspect ratio */
+.ins-chat-screens-grid.is-apps-platform .ins-chat-screen img,
+.ins-chat-screens-grid.is-apps-platform .ins-chat-screen-none {
+  aspect-ratio: 9 / 16;
 }
 
 /* A screen still being fetched — on a big batch, most of the grid, briefly —
@@ -7950,8 +7996,8 @@ select.ins-input {
 /* Bigger tiles than the dock's own narrow strip — the point of expanding is
    to actually be able to tell two near-identical screens apart. */
 .ins-review-modal .ins-chat-screens-grid {
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 16px;
 }
 
 .ins-review-modal .ins-chat-screen-name {

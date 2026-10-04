@@ -1507,7 +1507,7 @@ export function ReviewGrid({ job, slot }: { job: IngestJob; slot?: HTMLDivElemen
           {expanded ? <CloseIcon size={15} /> : <ExpandIcon size={15} />}
         </button>
       </div>
-      <div className="ins-chat-screens-grid" role={picking ? 'listbox' : 'list'} aria-multiselectable={picking || undefined}>
+      <div className={`ins-chat-screens-grid ${job.mode !== 'research' ? 'is-apps-platform' : ''}`} role={picking ? 'listbox' : 'list'} aria-multiselectable={picking || undefined}>
         {screens.map((screen, index) => {
           const isPicked = picked.has(screen.id);
           let screenLabel = '';
@@ -1516,7 +1516,7 @@ export function ReviewGrid({ job, slot }: { job: IngestJob; slot?: HTMLDivElemen
           const isRepresentative = !screen.dropped && !screen.duplicateOf;
 
           if (screen.reason === 'transition') {
-            // Transition frames: use "TransitionN/Frame X" pattern
+            // Transition frames: use "TransitionN/Frame X → ScreenY" pattern
             const transitionSequenceStart = screens.slice(0, index).findLastIndex((s) => !s.dropped && !s.duplicateOf && s.reason !== 'transition' && s.reason !== 'loading') + 1;
             const frameNum = index - transitionSequenceStart + 1;
             // Count transition sequences before this one (each sequence ends when we hit a non-transition screen)
@@ -1532,7 +1532,16 @@ export function ReviewGrid({ job, slot }: { job: IngestJob; slot?: HTMLDivElemen
                 transitionGroupNum++;
               }
             }
-            screenLabel = `Transition${transitionGroupNum}/Frame ${frameNum}`;
+            // Find the next non-transition, non-dropped screen (target of transition)
+            let targetScreenNum = '';
+            for (let i = index + 1; i < screens.length; i++) {
+              if (!screens[i].dropped && screens[i].reason !== 'transition' && screens[i].reason !== 'loading') {
+                const targetIndex = screens.slice(0, i).filter((s) => !s.dropped).length + 1;
+                targetScreenNum = targetIndex.toString();
+                break;
+              }
+            }
+            screenLabel = targetScreenNum ? `Transition${transitionGroupNum}/Frame ${frameNum} → Screen${targetScreenNum}` : `Transition${transitionGroupNum}/Frame ${frameNum}`;
           } else if (screen.dropped && screen.reason !== 'duplicate') {
             // Non-duplicate dropped frames (blank, loading, etc.)
             screenLabel = REASON_SHORT[screen.reason ?? ''] ?? 'set aside';
@@ -1547,7 +1556,17 @@ export function ReviewGrid({ job, slot }: { job: IngestJob; slot?: HTMLDivElemen
                 const allFramesInHold = screens.filter((s) => (isRepresentative && s.id === holdId) || s.duplicateOf === holdId);
                 const frameNum = allFramesInHold.findIndex((s) => s.id === screen.id) + 1;
                 const mark = isRepresentative ? ' ✓' : '';
-                screenLabel = `Screen ${screenNum}/Frame ${frameNum}${mark}`;
+                // Check if this screen follows loading frames or is part of progressive load
+                let loadStatus = '';
+                if (isRepresentative) {
+                  // Check if any frames before this in the same hold are loading
+                  const precedingFrames = screens.slice(0, repScreenIndex);
+                  const hasLoadingBefore = precedingFrames.some((s) => s.reason === 'loading');
+                  if (hasLoadingBefore) {
+                    loadStatus = ' (loaded)';
+                  }
+                }
+                screenLabel = `Screen ${screenNum}/Frame ${frameNum}${mark}${loadStatus}`;
               }
             }
           } else {

@@ -235,9 +235,10 @@ export const inspirationsApi = {
     return request('/elements', TTL.list, []);
   },
 
-  search(query: string, mode?: 'text'): Promise<SearchResults> {
+  search(query: string, mode?: 'text', appId?: string): Promise<SearchResults> {
     if (!query.trim()) return Promise.resolve(EMPTY_SEARCH);
-    return request(`/search?q=${encodeURIComponent(query)}${mode === 'text' ? '&mode=text' : ''}`, TTL.search, EMPTY_SEARCH);
+    const scope = mode === 'text' ? `&mode=text${appId ? `&appId=${encodeURIComponent(appId)}` : ''}` : '';
+    return request(`/search?q=${encodeURIComponent(query)}${scope}`, TTL.search, EMPTY_SEARCH);
   },
 
   /** Screens resolved by id, for saved items and collections. */
