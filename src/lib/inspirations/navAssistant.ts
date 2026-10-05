@@ -1,8 +1,9 @@
 import { inspirationsApi } from './api';
 import { INSPIRATIONS_ROUTES } from './routes';
 import { suggestQueries, type SearchSuggestion } from './search';
+import { EMPTY_FILTERS } from './filters';
 import { SCREEN_TYPE_LABEL } from './taxonomy';
-import type { App } from './types';
+import type { App, ScreenType } from './types';
 
 /**
  * The visitor-facing assistant: it answers "where do you want to go?" and the
@@ -106,12 +107,51 @@ function followUps(app: App, used: Section['tab'] | 'count' | null): NavTarget[]
   return all.filter((entry) => entry.key !== used).slice(0, 3).map((entry) => entry.target);
 }
 
+const COMPARE = /\b(compare|versus|vs\.?|difference between|differences between)\b/i;
+
+/** Words left once the app name and generic words are gone — what the visitor is naming. */
+function leftoverWords(text: string, apps: App[]): string[] {
+  let rest = clean(text);
+  for (const app of apps) rest = rest.replace(new RegExp(escape(app.name.toLowerCase()), 'g'), ' ').replace(new RegExp(`\\b${escape(app.name.toLowerCase().split(/\s+/)[0])}\\b`, 'g'), ' ');
+  return rest
+    .replace(/\b(flows?|journeys?|how|many|much|does|do|have|has|what|are|is|of|in|for|and|with|its|it)\b/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word.length >= 3);
+}
+
+async function matchFlows(words: string[], app: App | null, apps: App[]): Promise<NavTarget[]> {
+  if (!words.length) return [];
+  let flows: Awaited<ReturnType<typeof inspirationsApi.listFlows>> = [];
+  try {
+    flows = await inspirationsApi.listFlows();
+  } catch {
+    return [];
+  }
+  return flows
+    .filter((flow) => (!app || flow.appId === app.id) && words.every((word) => flow.name.toLowerCase().includes(word)))
+    .slice(0, 6)
+    .map((flow) => ({
+      label: app ? flow.name : `${flow.name} · ${apps.find((candidate) => candidate.id === flow.appId)?.name ?? 'Flow'}`,
+      hint: 'Flow',
+      href: `${INSPIRATIONS_ROUTES.flows}?flow=${encodeURIComponent(flow.id)}`,
+    }));
+}
+
+async function countScreens(type: string, app: App | null): Promise<number | null> {
+  try {
+    const page = await inspirationsApi.listScreens({ ...EMPTY_FILTERS, screenTypes: [type as ScreenType] }, 0, 'curated', app ? { app: app.id } : {});
+    return page.total;
+  } catch {
+    return null;
+  }
+}
+
 const GREETING = /^(hi+|hello+|hey+|hola|yo|howdy|good (morning|afternoon|evening)|sup|namaste|vanakkam)\b[\s!.?]*$/i;
 const THANKS = /^(thanks?|thank you|thx|ty|ok(ay)?|cool|great|nice|awesome)\b[\s!.?]*$/i;
 const HELP = /^(help|what can you do|what do you do|how (does this|do you) work|what is this)\b[\s!.?]*$/i;
 const WHO = /\b(who are you|who made you|who built you|are you (an? )?(ai|bot|human|real))\b/i;
 const HOW_ARE_YOU = /\bhow are you\b/i;
-const REFERS_BACK = /\b(it|its|it's|this app|that app|this one|there|same app)\b/i;
+const REFERS_BACK = /\b(it|its|it's|this app|that app|this one|same app)\b/i;
 
 export async function resolveNavigation(raw: string, context?: NavContext): Promise<NavReply> {
   const original = raw.trim().slice(0, 200);
@@ -145,10 +185,26 @@ export async function resolveNavigation(raw: string, context?: NavContext): Prom
 
   if (mentioned.length === 1) {
     const app = mentioned[0];
+    if (asksCount && screenType) {
+      const total = await countScreens(screenType.key, app);
+      if (total !== null) {
+        return {
+          text: `${app.name} has ${plural(total, `${screenType.label.toLowerCase()} screen`)}.`,
+          targets: [{ label: `See ${screenType.label.toLowerCase()} screens`, hint: 'Search', href: INSPIRATIONS_ROUTES.searchFor(`${app.name} ${screenType.label.toLowerCase()}`) }, ...followUps(app, 'count').slice(0, 2)],
+          app,
+        };
+      }
+    }
+    if (section?.tab === 'flows' && !asksCount) {
+      const flowMatches = await matchFlows(leftoverWords(original, apps), app, apps);
+      if (flowMatches.length === 1) return { text: `Opening the “${flowMatches[0].label}” flow.`, targets: followUps(app, 'flows').slice(0, 2), go: flowMatches[0], app };
+      if (flowMatches.length > 1) return { text: `${app.name} has a few flows like that — which one?`, targets: flowMatches, app };
+    }
     if (asksCount) {
-      const wantsFlows = section?.tab === 'flows';
-      const wantsScreens = section?.tab === 'screens' || !section;
-      const parts = [wantsScreens ? plural(app.screenCount, 'screen') : '', wantsFlows || !section ? plural(app.flowCount, 'flow') : ''].filter(Boolean);
+      const saysFlows = hasWord(lower, 'flows') || hasWord(lower, 'flow');
+      const saysScreens = hasWord(lower, 'screens') || hasWord(lower, 'screen');
+      const neither = !saysFlows && !saysScreens;
+      const parts = [saysScreens || neither ? plural(app.screenCount, 'screen') : '', saysFlows || neither ? plural(app.flowCount, 'flow') : ''].filter(Boolean);
       return {
         text: `${app.name} has ${parts.join(' and ')}.`,
         targets: [appTarget(app), ...followUps(app, 'count').slice(0, 2)],
@@ -168,7 +224,26 @@ export async function resolveNavigation(raw: string, context?: NavContext): Prom
     return { text: pick([`Opening ${app.name}.`, `Taking you to ${app.name}.`, `Here’s ${app.name}.`]), targets: followUps(app, null), go: appTarget(app), app };
   }
 
+  if (mentioned.length > 1 && COMPARE.test(lower)) {
+    const [first, second] = mentioned;
+    const facts = (app: App) => `${app.name} has ${plural(app.screenCount, 'screen')} and ${plural(app.flowCount, 'flow')}`;
+    return { text: `${facts(first)}. ${facts(second)}.`, targets: [appTarget(first), appTarget(second)] };
+  }
+
   if (mentioned.length > 1) return { text: 'Which app do you mean?', targets: mentioned.slice(0, 6).map((app) => appTarget(app, section?.tab)) };
+
+  if (asksCount && screenType) {
+    const total = await countScreens(screenType.key, null);
+    if (total !== null) {
+      return { text: `The library has ${plural(total, `${screenType.label.toLowerCase()} screen`)}.`, targets: [{ label: `See ${screenType.label.toLowerCase()} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` }] };
+    }
+  }
+
+  if (section?.tab === 'flows' && !asksCount) {
+    const flowMatches = await matchFlows(leftoverWords(original, apps), null, apps);
+    if (flowMatches.length === 1) return { text: `Opening the “${flowMatches[0].label.split(' · ')[0]}” flow.`, targets: [], go: flowMatches[0] };
+    if (flowMatches.length > 1) return { text: 'A few flows match — which one?', targets: flowMatches };
+  }
 
   if (asksCount && !screenType) {
     const screens = apps.reduce((sum, app) => sum + app.screenCount, 0);
