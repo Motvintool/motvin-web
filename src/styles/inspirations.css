@@ -7886,24 +7886,401 @@ select.ins-input {
   color: var(--ins-sub);
 }
 
-.ins-dock-user .ins-typing {
+.ins-guide .ins-typing {
   margin: 4px 2px;
 }
 
-.ins-dock-user .ins-chip-btn:disabled {
+.ins-guide .ins-chip-btn:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+/* The visitor's guide panel: full-height on the right over a dimmed page, a
+   centred welcome with prompt chips, a conversation once they start, and a
+   composer card pinned to the bottom. */
+.ins-guide-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(11, 12, 14, 0.32);
+  animation: insFadeIn 160ms var(--ins-ease);
+}
+
+.ins-guide {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 81;
+  display: flex;
+  flex-direction: column;
+  width: min(400px, calc(100vw - 32px));
+  border-radius: 12px;
+  background: var(--ins-card);
+  color: var(--ins-text);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  animation: insToastIn 200ms var(--ins-ease);
+}
+
+.ins-guide-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  flex: none;
+  padding: 16px 18px 0;
+}
+
+.ins-guide-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.ins-guide-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: #0b0c0e;
+}
+
+.ins-guide-welcome {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 28px 24px;
+  text-align: center;
+}
+
+.ins-guide-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 14px;
+  border-radius: 999px;
+  background: #0b0c0e;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+}
+
+.ins-guide-hi {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ins-sub);
+}
+
+.ins-guide-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ins-guide-sub {
+  margin: 8px 0 14px;
+  max-width: 340px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ins-sub);
+}
+
+.ins-guide-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.ins-guide-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid var(--ins-border);
+  border-radius: 12px;
+  background: var(--ins-card);
+  color: var(--ins-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: transform var(--ins-fast) var(--ins-ease), box-shadow var(--ins-fast) var(--ins-ease);
+}
+
+.ins-guide-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.09);
+}
+
+.ins-guide-chip-icon {
+  display: inline-flex;
+}
+
+.ins-guide-thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 20px 18px;
+}
+
+.ins-guide .ins-chat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* The guide: a white, lightly bordered bubble on the left. */
+.ins-guide .ins-chat-msg--assistant {
+  align-self: flex-start;
+  width: fit-content;
+  max-width: 90%;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--ins-border);
+  border-radius: 12px;
+  background: var(--ins-card);
+  color: var(--ins-text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.ins-guide .ins-chat-msg--assistant .ins-chat-line {
+  margin: 0;
+}
+
+/* The visitor: a soft grey bubble on the right. */
+.ins-guide .ins-chat-msg--user {
+  align-self: flex-end;
+  max-width: 86%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--ins-card-alt);
+  color: var(--ins-text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.ins-guide .ins-chat-msg.is-typing {
+  padding: 12px 14px;
+  border-radius: 12px;
+}
+
+.ins-guide .ins-chat-msg.is-typing .ins-typing {
+  margin: 0;
+  height: 8px;
+}
+
+.ins-guide .ins-chat-msg.is-typing .ins-typing i {
+  width: 6px;
+  height: 6px;
+}
+
+/* Where the guide took the visitor, as a dark pill that opens it again. */
+.ins-guide-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #0b0c0e;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.ins-guide-file img {
+  flex: none;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.ins-guide-file span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ins-guide-file svg {
+  flex: none;
+  opacity: 0.75;
+}
+
+/* Hover toolbar on the visitor's messages: edit, ask again, copy. */
+.ins-guide-tools {
+  position: absolute;
+  right: 12px;
+  bottom: -14px;
+  z-index: 1;
+  display: flex;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: 10px;
+  background: #0b0c0e;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ins-fast) var(--ins-ease);
+}
+
+.ins-guide-tools button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.ins-guide-tools button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.ins-guide-tools button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ins-guide .ins-chat:hover .ins-guide-tools,
+.ins-guide .ins-chat:focus-within .ins-guide-tools {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .ins-guide-tools {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.ins-guide-composer {
+  flex: none;
+  margin: 0 16px 16px;
+  border: 1px solid var(--ins-border);
+  border-radius: 20px;
+  background: var(--ins-card);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.ins-guide-composer:focus-within {
+  border-color: color-mix(in srgb, var(--ins-text) 10%, var(--ins-border));
+}
+
+.ins-guide-composer-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 14px 16px;
+  color: var(--ins-sub);
+}
+
+.ins-guide-composer-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ins-text);
+  font: inherit;
+  font-size: 15px;
+}
+
+/* Overrides the app-wide :focus-visible ring (inspirations.css:234) — the
+   composer card's own border already shows where focus is. */
+.ins-guide-composer-row input:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.ins-guide-composer-row input::placeholder {
+  color: var(--ins-sub);
+  opacity: 0.8;
+}
+
+.ins-guide-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ins-text);
+  color: var(--ins-card);
+  cursor: pointer;
+}
+
+.ins-guide-send:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+.ins-guide-composer-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--ins-border);
+  background: var(--ins-card-alt);
+  font-size: 12px;
+  color: var(--ins-sub);
+}
+
+@keyframes insFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .ins-guide {
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: calc(100vw - 16px);
+    border-radius: 12px;
+  }
 }
 
 /* The visitor's guide. For the owner it sits beside the admin assistant, and
    steps further left whenever the admin dock is open so the two never overlap. */
 .ins-dock-user.is-beside-admin.ins-dock-pill {
   right: 87px;
-}
-
-.ins-dock-user.is-beside-admin.ins-dock {
-  right: 87px;
-  min-height: min(420px, 70vh);
 }
 
 body:has(aside.ins-dock:not(.ins-dock-user)) .ins-dock-user.is-beside-admin {
