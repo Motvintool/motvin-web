@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { isAdminEmail } from '@/lib/inspirations/admin';
@@ -8,7 +8,9 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { greetingFor } from '@/lib/inspirations/guideGreeting';
 import { nextNudge, nudgeMessages, readNudgeState, writeNudgeState } from '@/lib/inspirations/guideNudge';
 import { groupChats, newChatId, previewOf, readHistory, relativeTime, removeChat, upsertChat, writeHistory, type SavedChat, type SavedLine } from '@/lib/inspirations/guideHistory';
-import { QUICK_PAGES, resolveNavigation, type NavCard, type NavTarget } from '@/lib/inspirations/navAssistant';
+import { exportLog, readLog, recordFeedback, recordMiss, type Verdict } from '@/lib/inspirations/guideTelemetry';
+import { QUICK_PAGES, resolveNavigation, type GuideAction, type NavCard, type NavTarget, type ReplyKind } from '@/lib/inspirations/navAssistant';
+import { libraryStore } from '@/lib/inspirations/store';
 import type { App } from '@/lib/inspirations/types';
 import {
   ArrowRightIcon,
@@ -17,14 +19,20 @@ import {
   ChevronRightIcon,
   CloseIcon,
   CopyIcon,
+  DownloadIcon,
   ExternalIcon,
   PencilIcon,
   RetryIcon,
   SearchIcon,
+  ThumbDownIcon,
+  ThumbUpIcon,
   TrashIcon,
 } from './Icons';
 
-type Line = { id: number; role: 'user' | 'assistant'; text: string; targets?: NavTarget[]; card?: NavCard; opened?: NavTarget; pending?: boolean; slow?: boolean; error?: boolean };
+type Line = { id: number; role: 'user' | 'assistant'; text: string; targets?: NavTarget[]; card?: NavCard; opened?: NavTarget; pending?: boolean; slow?: boolean; error?: boolean; kind?: ReplyKind; action?: GuideAction; verdict?: Verdict };
+
+/** Where the guide files what a visitor asks to keep. */
+const GUIDE_COLLECTION = 'Saved from the guide';
 
 const NUDGE_DELAY = 2500;
 const NUDGE_LIFETIME = 6500;
@@ -44,6 +52,7 @@ const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia('
 
 export function UserDock() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, ready } = useAuth();
   const signedIn = ready && Boolean(user && !user.isAnonymous);
   const alongsideAdmin = signedIn && isAdminEmail(user?.email);
@@ -76,6 +85,8 @@ export function UserDock() {
   const wasOpen = useRef(false);
   const nextId = useRef(1);
   const lastApp = useRef<App | null>(null);
+  // What the last answer listed, so "the second one" has something to point at.
+  const lastResults = useRef<NavTarget[] | null>(null);
   const alive = useRef(true);
 
   useEffect(() => {
@@ -181,7 +192,7 @@ export function UserDock() {
         const top = [...apps].sort((a, b) => b.screenCount - a.screenCount).slice(0, 2);
         if (top.length === 0) return;
         const [first, second] = top;
-        setExamples([`Open ${first.name}`, `How many screens does ${first.name} have?`, ...(second ? [`Compare ${first.name} and ${second.name}`] : [])]);
+        setExamples([`Open ${first.name}`, `Which app has the most flows?`, ...(second ? [`Compare ${first.name} and ${second.name}`] : [`How many screens does ${first.name} have?`])]);
       })
       .catch(() => undefined);
     setOpen(true);
@@ -207,8 +218,10 @@ export function UserDock() {
     // A reply that is quick needs only the dots; one that drags says what it is doing.
     const slowTimer = setTimeout(() => patch(replyId, { slow: true }), SLOW_AFTER_MS);
     try {
-      const reply = await resolveNavigation(text, { app: lastApp.current });
+      const reply = await resolveNavigation(text, { app: lastApp.current, results: lastResults.current, page: { pathname, search: typeof window !== 'undefined' ? window.location.search : '' } });
       if (reply.app) lastApp.current = reply.app;
+      if (reply.results) lastResults.current = reply.results;
+      if (reply.kind === 'fallback' || reply.kind === 'clarify' || reply.kind === 'error') recordMiss(text, reply.kind, reply.text);
       const calm = reducedMotion();
       if (!calm) await sleep(320 + Math.random() * 280);
       const words = reply.text.split(' ');
@@ -216,7 +229,7 @@ export function UserDock() {
         patch(replyId, { text: words.slice(0, count).join(' '), pending: false });
         if (!calm) await sleep(26);
       }
-      patch(replyId, { text: reply.text, pending: false, card: reply.card, targets: reply.targets, opened: reply.go, error: reply.error });
+      patch(replyId, { text: reply.text, pending: false, card: reply.card, targets: reply.targets, opened: reply.go, error: reply.error, kind: reply.kind, action: reply.action });
       if (reply.go && alive.current) go(reply.go);
     } finally {
       clearTimeout(slowTimer);
@@ -224,7 +237,11 @@ export function UserDock() {
     }
   };
 
-  const choose = (target: NavTarget) => (target.ask ? void send(target.ask) : go(target));
+  const choose = (target: NavTarget) => {
+    if (target.ask === '__confirm__' && latest) return void confirmAction(latest);
+    if (target.ask === '__decline__' && latest) return declineAction(latest);
+    return target.ask ? void send(target.ask) : go(target);
+  };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -234,6 +251,7 @@ export function UserDock() {
   const resetConversation = () => {
     chatId.current = null;
     lastApp.current = null;
+    lastResults.current = null;
     nextId.current = 1;
     setLines([]);
   };
@@ -294,12 +312,78 @@ export function UserDock() {
     inputRef.current?.focus();
   };
 
+  /** The visitor's message that an answer replied to. */
+  const questionFor = (line: Line) => {
+    const at = lines.findIndex((candidate) => candidate.id === line.id);
+    for (let i = at - 1; i >= 0; i--) if (lines[i].role === 'user') return lines[i].text;
+    return '';
+  };
+
+  const rate = (line: Line, verdict: Verdict) => {
+    recordFeedback(questionFor(line), line.text, verdict);
+    patch(line.id, { verdict });
+  };
+
+  /** ↑ in an empty composer brings back the last thing the visitor typed, to fix or resend. */
+  const onComposerKey = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'ArrowUp' || question.trim()) return;
+    const last = [...lines].reverse().find((line) => line.role === 'user');
+    if (!last) return;
+    event.preventDefault();
+    setQuestion(last.text);
+  };
+
+  const say = (text: string, extra: Partial<Line> = {}) => setLines((all) => [...all, { id: nextId.current++, role: 'assistant', text, kind: 'answer', ...extra }]);
+
+  /** The visitor said yes to a save or a copy. Each is small and reversible. */
+  const confirmAction = async (line: Line) => {
+    const action = line.action;
+    if (!action) return;
+    patch(line.id, { action: undefined });
+    if (action.kind === 'copy') {
+      try {
+        await navigator.clipboard.writeText(`${window.location.origin}${action.href}`);
+        say(`Copied the link to ${action.label}.`);
+      } catch {
+        say(`I couldn’t reach the clipboard. Here’s the link to copy: ${window.location.origin}${action.href}`);
+      }
+      return;
+    }
+    const collection = libraryStore.getOrCreateCollectionByName(GUIDE_COLLECTION);
+    const added = libraryStore.addToCollection(collection.id, action.item);
+    say(added ? `Saved ${action.label} to “${collection.name}”.` : `${action.label} is already in “${collection.name}”.`, { targets: [{ label: 'Open collections', hint: 'Page', href: QUICK_PAGES[5].href }] });
+  };
+
+  const declineAction = (line: Line) => {
+    patch(line.id, { action: undefined });
+    say('No problem.');
+  };
+
+  const exportFeedback = () => {
+    const report = exportLog(readLog());
+    const blob = new Blob([report], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `motvin-guide-feedback-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   // The suggestion row above the composer follows the conversation: the places
   // to go at first, then whatever the latest answer offers next. While a reply
   // is still being written, the last settled answer's suggestions stay put.
   const settled = busy ? lines.slice(0, -2) : lines;
   const latest = [...settled].reverse().find((line) => line.role === 'assistant' && !line.pending);
-  const suggestions = latest?.targets && latest.targets.length > 0 ? latest.targets : QUICK_PAGES;
+  const pendingAction = latest?.action;
+  const suggestions = pendingAction
+    ? [
+        { label: pendingAction.kind === 'copy' ? 'Yes, copy the link' : 'Yes, save it', hint: 'Confirm', href: '', ask: '__confirm__' },
+        { label: 'Not now', hint: 'Dismiss', href: '', ask: '__decline__' },
+      ]
+    : latest?.targets && latest.targets.length > 0
+      ? latest.targets
+      : QUICK_PAGES;
   const suggestKey = latest?.id ?? 0;
 
   // Arrows show only when there is more of the row off to that side.
@@ -445,9 +529,14 @@ export function UserDock() {
                     <div className="ins-guide-history-grouphead">
                       <h3>{group.label}</h3>
                       {groupIndex === 0 && (
-                        <button type="button" className="ins-guide-link" onClick={clearHistory}>
-                          Clear all
-                        </button>
+                        <span className="ins-guide-grouphead-actions">
+                          <button type="button" className="ins-guide-link" onClick={exportFeedback} title="Download what the guide could not answer, and your thumbs up and down, as a file">
+                            <DownloadIcon size={13} /> Export feedback
+                          </button>
+                          <button type="button" className="ins-guide-link" onClick={clearHistory}>
+                            Clear all
+                          </button>
+                        </span>
                       )}
                     </div>
                     <ul className="ins-guide-history-list">
@@ -527,7 +616,30 @@ export function UserDock() {
                       <ExternalIcon size={15} />
                     </button>
                   )}
+                  {line.card?.rows && line.card.columns && (
+                    <div className="ins-guide-compare" role="table" aria-label={line.card.title}>
+                      <div className="ins-guide-compare-row is-head" role="row">
+                        <span role="columnheader" />
+                        {line.card.columns.map((column) => (
+                          <span key={column} role="columnheader">
+                            {column}
+                          </span>
+                        ))}
+                      </div>
+                      {line.card.rows.map((row) => (
+                        <div key={row.label} className="ins-guide-compare-row" role="row">
+                          <span role="rowheader">{row.label}</span>
+                          {row.values.map((value, index) => (
+                            <span key={`${row.label}-${index}`} role="cell">
+                              {value}
+                            </span>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {line.card &&
+                    !line.card.rows &&
                     (() => {
                       const card = line.card;
                       const body = (
@@ -549,6 +661,16 @@ export function UserDock() {
                       );
                     })()}
                 </div>
+                {line.role === 'assistant' && !line.pending && line.kind !== 'smalltalk' && (
+                  <div className={`ins-guide-tools is-assistant ${line.verdict ? 'is-rated' : ''}`} role="toolbar" aria-label="Was this helpful?">
+                    <button type="button" onClick={() => rate(line, 'up')} aria-label="Helpful" aria-pressed={line.verdict === 'up'} title="Helpful">
+                      <ThumbUpIcon size={15} filled={line.verdict === 'up'} />
+                    </button>
+                    <button type="button" onClick={() => rate(line, 'down')} aria-label="Not helpful" aria-pressed={line.verdict === 'down'} title="Not helpful">
+                      <ThumbDownIcon size={15} filled={line.verdict === 'down'} />
+                    </button>
+                  </div>
+                )}
                 {line.role === 'user' && (
                   <div className="ins-guide-tools" role="toolbar" aria-label="Message actions">
                     <button type="button" onClick={() => edit(line)} aria-label="Edit this message" title="Edit">
@@ -608,7 +730,7 @@ export function UserDock() {
         </div>
 
         <form className="ins-guide-composer" onSubmit={submit}>
-          <input ref={inputRef} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask for an app or a page…" aria-label="Ask where to go" maxLength={200} />
+          <input ref={inputRef} value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={onComposerKey} placeholder="Ask for an app or a page…" aria-label="Ask where to go" maxLength={200} />
           <div className="ins-guide-composer-bar">
             <button type="button" className="ins-guide-esc" onClick={() => setOpen(false)} title="Close the guide">
               <kbd>Esc</kbd>

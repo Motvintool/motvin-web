@@ -32,7 +32,8 @@ export function maxTypos(length: number): number {
 /** The one known word a misspelling most likely means, or null when none fits or two fit equally. */
 export function closestWord(token: string, vocabulary: string[]): string | null {
   const limit = maxTypos(token.length);
-  if (limit === 0 || vocabulary.includes(token)) return null;
+  // A known word, or the singular/plural of one, is already right.
+  if (limit === 0 || vocabulary.includes(token) || vocabulary.includes(`${token}s`) || (token.endsWith('s') && vocabulary.includes(token.slice(0, -1)))) return null;
   let best: string | null = null;
   let bestDistance = Infinity;
   let tied = false;

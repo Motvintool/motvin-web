@@ -30,6 +30,12 @@ describe('closestWord', () => {
     expect(closestWord('chekout', vocabulary)).toBe('checkout');
   });
 
+  it('never "corrects" a word into its own plural or singular', () => {
+    expect(closestWord('screen', ['screens'])).toBeNull();
+    expect(closestWord('screens', ['screen'])).toBeNull();
+    expect(closestWord('pattern', ['patterns', 'pattern'])).toBeNull();
+  });
+
   it('leaves words that are already right, or too short to judge', () => {
     expect(closestWord('swiggy', vocabulary)).toBeNull();
     expect(closestWord('swig', vocabulary)).toBeNull();

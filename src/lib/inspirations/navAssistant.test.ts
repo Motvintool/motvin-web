@@ -8,24 +8,36 @@ vi.mock('./api', () => {
     { id: 'a4', name: 'Groww', slug: 'groww', screenCount: 90, flowCount: 20, logo: null, industry: 'fintech', rating: 4.2, ratingCount: 3, platforms: ['ios', 'android'] },
   ];
   const flows = [
-    { id: 'f1', appId: 'a1', name: 'Checkout' },
-    { id: 'f2', appId: 'a1', name: 'Onboarding' },
-    { id: 'f3', appId: 'a2', name: 'Onboarding' },
+    { id: 'f1', appId: 'a1', name: 'Checkout', category: 'checkout', screenIds: ['s1', 's2', 's3'] },
+    { id: 'f2', appId: 'a1', name: 'Onboarding', category: 'onboarding', screenIds: ['s4', 's5'] },
+    { id: 'f3', appId: 'a2', name: 'Onboarding', category: 'onboarding', screenIds: ['s6'] },
   ];
   return {
     inspirationsApi: {
       listApps: vi.fn(async () => apps),
       listFlows: vi.fn(async () => flows),
       listScreens: vi.fn(async () => ({ items: [], total: 7, limit: 24, offset: 0, nextOffset: null })),
-      getMeta: vi.fn(async () => ({ taxonomy: { screenTypes: ['splash', 'login'], industries: [] } })),
-      listPatterns: vi.fn(async () => [{ name: 'Filter chips', slug: 'filter-chips', category: 'Filters' }]),
+      getMeta: vi.fn(async () => ({ taxonomy: { screenTypes: ['splash', 'login'], industries: [], flowCategories: ['checkout', 'onboarding'] } })),
+      listPatterns: vi.fn(async () => [
+        { id: 'p1', name: 'Filter chips', slug: 'filter-chips', category: 'Filters', screenIds: ['swiggy-ios-a', 'zomato-ios-b'] },
+        { id: 'p2', name: 'Bottom sheet actions', slug: 'bottom-sheet-actions', category: 'Modals', screenIds: ['zomato-ios-c'] },
+      ]),
+      listElements: vi.fn(async () => [
+        { kind: 'nav-bar', count: 410 },
+        { kind: 'bottom-sheet', count: 20 },
+        { kind: 'toast', count: 18 },
+      ]),
       mediaUrl: vi.fn(() => null),
     },
   };
 });
 
 import { inspirationsApi } from './api';
+import { resetIndex } from './guideIndex';
 import { resolveNavigation } from './navAssistant';
+
+// The index stays warm for a minute in the app; tests want every mock change seen at once.
+beforeEach(() => resetIndex());
 
 const ask = (text: string, app: Parameters<typeof resolveNavigation>[1] = undefined) => resolveNavigation(text, app);
 
@@ -111,10 +123,12 @@ describe('flows by name', () => {
     expect((await ask('show swiggy checkout flow')).go?.href).toBe('/inspirations/flows?flow=f1');
   });
 
-  it('offers the choices when several apps have one', async () => {
+  it('offers the choices when several apps have one, plus the page for all of them', async () => {
     const reply = await ask('onboarding flow');
     expect(reply.go).toBeUndefined();
-    expect(reply.targets).toHaveLength(3 - 1);
+    expect(reply.kind).toBe('clarify');
+    expect(reply.targets.map((t) => t.hint)).toEqual(['Flow', 'Flow', 'Flows']);
+    expect(reply.targets[2].href).toBe('/inspirations/flows?category=onboarding');
   });
 });
 
@@ -628,5 +642,303 @@ describe('the third conversation from the screenshot: follow-ups with no pronoun
 
   it('with nothing shown yet, a bare count is the whole library', async () => {
     expect((await ask('how much screens have?')).text).toMatch(/^The library has 4 apps/);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* The second engine: states, styles, elements, patterns, categories,  */
+/* negation, numbers, ordinals, multi-step, page awareness, actions.    */
+/* ------------------------------------------------------------------ */
+
+const ctx = (app: unknown = null, extra: Record<string, unknown> = {}) => ({ app, ...extra }) as Parameters<typeof resolveNavigation>[1];
+const SWIGGY = { id: 'a1', name: 'Swiggy', slug: 'swiggy', screenCount: 262, flowCount: 39, logo: null, industry: 'food', rating: 5, ratingCount: 1, platforms: ['ios', 'android'] };
+
+describe('screens by state and style', () => {
+  it.each([
+    ['empty states', '/inspirations/screens?state=empty', 'Showing empty screens.'],
+    ['show me bottom sheet screens', '/inspirations/screens?state=bottom-sheet', 'Showing bottom sheet screens.'],
+    ['dark mode screens', '/inspirations/screens?style=dark', 'Showing dark screens.'],
+    ['loading login screens', '/inspirations/screens?type=login&state=loading', 'Showing loading login screens.'],
+    ['minimal onboarding screens', '/inspirations/screens?type=onboarding&style=minimal', 'Showing minimal onboarding screens.'],
+  ])('%s', async (text, href, answer) => {
+    const reply = await ask(text);
+    expect(reply.go?.href).toBe(href);
+    expect(reply.text).toBe(answer);
+  });
+
+  it('counts them', async () => {
+    expect((await ask('how many empty states are there')).text).toBe('The library has 7 empty screens.');
+  });
+
+  it('scopes to one app, as a page or a yes/no', async () => {
+    const show = await ask('swiggy empty states');
+    expect(show.go?.href).toBe('/inspirations/search?q=Swiggy%20empty');
+    expect(show.text).toBe('Swiggy has 7 empty screens. Showing them.');
+    const yes = await ask('does swiggy have error states?');
+    expect(yes.text).toBe('Yes — Swiggy has 7 error screens.');
+    expect(yes.go).toBeUndefined();
+    expect((await ask('how many dark screens does zomato have')).text).toBe('Zomato has 7 dark screens.');
+  });
+});
+
+describe('UI elements', () => {
+  it('opens one kind, with how common it is', async () => {
+    const reply = await ask('bottom sheets');
+    expect(reply.go?.href).toBe('/inspirations/ui-elements?element=bottom-sheet');
+    expect(reply.text).toBe('Showing bottom sheets — 20 screens.');
+    expect((await ask('show me nav bars')).go?.href).toBe('/inspirations/ui-elements?element=nav-bar');
+    expect((await ask('toasts')).text).toBe('Showing toasts — 18 screens.');
+  });
+
+  it('answers which apps and how many', async () => {
+    expect((await ask('which apps have toasts')).text).toBe('18 screens have toasts.');
+    expect((await ask('how many screens have nav bars')).text).toBe('410 screens have nav bars.');
+  });
+
+  it('scopes to one app', async () => {
+    const show = await ask('swiggy nav bars');
+    expect(show.text).toBe('Swiggy has 7 screens with nav bars.');
+    expect(show.go?.href).toBe('/inspirations/app/swiggy?tab=ui-elements');
+    const yes = await ask('does zomato have toasts?');
+    expect(yes.text).toBe('Yes — Zomato has 7 screens with toasts.');
+    expect(yes.go).toBeUndefined();
+  });
+
+  it('summarises the most common elements', async () => {
+    const reply = await ask('which ui elements are most common');
+    expect(reply.text).toBe('The most common UI elements: nav bars (410), bottom sheets (20) and toasts (18).');
+    expect(reply.go?.href).toBe('/inspirations/ui-elements');
+  });
+
+  it('ignores a kind the library does not have', async () => {
+    expect((await ask('carousels')).go?.href ?? '').not.toContain('element=');
+  });
+});
+
+describe('patterns', () => {
+  it('opens a pattern by name, with where it is used', async () => {
+    const reply = await ask('filter chips');
+    expect(reply.go?.href).toBe('/inspirations/pattern/filter-chips');
+    expect(reply.text).toBe('Opening the “Filter chips” pattern.');
+    expect(reply.card?.facts).toEqual(['Filters', '2 screens', 'In Swiggy and Zomato']);
+  });
+
+  it('says which apps use a pattern', async () => {
+    expect((await ask('which apps use filter chips')).text).toBe('The “Filter chips” pattern appears in 2 apps — Swiggy and Zomato.');
+    expect((await ask('where are filter chips used')).text).toBe('The “Filter chips” pattern appears in 2 apps — Swiggy and Zomato.');
+  });
+
+  it('answers yes/no for one app', async () => {
+    expect((await ask('does swiggy use filter chips')).text).toBe('Yes — Swiggy uses the “Filter chips” pattern.');
+    expect((await ask('does groww use filter chips')).text).toBe('Groww doesn’t use the “Filter chips” pattern. It appears in Swiggy and Zomato.');
+  });
+
+  it('opens a category of patterns', async () => {
+    expect((await ask('modal patterns')).go?.href).toBe('/inspirations/pattern/bottom-sheet-actions');
+  });
+
+  it('knows "this" on a pattern page', async () => {
+    const reply = await ask('which apps use this', ctx(null, { page: { pathname: '/inspirations/pattern/filter-chips' } }));
+    expect(reply.text).toBe('The “Filter chips” pattern appears in 2 apps — Swiggy and Zomato.');
+  });
+});
+
+describe('flows by category', () => {
+  it('opens the filtered flows page for the plural', async () => {
+    const reply = await ask('onboarding flows');
+    expect(reply.go?.href).toBe('/inspirations/flows?category=onboarding');
+    expect(reply.text).toBe('Showing 2 onboarding flows.');
+  });
+
+  it('says which apps have one', async () => {
+    expect((await ask('which apps have an onboarding flow')).text).toBe('There are 2 onboarding flows, in Swiggy and Zomato.');
+  });
+
+  it('opens the one flow of that kind inside an app', async () => {
+    const reply = await ask('swiggy checkout flow');
+    expect(reply.go?.href).toBe('/inspirations/flows?flow=f1');
+    expect(reply.text).toBe('Opening Swiggy’s checkout flow, “Checkout”.');
+    expect(reply.card?.facts).toEqual(['Swiggy', 'Checkout', '3 steps']);
+  });
+
+  it('reads everyday words for a category', async () => {
+    expect((await ask('payment flow in swiggy')).go?.href).toBe('/inspirations/flows?flow=f1');
+    expect((await ask('sign up flows')).text).toBe('No authentication flows yet.');
+  });
+});
+
+describe('negation', () => {
+  it('lists everything but', async () => {
+    const reply = await ask('apps except swiggy');
+    expect(reply.text).toBe('Apart from Swiggy: Zomato, Groww and Zoho Corporation.');
+    expect(reply.results?.map((t) => t.label)).toEqual(['Zomato', 'Groww', 'Zoho Corporation']);
+    expect(reply.go).toBeUndefined();
+  });
+
+  it('combines with a kind of app', async () => {
+    const reply = await ask('web apps other than zomato');
+    expect(reply.text).toBe('Showing web apps (leaving out Zomato).');
+    expect(reply.targets.map((t) => t.label)).toEqual(['Zoho Corporation']);
+  });
+
+  it('reads a correction', async () => {
+    expect((await ask('not swiggy, zomato')).go?.href).toBe('/inspirations/app/zomato');
+  });
+
+  it('rules out a platform', async () => {
+    const reply = await ask('apps that are not on web');
+    expect(reply.targets.map((t) => t.label).sort()).toEqual(['Groww', 'Swiggy']);
+  });
+});
+
+describe('numbers', () => {
+  it('filters apps by a count', async () => {
+    expect((await ask('apps with more than 100 screens')).text).toBe('2 apps have more than 100 screens: Swiggy (262) and Zomato (140).');
+    expect((await ask('which apps have fewer than 20 flows')).text).toBe('1 app has fewer than 20 flows: Zoho Corporation (3).');
+    expect((await ask('apps with at least 4.5 stars')).text).toBe('2 apps have at least 4.5 stars: Swiggy (5.0) and Zomato (4.5).');
+  });
+
+  it('says when none match', async () => {
+    const reply = await ask('apps with more than 1000 screens');
+    expect(reply.text).toBe('No apps have more than 1000 screens.');
+    expect(reply.go).toBeUndefined();
+  });
+
+  it('ranks inside a filter', async () => {
+    expect((await ask('which app with more than 100 screens has the most flows')).text).toBe('Among apps with more than 100 screens, Zomato has the most flows (85), followed by Swiggy (39).');
+  });
+
+  it('gives a top n', async () => {
+    expect((await ask('top 3 apps by screens')).text).toBe('The top 3 by screens: Swiggy (262), Zomato (140) and Groww (90).');
+    expect((await ask('top 2 rated apps')).text).toBe('The top rated apps are Swiggy (5.0) and Zomato (4.5).');
+  });
+
+  it('handles newest when no dates are recorded', async () => {
+    expect((await ask('newest app')).text).toBe('No capture dates have been recorded yet.');
+  });
+});
+
+describe('picking from what was listed', () => {
+  it('"the second one", "both", "all of them", "the other one"', async () => {
+    const ranked = await ask('which app has the most screens');
+    const results = ranked.results;
+    expect(results?.map((t) => t.label)).toEqual(['Swiggy', 'Zomato', 'Groww', 'Zoho Corporation']);
+    expect((await ask('the second one', ctx(ranked.app, { results }))).go?.href).toBe('/inspirations/app/zomato');
+    expect((await ask('open the last one', ctx(ranked.app, { results }))).go?.href).toBe('/inspirations/app/zoho');
+    const both = await ask('both', ctx(ranked.app, { results }));
+    expect(both.card?.columns).toEqual(['Swiggy', 'Zomato']);
+    expect(both.card?.rows?.[0]).toEqual({ label: 'Screens', values: ['262', '140'] });
+    expect((await ask('all of them', ctx(ranked.app, { results }))).text).toBe('Here they all are — Swiggy, Zomato, Groww and Zoho Corporation.');
+    const compared = await ask('compare swiggy and zomato');
+    expect((await ask('the other one', ctx(SWIGGY, { results: compared.results }))).go?.href).toBe('/inspirations/app/zomato');
+  });
+
+  it('is honest when the list is shorter than asked', async () => {
+    const compared = await ask('compare swiggy and zomato');
+    const reply = await ask('the fourth one', ctx(null, { results: compared.results }));
+    expect(reply.text).toBe('I only listed 2 apps — Swiggy and Zomato. Which one?');
+  });
+
+  it('does nothing special without a list', async () => {
+    expect((await ask('the second one')).go).toBeUndefined();
+  });
+});
+
+describe('two requests in one', () => {
+  it('runs them in order, carrying the app forward', async () => {
+    const reply = await ask('open zomato and show its flows');
+    expect(reply.go?.href).toBe('/inspirations/app/zomato?tab=flows');
+    expect(reply.text).toMatch(/Zomato\./);
+    expect(reply.text).toMatch(/Zomato’s flows\./);
+  });
+
+  it('answers a question after an open', async () => {
+    const reply = await ask('open swiggy, then how many flows does it have');
+    expect(reply.text).toMatch(/Swiggy has 39 flows\.$/);
+  });
+});
+
+describe('knowing the page', () => {
+  it('uses the app page as the subject', async () => {
+    const page = { pathname: '/inspirations/app/zomato' };
+    expect((await ask('how many screens?', ctx(null, { page }))).text).toBe('Zomato has 140 screens.');
+    expect((await ask('is it on web', ctx(null, { page }))).text).toBe('Yes — Zomato is on iOS and the web.');
+  });
+
+  it('answers "which app is this"', async () => {
+    const reply = await ask('which app is this', ctx(null, { page: { pathname: '/inspirations/app/zomato' } }));
+    expect(reply.text).toBe('You’re looking at Zomato. Zomato is a Food & drink app on iOS and the web, with 140 screens and 85 flows.');
+    expect(reply.go).toBeUndefined();
+    expect((await ask('where am i', ctx(null, { page: { pathname: '/inspirations/flows' } }))).text).toBe('You’re on the Flows page.');
+  });
+});
+
+describe('not over-reaching', () => {
+  const onZomato = ctx(null, { page: { pathname: '/inspirations/app/zomato' } });
+
+  it('"what is this" is about the app on the page, but a real question is not', async () => {
+    expect((await ask('what is this', onZomato)).text).toMatch(/^Zomato is a Food & drink app/);
+    expect((await ask('tell me about it', onZomato)).text).toMatch(/^Zomato is a Food & drink app/);
+    const life = await ask('what is the meaning of life', onZomato);
+    expect(life.kind).toBe('fallback');
+    expect(life.text).not.toMatch(/Zomato/);
+    expect((await ask('what is a design system?', ctx(SWIGGY))).kind).toBe('fallback');
+  });
+});
+
+describe('small safe actions', () => {
+  it('offers to save an app', async () => {
+    const reply = await ask('save swiggy');
+    expect(reply.action).toEqual({ kind: 'save', item: { type: 'app', id: 'a1' }, label: 'Swiggy' });
+    expect(reply.text).toBe('Save Swiggy to a collection?');
+    expect(reply.kind).toBe('action');
+    expect(reply.go).toBeUndefined();
+  });
+
+  it('offers to copy a link', async () => {
+    const reply = await ask('copy link to zomato');
+    expect(reply.action).toEqual({ kind: 'copy', href: '/inspirations/app/zomato', label: 'Zomato' });
+  });
+
+  it('uses the current app or page', async () => {
+    expect((await ask('save it', ctx(SWIGGY))).action?.kind).toBe('save');
+    expect((await ask('save this', ctx(null, { page: { pathname: '/inspirations/pattern/filter-chips' } }))).action).toEqual({ kind: 'save', item: { type: 'pattern', id: 'p1' }, label: 'Filter chips' });
+  });
+
+  it('asks when there is nothing to act on', async () => {
+    const reply = await ask('save');
+    expect(reply.kind).toBe('clarify');
+    expect(reply.action).toBeUndefined();
+  });
+});
+
+describe('similar apps and a surprise', () => {
+  it('finds apps of the same kind', async () => {
+    expect((await ask('apps like swiggy')).text).toBe('Apps like Swiggy (Food & drink): Zomato.');
+    expect((await ask('alternatives to groww')).text).toBe('Groww is the only Fintech app in the library so far.');
+  });
+
+  it('picks a random app', async () => {
+    const reply = await ask('surprise me');
+    expect(reply.go?.href).toMatch(/^\/inspirations\/app\//);
+    expect(reply.text).toMatch(/^How about /);
+  });
+});
+
+describe('every reply says what kind it is', () => {
+  it.each([
+    ['hi', 'smalltalk'],
+    ['open swiggy', 'nav'],
+    ['how many screens does swiggy have', 'answer'],
+    ['how many flows does it have', 'clarify'],
+    ['blorpfrazzle', 'fallback'],
+    ['save swiggy', 'action'],
+  ])('%s → %s', async (text, kind) => {
+    expect((await ask(text)).kind).toBe(kind);
+  });
+
+  it('error', async () => {
+    vi.mocked(inspirationsApi.listApps).mockRejectedValueOnce(new Error('offline'));
+    expect((await ask('how many screens does swiggy have')).kind).toBe('error');
   });
 });

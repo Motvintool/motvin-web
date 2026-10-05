@@ -128,6 +128,12 @@ export const UndoIcon = (p: IconProps) => (
 export const RetryIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M20 12a8 8 0 1 1-2.5-5.8" /><path d="M20 4v5h-5" /></svg>
 );
+export const ThumbUpIcon = ({ filled, ...p }: IconProps & { filled?: boolean }) => (
+  <svg {...base(p)} fill={filled ? 'currentColor' : 'none'}><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3zM7 11l4-7a2 2 0 0 1 2 2v4h5a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 20H7" /></svg>
+);
+export const ThumbDownIcon = ({ filled, ...p }: IconProps & { filled?: boolean }) => (
+  <svg {...base(p)} fill={filled ? 'currentColor' : 'none'}><path d="M17 13V4h3a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-3zM17 13l-4 7a2 2 0 0 1-2-2v-4H6a2 2 0 0 1-2-2.3l1.2-6A2 2 0 0 1 7.2 4H17" /></svg>
+);
 export const PencilIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M4 20h4l10-10-4-4L4 16z" /><path d="m13 7 4 4" /></svg>
 );

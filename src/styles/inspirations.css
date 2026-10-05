@@ -10012,3 +10012,71 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   padding-left: 12px;
   font-size: 12px;
 }
+
+/* Thumbs on an answer: the same dark toolbar as on a message, on the left. It
+   stays once a verdict is given, so the visitor can see what they said. */
+.ins-guide-tools.is-assistant {
+  right: auto;
+  left: 12px;
+}
+
+.ins-guide-tools.is-assistant.is-rated {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ins-guide-tools button[aria-pressed='true'] {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Two or three apps side by side. */
+.ins-guide-compare {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.ins-guide-compare-row {
+  display: grid;
+  grid-template-columns: 84px repeat(auto-fit, minmax(0, 1fr));
+  gap: 8px;
+  padding: 9px 12px;
+  align-items: baseline;
+}
+
+.ins-guide-compare-row + .ins-guide-compare-row {
+  border-top: 1px solid #eef0f2;
+}
+
+.ins-guide-compare-row.is-head {
+  background: #f6f7f9;
+  font-weight: 600;
+}
+
+.ins-guide-compare-row [role='rowheader'] {
+  color: #6b6f7a;
+}
+
+.ins-guide-compare-row [role='cell'],
+.ins-guide-compare-row [role='columnheader'] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ins-guide-grouphead-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ins-guide-grouphead-actions .ins-guide-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
