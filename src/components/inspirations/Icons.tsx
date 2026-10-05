@@ -128,9 +128,6 @@ export const UndoIcon = (p: IconProps) => (
 export const RetryIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M20 12a8 8 0 1 1-2.5-5.8" /><path d="M20 4v5h-5" /></svg>
 );
-export const HistoryIcon = (p: IconProps) => (
-  <svg {...base(p)}><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" /><path d="M3.5 4.5v4h4" /><path d="M12 7.5V12l3 2" /></svg>
-);
 export const PencilIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M4 20h4l10-10-4-4L4 16z" /><path d="m13 7 4 4" /></svg>
 );

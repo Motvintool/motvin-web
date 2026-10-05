@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_CHATS, MAX_LINES, parseHistory, relativeTime, removeChat, titleOf, upsertChat, type SavedChat, type SavedLine } from './guideHistory';
+import { groupChats, MAX_CHATS, MAX_LINES, parseHistory, previewOf, relativeTime, removeChat, titleOf, upsertChat, type SavedChat, type SavedLine } from './guideHistory';
 
 const user = (id: number, text: string): SavedLine => ({ id, role: 'user', text });
 const bot = (id: number, text: string): SavedLine => ({ id, role: 'assistant', text });
@@ -109,5 +109,50 @@ describe('parseHistory (browser storage is untrusted)', () => {
     const read = parseHistory(JSON.stringify(many));
     expect(read).toHaveLength(MAX_CHATS);
     expect(read[0].updatedAt).toBeGreaterThan(read[1].updatedAt);
+  });
+});
+
+describe('groupChats', () => {
+  const now = new Date('2026-10-06T15:00:00').getTime();
+  const at = (iso: string): SavedChat => ({ id: iso, title: iso, updatedAt: new Date(iso).getTime(), appId: null, lines: [user(1, 'x')] });
+
+  it('splits into today, yesterday and earlier, newest first within each', () => {
+    const groups = groupChats([at('2026-10-06T14:00:00'), at('2026-10-06T00:00:00'), at('2026-10-05T23:59:00'), at('2026-10-05T01:00:00'), at('2026-09-30T10:00:00')], now);
+    expect(groups.map((g) => [g.label, g.chats.length])).toEqual([['Today', 2], ['Yesterday', 2], ['Earlier', 1]]);
+    expect(groups[0].chats.map((c) => c.id)).toEqual(['2026-10-06T14:00:00', '2026-10-06T00:00:00']);
+  });
+
+  it('leaves out groups with nothing in them', () => {
+    expect(groupChats([at('2026-09-01T10:00:00')], now).map((g) => g.label)).toEqual(['Earlier']);
+    expect(groupChats([], now)).toEqual([]);
+  });
+});
+
+describe('previewOf', () => {
+  const chatWith = (lines: SavedLine[]): SavedChat => ({ id: 'a', title: 't', updatedAt: 1, appId: null, lines });
+
+  it('is the guide’s last reply', () => {
+    expect(previewOf(chatWith([user(1, 'open swiggy'), bot(2, 'Here’s Swiggy.'), user(3, 'flows'), bot(4, 'Opening Swiggy’s flows.')]))).toBe('Opening Swiggy’s flows.');
+  });
+
+  it('skips empty replies and a trailing question, and shortens a long reply', () => {
+    expect(previewOf(chatWith([bot(1, 'Hello'), bot(2, '   '), user(3, 'hi')]))).toBe('Hello');
+    expect(previewOf(chatWith([user(1, 'hi')]))).toBe('');
+    const long = previewOf(chatWith([bot(1, 'word '.repeat(60))]));
+    expect(long.length).toBe(88);
+    expect(long.endsWith('…')).toBe(true);
+  });
+});
+
+describe('saved logos', () => {
+  it('keeps a web address for an image but drops anything else', () => {
+    const base = { id: 'a', title: 't', updatedAt: 1, appId: null };
+    const line = (iconSrc: string) => ({ id: 1, role: 'assistant', text: 'x', opened: { label: 'a', hint: 'b', href: '/inspirations/app/a', iconSrc } });
+    const read = (iconSrc: string) => parseHistory(JSON.stringify([{ ...base, lines: [line(iconSrc)] }]))[0].lines[0].opened?.iconSrc;
+    expect(read('http://localhost:3000/api/inspirations/logos/swiggy.png')).toBe('http://localhost:3000/api/inspirations/logos/swiggy.png');
+    expect(read('https://api.motvin.com/logos/x.webp')).toBe('https://api.motvin.com/logos/x.webp');
+    expect(read('/ASSET/logo.svg')).toBe('/ASSET/logo.svg');
+    expect(read('javascript:alert(1)')).toBeUndefined();
+    expect(read('data:image/svg+xml;base64,AAAA')).toBeUndefined();
   });
 });

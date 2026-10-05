@@ -8053,8 +8053,16 @@ select.ins-input {
 .ins-guide-brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
+  gap: 12px;
+}
+
+.ins-guide-brand strong {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 29px;
+  letter-spacing: -0.2px;
+  color: #0b0c0e;
+  white-space: nowrap;
 }
 
 .ins-guide-suggest::-webkit-scrollbar {
@@ -8119,7 +8127,7 @@ select.ins-input {
   display: flex;
   flex-direction: column;
   width: min(400px, calc(100vw - 32px));
-  border-radius: 12px;
+  border-radius: 24px;
   background: var(--ins-card);
   color: var(--ins-text);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
@@ -8127,19 +8135,55 @@ select.ins-input {
   animation: insToastIn 200ms var(--ins-ease);
 }
 
+/* The top bar, from Figma "Design Post Site" node 1261:9766: 16px of padding
+   all round, content pushed to the right, and a 44px round chat-history button. */
 .ins-guide-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
+  gap: 8px;
   flex: none;
-  padding: 16px 18px 0;
+  padding: 16px;
+}
+
+.ins-guide-history-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  padding: 8px;
+  overflow: hidden;
+  border: 1.2px solid #e4e5e8;
+  border-radius: 1000px;
+  background: #fff;
+  cursor: pointer;
+  transition: background 140ms var(--ins-ease), border-color 140ms var(--ins-ease);
+}
+
+.ins-guide-history-btn:hover {
+  background: #fff;
+  border-color: #c5c5c5;
+}
+
+.ins-guide-history-btn img {
+  display: block;
+  flex: none;
+}
+
+.ins-guide-history-btn:focus-visible {
+  outline: 2px solid rgba(11, 12, 14, 0.4);
+  outline-offset: 2px;
+  box-shadow: none;
+  border-radius: 1000px;
 }
 
 .ins-guide-top-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   margin-left: auto;
 }
 
@@ -8147,8 +8191,9 @@ select.ins-input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  flex: none;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
   background: #0b0c0e;
 }
@@ -8626,7 +8671,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   flex: none;
   margin: 0 16px 16px;
   border: 1px solid #e6e7ea;
-  border-radius: 22px;
+  border-radius: 12px;
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   overflow: hidden;
@@ -8668,8 +8713,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   padding: 6px 12px 12px 14px;
 }
 
-/* "Esc to close" as a keyboard-shortcut hint, which also closes when clicked.
-   Touch screens have no Esc key, so it is hidden there. */
+/* "Esc to close" as a keyboard-shortcut hint, which also closes when clicked. */
 .ins-guide-esc {
   display: inline-flex;
   align-items: center;
@@ -8705,9 +8749,23 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   line-height: 1;
 }
 
+/* Touch screens have no Esc key, so the same button reads "Close" there. */
+.ins-guide-close-label {
+  display: none;
+}
+
 @media (hover: none) {
-  .ins-guide-esc {
+  .ins-guide-esc kbd,
+  .ins-guide-esc-label {
     display: none;
+  }
+
+  .ins-guide-close-label {
+    display: inline;
+    padding: 4px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0b0c0e;
   }
 }
 
@@ -8716,23 +8774,9 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 16px 16px;
-}
-
-.ins-guide-history-head {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 4px;
-}
-
-.ins-guide-history-head h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: #0b0c0e;
+  flex-direction: column;
+  padding: 12px 16px 16px;
 }
 
 .ins-guide-link {
@@ -8752,25 +8796,203 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   background: #f4f5f7;
 }
 
+/* Nothing saved yet: a few faded ghost rows, as if past chats were about to
+   appear, the Motvin bot in front of them, then what to do about it. */
 .ins-guide-history-empty {
-  margin: 18px 4px 0;
-  font-size: 14px;
-  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Auto margins centre it in the room under the header, and fall back to
+     normal flow (so nothing is cut off) when the window is too short. */
+  margin: auto 4px;
+  text-align: center;
+  animation: insGuideIn 340ms var(--ins-ease) both;
+}
+
+/* The layout box is just the bot, so what gets centred is the group the eye
+   actually reads — bot, heading, text, button. The ghost rows hang above it,
+   each a step fainter than the one above, so they fade out toward the bot. */
+.ins-guide-history-art {
+  position: relative;
+  width: 100%;
+  max-width: 290px;
+  height: 56px;
+}
+
+.ins-guide-ghosts {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* On a short window there is no room above for them. */
+@media (max-height: 680px) {
+  .ins-guide-ghosts {
+    display: none;
+  }
+}
+
+.ins-guide-ghost {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 13px 14px;
+  border-radius: 12px;
+  background: #f5f6f8;
+}
+
+.ins-guide-ghost i {
+  display: block;
+  height: 9px;
+  border-radius: 5px;
+  background: #e1e4e9;
+}
+
+.ins-guide-ghost i + i {
+  height: 7px;
+  background: #e9ebef;
+}
+
+.ins-guide-ghost.is-row-0 {
+  opacity: 0.24;
+}
+
+.ins-guide-ghost.is-row-0 i:first-child {
+  width: 68%;
+}
+
+.ins-guide-ghost.is-row-0 i + i {
+  width: 34%;
+}
+
+.ins-guide-ghost.is-row-1 {
+  opacity: 0.66;
+}
+
+.ins-guide-ghost.is-row-1 i:first-child {
+  width: 52%;
+}
+
+.ins-guide-ghost.is-row-1 i + i {
+  width: 40%;
+}
+
+.ins-guide-ghost.is-row-2 {
+  opacity: 1;
+}
+
+.ins-guide-ghost.is-row-2 i:first-child {
+  width: 74%;
+}
+
+.ins-guide-ghost.is-row-2 i + i {
+  width: 28%;
+}
+
+.ins-guide-history-bot {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: #0b0c0e;
+  box-shadow: 0 0 0 6px #fff, 0 10px 22px rgba(0, 0, 0, 0.2);
+  transform: translateX(-50%);
+}
+
+.ins-guide-history-empty h3 {
+  margin: 16px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #0b0c0e;
+}
+
+.ins-guide-history-empty p {
+  margin: 6px 0 0;
+  max-width: 270px;
+  font-size: 13px;
+  line-height: 1.55;
   color: #6b6f7a;
+}
+
+.ins-guide-empty-cta {
+  margin-top: 18px;
+  height: 38px;
+  padding: 0 18px 2px;
+  border: 0;
+  border-radius: 999px;
+  background: #0b0c0e;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 140ms var(--ins-ease);
+}
+
+.ins-guide-empty-cta:hover {
+  transform: translateY(-1px);
+}
+
+.ins-guide-empty-cta:focus-visible {
+  outline: 2px solid rgba(11, 12, 14, 0.4);
+  outline-offset: 2px;
+  box-shadow: none;
+  border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-guide-history-empty {
+    animation: none;
+  }
+}
+
+/* Saved chats, grouped by day. Each row: the title over a one-line preview of
+   the last reply, and the time at the right — which gives way to a delete
+   button when the row is hovered. */
+.ins-guide-history-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.ins-guide-history-grouphead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+  padding: 0 4px 6px;
+}
+
+.ins-guide-history-grouphead h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #9a9ca3;
 }
 
 .ins-guide-history-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin: 14px 0 0;
+  gap: 12px;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .ins-guide-history-list li {
-  display: flex;
-  align-items: stretch;
+  position: relative;
   border-radius: 12px;
   background: #f9fafb;
   transition: background 140ms var(--ins-ease);
@@ -8781,17 +9003,12 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   background: #f1f2f4;
 }
 
-.ins-guide-history-list li.is-current {
-  box-shadow: inset 0 0 0 1px #d9dbe0;
-}
-
 .ins-guide-history-item {
-  flex: 1 1 auto;
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  padding: 12px 6px 12px 14px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
   border: 0;
   border-radius: 12px;
   background: transparent;
@@ -8801,48 +9018,100 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   cursor: pointer;
 }
 
+.ins-guide-history-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .ins-guide-history-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.35;
 }
 
-.ins-guide-history-meta {
-  font-size: 11.5px;
-  line-height: 1.35;
+.ins-guide-history-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.4;
   color: #6b6f7a;
 }
 
-.ins-guide-history-del {
+.ins-guide-history-side {
   flex: none;
+  display: flex;
+  /* Top-aligned with the title; the 3px centres the small time on the title's
+     first line (a 14px title line is about 5px taller than the 11.5px time). */
+  align-self: flex-start;
+  margin-top: 3px;
+  transition: opacity 140ms var(--ins-ease);
+}
+
+.ins-guide-history-time {
+  font-size: 11.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: #9a9ca3;
+}
+
+.ins-guide-history-del {
+  position: absolute;
+  top: 50%;
+  right: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
+  width: 32px;
+  height: 32px;
   border: 0;
-  border-radius: 0 12px 12px 0;
-  background: transparent;
-  color: #9a9ca3;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #e4e5e8;
+  color: #6b6f7a;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 140ms var(--ins-ease), color 140ms var(--ins-ease);
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 140ms var(--ins-ease), color 140ms var(--ins-ease), box-shadow 140ms var(--ins-ease);
 }
 
 .ins-guide-history-list li:hover .ins-guide-history-del,
 .ins-guide-history-list li:focus-within .ins-guide-history-del,
 .ins-guide-history-del:focus-visible {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.ins-guide-history-list li:hover .ins-guide-history-side,
+.ins-guide-history-list li:focus-within .ins-guide-history-side {
+  opacity: 0;
 }
 
 .ins-guide-history-del:hover {
   color: #dc2626;
+  box-shadow: 0 0 0 1px #f2c4c4;
 }
 
+/* No hover on a touch screen: keep the time and show the delete button beside it. */
 @media (hover: none) {
+  .ins-guide-history-item {
+    padding-right: 52px;
+  }
+
   .ins-guide-history-del {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .ins-guide-history-list li:hover .ins-guide-history-side,
+  .ins-guide-history-list li:focus-within .ins-guide-history-side {
     opacity: 1;
   }
 }
@@ -8867,7 +9136,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
 }
 
 .ins-guide-history-del:focus-visible {
-  border-radius: 8px;
+  border-radius: 999px;
   opacity: 1;
 }
 
@@ -8892,44 +9161,105 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   align-items: center;
 }
 
-/* "New chat", at the top of a conversation. */
-.ins-guide-newchat,
-.ins-guide-back {
+/* "New Chat" at the top of a conversation, from Figma node 1261:15237: a 44px
+   pill, 1.2px #e4e5e8 border, 6px between the icon and the label, 12px of
+   padding on the icon side and 16px on the label side. */
+.ins-guide-newchat {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
-  padding: 0 12px 1px 10px;
-  border: 0;
-  border-radius: 999px;
+  height: 44px;
+  padding: 0 16px 1px 12px;
+  overflow: hidden;
+  border: 1.2px solid #e4e5e8;
+  border-radius: 1000px;
   background: #fff;
-  box-shadow: 0 0 0 1px #e4e5e8;
   color: #0b0c0e;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 140ms var(--ins-ease), box-shadow 140ms var(--ins-ease);
+  transition: background 140ms var(--ins-ease), border-color 140ms var(--ins-ease);
 }
 
-.ins-guide-newchat:hover:not(:disabled),
-.ins-guide-back:hover:not(:disabled) {
-  background: #f6f7f9;
-  box-shadow: 0 0 0 1px #cfd1d6;
+.ins-guide-newchat img {
+  display: block;
+  flex: none;
 }
 
-.ins-guide-newchat:focus-visible,
-.ins-guide-back:focus-visible {
+.ins-guide-newchat:hover:not(:disabled) {
+  background: #fff;
+  border-color: #c5c5c5;
+}
+
+.ins-guide-newchat:focus-visible {
   outline: 2px solid rgba(11, 12, 14, 0.4);
   outline-offset: 2px;
-  box-shadow: 0 0 0 1px #e4e5e8;
-  border-radius: 999px;
+  box-shadow: none;
+  border-radius: 1000px;
 }
 
-.ins-guide-newchat:disabled,
-.ins-guide-back:disabled {
+.ins-guide-newchat:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* The History screen's title row, from Figma node 1260:9351: the back arrow and
+   "Chat history" are one button, 12px apart and 4px in from the left edge. */
+.ins-guide-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 0 0 4px;
+  border: 0;
+  background: transparent;
+  color: #0b0c0e;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 29px;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* The arrow glides a little to the left on hover (or keyboard focus), easing
+   to a stop, and glides back when the pointer leaves. It moves as a wrapper because
+   the site's theme sheet sets `transition: none !important` on every <img>, so
+   the image itself could never animate. */
+.ins-guide-back-arrow {
+  display: inline-flex;
+  flex: none;
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.ins-guide-back-arrow img {
+  display: block;
+}
+
+.ins-guide-back:hover .ins-guide-back-arrow,
+.ins-guide-back:focus-visible .ins-guide-back-arrow {
+  transform: translateX(-2px);
+}
+
+.ins-guide-back:active .ins-guide-back-arrow {
+  transform: translateX(-3px);
+  transition-duration: 120ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-guide-back-arrow {
+    transition: none;
+  }
+}
+
+.ins-guide-back:focus-visible {
+  outline: 2px solid rgba(11, 12, 14, 0.4);
+  outline-offset: 4px;
+  box-shadow: none;
+  border-radius: 8px;
 }
 
 .ins-guide-send {
@@ -8972,7 +9302,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
     right: max(8px, env(safe-area-inset-right));
     bottom: max(8px, env(safe-area-inset-bottom));
     width: calc(100vw - 16px);
-    border-radius: 12px;
+    border-radius: 24px;
   }
 }
 

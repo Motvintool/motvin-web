@@ -7,11 +7,10 @@ import { isAdminEmail } from '@/lib/inspirations/admin';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { greetingFor } from '@/lib/inspirations/guideGreeting';
 import { nextNudge, nudgeMessages, readNudgeState, writeNudgeState } from '@/lib/inspirations/guideNudge';
-import { newChatId, readHistory, relativeTime, removeChat, upsertChat, writeHistory, type SavedChat, type SavedLine } from '@/lib/inspirations/guideHistory';
+import { groupChats, newChatId, previewOf, readHistory, relativeTime, removeChat, upsertChat, writeHistory, type SavedChat, type SavedLine } from '@/lib/inspirations/guideHistory';
 import { QUICK_PAGES, resolveNavigation, type NavCard, type NavTarget } from '@/lib/inspirations/navAssistant';
 import type { App } from '@/lib/inspirations/types';
 import {
-  ArrowLeftIcon,
   ArrowRightIcon,
   CheckIcon,
   ChevronLeftIcon,
@@ -19,9 +18,7 @@ import {
   CloseIcon,
   CopyIcon,
   ExternalIcon,
-  HistoryIcon,
   PencilIcon,
-  PlusIcon,
   RetryIcon,
   SearchIcon,
   TrashIcon,
@@ -70,9 +67,8 @@ export function UserDock() {
   // The welcome screen: a time-of-day greeting and example questions drawn from the real library.
   const [hour, setHour] = useState(12);
   const [examples, setExamples] = useState<string[]>([]);
-  // The saved chat being continued: a ref for the handlers and effects, mirrored in state for rendering.
+  // The saved chat being continued.
   const chatId = useRef<string | null>(null);
-  const [currentId, setCurrentId] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const suggestRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -204,7 +200,6 @@ export function UserDock() {
     setBusy(true);
     if (!chatId.current) {
       chatId.current = newChatId();
-      setCurrentId(chatId.current);
     }
     const userId = nextId.current++;
     const replyId = nextId.current++;
@@ -238,7 +233,6 @@ export function UserDock() {
 
   const resetConversation = () => {
     chatId.current = null;
-    setCurrentId(null);
     lastApp.current = null;
     nextId.current = 1;
     setLines([]);
@@ -256,7 +250,6 @@ export function UserDock() {
 
   const openChat = (chat: SavedChat) => {
     chatId.current = chat.id;
-    setCurrentId(chat.id);
     nextId.current = Math.max(0, ...chat.lines.map((line) => line.id)) + 1;
     lastApp.current = null;
     setLines(chat.lines);
@@ -391,71 +384,96 @@ export function UserDock() {
       <aside className={`ins-guide ${dimmed ? '' : 'is-floating'}`} role="dialog" aria-modal={dimmed || undefined} aria-label="Motvin guide" onKeyDown={keepFocusInside}>
         <div className="ins-guide-top">
           {inHistory ? (
-            <button type="button" className="ins-guide-back" onClick={() => setView('chat')}>
-              <ArrowLeftIcon size={16} />
-              Back
+            <button type="button" className="ins-guide-back" onClick={() => setView('chat')} title="Back to the chat">
+              <span className="ins-guide-back-arrow" aria-hidden>
+                <img src="/ASSET/Icons/Motvin/chat-back.svg" alt="" width={20} height={20} />
+              </span>
+              Chat history
             </button>
           ) : (
             !welcome && (
               <span className="ins-guide-brand">
                 <span className="ins-guide-mark" aria-hidden>
-                  <img src="/ASSET/Icons/Motvin/bot-Illustration.svg" alt="" width={22} height={22} />
+                  <img src="/ASSET/Icons/Motvin/bot-Illustration.svg" alt="" width={28} height={28} />
                 </span>
-                <strong>Motvin guide</strong>
+                <strong>Motvin Guide</strong>
               </span>
             )
           )}
           <div className="ins-guide-top-actions">
             {(inHistory || !welcome) && (
               <button type="button" className="ins-guide-newchat" onClick={clear} disabled={busy} title="Start a new conversation">
-                <PlusIcon size={15} />
-                New chat
+                <img src="/ASSET/Icons/Motvin/new-chat.svg" alt="" width={15} height={15} />
+                New Chat
               </button>
             )}
             {!inHistory && (
-              <button type="button" className="ins-iconbtn ins-iconbtn--plain" onClick={showHistory} aria-label="Chat history" title="Chat history">
-                <HistoryIcon size={18} />
+              <button type="button" className="ins-guide-history-btn" onClick={showHistory} aria-label="Chat history" title="Chat history">
+                <img src="/ASSET/Icons/Motvin/chat-history.svg" alt="" width={20} height={20} />
               </button>
             )}
-            <button type="button" className="ins-iconbtn ins-iconbtn--plain" onClick={() => setOpen(false)} aria-label="Close" title="Close (Esc)">
-              <CloseIcon size={18} />
-            </button>
           </div>
         </div>
 
         {inHistory ? (
           <div className="ins-guide-history" role="region" aria-label="Chat history">
-            <div className="ins-guide-history-head">
-              <h2>Chat history</h2>
-              {history.length > 0 && (
-                <button type="button" className="ins-guide-link" onClick={clearHistory}>
-                  Clear all
-                </button>
-              )}
-            </div>
             {history.length === 0 ? (
-              <p className="ins-guide-history-empty">No past chats yet. Your conversations will show up here, saved in this browser only.</p>
+              <div className="ins-guide-history-empty">
+                <div className="ins-guide-history-art" aria-hidden>
+                  <div className="ins-guide-ghosts">
+                    {[2, 1, 0].map((row) => (
+                      <div key={row} className={`ins-guide-ghost is-row-${row}`}>
+                        <i />
+                        <i />
+                      </div>
+                    ))}
+                  </div>
+                  <span className="ins-guide-history-bot">
+                    <img src="/ASSET/Icons/Motvin/bot-Illustration.svg" alt="" width={30} height={30} />
+                  </span>
+                </div>
+                <h3>No chats yet</h3>
+                <p>Ask the guide for an app or a page and your conversation will be saved here, in this browser only.</p>
+                <button type="button" className="ins-guide-empty-cta" onClick={clear}>
+                  Start a chat
+                </button>
+              </div>
             ) : (
-              <ul className="ins-guide-history-list">
-                {history.map((chat) => {
-                  const questions = chat.lines.filter((line) => line.role === 'user').length;
-                  const current = chat.id === currentId;
-                  return (
-                    <li key={chat.id} className={current ? 'is-current' : ''}>
-                      <button type="button" className="ins-guide-history-item" onClick={() => openChat(chat)}>
-                        <span className="ins-guide-history-title">{chat.title}</span>
-                        <span className="ins-guide-history-meta">
-                          {relativeTime(chat.updatedAt, now)} · {questions} question{questions === 1 ? '' : 's'}
-                          {current ? ' · Current' : ''}
-                        </span>
-                      </button>
-                      <button type="button" className="ins-guide-history-del" onClick={() => deleteChat(chat.id)} aria-label={`Delete “${chat.title}”`} title="Delete this chat">
-                        <TrashIcon size={15} />
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="ins-guide-history-groups">
+                {groupChats(history, now).map((group, groupIndex) => (
+                  <section key={group.label} className="ins-guide-history-group" aria-label={group.label}>
+                    <div className="ins-guide-history-grouphead">
+                      <h3>{group.label}</h3>
+                      {groupIndex === 0 && (
+                        <button type="button" className="ins-guide-link" onClick={clearHistory}>
+                          Clear all
+                        </button>
+                      )}
+                    </div>
+                    <ul className="ins-guide-history-list">
+                      {group.chats.map((chat) => {
+                        const preview = previewOf(chat);
+                        return (
+                          <li key={chat.id}>
+                            <button type="button" className="ins-guide-history-item" onClick={() => openChat(chat)}>
+                              <span className="ins-guide-history-body">
+                                <span className="ins-guide-history-title">{chat.title}</span>
+                                {preview && <span className="ins-guide-history-preview">{preview}</span>}
+                              </span>
+                              <span className="ins-guide-history-side">
+                                <span className="ins-guide-history-time">{relativeTime(chat.updatedAt, now)}</span>
+                              </span>
+                            </button>
+                            <button type="button" className="ins-guide-history-del" onClick={() => deleteChat(chat.id)} aria-label={`Delete “${chat.title}”`} title="Delete this chat">
+                              <TrashIcon size={15} />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                ))}
+              </div>
             )}
           </div>
         ) : welcome ? (
@@ -594,7 +612,8 @@ export function UserDock() {
           <div className="ins-guide-composer-bar">
             <button type="button" className="ins-guide-esc" onClick={() => setOpen(false)} title="Close the guide">
               <kbd>Esc</kbd>
-              <span>to close</span>
+              <span className="ins-guide-esc-label">to close</span>
+              <span className="ins-guide-close-label">Close</span>
             </button>
             <button type="submit" className="ins-guide-send" disabled={!question.trim() || busy} aria-label="Send">
               <ArrowRightIcon size={18} />

@@ -48,6 +48,8 @@ export function relativeTime(then: number, now: number): string {
 }
 
 const insideSite = (href: unknown): href is string => typeof href === 'string' && /^\/(?!\/)/.test(href);
+// An image may come from the library's own server, so a web address is fine there — it is only ever drawn, never followed.
+const imageSrc = (value: unknown): value is string => insideSite(value) || (typeof value === 'string' && /^https?:\/\//i.test(value));
 
 function cleanTarget(value: unknown): NavTarget | null {
   if (!value || typeof value !== 'object') return null;
@@ -60,7 +62,7 @@ function cleanTarget(value: unknown): NavTarget | null {
     hint: target.hint.slice(0, 120),
     href: asks ? '' : (target.href as string),
     ...(asks ? { ask: (target.ask as string).slice(0, 200) } : {}),
-    ...(typeof target.iconSrc === 'string' && insideSite(target.iconSrc) ? { iconSrc: target.iconSrc } : {}),
+    ...(imageSrc(target.iconSrc) ? { iconSrc: target.iconSrc } : {}),
   };
 }
 
@@ -72,7 +74,7 @@ function cleanLine(value: unknown): SavedLine | null {
   const opened = cleanTarget(line.opened) ?? undefined;
   const card =
     line.card && typeof line.card === 'object' && typeof line.card.title === 'string' && Array.isArray(line.card.facts)
-      ? { title: line.card.title.slice(0, 120), facts: line.card.facts.filter((fact): fact is string => typeof fact === 'string').slice(0, 4), ...(insideSite(line.card.href) ? { href: line.card.href } : {}), ...(insideSite(line.card.iconSrc) ? { iconSrc: line.card.iconSrc } : {}) }
+      ? { title: line.card.title.slice(0, 120), facts: line.card.facts.filter((fact): fact is string => typeof fact === 'string').slice(0, 4), ...(insideSite(line.card.href) ? { href: line.card.href } : {}), ...(imageSrc(line.card.iconSrc) ? { iconSrc: line.card.iconSrc } : {}) }
       : undefined;
   return { id: line.id, role: line.role, text: line.text.slice(0, 600), ...(targets?.length ? { targets } : {}), ...(opened ? { opened } : {}), ...(card ? { card } : {}), ...(line.error ? { error: true } : {}) };
 }
@@ -111,4 +113,33 @@ export function writeHistory(history: SavedChat[]) {
   } catch {
     // Storage full or blocked — the conversation still works, it just is not kept.
   }
+}
+
+export type ChatGroup = { label: 'Today' | 'Yesterday' | 'Earlier'; chats: SavedChat[] };
+
+/** Chats grouped by the day they were last used, newest first, leaving out empty groups. */
+export function groupChats(chats: SavedChat[], now: number): ChatGroup[] {
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const startToday = today.getTime();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const startYesterday = yesterday.getTime();
+  const groups: ChatGroup[] = [
+    { label: 'Today', chats: chats.filter((chat) => chat.updatedAt >= startToday) },
+    { label: 'Yesterday', chats: chats.filter((chat) => chat.updatedAt >= startYesterday && chat.updatedAt < startToday) },
+    { label: 'Earlier', chats: chats.filter((chat) => chat.updatedAt < startYesterday) },
+  ];
+  return groups.filter((group) => group.chats.length > 0);
+}
+
+/** The guide's last reply in a chat, trimmed to a line — what the chat ended on. */
+export function previewOf(chat: SavedChat): string {
+  for (let i = chat.lines.length - 1; i >= 0; i--) {
+    const line = chat.lines[i];
+    if (line.role !== 'assistant') continue;
+    const text = line.text.replace(/\s+/g, ' ').trim();
+    if (text) return text.length > 90 ? `${text.slice(0, 87)}…` : text;
+  }
+  return '';
 }
