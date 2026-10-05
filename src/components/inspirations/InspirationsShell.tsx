@@ -8,6 +8,7 @@ import { ScreenPreviewOverlay } from './ScreenPreviewModal';
 import { ToastProvider } from './Toast';
 import { AdminDrawerOverlay } from './admin/AdminDrawer';
 import { IngestDock } from './admin/IngestDock';
+import { UserDock } from './UserDock';
 
 function InspirationsHeaderSkeleton() {
   return (
@@ -68,6 +69,9 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
         {/* The library owner's running video ingest, on whichever page they
             are on. Renders nothing for everyone else. */}
         <IngestDock />
+        {/* The visitor's guide: navigation only, shown to everyone — beside the
+            admin dock for the owner. */}
+        <UserDock />
       </div>
     </ToastProvider>
   );

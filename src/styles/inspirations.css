@@ -7852,6 +7852,77 @@ select.ins-input {
   font-size: 15px;
 }
 
+/* A small summary card in a guide answer — the app's mark and its numbers. */
+.ins-guide-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--ins-border);
+  border-radius: 14px;
+  background: var(--ins-card-alt);
+}
+
+.ins-guide-card img {
+  flex: none;
+  border-radius: 9px;
+  object-fit: cover;
+}
+
+.ins-guide-card div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ins-guide-card strong {
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.ins-guide-card span {
+  font-size: 13px;
+  color: var(--ins-sub);
+}
+
+.ins-dock-user .ins-typing {
+  margin: 4px 2px;
+}
+
+.ins-dock-user .ins-chip-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* The visitor's guide. For the owner it sits beside the admin assistant, and
+   steps further left whenever the admin dock is open so the two never overlap. */
+.ins-dock-user.is-beside-admin.ins-dock-pill {
+  right: 87px;
+}
+
+.ins-dock-user.is-beside-admin.ins-dock {
+  right: 87px;
+  min-height: min(420px, 70vh);
+}
+
+body:has(aside.ins-dock:not(.ins-dock-user)) .ins-dock-user.is-beside-admin {
+  right: 432px;
+}
+
+body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-admin {
+  right: 592px;
+}
+
+@media (max-width: 900px) {
+  .ins-dock-user.is-beside-admin,
+  body:has(aside.ins-dock:not(.ins-dock-user)) .ins-dock-user.is-beside-admin,
+  body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-admin {
+    right: 12px;
+    bottom: 80px;
+  }
+}
+
 .ins-chat-text {
   position: relative;
   line-height: 1.5;
