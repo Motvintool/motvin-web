@@ -7870,6 +7870,29 @@ select.ins-input {
   object-fit: cover;
 }
 
+.ins-guide-card.is-link {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease);
+}
+
+.ins-guide-card.is-link:hover {
+  background: var(--ins-hover);
+  border-color: color-mix(in srgb, var(--ins-text) 14%, var(--ins-border));
+}
+
+.ins-guide-card.is-link > div {
+  flex: 1 1 auto;
+}
+
+.ins-guide-card.is-link > svg {
+  flex: none;
+  color: var(--ins-sub);
+}
+
 .ins-guide-card div {
   display: flex;
   flex-direction: column;
@@ -7890,9 +7913,190 @@ select.ins-input {
   margin: 4px 2px;
 }
 
+/* The guide's chip: a quiet white pill on the grey bubble. No stroke — a
+   hairline ring in the shadow separates it — so a row of them reads light.
+   Scoped to the guide so the admin assistant's chips keep their own look. */
+.ins-guide .ins-chip-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  /* 2px more underneath lifts the label 1px: Manrope's lowercase sits ~1.5px
+     below the middle of its line box at 13px, so a symmetric pad reads low. */
+  padding: 0 12px 2px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(11, 12, 14, 0.07), 0 1px 2px rgba(11, 12, 14, 0.05);
+  color: #0b0c0e;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 140ms var(--ins-ease), box-shadow 140ms var(--ins-ease);
+  animation: insChipIn 240ms var(--ins-ease) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+.ins-guide .ins-chip-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px rgba(11, 12, 14, 0.12), 0 4px 10px rgba(11, 12, 14, 0.08);
+}
+
+.ins-guide .ins-chip-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.ins-guide .ins-chip-btn:focus-visible {
+  outline: 2px solid rgba(11, 12, 14, 0.4);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px rgba(11, 12, 14, 0.07), 0 1px 2px rgba(11, 12, 14, 0.05);
+  border-radius: 999px;
+}
+
 .ins-guide .ins-chip-btn:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+@keyframes insChipIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-guide .ins-chip-btn {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* The row of suggestions pinned above the composer: one line that scrolls
+   sideways, fading at the edge. It follows the conversation — the places to go
+   at first, then whatever the latest answer offers next. */
+.ins-guide-suggest-wrap {
+  position: relative;
+  flex: none;
+}
+
+.ins-guide-suggest {
+  display: flex;
+  gap: 8px;
+  padding: 4px 16px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/* The row fades only on the side that has more to scroll to. */
+.ins-guide-suggest.fade-right {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent);
+}
+
+.ins-guide-suggest.fade-left {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 44px);
+  mask-image: linear-gradient(90deg, transparent, #000 44px);
+}
+
+.ins-guide-suggest.fade-left.fade-right {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 44px, #000 calc(100% - 44px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 44px, #000 calc(100% - 44px), transparent);
+}
+
+/* Arrows for mouse users, who can't swipe the row; touch screens swipe. */
+.ins-guide-suggest-arrow {
+  position: absolute;
+  top: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #0b0c0e;
+  box-shadow: 0 0 0 1px #e4e5e8, 0 4px 10px rgba(11, 12, 14, 0.1);
+  cursor: pointer;
+  transition: transform 140ms var(--ins-ease);
+}
+
+.ins-guide-suggest-arrow:hover {
+  transform: scale(1.08);
+}
+
+.ins-guide-suggest-arrow.is-left {
+  left: 10px;
+}
+
+.ins-guide-suggest-arrow.is-right {
+  right: 10px;
+}
+
+@media (hover: none) {
+  .ins-guide-suggest-arrow {
+    display: none;
+  }
+}
+
+.ins-guide-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.ins-guide-suggest::-webkit-scrollbar {
+  display: none;
+}
+
+.ins-guide-suggest .ins-chip-btn {
+  flex: none;
+  height: 38px;
+  padding: 0 16px 2px;
+  white-space: nowrap;
+  font-size: 14px;
+  color: #4f535e;
+  box-shadow: 0 0 0 1px #e4e5e8;
+}
+
+.ins-guide-suggest .ins-chip-btn:hover:not(:disabled) {
+  color: #0b0c0e;
+  box-shadow: 0 0 0 1px #cfd1d6, 0 4px 10px rgba(11, 12, 14, 0.07);
+}
+
+/* One-colour icon that follows the label's colour. The chip's bottom padding
+   lifts its content 1px for the lowercase text, so the icon drops back 1px to
+   sit on the chip's true middle. */
+.ins-guide-suggest .ins-chip-icon {
+  display: inline-flex;
+  flex: none;
+  margin-right: -1px;
+  transform: translateY(1px);
+  color: currentColor;
+}
+
+/* The ai-chip icon, drawn from /ASSET/Icons/ai-chip.svg as a mask so it takes
+   the chip's text colour (and its hover colour) instead of the file's fixed one. */
+.ins-guide-suggest .ins-chip-ai,
+.ins-guide-example .ins-chip-ai {
+  display: block;
+  width: 15px;
+  height: 15px;
+  background-color: currentColor;
+  -webkit-mask: url('/ASSET/Icons/ai-chip.svg') center / contain no-repeat;
+  mask: url('/ASSET/Icons/ai-chip.svg') center / contain no-repeat;
 }
 
 /* The visitor's guide panel: full-height on the right over a dimmed page, a
@@ -7957,8 +8161,8 @@ select.ins-input {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 8px 28px 24px;
+  gap: 4px;
+  padding: 8px 28px 20px;
   text-align: center;
 }
 
@@ -7976,58 +8180,125 @@ select.ins-input {
 
 .ins-guide-hi {
   margin: 0;
-  font-size: 22px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--ins-sub);
+  color: #6b6f7a;
+}
+
+.ins-guide-wave {
+  display: inline-block;
+  font-size: 1em;
+  line-height: 1;
 }
 
 .ins-guide-title {
   margin: 0;
-  font-size: 22px;
+  font-size: 21px;
   line-height: 1.25;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+  color: #0b0c0e;
 }
 
 .ins-guide-sub {
-  margin: 8px 0 14px;
-  max-width: 340px;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--ins-sub);
+  margin: 8px 0 22px;
+  max-width: 280px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #6b6f7a;
 }
 
-.ins-guide-chips {
+.ins-guide-examples {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 330px;
 }
 
-.ins-guide-chip {
-  display: inline-flex;
+.ins-guide-examples-label {
+  margin-bottom: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-align: left;
+  color: #9a9ca3;
+}
+
+.ins-guide-example {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 14px;
-  border: 1px solid var(--ins-border);
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 14px;
+  border: 0;
   border-radius: 12px;
-  background: var(--ins-card);
-  color: var(--ins-text);
+  background: #f9fafb;
+  color: #0b0c0e;
   font: inherit;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: left;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  transition: transform var(--ins-fast) var(--ins-ease), box-shadow var(--ins-fast) var(--ins-ease);
+  transition: background 140ms var(--ins-ease);
 }
 
-.ins-guide-chip:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.09);
+.ins-guide-example > .ins-chip-ai {
+  flex: none;
+  color: #9a9ca3;
+  transition: transform 140ms var(--ins-ease), color 140ms var(--ins-ease);
 }
 
-.ins-guide-chip-icon {
-  display: inline-flex;
+.ins-guide-example:hover:not(:disabled) {
+  background: #f1f2f4;
+}
+
+.ins-guide-example:hover:not(:disabled) > .ins-chip-ai {
+  color: #0b0c0e;
+  transform: translateX(2px);
+}
+
+.ins-guide-example:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ins-guide-example:focus-visible {
+  outline: 2px solid rgba(11, 12, 14, 0.4);
+  outline-offset: 2px;
+  box-shadow: none;
+  border-radius: 12px;
+}
+
+/* The welcome screen settles in piece by piece. */
+.ins-guide-welcome > * {
+  animation: insGuideIn 340ms var(--ins-ease) both;
+}
+
+.ins-guide-welcome > :nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.ins-guide-welcome > :nth-child(3) {
+  animation-delay: 110ms;
+}
+
+.ins-guide-welcome > :nth-child(4) {
+  animation-delay: 160ms;
+}
+
+.ins-guide-welcome > :nth-child(5) {
+  animation-delay: 230ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-guide-welcome > * {
+    animation: none;
+  }
 }
 
 .ins-guide-thread {
@@ -8047,17 +8318,19 @@ select.ins-input {
   gap: 0;
 }
 
-/* The guide: a white, lightly bordered bubble on the left. */
+/* The guide: a very light grey bubble on the left. Its text colour is fixed
+   so it stays readable on its own fill in both themes. */
 .ins-guide .ins-chat-msg--assistant {
   align-self: flex-start;
   width: fit-content;
   max-width: 90%;
   gap: 10px;
   padding: 14px 16px;
-  border: 1px solid var(--ins-border);
-  border-radius: 12px;
-  background: var(--ins-card);
-  color: var(--ins-text);
+  border: 0;
+  box-shadow: none;
+  border-radius: 14px;
+  background: #f9fafb;
+  color: #0b0c0e;
   font-size: 15px;
   line-height: 1.5;
 }
@@ -8066,14 +8339,173 @@ select.ins-input {
   margin: 0;
 }
 
-/* The visitor: a soft grey bubble on the right. */
+/* Room under a visitor's message for the hover toolbar that hangs below it. */
+.ins-guide .ins-chat:has(.ins-guide-tools) {
+  margin-bottom: 8px;
+}
+
+/* New messages ease in; the streamed words inside one don't re-trigger it. */
+.ins-guide .ins-chat {
+  animation: insGuideIn 220ms var(--ins-ease) both;
+}
+
+@keyframes insGuideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-guide .ins-chat,
+  .ins-guide,
+  .ins-guide-backdrop,
+  .ins-guide-nudge {
+    animation: none;
+  }
+}
+
+.ins-guide .ins-chat-msg--assistant .ins-guide-card {
+  background: #fff;
+}
+
+.ins-guide .ins-chat-msg--assistant.is-error {
+  background: #fef2f2;
+}
+
+/* Once the guide has taken the visitor somewhere there is no dimming, so the
+   panel reads as a floating assistant rather than a modal. */
+.ins-guide.is-floating {
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.22), 0 2px 8px -2px rgba(0, 0, 0, 0.1);
+}
+
+/* The button gives a small bounce and a ring each time the guide calls out. */
+.ins-dock-user.is-calling {
+  animation: insGuideCall 1100ms var(--ins-ease) 1;
+}
+
+@keyframes insGuideCall {
+  0% {
+    transform: translateY(0);
+    box-shadow: 0 8px 12px rgba(0, 0, 0, 0.22), 0 0 0 0 rgba(11, 12, 14, 0.3);
+  }
+  22% {
+    transform: translateY(-7px);
+  }
+  44% {
+    transform: translateY(0);
+  }
+  62% {
+    transform: translateY(-3px);
+  }
+  80% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(0);
+    box-shadow: 0 8px 12px rgba(0, 0, 0, 0.22), 0 0 0 18px rgba(11, 12, 14, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-dock-user.is-calling {
+    animation: none;
+  }
+}
+
+/* The guide calls out above its button — a different line each time. */
+.ins-guide-nudge {
+  position: fixed;
+  right: 20px;
+  bottom: 86px;
+  z-index: 75;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 4px 4px;
+  border: 1px solid var(--ins-border);
+  border-radius: 12px;
+  background: var(--ins-card);
+  color: var(--ins-text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  animation: insToastIn 220ms var(--ins-ease);
+}
+
+.ins-guide-nudge::after {
+  content: '';
+  position: absolute;
+  right: 22px;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  border: solid var(--ins-border);
+  border-width: 0 1px 1px 0;
+  background: var(--ins-card);
+  transform: rotate(45deg);
+}
+
+.ins-guide-nudge-text {
+  padding: 8px 6px 8px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ins-guide-nudge-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ins-sub);
+  cursor: pointer;
+}
+
+.ins-guide-nudge-close:hover {
+  background: var(--ins-hover);
+}
+
+.ins-guide-nudge.is-beside-admin {
+  right: 87px;
+}
+
+body:has(aside.ins-dock:not(.ins-dock-user)) .ins-guide-nudge.is-beside-admin {
+  right: 432px;
+}
+
+body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-admin {
+  right: 592px;
+}
+
+@media (max-width: 900px) {
+  .ins-guide-nudge,
+  .ins-guide-nudge.is-beside-admin,
+  body:has(aside.ins-dock:not(.ins-dock-user)) .ins-guide-nudge.is-beside-admin,
+  body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-admin {
+    right: 12px;
+    bottom: 76px;
+  }
+}
+
+/* The visitor: a black bubble on the right, its top-right corner squared. */
 .ins-guide .ins-chat-msg--user {
   align-self: flex-end;
   max-width: 86%;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: var(--ins-card-alt);
-  color: var(--ins-text);
+  padding: 14px 18px;
+  border-radius: 14px 2px 14px 14px;
+  background: #000;
+  color: #fff;
   font-size: 15px;
   line-height: 1.5;
 }
@@ -8134,13 +8566,13 @@ select.ins-input {
 .ins-guide-tools {
   position: absolute;
   right: 12px;
-  bottom: -14px;
-  z-index: 1;
+  bottom: -26px;
+  z-index: 20;
   display: flex;
   gap: 2px;
   padding: 4px 6px;
   border-radius: 10px;
-  background: #0b0c0e;
+  background: #1e1e1e;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
   opacity: 0;
   pointer-events: none;
@@ -8175,6 +8607,14 @@ select.ins-input {
   pointer-events: auto;
 }
 
+/* Every message is its own stacking context (the entrance animation sees to
+   that), so the toolbar's own z-index can't lift it over the next message —
+   the whole hovered message has to rise instead. */
+.ins-guide .ins-chat:hover,
+.ins-guide .ins-chat:focus-within {
+  z-index: 10;
+}
+
 @media (hover: none) {
   .ins-guide-tools {
     opacity: 1;
@@ -8185,47 +8625,311 @@ select.ins-input {
 .ins-guide-composer {
   flex: none;
   margin: 0 16px 16px;
-  border: 1px solid var(--ins-border);
-  border-radius: 20px;
-  background: var(--ins-card);
+  border: 1px solid #e6e7ea;
+  border-radius: 22px;
+  background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   overflow: hidden;
 }
 
 .ins-guide-composer:focus-within {
-  border-color: color-mix(in srgb, var(--ins-text) 10%, var(--ins-border));
+  border-color: color-mix(in srgb, var(--ins-text) 10%, #e6e7ea);
 }
 
-.ins-guide-composer-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 14px 14px 16px;
-  color: var(--ins-sub);
-}
-
-.ins-guide-composer-row input {
-  flex: 1 1 auto;
-  min-width: 0;
+.ins-guide-composer input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 18px 20px 6px;
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--ins-text);
+  color: #0b0c0e;
   font: inherit;
-  font-size: 15px;
+  font-size: 16px;
 }
 
 /* Overrides the app-wide :focus-visible ring (inspirations.css:234) — the
    composer card's own border already shows where focus is. */
-.ins-guide-composer-row input:focus-visible {
+.ins-guide-composer input:focus-visible {
   outline: none;
   box-shadow: none;
   border-radius: 0;
 }
 
-.ins-guide-composer-row input::placeholder {
-  color: var(--ins-sub);
-  opacity: 0.8;
+.ins-guide-composer input::placeholder {
+  color: #b3b6bd;
+}
+
+.ins-guide-composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px 12px 14px;
+}
+
+/* "Esc to close" as a keyboard-shortcut hint, which also closes when clicked.
+   Touch screens have no Esc key, so it is hidden there. */
+.ins-guide-esc {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #6b6f7a;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ins-guide-esc:hover {
+  background: #f4f5f7;
+  color: #0b0c0e;
+}
+
+.ins-guide-esc kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  padding: 3px 7px 4px;
+  border-radius: 6px;
+  background: #f6f7f9;
+  box-shadow: 0 0 0 1px #dcdee2, 0 1px 0 1px #dcdee2;
+  color: #4f535e;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+@media (hover: none) {
+  .ins-guide-esc {
+    display: none;
+  }
+}
+
+/* The chat history screen: saved conversations as a quiet list. */
+.ins-guide-history {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px 16px;
+}
+
+.ins-guide-history-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.ins-guide-history-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #0b0c0e;
+}
+
+.ins-guide-link {
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b6f7a;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.ins-guide-link:hover {
+  color: #0b0c0e;
+  background: #f4f5f7;
+}
+
+.ins-guide-history-empty {
+  margin: 18px 4px 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #6b6f7a;
+}
+
+.ins-guide-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ins-guide-history-list li {
+  display: flex;
+  align-items: stretch;
+  border-radius: 12px;
+  background: #f9fafb;
+  transition: background 140ms var(--ins-ease);
+}
+
+.ins-guide-history-list li:hover,
+.ins-guide-history-list li:focus-within {
+  background: #f1f2f4;
+}
+
+.ins-guide-history-list li.is-current {
+  box-shadow: inset 0 0 0 1px #d9dbe0;
+}
+
+.ins-guide-history-item {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px 6px 12px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #0b0c0e;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ins-guide-history-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.ins-guide-history-meta {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: #6b6f7a;
+}
+
+.ins-guide-history-del {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  border: 0;
+  border-radius: 0 12px 12px 0;
+  background: transparent;
+  color: #9a9ca3;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms var(--ins-ease), color 140ms var(--ins-ease);
+}
+
+.ins-guide-history-list li:hover .ins-guide-history-del,
+.ins-guide-history-list li:focus-within .ins-guide-history-del,
+.ins-guide-history-del:focus-visible {
+  opacity: 1;
+}
+
+.ins-guide-history-del:hover {
+  color: #dc2626;
+}
+
+@media (hover: none) {
+  .ins-guide-history-del {
+    opacity: 1;
+  }
+}
+
+/* One keyboard-focus ring for the guide's controls — a dark outline set off
+   from the control — in place of the app-wide blue glow, which clashes with the
+   guide's quiet greys. Chips, New chat and Back already carry their own copy. */
+.ins-guide-history-item:focus-visible,
+.ins-guide-history-del:focus-visible,
+.ins-guide-link:focus-visible,
+.ins-guide-esc:focus-visible,
+.ins-guide-send:focus-visible,
+.ins-guide-example:focus-visible,
+.ins-guide-card.is-link:focus-visible {
+  outline: 2px solid rgba(11, 12, 14, 0.4);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.ins-guide-history-item:focus-visible {
+  border-radius: 12px;
+}
+
+.ins-guide-history-del:focus-visible {
+  border-radius: 8px;
+  opacity: 1;
+}
+
+.ins-guide-send:focus-visible {
+  border-radius: 999px;
+}
+
+.ins-guide-card.is-link:focus-visible {
+  border-radius: 14px;
+}
+
+/* The line beside the typing dots when a reply is slow to arrive. */
+.ins-guide-slow {
+  margin-left: 8px;
+  font-size: 13px;
+  color: #6b6f7a;
+}
+
+.ins-guide .ins-chat-msg.is-typing {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+/* "New chat", at the top of a conversation. */
+.ins-guide-newchat,
+.ins-guide-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px 1px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #e4e5e8;
+  color: #0b0c0e;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 140ms var(--ins-ease), box-shadow 140ms var(--ins-ease);
+}
+
+.ins-guide-newchat:hover:not(:disabled),
+.ins-guide-back:hover:not(:disabled) {
+  background: #f6f7f9;
+  box-shadow: 0 0 0 1px #cfd1d6;
+}
+
+.ins-guide-newchat:focus-visible,
+.ins-guide-back:focus-visible {
+  outline: 2px solid rgba(11, 12, 14, 0.4);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px #e4e5e8;
+  border-radius: 999px;
+}
+
+.ins-guide-newchat:disabled,
+.ins-guide-back:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .ins-guide-send {
@@ -8233,29 +8937,24 @@ select.ins-input {
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 34px;
-  height: 34px;
+  margin-left: auto;
+  width: 38px;
+  height: 38px;
   border: 0;
   border-radius: 999px;
-  background: var(--ins-text);
-  color: var(--ins-card);
+  background: #0b0c0e;
+  color: #fff;
   cursor: pointer;
+  transition: transform 140ms var(--ins-ease), opacity 140ms var(--ins-ease);
+}
+
+.ins-guide-send:hover:not(:disabled) {
+  transform: scale(1.06);
 }
 
 .ins-guide-send:disabled {
   opacity: 0.28;
   cursor: default;
-}
-
-.ins-guide-composer-foot {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
-  border-top: 1px solid var(--ins-border);
-  background: var(--ins-card-alt);
-  font-size: 12px;
-  color: var(--ins-sub);
 }
 
 @keyframes insFadeIn {
@@ -8269,9 +8968,9 @@ select.ins-input {
 
 @media (max-width: 640px) {
   .ins-guide {
-    top: 8px;
-    right: 8px;
-    bottom: 8px;
+    top: max(8px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
     width: calc(100vw - 16px);
     border-radius: 12px;
   }

@@ -14,8 +14,8 @@ import type { App, ScreenType } from './types';
 
 /** A button: a link to go to, or (with `ask`) a follow-up question to send as if typed. */
 export type NavTarget = { label: string; hint: string; href: string; iconSrc?: string; ask?: string };
-export type NavCard = { title: string; iconSrc?: string; facts: string[] };
-export type NavReply = { text: string; targets: NavTarget[]; go?: NavTarget; card?: NavCard; app?: App };
+export type NavCard = { title: string; iconSrc?: string; facts: string[]; href?: string };
+export type NavReply = { text: string; targets: NavTarget[]; go?: NavTarget; card?: NavCard; app?: App; error?: boolean };
 export type NavContext = { app: App | null };
 
 const PAGES: { keys: string[]; target: NavTarget }[] = [
@@ -169,16 +169,31 @@ export async function resolveNavigation(raw: string, context?: NavContext): Prom
   if (page) return { text: pick([`Opening ${page.target.label}.`, `Taking you to ${page.target.label}.`, `Here’s ${page.target.label}.`]), targets: [], go: page.target };
 
   let apps: App[] = [];
+  let unreachable = false;
   try {
     apps = await inspirationsApi.listApps();
   } catch {
-    // Offline or the library is unreachable — name matching below still tries suggestions.
+    unreachable = true;
   }
 
   const lower = original.toLowerCase();
   const asksCount = /\bhow (many|much)\b|\b(count|number of|total)\b/.test(lower);
   const section = findSection(lower);
   const screenType = findScreenType(lower);
+
+  // Pages and screen-type links need no data, so they still work offline;
+  // everything else looks something up and has nothing to look it up in.
+  if (unreachable) {
+    if (screenType && !asksCount) {
+      const go: NavTarget = { label: `${screenType.label} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` };
+      return { text: `Showing ${screenType.label.toLowerCase()} screens.`, targets: [], go };
+    }
+    return {
+      text: 'I can’t reach the library right now. Check your connection and try again.',
+      targets: [{ label: 'Try again', hint: 'Retry', href: '', ask: original }],
+      error: true,
+    };
+  }
   let mentioned = findApps(lower, apps);
   // "its flows", "how many screens does it have" — the app from the last answer.
   if (!mentioned.length && context?.app && REFERS_BACK.test(lower) && (section || asksCount || screenType)) mentioned = [context.app];
@@ -208,7 +223,7 @@ export async function resolveNavigation(raw: string, context?: NavContext): Prom
       return {
         text: `${app.name} has ${parts.join(' and ')}.`,
         targets: [appTarget(app), ...followUps(app, 'count').slice(0, 2)],
-        card: { title: app.name, iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined, facts: [plural(app.screenCount, 'screen'), plural(app.flowCount, 'flow')] },
+        card: { title: app.name, iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined, facts: [plural(app.screenCount, 'screen'), plural(app.flowCount, 'flow')], href: INSPIRATIONS_ROUTES.app(app) },
         app,
       };
     }

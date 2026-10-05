@@ -23,6 +23,7 @@ vi.mock('./api', () => {
   };
 });
 
+import { inspirationsApi } from './api';
 import { resolveNavigation } from './navAssistant';
 
 const ask = (text: string, app: Parameters<typeof resolveNavigation>[1] = undefined) => resolveNavigation(text, app);
@@ -135,6 +136,38 @@ describe('remembering the last app', () => {
 
   it('does not invent an app when nothing was said before', async () => {
     expect((await ask('how many flows does it have', { app: null })).text).not.toMatch(/Swiggy|Zomato/);
+  });
+});
+
+describe('when the library cannot be reached', () => {
+  const fail = () => vi.mocked(inspirationsApi.listApps).mockRejectedValueOnce(new Error('network'));
+
+  it('says so and offers to retry the same question', async () => {
+    fail();
+    const reply = await ask('how many screens does swiggy have');
+    expect(reply.error).toBe(true);
+    expect(reply.go).toBeUndefined();
+    expect(reply.text).toMatch(/can’t reach the library/);
+    expect(reply.targets[0]).toMatchObject({ label: 'Try again', ask: 'how many screens does swiggy have' });
+  });
+
+  it('still opens pages, which need no data', async () => {
+    expect((await ask('show flows')).go?.href).toBe('/inspirations/flows');
+  });
+
+  it('still opens a screen-type page, which needs no data', async () => {
+    fail();
+    expect((await ask('login screens')).go?.href).toBe('/inspirations/screens?type=login');
+  });
+
+  it('does not report an error for small talk', async () => {
+    expect((await ask('hello')).error).toBeUndefined();
+  });
+});
+
+describe('answer cards', () => {
+  it('links a count answer’s card to the app', async () => {
+    expect((await ask('how many screens does swiggy have')).card?.href).toBe('/inspirations/app/swiggy');
   });
 });
 
