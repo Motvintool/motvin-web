@@ -164,14 +164,19 @@ export function AudioMenu() {
                     aria-label={`${isPlaying ? 'Pause' : 'Play'} ${station.name}`}
                     onClick={(e) => toggleStation(station.name, station.src, e)}
                   >
-                    <span className="ins-tune-art"><station.Icon size={20} /></span>
-                    <span className="ins-tune-name">{station.name}</span>
+                    <span className="ins-tune-art"><station.Icon size={22} /></span>
+                    <span className="ins-tune-text">
+                      <span className="ins-tune-name">{station.name}</span>
+                      <span className="ins-tune-meta">
+                        {isPlaying ? (
+                          <><span className="ins-tune-eq" aria-hidden><i /><i /><i /><i /></span>Playing now</>
+                        ) : (
+                          `${Number(station.listeners).toLocaleString('en-US')} active listeners`
+                        )}
+                      </span>
+                    </span>
                     <span className="ins-tune-ctl" aria-hidden>
-                      {isPlaying ? (
-                        <><span className="ins-tune-eq"><i /><i /><i /><i /></span><PauseIcon size={11} /></>
-                      ) : (
-                        <PlayIcon size={11} />
-                      )}
+                      {isPlaying ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
                     </span>
                   </button>
                 </li>
