@@ -32,7 +32,7 @@ const MAX_BYTES = 2 * 1024 * 1024 * 1024;
 /** Extensions the crawler recognises as a recording. */
 const VIDEO_EXT = new Set(['mov', 'mp4', 'm4v', 'avi', 'mkv']);
 
-export type { IngestEvent, IngestResult, IngestScreen } from '@/lib/inspirations/ingestJobs';
+export type { IngestEvent, IngestResult, IngestScreen } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 
 export async function POST(request: Request) {
   const admin = await verifyAdmin(request);

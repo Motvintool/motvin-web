@@ -7,8 +7,8 @@ import { LibrarySync } from './LibrarySync';
 import { ScreenPreviewOverlay } from './ScreenPreviewModal';
 import { ToastProvider } from './Toast';
 import { AdminDrawerOverlay } from './admin/AdminDrawer';
-import { IngestDock } from './admin/IngestDock';
-import { UserDock } from './UserDock';
+import { AdminChatbot } from './admin/AdminChatbot';
+import { UserChatbot } from './UserChatbot';
 
 function InspirationsHeaderSkeleton() {
   return (
@@ -68,10 +68,10 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
         </Suspense>
         {/* The library owner's running video ingest, on whichever page they
             are on. Renders nothing for everyone else. */}
-        <IngestDock />
+        <AdminChatbot />
         {/* The visitor's guide: navigation only, shown to everyone — beside the
             admin dock for the owner. */}
-        <UserDock />
+        <UserChatbot />
       </div>
     </ToastProvider>
   );

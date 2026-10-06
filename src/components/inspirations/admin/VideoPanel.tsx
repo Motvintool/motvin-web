@@ -16,11 +16,11 @@ import {
   startIngest,
   useIngestJobs,
   type IngestJob,
-} from '@/lib/inspirations/ingestJobs';
+} from '@/lib/inspirations/admin-chatbot/ingestJobs';
 import { CheckIcon, CloseIcon, UploadIcon } from '../Icons';
-import { ReviewGrid } from './IngestDock';
+import { ReviewGrid } from './AdminChatbot';
 import { AppModeSelect } from './AppModeSelect';
-import { IngestSummary, interimResult } from './IngestSummary';
+import { AdminChatbotIngestSummary, interimResult } from './AdminChatbotIngestSummary';
 
 /**
  * Turn a screen recording into screens. One action, no form.
@@ -321,7 +321,7 @@ export function VideoPanel({ state, busy, onIngested }: { state: AdminState; bus
       )}
 
       {shown && (
-        <IngestSummary result={shown} writing={latest?.status === 'running'} logoState={logoState} onPickLogo={() => logoRef.current?.click()} />
+        <AdminChatbotIngestSummary result={shown} writing={latest?.status === 'running'} logoState={logoState} onPickLogo={() => logoRef.current?.click()} />
       )}
 
       {shown && (

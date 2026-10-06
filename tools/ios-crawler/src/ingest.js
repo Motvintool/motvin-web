@@ -802,7 +802,7 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
  * is dropped is not a newly-discovered screen — it is the exact same screen
  * the segmenter already identified, just a clearer raw sample of it (the
  * review grid's own "pick the most complete duplicate" default, in
- * IngestDock.tsx). Handled as an ordinary recovery it would come back under
+ * AdminChatbot.tsx). Handled as an ordinary recovery it would come back under
  * its own new id with none of the original's edges, overlay/revisit links,
  * or classification hints: a disconnected node the flow graph has never
  * heard of, even though it sits exactly where the original did in the walk

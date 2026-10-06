@@ -1,6 +1,6 @@
-import type { AiStatus, IngestJob } from '@/lib/inspirations/ingestJobs';
-import { INGEST_STAGES, platformIn, stageIndex } from '@/lib/inspirations/ingestJobs';
-import { describeOp, isDestructive, labelFor, type AdminOp, type AssistantAction, type Expect } from '@/lib/inspirations/assistantActions';
+import type { AiStatus, IngestJob } from '@/lib/inspirations/admin-chatbot/ingestJobs';
+import { INGEST_STAGES, platformIn, stageIndex } from '@/lib/inspirations/admin-chatbot/ingestJobs';
+import { describeOp, isDestructive, labelFor, type AdminOp, type AssistantAction, type Expect } from '@/lib/inspirations/admin-chatbot/assistantActions';
 import { askModel, cachedAiStatus } from '@/lib/server/ai';
 import { backendBase } from '@/lib/server/adminAuth';
 import { listJobs } from '@/lib/server/ingestJobs';

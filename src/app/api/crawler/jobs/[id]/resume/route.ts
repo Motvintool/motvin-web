@@ -1,6 +1,6 @@
 import { fail, verifyAdmin } from '@/lib/server/adminAuth';
 import { resumeJob } from '@/lib/server/ingestJobs';
-import type { ReviewDecision } from '@/lib/inspirations/ingestJobs';
+import type { ReviewDecision } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 
 /**
  * POST /api/crawler/jobs/:id/resume — the admin's answer to a run that

@@ -1,6 +1,6 @@
-import { inspirationsApi } from './api';
-import { elementLabel, flowCategoryLabel, INDUSTRY_LABEL, SCREEN_STATE_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from './taxonomy';
-import type { App, Flow, LibraryMeta, Pattern } from './types';
+import { inspirationsApi } from '../api';
+import { elementLabel, flowCategoryLabel, INDUSTRY_LABEL, SCREEN_STATE_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from '../taxonomy';
+import type { App, Flow, LibraryMeta, Pattern } from '../types';
 
 /**
  * Everything the guide can name, loaded once and kept warm: the apps, flows,

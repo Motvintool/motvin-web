@@ -18,11 +18,8 @@ function base({ size = 16, ...rest }: IconProps) {
   };
 }
 
-const HeadphonesIcon = (p: IconProps) => (
-  <svg {...base(p)}><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3v4z"></path><path d="M3 19a2 2 0 0 0 2 2h1v-6H3v4z"></path></svg>
-);
 const TreeIcon = (p: IconProps) => (
-  <svg {...base(p)}><path d="M12 22v-8"/><path d="M12 14c-4 0-5-3-5-3s1-2 3-2-2-4-2-4 2.5-1 4-1 4 1 4 1-2 2 0 4 3 2 3 2-1 3-5 3z"/></svg>
+  <svg {...base(p)}><path d="M12 3 7 10h3l-4 6h12l-4-6h3z"/><path d="M12 16v5"/></svg>
 );
 const CloudRainIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M16 14v6"/><path d="M8 14v6"/><path d="M12 16v6"/></svg>
@@ -45,16 +42,24 @@ const AudioBarsIcon = (p: IconProps) => (
   </svg>
 );
 
+const VolumeLowIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9.5a4 4 0 0 1 0 5"/></svg>
+);
+const VolumeHighIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9.5a4 4 0 0 1 0 5"/><path d="M18.5 6.5a8 8 0 0 1 0 11"/></svg>
+);
+
 const STATIONS = [
-  { name: 'Rain Forest', listeners: '8334', Icon: TreeIcon, src: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_514802c002.mp3?filename=rain-forest-birds-10145.mp3' },
-  { name: 'Monsoon Days', listeners: '7360', Icon: CloudRainIcon, src: 'https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=heavy-rain-nature-sounds-8186.mp3' },
-  { name: 'Office Hours', listeners: '4218', Icon: BriefcaseIcon, src: 'https://cdn.pixabay.com/download/audio/2022/11/26/audio_27ab08fca8.mp3?filename=office-ambience-6322.mp3' },
-  { name: 'Lo-Fi Focus', listeners: '6977', Icon: MusicIcon, src: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf7f6.mp3?filename=lofi-study-112191.mp3' },
+  { name: 'Rain Forest', listeners: '8334', Icon: TreeIcon, tint: '#3f9d73', src: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_514802c002.mp3?filename=rain-forest-birds-10145.mp3' },
+  { name: 'Monsoon Days', listeners: '7360', Icon: CloudRainIcon, tint: '#4b86c8', src: 'https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=heavy-rain-nature-sounds-8186.mp3' },
+  { name: 'Office Hours', listeners: '4218', Icon: BriefcaseIcon, tint: '#c98f3a', src: 'https://cdn.pixabay.com/download/audio/2022/11/26/audio_27ab08fca8.mp3?filename=office-ambience-6322.mp3' },
+  { name: 'Lo-Fi Focus', listeners: '6977', Icon: MusicIcon, tint: '#8a63c9', src: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf7f6.mp3?filename=lofi-study-112191.mp3' },
 ];
 
 export function AudioMenu() {
   const [open, setOpen] = useState(false);
   const [playing, setPlaying] = useState<string | null>(null);
+  const [volume, setVolume] = useState(0.7);
   const ref = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
@@ -65,6 +70,24 @@ export function AudioMenu() {
     };
     document.addEventListener('pointerdown', onDown);
     return () => document.removeEventListener('pointerdown', onDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = volume;
+  }, [volume]);
+
+  // Closing the panel (X, Escape, outside click, header toggle) stops playback.
+  useEffect(() => {
+    if (open) return;
+    setPlaying(null);
+    audioRef.current?.pause();
   }, [open]);
 
   // Clean up audio on unmount
@@ -117,70 +140,62 @@ export function AudioMenu() {
       </button>
 
       {open && (
-        <div 
-          className="ins-popover ins-popover--right" 
-          role="menu" 
-          aria-label="Tune In" 
-          style={{ width: '360px', padding: '16px 12px', minWidth: '360px' }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', padding: '0 8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <HeadphonesIcon size={20} stroke="#666" />
-              <h3 style={{ margin: 0, fontSize: '18px', fontFamily: 'Outfit, sans-serif', fontWeight: 600 }}>Tune In</h3>
+        <div className="ins-popover ins-popover--right ins-tune" role="dialog" aria-label="Tune In">
+          <div className="ins-tune-head">
+            <div className="ins-tune-titles">
+              <h3 className="ins-tune-title">Tune In</h3>
+              <p className="ins-tune-sub">{playing ? `Playing ${playing}` : 'Ambient sound while you browse'}</p>
             </div>
-            <button 
-              type="button" 
-              onClick={() => setOpen(false)}
-              style={{ background: 'transparent', border: 0, cursor: 'pointer', padding: '4px', color: '#666', display: 'flex' }}
-            >
-              <CloseIcon size={18} />
+            <button type="button" className="ins-tune-close" aria-label="Close" onClick={() => setOpen(false)}>
+              <CloseIcon size={14} />
             </button>
           </div>
 
-          <div className="ins-popover-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: 'none' }}>
+          <ul className="ins-tune-list">
             {STATIONS.map((station) => {
               const isPlaying = playing === station.name;
-              
               return (
-                <button
-                  key={station.name}
-                  type="button"
-                  className="ins-popover-item"
-                  role="menuitem"
-                  style={{ 
-                    padding: '12px', 
-                    gap: '16px', 
-                    borderRadius: '16px',
-                    background: isPlaying ? 'rgba(0,0,0,0.04)' : 'transparent'
-                  }}
-                  onClick={(e) => toggleStation(station.name, station.src, e)}
-                >
-                  <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: isPlaying ? '#EBEBEB' : '#F8F7F5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6E675F', flexShrink: 0 }}>
-                    <station.Icon size={20} />
-                  </div>
-                  <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
-                    <div style={{ fontSize: '16px', fontWeight: 500, color: '#111', marginBottom: '4px', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{station.name}</div>
-                    <div style={{ fontSize: '12px', color: isPlaying ? '#444' : '#777', fontFamily: 'Inter, sans-serif' }}>
-                      {isPlaying ? 'Playing now...' : `${station.listeners} active listeners`}
-                    </div>
-                  </div>
-                  <div style={{ 
-                    width: '36px', 
-                    height: '36px', 
-                    borderRadius: '12px', 
-                    background: isPlaying ? '#EBEBEB' : '#F5F5F5', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    color: '#666', 
-                    flexShrink: 0 
-                  }}>
-                    {isPlaying ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
-                  </div>
-                </button>
+                <li key={station.name}>
+                  <button
+                    type="button"
+                    className={`ins-tune-row ${isPlaying ? 'is-playing' : ''}`}
+                    style={{ ['--tint' as string]: station.tint }}
+                    aria-pressed={isPlaying}
+                    aria-label={`${isPlaying ? 'Pause' : 'Play'} ${station.name}`}
+                    onClick={(e) => toggleStation(station.name, station.src, e)}
+                  >
+                    <span className="ins-tune-art"><station.Icon size={20} /></span>
+                    <span className="ins-tune-name">{station.name}</span>
+                    <span className="ins-tune-ctl" aria-hidden>
+                      {isPlaying ? (
+                        <><span className="ins-tune-eq"><i /><i /><i /><i /></span><PauseIcon size={11} /></>
+                      ) : (
+                        <PlayIcon size={11} />
+                      )}
+                    </span>
+                  </button>
+                </li>
               );
             })}
-          </div>
+          </ul>
+
+          {playing && (
+            <div className="ins-tune-vol-wrap">
+              <VolumeLowIcon size={14} />
+              <input
+                type="range"
+                className="ins-tune-vol"
+                min={0}
+                max={1}
+                step={0.01}
+                value={volume}
+                aria-label="Volume"
+                onChange={(e) => setVolume(Number(e.target.value))}
+                style={{ ['--fill' as string]: `${Math.round(volume * 100)}%` }}
+              />
+              <VolumeHighIcon size={14} />
+            </div>
+          )}
         </div>
       )}
     </div>

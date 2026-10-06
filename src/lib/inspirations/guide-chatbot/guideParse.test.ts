@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { findElements, findFlowCategory, findNegations, findNumberFilter, findOrdinal, findPatterns, findStates, findStyles, findTopN, matchesNumber, sentenceForm, splitIntents, withoutNegations } from './guideParse';
-import type { Pattern } from './types';
+import { findElements, stripElements, findFlowCategory, findNegations, findNumberFilter, findOrdinal, findPatterns, findStates, findStyles, findTopN, matchesNumber, sentenceForm, splitIntents, withoutNegations } from './guideParse';
+import type { Pattern } from '../types';
 
 describe('sentenceForm', () => {
   it.each([
@@ -74,6 +74,8 @@ describe('findElements', () => {
     ['call to action buttons', ['cta', 'button']],
     ['filter chips', ['chip']],
     ['carousels', ['carousel']],
+    ['btn', ['button']],
+    ['primary btns', ['button']],
   ])('%s', (text, expected) => {
     expect(findElements(text, kinds).sort()).toEqual([...expected].sort());
   });
@@ -229,5 +231,13 @@ describe('splitIntents', () => {
 
   it('caps at three parts', () => {
     expect(splitIntents('open a, then open b, then open c, then open d')).toHaveLength(3);
+  });
+});
+
+describe('stripElements', () => {
+  it('takes the named components out, so a screen type inside one is not read twice', () => {
+    expect(stripElements('screens with search bar', ['search-bar'])).toBe('screens with');
+    expect(stripElements('show me nav bars and tab bars', ['nav-bar', 'tab-bar'])).toBe('show me and');
+    expect(stripElements('login screens', [])).toBe('login screens');
   });
 });

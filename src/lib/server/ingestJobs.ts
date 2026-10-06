@@ -4,7 +4,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import type { IngestEvent, IngestJob, IngestResult, ReviewDecision } from '@/lib/inspirations/ingestJobs';
+import type { IngestEvent, IngestJob, IngestResult, ReviewDecision } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 
 const execFileAsync = promisify(execFile);
 

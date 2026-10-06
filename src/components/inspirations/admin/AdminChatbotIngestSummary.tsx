@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
-import { clock, type IngestResult, type IngestScreen } from '@/lib/inspirations/ingestJobs';
+import { clock, type IngestResult, type IngestScreen } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 import { fineTypeLabel, screenStateLabel } from '@/lib/inspirations/taxonomy';
 import { CheckIcon, ExternalIcon, UploadIcon } from '../Icons';
 import { SCREEN_PARAM } from '../ScreenPreviewModal';
@@ -39,7 +39,7 @@ export function interimResult(partial: Partial<IngestResult>): IngestResult {
   };
 }
 
-export function IngestSummary({
+export function AdminChatbotIngestSummary({
   result,
   writing,
   logoState,

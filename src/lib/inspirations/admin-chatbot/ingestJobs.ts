@@ -3,7 +3,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { getIdToken } from '@/lib/firebase/auth';
 import { adminApi, safeFileName, type ScreenSidecar } from '@/lib/inspirations/admin';
-import { doneText, isDestructive, labelFor, type AdminOp, type AssistantAction, type ConfirmAction, type Expect } from '@/lib/inspirations/assistantActions';
+import { doneText, isDestructive, labelFor, type AdminOp, type AssistantAction, type ConfirmAction, type Expect } from '@/lib/inspirations/admin-chatbot/assistantActions';
 import { SCREEN_TYPES, type Industry, type Platform, type ScreenType, type Style } from '@/lib/inspirations/types';
 import { invalidateInspirationsCache } from '@/lib/inspirations/api';
 import { qualifyFlowFile, qualifyScreenFile } from '@/lib/inspirations/screenPaths';

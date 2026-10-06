@@ -1,4 +1,4 @@
-import type { AiSettingsInput } from '@/lib/inspirations/ingestJobs';
+import type { AiSettingsInput } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 import { fail, verifyAdmin } from '@/lib/server/adminAuth';
 import { aiStatus, forgetAiStatus, writeSettings } from '@/lib/server/ai';
 import { forgetAgentModel } from '@/lib/server/agent';

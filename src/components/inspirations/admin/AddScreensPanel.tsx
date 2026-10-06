@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
 import type { AdminState } from '@/lib/inspirations/admin';
-import { AiPicker } from './AiPicker';
+import { AdminChatbotAiPicker } from './AdminChatbotAiPicker';
 import { UploadPanel } from './UploadPanel';
 import { VideoPanel } from './VideoPanel';
 
@@ -69,7 +69,7 @@ export function AddScreensPanel({
             ? 'Drop a screen recording — screens, names, types and flows are worked out for you.'
             : 'Already have screenshots? Pick the app, set each one’s type, and upload.'}
         </p>
-        {mode === 'automatic' && <AiPicker admin={admin} align="right" />}
+        {mode === 'automatic' && <AdminChatbotAiPicker admin={admin} align="right" />}
       </div>
 
       {mode === 'automatic' ? (

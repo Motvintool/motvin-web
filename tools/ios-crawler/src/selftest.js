@@ -1039,7 +1039,7 @@ export async function selfTest() {
       // recording (~/Downloads/Airbnb.mp4) where every family's spread
       // between the segmenter's own pick and its best-scoring duplicate
       // was under a point. This is why the admin dock's own re-pick
-      // (IngestDock.tsx, "I'll choose myself") requires a clear margin
+      // (AdminChatbot.tsx, "I'll choose myself") requires a clear margin
       // before swapping away from the segmenter's choice, rather than
       // always taking whichever sample happens to score highest — on a
       // flat or near-flat family (like this one) that would just be

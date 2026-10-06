@@ -222,7 +222,7 @@ body {
   background: none;
   border: 0;
   padding: 0;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 :where(.ins-root, .ins-portal) input,
@@ -440,7 +440,7 @@ body {
   height: 46px;
   flex: none;
   background: transparent;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   border: none;
 }
 
@@ -711,7 +711,7 @@ body {
   appearance: none;
   border: 0;
   background: transparent;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .ins-search-modal-head { position: relative; display: flex; align-items: center; justify-content: space-between; height: 74px; padding: 0 24px; }
@@ -789,7 +789,7 @@ body {
   border: 0;
   background: transparent;
   padding: 0;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   /* Fix WebKit animation bug with overflow:hidden and border-radius */
   transform: translateZ(0);
   -webkit-mask-image: -webkit-radial-gradient(white, black);
@@ -1675,7 +1675,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   font-family: var(--font-outfit), sans-serif;
   font-size: 16px;
   text-align: left;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   text-decoration: none;
   transition: background 0.15s ease;
 }
@@ -1936,7 +1936,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 
 .ins-btn:disabled {
   opacity: 0.5;
-  cursor: not-allowed;
+  cursor: var(--ins-cursor-not-allowed, not-allowed);
 }
 
 .ins-btn.is-active {
@@ -2149,7 +2149,7 @@ select.ins-input {
   border: 0;
   border-left: 2px solid transparent;
   text-decoration: none;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .ins-popover-item:hover {
@@ -2554,7 +2554,7 @@ select.ins-input {
   background: #fff;
   opacity: 0;
   pointer-events: none;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: opacity var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease);
 }
 
@@ -2695,7 +2695,7 @@ select.ins-input {
   border-radius: 100px;
   background: #e5e5e5;
   color: #141414;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   /* .ins-card-hover-controls itself stays pointer-events: none so hovering
      the gradient strip doesn't block the screenshot link beneath it — only
      the two actual buttons need to be clickable. */
@@ -2709,7 +2709,7 @@ select.ins-input {
 
 .ins-card-control:disabled {
   opacity: 0.55;
-  cursor: default;
+  cursor: var(--ins-cursor-arrow, default);
 }
 
 .ins-card-control:disabled:hover {
@@ -2815,7 +2815,7 @@ select.ins-input {
   align-items: center;
   justify-content: center;
   border: 0;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: background 180ms ease, color 180ms ease;
 }
 .ins-btn-save {
@@ -2924,7 +2924,7 @@ select.ins-input {
   align-items: center;
   justify-content: center;
   color: #141414;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: background var(--ins-fast) var(--ins-ease);
 }
 
@@ -2993,7 +2993,7 @@ select.ins-input {
   box-sizing: border-box;
   border: 1px solid #eee;
   border-radius: 12.41% / 5.65%;
-  cursor: zoom-in;
+  cursor: var(--ins-cursor-zoom-in, zoom-in);
   overflow: hidden;
 }
 
@@ -3142,7 +3142,7 @@ select.ins-input {
   border: 1px solid #ccc;
   background: transparent;
   color: #141414;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: border-color var(--ins-fast) var(--ins-ease);
 }
 
@@ -4550,7 +4550,7 @@ select.ins-input {
   background: none;
   border-radius: var(--ins-radius);
   color: var(--ins-border-strong);
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: color var(--ins-fast) var(--ins-ease), transform var(--ins-fast) var(--ins-ease);
 }
 
@@ -4792,7 +4792,7 @@ select.ins-input {
   border-radius: 12.41% / 5.65%;
   overflow: hidden;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-  cursor: zoom-in;
+  cursor: var(--ins-cursor-zoom-in, zoom-in);
   /* Zoom grows this box's own real size (not a `transform: scale()` on its
      content), so a fixed-px border-radius stays a constant 92px at either
      size instead of visually stretching along with it. */
@@ -4806,7 +4806,7 @@ select.ins-input {
 .ins-lightbox-shot.is-zoomed {
   max-width: 125%;
   max-height: calc((100vh - 96px) * 1.25);
-  cursor: zoom-out;
+  cursor: var(--ins-cursor-zoom-out, zoom-out);
 }
 
 .ins-lightbox-shot img {
@@ -5165,7 +5165,7 @@ select.ins-input {
   padding: 10px 10px 10px 24px;
   background-color: #f0f0f0;
   border-radius: 100px;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transform: translateZ(0);
   transition: background-color var(--ins-fast) var(--ins-ease);
 }
@@ -5185,7 +5185,7 @@ select.ins-input {
   opacity: 0;
   transition: opacity var(--ins-fast) var(--ins-ease), background-color var(--ins-fast) var(--ins-ease);
   z-index: 10;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   border: none;
 }
 
@@ -5247,7 +5247,7 @@ select.ins-input {
   padding: 16px 10px 16px 24px;
   border: 1px dashed #cacaca;
   border-radius: 100px;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   overflow: hidden;
   max-height: 100px;
   opacity: 1;
@@ -5329,7 +5329,7 @@ select.ins-input {
   background: #f0f0f0;
   color: #0b0c0e;
   font: 500 16px/1 var(--font-inter), sans-serif;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .ins-float-collection-input {
@@ -5377,7 +5377,7 @@ select.ins-input {
 
 .ins-float-collection-save:disabled {
   opacity: 0.4;
-  cursor: not-allowed;
+  cursor: var(--ins-cursor-not-allowed, not-allowed);
 }
 
 .ins-float-collection-close {
@@ -5523,7 +5523,7 @@ select.ins-input {
   border-radius: 9999px;
   background: var(--ins-tag);
   color: var(--ins-text);
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   z-index: 1;
   transition: background var(--ins-fast) var(--ins-ease);
 }
@@ -5607,7 +5607,7 @@ select.ins-input {
    the one with colour — and it's a button, jumping to the Screens tab. */
 .ins-admin-stat--held {
   background: #fff4e5;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: background var(--ins-fast) var(--ins-ease);
 }
 
@@ -5943,7 +5943,7 @@ select.ins-input {
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.6);
   color: #fff;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .ins-admin-thumb-remove:hover {
@@ -6045,7 +6045,7 @@ select.ins-input {
 
 .ins-dropzone .ins-btn:disabled {
   opacity: 0.5;
-  cursor: not-allowed;
+  cursor: var(--ins-cursor-not-allowed, not-allowed);
 }
 
 /* ── Flow builder ───────────────────────────────────────── */
@@ -6164,7 +6164,7 @@ select.ins-input {
    full. Still readable, clearly not a button for the moment. */
 .ins-flowbuild-tile:disabled:not(.is-selected) {
   opacity: 0.45;
-  cursor: not-allowed;
+  cursor: var(--ins-cursor-not-allowed, not-allowed);
 }
 
 .ins-flowbuild-badge {
@@ -6962,7 +6962,7 @@ select.ins-input {
   background: none;
   border: 0;
   border-radius: var(--ins-radius);
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6999,7 +6999,7 @@ select.ins-input {
   background: none;
   border: 0;
   border-radius: 50%;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .ins-flowtree-toggle:hover {
@@ -7095,7 +7095,7 @@ select.ins-input {
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: background var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease);
 }
 
@@ -7105,7 +7105,7 @@ select.ins-input {
 
 .ins-ai-pill:disabled {
   opacity: 0.6;
-  cursor: default;
+  cursor: var(--ins-cursor-arrow, default);
 }
 
 .ins-ai-pill-text {
@@ -7204,7 +7204,7 @@ select.ins-input {
   background: transparent;
   color: var(--ins-text);
   text-align: left;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: background var(--ins-fast) var(--ins-ease);
 }
 
@@ -7588,7 +7588,7 @@ select.ins-input {
   font-size: 14px;
   font-weight: 600;
   box-shadow: 0 8px 12px rgba(0, 0, 0, 0.22);
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   animation: insToastIn 180ms var(--ins-ease);
 }
 
@@ -7694,13 +7694,13 @@ select.ins-input {
   border-radius: 50%;
   background: #0b0c0e;
   color: #fff;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: opacity var(--ins-fast) var(--ins-ease);
 }
 
 .ins-dock-send:disabled {
   opacity: 0.35;
-  cursor: default;
+  cursor: var(--ins-cursor-arrow, default);
 }
 
 /* While the assistant is writing, the send button becomes a stop button —
@@ -7748,7 +7748,7 @@ select.ins-input {
   color: var(--ins-text);
   font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   text-decoration: none;
   transition: background var(--ins-fast) var(--ins-ease);
 }
@@ -7875,7 +7875,7 @@ select.ins-input {
   font: inherit;
   color: inherit;
   text-align: left;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: background var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease);
 }
 
@@ -7936,7 +7936,7 @@ select.ins-input {
   font-weight: 500;
   line-height: 1;
   text-align: center;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: transform 140ms var(--ins-ease), box-shadow 140ms var(--ins-ease);
   animation: insChipIn 240ms var(--ins-ease) both;
   animation-delay: calc(var(--i, 0) * 45ms);
@@ -7960,7 +7960,7 @@ select.ins-input {
 
 .ins-guide .ins-chip-btn:disabled {
   opacity: 0.55;
-  cursor: default;
+  cursor: var(--ins-cursor-arrow, default);
 }
 
 @keyframes insChipIn {
@@ -8028,7 +8028,7 @@ select.ins-input {
   background: #fff;
   color: #0b0c0e;
   box-shadow: 0 0 0 1px #e4e5e8, 0 4px 10px rgba(11, 12, 14, 0.1);
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: transform 140ms var(--ins-ease);
 }
 
@@ -8159,7 +8159,7 @@ select.ins-input {
   border: 1.2px solid #e4e5e8;
   border-radius: 1000px;
   background: #fff;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: background 140ms var(--ins-ease), border-color 140ms var(--ins-ease);
 }
 
@@ -8288,7 +8288,7 @@ select.ins-input {
   font-weight: 500;
   line-height: 1.35;
   text-align: left;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: background 140ms var(--ins-ease);
 }
 
@@ -8309,7 +8309,7 @@ select.ins-input {
 
 .ins-guide-example:disabled {
   opacity: 0.55;
-  cursor: default;
+  cursor: var(--ins-cursor-arrow, default);
 }
 
 .ins-guide-example:focus-visible {
@@ -8501,7 +8501,7 @@ select.ins-input {
   font: inherit;
   font-size: 14px;
   font-weight: 600;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .ins-guide-nudge-close {
@@ -8514,7 +8514,7 @@ select.ins-input {
   border-radius: 8px;
   background: transparent;
   color: var(--ins-sub);
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .ins-guide-nudge-close:hover {
@@ -8585,7 +8585,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   font: inherit;
   font-size: 14px;
   font-weight: 600;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
 }
 
@@ -8634,7 +8634,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   border-radius: 8px;
   background: transparent;
   color: #fff;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .ins-guide-tools button:hover:not(:disabled) {
@@ -8643,7 +8643,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
 
 .ins-guide-tools button:disabled {
   opacity: 0.4;
-  cursor: default;
+  cursor: var(--ins-cursor-arrow, default);
 }
 
 .ins-guide .ins-chat:hover .ins-guide-tools,
@@ -8725,7 +8725,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   color: #6b6f7a;
   font: inherit;
   font-size: 12px;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .ins-guide-esc:hover {
@@ -8788,7 +8788,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   font: inherit;
   font-size: 13px;
   font-weight: 500;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .ins-guide-link:hover {
@@ -8935,7 +8935,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   font: inherit;
   font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: transform 140ms var(--ins-ease);
 }
 
@@ -9015,7 +9015,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   color: #0b0c0e;
   font: inherit;
   text-align: left;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .ins-guide-history-body {
@@ -9075,7 +9075,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   background: #fff;
   box-shadow: 0 0 0 1px #e4e5e8;
   color: #6b6f7a;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   opacity: 0;
   pointer-events: none;
   transform: translateY(-50%);
@@ -9179,7 +9179,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   font: inherit;
   font-size: 14px;
   font-weight: 500;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: background 140ms var(--ins-ease), border-color 140ms var(--ins-ease);
 }
 
@@ -9202,7 +9202,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
 
 .ins-guide-newchat:disabled {
   opacity: 0.4;
-  cursor: default;
+  cursor: var(--ins-cursor-arrow, default);
 }
 
 /* The History screen's title row, from Figma node 1260:9351: the back arrow and
@@ -9221,7 +9221,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   line-height: 29px;
   letter-spacing: -0.2px;
   white-space: nowrap;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 /* The arrow glides a little to the left on hover (or keyboard focus), easing
@@ -9274,7 +9274,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   border-radius: 999px;
   background: #0b0c0e;
   color: #fff;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: transform 140ms var(--ins-ease), opacity 140ms var(--ins-ease);
 }
 
@@ -9284,7 +9284,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
 
 .ins-guide-send:disabled {
   opacity: 0.28;
-  cursor: default;
+  cursor: var(--ins-cursor-arrow, default);
 }
 
 @keyframes insFadeIn {
@@ -9376,7 +9376,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
    buttons (clicking an old "iOS" again would answer whatever step the
    chat is on now, not the platform question it actually came from). */
 .ins-chip-btn--static {
-  cursor: default;
+  cursor: var(--ins-cursor-arrow, default);
 }
 
 .ins-chip-btn--static:hover {
@@ -9415,7 +9415,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   color: var(--ins-sub);
   font-size: 14px;
   font-weight: 600;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: background var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease);
 }
 
@@ -9425,7 +9425,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 }
 
 .ins-segmented-item:disabled {
-  cursor: default;
+  cursor: var(--ins-cursor-arrow, default);
   opacity: 0.6;
 }
 
@@ -9509,7 +9509,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   padding: 9.5px 12px;
   border-radius: 12px;
   width: 100%;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   font-family: inherit;
   transition: background 0.15s ease;
 }
@@ -9612,7 +9612,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   color: var(--ins-muted);
   font-size: 12px;
   font-weight: 600;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: background var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease);
 }
 
@@ -9623,7 +9623,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 
 .ins-chat-tool:disabled {
   opacity: 0.5;
-  cursor: default;
+  cursor: var(--ins-cursor-arrow, default);
 }
 
 .ins-chat-time {
@@ -9718,14 +9718,14 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   background: transparent;
   color: var(--ins-text);
   text-align: left;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   border-radius: 10px;
   width: 100%;
   min-width: 0;
 }
 
 .ins-chat-screen:disabled {
-  cursor: default;
+  cursor: var(--ins-cursor-arrow, default);
 }
 
 .ins-chat-screen img,
@@ -9936,7 +9936,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   align-items: center;
   gap: 4px;
   list-style: none;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   user-select: none;
   font-weight: 600;
   color: var(--ins-sub);
@@ -10080,3 +10080,36 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   align-items: center;
   gap: 5px;
 }
+
+/* ─── Tune In (AudioMenu) ─────────────────────────────── */
+.ins-tune { width: 316px; min-width: 316px; padding: 20px 12px 14px; }
+.ins-tune-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 0 12px 16px; }
+.ins-tune-titles { min-width: 0; }
+.ins-tune-title { margin: 0; font: 600 18px/1.1 Outfit, Inter, sans-serif; color: #111; }
+.ins-tune-sub { margin: 6px 0 0; font: 400 12px/1.3 Inter, sans-serif; color: #8a857f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ins-tune-close { width: 28px; height: 28px; flex-shrink: 0; border: 0; border-radius: 50%; background: #F4F3F1; color: #6f6a64; display: grid; place-items: center; transition: background .15s, color .15s; }
+.ins-tune-close:hover { background: #111; color: #fff; }
+.ins-tune-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ins-tune-row { --tint: #777; position: relative; width: 100%; display: flex; align-items: center; gap: 14px; padding: 10px 12px; border: 0; border-radius: 16px; background: transparent; text-align: left; color: #111; transition: background .2s; }
+.ins-tune-row:hover { background: #F7F6F4; }
+.ins-tune-row.is-playing { background: linear-gradient(100deg, color-mix(in srgb, var(--tint) 14%, #fff), color-mix(in srgb, var(--tint) 4%, #fff)); }
+.ins-tune-art { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; flex-shrink: 0; color: var(--tint); background: color-mix(in srgb, var(--tint) 11%, #fff); transition: background .2s, color .2s, transform .2s; }
+.ins-tune-row:hover .ins-tune-art { transform: scale(1.04); }
+.ins-tune-row.is-playing .ins-tune-art { background: var(--tint); color: #fff; }
+.ins-tune-name { flex: 1; min-width: 0; font: 500 15px/1.2 Inter, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ins-tune-ctl { height: 32px; min-width: 32px; padding: 0 10px; gap: 8px; border-radius: 16px; background: #F1F0EE; color: #333; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .2s, color .2s; }
+.ins-tune-row:hover .ins-tune-ctl { background: #111; color: #fff; }
+.ins-tune-row.is-playing .ins-tune-ctl { background: var(--tint); color: #fff; }
+.ins-tune-eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; }
+.ins-tune-eq i { width: 2px; background: currentColor; border-radius: 1px; animation: insTuneEq 900ms ease-in-out infinite; }
+.ins-tune-eq i:nth-child(1) { height: 40%; animation-delay: -.2s; }
+.ins-tune-eq i:nth-child(2) { height: 100%; animation-delay: -.6s; }
+.ins-tune-eq i:nth-child(3) { height: 60%; animation-delay: -.4s; }
+.ins-tune-eq i:nth-child(4) { height: 80%; animation-delay: -.8s; }
+@keyframes insTuneEq { 0%,100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
+.ins-tune-vol-wrap { display: flex; align-items: center; gap: 12px; margin: 14px 12px 4px; padding: 12px 14px; border-radius: 14px; background: #F7F6F4; color: #8a857f; }
+.ins-tune-vol { --fill: 70%; flex: 1; min-width: 0; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; outline: none; background: linear-gradient(to right, #111 var(--fill), #E1DFDC var(--fill)); }
+.ins-tune-vol::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.ins-tune-vol::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.ins-tune-row:focus-visible, .ins-tune-close:focus-visible { outline: 2px solid #111; outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) { .ins-tune-eq i { animation: none; } .ins-tune-art { transition: none; } }

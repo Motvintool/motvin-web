@@ -1,6 +1,6 @@
 import { readSettings } from '@/lib/server/ai';
-import type { AiStatus, IngestJob } from '@/lib/inspirations/ingestJobs';
-import type { AdminOp, AssistantAction, Expect } from '@/lib/inspirations/assistantActions';
+import type { AiStatus, IngestJob } from '@/lib/inspirations/admin-chatbot/ingestJobs';
+import type { AdminOp, AssistantAction, Expect } from '@/lib/inspirations/admin-chatbot/assistantActions';
 import { localDateString } from '@/lib/inspirations/dates';
 import { splitScreenFile } from '@/lib/inspirations/screenPaths';
 import type { AssistantAnswer, HistoryLine, LibraryState, ParsedOp, TokenSink } from '@/lib/server/assistant';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { aiLabel, refreshAiStatus, saveAiSettings, useAiStatus, type AiProvider, type AiStatus } from '@/lib/inspirations/ingestJobs';
+import { aiLabel, refreshAiStatus, saveAiSettings, useAiStatus, type AiProvider, type AiStatus } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 import { CheckIcon, ChevronDownIcon, SparklesIcon } from '../Icons';
 
 /**
@@ -57,7 +57,7 @@ export function statusLine(status: AiStatus | null, loading: boolean): string {
   return `Not connected — ${status.reason ?? 'no model answers'}`;
 }
 
-export function AiPicker({ admin, align = 'left' }: { admin: boolean; align?: 'left' | 'right' }) {
+export function AdminChatbotAiPicker({ admin, align = 'left' }: { admin: boolean; align?: 'left' | 'right' }) {
   const { status, loading, error } = useAiStatus(admin);
   const [open, setOpen] = useState(false);
   // What the admin has typed so far; until they touch anything, the form is

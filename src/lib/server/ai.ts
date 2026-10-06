@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { AiSettingsInput, AiStatus } from '@/lib/inspirations/ingestJobs';
+import type { AiSettingsInput, AiStatus } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 
 /**
  * The free AI, as the crawler sees it.

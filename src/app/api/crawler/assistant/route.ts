@@ -1,5 +1,5 @@
 import { fail, verifyAdmin } from '@/lib/server/adminAuth';
-import type { AdminOp, Expect } from '@/lib/inspirations/assistantActions';
+import type { AdminOp, Expect } from '@/lib/inspirations/admin-chatbot/assistantActions';
 import { answerQuestion, type HistoryLine } from '@/lib/server/assistant';
 
 /**

@@ -1,13 +1,13 @@
-import { inspirationsApi } from './api';
+import { inspirationsApi } from '../api';
 import { correctText } from './fuzzy';
 import { appsUsingPattern, loadIndex, type LibraryIndex } from './guideIndex';
-import { asksElements, findElements, findFlowCategory, findNegations, findNumberFilter, findOrdinal, findPatterns, findStates, findStyles, findTopN, matchesNumber, splitIntents, withoutNegations, type NumberFilter } from './guideParse';
-import { INSPIRATIONS_ROUTES } from './routes';
-import { suggestQueries, type SearchSuggestion } from './search';
-import { EMPTY_FILTERS } from './filters';
+import { asksElements, findElements, findFlowCategory, findNegations, findNumberFilter, findOrdinal, findPatterns, findStates, findStyles, findTopN, matchesNumber, splitIntents, stripElements, withoutNegations, type NumberFilter } from './guideParse';
+import { INSPIRATIONS_ROUTES } from '../routes';
+import { suggestQueries, type SearchSuggestion } from '../search';
+import { EMPTY_FILTERS } from '../filters';
 import { applySynonyms, findIndustry, findPlatform, findPlatforms, PLATFORM_LABEL, stripChatter } from './synonyms';
-import { elementLabel, flowCategoryLabel, INDUSTRY_LABEL, SCREEN_STATE_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from './taxonomy';
-import { FLOW_CATEGORY_PRESETS, type App, type Flow, type Pattern, type Platform, type SavedItemType, type ScreenState, type ScreenType, type Style } from './types';
+import { elementLabel, flowCategoryLabel, INDUSTRY_LABEL, SCREEN_STATE_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from '../taxonomy';
+import { FLOW_CATEGORY_PRESETS, type App, type Flow, type Pattern, type Platform, type SavedItemType, type ScreenState, type ScreenType, type Style } from '../types';
 
 /**
  * The visitor-facing assistant: it answers "where do you want to go?" and the
@@ -34,9 +34,9 @@ const PAGES: { keys: string[]; target: NavTarget }[] = [
   { keys: ['apps', 'all apps', 'app list', 'browse apps'], target: { label: 'Apps', hint: 'Page', href: INSPIRATIONS_ROUTES.apps } },
   { keys: ['screens', 'all screens', 'screenshots'], target: { label: 'Screens', hint: 'Page', href: INSPIRATIONS_ROUTES.screens } },
   { keys: ['flows', 'flow', 'user flows', 'all flows'], target: { label: 'Flows', hint: 'Page', href: INSPIRATIONS_ROUTES.flows } },
-  { keys: ['ui elements', 'ui element', 'elements', 'components'], target: { label: 'UI elements', hint: 'Page', href: INSPIRATIONS_ROUTES.uiElements } },
+  { keys: ['ui elements', 'ui element', 'elements', 'components', 'ui', 'ui kit', 'ui components'], target: { label: 'UI elements', hint: 'Page', href: INSPIRATIONS_ROUTES.uiElements } },
   { keys: ['patterns', 'pattern'], target: { label: 'Patterns', hint: 'Page', href: INSPIRATIONS_ROUTES.patterns } },
-  { keys: ['collections', 'collection', 'boards', 'saved', 'my boards'], target: { label: 'Collections', hint: 'Page', href: INSPIRATIONS_ROUTES.collections } },
+  { keys: ['collections', 'collection', 'boards', 'saved', 'my boards', 'my collections', 'my collection', 'my saved', 'saved items', 'saved apps', 'saved screens', 'what did i save', 'what have i saved', 'my saves', 'bookmarks', 'my bookmarks', 'favorites', 'favourites', 'my favorites', 'my favourites'], target: { label: 'Collections', hint: 'Page', href: INSPIRATIONS_ROUTES.collections } },
   { keys: ['icons', 'icon library'], target: { label: 'Icon library', hint: 'Page', href: '/icons' } },
 ];
 
@@ -93,12 +93,12 @@ function findScreenType(text: string): TypeHit | null {
 
 function findApps(text: string, apps: App[]): App[] {
   const lower = text.toLowerCase();
-  const full = apps.filter((app) => hasWord(lower, app.name.toLowerCase()));
+  const full = apps.filter((app) => hasWord(lower, app.name.toLowerCase()) || hasWord(lower, `${app.name.toLowerCase()}s`));
   if (full.length) return full;
-  // "Zoho Corporation" is just "zoho" to a visitor.
+  // "Zoho Corporation" is just "zoho" to a visitor, and "swiggys flows" is Swiggy's.
   return apps.filter((app) => {
     const first = app.name.toLowerCase().split(/\s+/)[0];
-    return first.length >= 4 && hasWord(lower, first);
+    return first.length >= 4 && (hasWord(lower, first) || hasWord(lower, `${first}s`));
   });
 }
 
@@ -205,6 +205,9 @@ type Ranking = { metric: 'screens' | 'flows' | 'rating' | 'newest'; order: 'high
 /** "which app has the most flows", "top rated apps", "smallest app", "newest app" — a question about apps, ranked. */
 function findRanking(raw: string): Ranking | null {
   const text = raw.replace(/\bat (?:least|most)\b/g, ' ');
+  // "least flows", "which has the most screens": a ranking of apps even without the word.
+  const bare = /^(?:which (?:one |app )?(?:has|have) )?(?:the )?(most|least|fewest|biggest|largest|smallest|highest|lowest)\s+(flows|screens|rated|rating)\s*\??$/.exec(text.trim());
+  if (bare) return { metric: bare[2].startsWith('rat') ? 'rating' : (bare[2] as 'flows' | 'screens'), order: /^(?:least|fewest|smallest|lowest)$/.test(bare[1]) ? 'low' : 'high' };
   if (!/\bapps?\b/.test(text)) return null;
   if (/\b(newest|latest|most recent|recently added|new)\b/.test(text)) return { metric: 'newest', order: 'high' };
   if (/\b(oldest|earliest|first added)\b/.test(text)) return { metric: 'newest', order: 'low' };
@@ -274,8 +277,29 @@ function compareApps(list: App[]): NavReply {
 }
 
 const GREETING = /^(hi+|hello+|hey+|hola|yo|howdy|good (morning|afternoon|evening)|sup|namaste|vanakkam)\b[\s!.?]*$/i;
-const THANKS = /^(thanks?|thank you|thx|ty|ok(ay)?|cool|great|nice|awesome)\b[\s!.?]*$/i;
-const HELP = /^(help|what can you do|what do you do|how (does this|do you) work|what is this)\b[\s!.?]*$/i;
+const THANKS = /^(?:thanks?|thank you|thx|ty|tysm|cheers|ok(?:ay)?|cool|great|nice|awesome|perfect|got it|brilliant|wonderful|love it)\b(?:[\s,!.]+(?:so much|a lot|very much|a ton|again|buddy|mate|man|bro|you|guide|motvin|that'?s (?:great|perfect|helpful)|for (?:the )?help|for that|thanks?|thank you))*[\s!.?]*$/i;
+const BYE = /^(?:(?:ok(?:ay)?|alright|cool|thanks?|thank you)[\s,!.]*)?(?:bye+|goodbye|good bye|see (?:you|ya)(?: later)?|cya|later|good night|take care|talk (?:to you )?later)[\s!.]*$/i;
+const HELP = /^(?:help|what can you do|what do you do|how (?:does this|do you) work|what is this|what can i (?:find|do|see|ask)(?: here| in here| on here)?|what(?:'s| is| are)? (?:in )?here|what do you have|what have you got|how can you help(?: me)?|what can you help (?:me )?with|how do i use (?:this|you|it)|how to use (?:this|you)|what is this for|what are you for)\b[\s!.?]*$/i;
+/** The guide only takes people around; it never changes the library. */
+const CLEAR_HISTORY = /^(?:please\s+)?(?:clear|delete|erase|remove|wipe)\s+(?:all\s+)?(?:my\s+)?(?:chat\s+)?(?:history|chats?|conversations?|messages)\b/i;
+const CREATE_WORD = /^(?:please\s+)?(?:(?:how (?:do|can) i|can i|i want to|i wanna|i'd like to|let me|help me)\s+)?(?:upload|add|create|submit|import)\s+(?:an?\s+|my\s+|the\s+|new\s+|some\s+)*(?:apps?|videos?|screens?|screenshots?|flows?|patterns?)\b/i;
+const DELETE_WORD = /^(?:please\s+)?(?:how (?:do|can) i\s+|can i\s+)?(?:delete|remove|erase|rename|edit|destroy)\b/i;
+const GO_BACK = /^(?:go back|back|go to the previous page|previous page|take me back|go back please|back please)[\s!.?]*$/i;
+const REOPEN = /^(?:(?:please\s+)?(?:open|show|take me to|go to|take me back to|go back to|back to)\s+(?:me\s+)?(?:the\s+)?(?:last|previous|same|that|this)(?:\s+one|\s+app)?(?:\s+again)?|(?:open|show)\s+(?:it|that|this)\s+again|back to (?:it|that|this))[\s!.?]*$/i;
+/** "what about android", "and web?", "only ios ones": the same question, for another platform. */
+const FOLLOW_PLATFORM = /^(?:and|what about|how about|only|just|but|now|then|also)\s+(?:me\s+)?(?:the\s+)?(web|ios|android|iphone|website|websites)(?:\s+(?:ones?|version|too|also))*\s*[?!.]*$/i;
+/** A judgement of taste is not something the library can answer. */
+const JUDGE = /\b(?:better|worse|nicer|prettier|best looking|best designed|good design|best ui|best ux|most beautiful|ugliest)\b/i;
+const POPULAR = /\b(?:popular|trending|trends?|famous|viral|most used|most viewed|most downloaded|hottest)\b/i;
+const UNTRACKED = /\b(?:free|paid|premium|open[- ]source)\s+apps?\b|\bhow many (?:users|downloads)\b/i;
+const RECENT = /\b(?:recently added|newly added|just added|latest|newest|what'?s new|whats new|new arrivals?|recent(?:ly)?)\b/i;
+/** "what is a bottom sheet", "explain filter chips". */
+const DEFINE = /^(?:what(?:'s| is| are)|whats|explain|define|meaning of)\b/i;
+const ABOUT_MOTVIN = /\bwho (?:built|made|created|owns|runs|is behind) (?:motvin|this|the (?:library|site|app|website))\b|\bwhat is motvin\b/i;
+const PLAN_Q = /\bis (?:this|it|motvin) (?:free|paid|cheap|expensive)\b|\bhow much does (?:this|it|motvin) cost\b|\bwhat does (?:this|it|motvin) cost\b/i;
+const RECOMMEND = /\b(?:recommend|suggest)\b|\bwhat should i (?:look|see|start|check)|\bwhere (?:do|should) i (?:start|begin)\b|\bi(?:'m| am) (?:lost|stuck|not sure)\b|\bi don'?t know\b|\bshow (?:me )?everything\b|\bnot sure what\b/i;
+/** Words that are not a subject, so they never turn "Zomato" into a search. */
+const NOT_A_SUBJECT = new Set(['everything', 'anything', 'something', 'about', 'please', 'thanks', 'thank', 'kindly', 'quickly', 'today', 'again', 'there', 'where', 'which', 'these', 'those', 'would', 'could', 'should', 'want', 'need', 'like', 'give', 'bring', 'take', 'have', 'with', 'that', 'this', 'from', 'into', 'just', 'only', 'also', 'then', 'them', 'some', 'your', 'show', 'check', 'looks', 'looking', 'display', 'details', 'information', 'more', 'tell', 'screens', 'screen', 'pages', 'flows', 'while', 'inside', 'within']);
 const WHO = /\b(who are you|who made you|who built you|are you (an? )?(ai|bot|human|real))\b/i;
 const HOW_ARE_YOU = /\bhow are you\b/i;
 const APOLOGY = /^(?:sorry|my bad|oops)[\s!.]*$/i;
@@ -287,7 +311,7 @@ const YES_NO = /^(?:is|are|does|do|did|was|were|can|could|will|would|has|have|am
 // "how about Zomato" is a change of subject, not a question.
 const WH = /^(?:what|which|where|when|who|why|what's|where's|who's|how(?!\s+about\b))\b/i;
 /** "tell me about Swiggy", "what is Zomato" — a request for the app's details, not its page. */
-const INFO = /\b(?:tell me (?:more )?about|what is|what's|whats|who is|info(?:rmation)? (?:on|about)|details (?:on|about|of)|describe|overview of|more about|know about)\b/i;
+const INFO = /\b(?:tell me (?:more )?about|what is|what's|whats|who is|info(?:rmation)? (?:on|about)|details (?:on|about|of)|describe|overview of|more about|know about)\b|\b(?:details|info|information|overview|summary)\s*\??$/i;
 /** Asks where an app runs, without naming a platform. */
 const PLATFORM_ASKED = /\b(?:platforms?|runs? on|running on|available on|works? on|supported on|support|device|mobile|phone|where (?:does|do|is|can) (?:it|this|that|\w+) (?:run|work|live))\b/i;
 /** Asks what kind of app it is, without naming a kind. */
@@ -383,7 +407,7 @@ async function answerAboutApp(app: App, text: string, question: boolean, yesNo: 
   }
 
   // What kind of app it is.
-  const industryAsked = findIndustry(rest);
+  const industryAsked = question || /\bapps?\b/.test(rest) ? findIndustry(rest) : null;
   if (industryAsked || INDUSTRY_ASKED.test(rest)) {
     const is = `${app.name} is ${article(kind)} ${kind} app.`;
     if (industryAsked && industryAsked !== app.industry) return { text: `No — ${app.name} is ${article(kind)} ${kind} app, not ${INDUSTRY_LABEL[industryAsked]}.`, targets: [appTarget(app)], app };
@@ -442,7 +466,7 @@ export async function resolveNavigation(raw: string, context?: NavContext): Prom
   for (const part of parts) {
     const reply = classify(await resolveWithNotes(part, working));
     texts.push(reply.text);
-    if (reply.app) working = { ...working, app: reply.app };
+    if (reply.app) working = { ...working, app: reply.app, results: reply.results ?? null };
     if (reply.results) working = { ...working, results: reply.results };
     if (reply.go) go = reply.go;
     last = reply;
@@ -468,6 +492,14 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   if (THANKS.test(original)) return { text: pick(['Anytime. Tell me where to go next.', 'Happy to help. Where to next?', 'You’re welcome. Anything else you’d like to see?']), targets: [], kind: 'smalltalk' };
   if (HOW_ARE_YOU.test(original)) return { text: 'Doing great, thanks for asking! Where would you like to go?', targets: QUICK_PAGES.slice(0, 4), kind: 'smalltalk' };
   if (WHO.test(original)) return { text: 'I’m the Motvin guide. I help you find apps, screens and flows, and answer quick questions like how many screens an app has.', targets: QUICK_PAGES.slice(0, 4), kind: 'smalltalk' };
+  if (ABOUT_MOTVIN.test(original)) return { text: 'Motvin is a library of real app screens, flows and UI patterns to get inspired by. I’m its guide: I take you to the right app or page.', targets: QUICK_PAGES.slice(0, 4), kind: 'answer' };
+  if (PLAN_Q.test(original)) return { text: 'I don’t know about plans or prices. I only take you around the library. Try asking me for an app or a page.', targets: QUICK_PAGES.slice(0, 4), kind: 'answer' };
+  if (BYE.test(original)) return { text: pick(['Bye! I’m here whenever you need a hand.', 'See you! Come back any time.', 'Take care! Just open me when you need to find something.']), targets: [], kind: 'smalltalk' };
+  if (GO_BACK.test(original)) return { text: 'Going back.', targets: [], go: { label: 'Back', hint: 'Back', href: '__back__' } };
+  if (CLEAR_HISTORY.test(original)) return { text: 'You can delete a chat from Chat history with its bin icon, or choose Clear all there. Your chats stay in this browser only.', targets: [], kind: 'answer' };
+  if (DELETE_WORD.test(original) || CREATE_WORD.test(original)) {
+    return { text: 'I can only take you around Motvin. I can’t add, change or delete anything in the library. Admins manage apps and uploads from the admin tools.', targets: QUICK_PAGES.slice(0, 4), kind: 'answer' };
+  }
   // "what is this" while looking at an app or a pattern asks about that, not for help.
   const lookingAtSomething = Boolean(context?.app) || /^\/inspirations\/(?:app|pattern)\//.test(context?.page?.pathname ?? '');
   if (HELP.test(original) && !(lookingAtSomething && /^what is this\??$/i.test(original))) {
@@ -481,6 +513,9 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   if (!query && !wantsApps) return { text: 'Tell me where to go — an app, a page like Flows or Screens, or something to search for.', targets: QUICK_PAGES, kind: 'fallback' };
 
   if (page && !isAppsPage) return { text: pick([`Opening ${page.target.label}.`, `Taking you to ${page.target.label}.`, `Here’s the ${page.target.label} page.`]), targets: [], go: page.target };
+  // A style on its own: "dark", "minimal".
+  const bareStyle = /^(dark|light|minimal|bold|playful|corporate|editorial|experimental)(?: (?:mode|theme|ui|style))?$/.exec(query);
+  if (bareStyle) return { text: `Showing ${bareStyle[1]} screens.`, targets: [], go: { label: `${bareStyle[1][0].toUpperCase()}${bareStyle[1].slice(1)} screens`, hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}?style=${bareStyle[1]}` } };
 
   const index = await loadIndex();
   const { apps, patterns, elements, meta } = index;
@@ -512,9 +547,26 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
 
   const asksCount = /\bhow (many|much)\b|\b(count|number of|total)\b/.test(lower);
   const section = findSection(lower);
-  const screenType = section?.tab === 'flows' ? null : findScreenType(lower);
+  const namedElements = findElements(working, elementKinds);
+  // "screens with a search bar" is about the search bar, not about search screens.
+  const screenType = section?.tab === 'flows' ? null : findScreenType(namedElements.length ? stripElements(lower, namedElements) : lower);
   const states = findStates(lower);
   const styles = findStyles(lower);
+  const industryHit = findIndustry(lower);
+  const adjective = /\b(ios|iphone|android|web|website)\s+(?:[\w-]+\s+){0,2}?(?:screens?|pages?|flows?|ui)\b/.exec(lower);
+  const platformHit = findPlatform(lower) ?? (adjective ? findPlatform(`on ${adjective[1]}`) : null);
+  /** The Screens page, filtered by everything the sentence named. */
+  const screenQuery = (sort?: string) => {
+    const params = new URLSearchParams();
+    if (screenType) params.set('type', screenType.key);
+    if (states.length) params.set('state', states.join(','));
+    if (styles.length) params.set('style', styles.join(','));
+    if (industryHit) params.set('industry', industryHit);
+    if (platformHit) params.set('platform', platformHit);
+    if (sort) params.set('sort', sort);
+    return params;
+  };
+  const screenScope = `${platformHit ? ` on ${PLATFORM_LABEL[platformHit]}` : ''}${industryHit ? ` from ${INDUSTRY_LABEL[industryHit].toLowerCase()} apps` : ''}`;
   const yesNo = YES_NO.test(original);
   const question = yesNo || WH.test(original) || /\?\s*$/.test(original);
   // Something about an app is being asked — enough to know "it" needs an app.
@@ -558,6 +610,33 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
     return { text: `I only listed ${plural(listed.length, 'app')} — ${listNames(listed.map((app) => app.name), 6)}. Which one?`, targets: appResults(listed), results: appResults(listed) };
   }
 
+  // "what about android", "and web?": the same question for another platform, about what was just listed or opened.
+  const followPlatform = FOLLOW_PLATFORM.exec(lower.trim());
+  const followAsked = followPlatform ? findPlatform(`on ${followPlatform[1]}`) : null;
+  if (followPlatform && followAsked && findApps(lower, apps).length === 0) {
+    const asked = followAsked;
+    const current = context?.app ?? pageApp ?? null;
+    if (listed.length > 1) {
+      const on = listed.filter((app) => app.platforms?.includes(asked));
+      return on.length
+        ? { text: `Of those, ${listNames(on.map((app) => app.name), 4)} ${on.length === 1 ? 'is' : 'are'} on ${ON_LABEL[asked]}.`, targets: appResults(on.slice(0, 4)), results: appResults(on) }
+        : { text: `None of those are on ${ON_LABEL[asked]}.`, targets: appResults(listed.slice(0, 3)), results: appResults(listed) };
+    }
+    if (current) {
+      const on = current.platforms?.includes(asked);
+      return { text: on ? `Yes — ${current.name} is on ${platformList(current)}.` : `${current.name} isn’t on ${ON_LABEL[asked]}. It’s on ${platformList(current)}.`, targets: [appTarget(current), ...followUps(current, null).slice(0, 2)], app: current };
+    }
+    return resolveInner(`${asked} apps`, undefined, notes);
+  }
+
+  // "open the last app again", "back to that one".
+  if (REOPEN.test(lower.trim())) {
+    const current = context?.app ?? pageApp ?? null;
+    if (current) return { text: pick([`Opening ${current.name} again.`, `Back to ${current.name}.`]), targets: followUps(current, null), go: appTarget(current), app: current };
+    const biggest = [...apps].sort((a, b) => b.screenCount - a.screenCount).slice(0, 5);
+    return { text: 'Which app do you mean?', targets: biggest.map((app) => ({ label: app.name, hint: 'App', href: '', ask: `open ${app.name}`, iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined })), kind: 'clarify' };
+  }
+
   let mentioned = findApps(lower, apps).filter((app) => !negatedApps.includes(app));
   // "its flows", "is this on iOS" — the app from the last answer.
   const subject = context?.app ?? pageApp ?? null;
@@ -565,13 +644,14 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   // "how many screens?" straight after opening Zomato means Zomato's screens. The
   // app being talked about is the subject of any question about app facts, unless
   // the question widens itself: "in the whole library", "all apps", "which app has…".
-  const widened = LIBRARY_SCOPE.test(lower) || /\bapps\b/i.test(lower) || findRanking(lower) !== null || COMPARE.test(lower) || findIndustry(lower) !== null || WHICH_APPS.test(lower);
+  const widened = LIBRARY_SCOPE.test(lower) || /\bapps\b/i.test(lower) || findRanking(lower) !== null || COMPARE.test(lower) || findIndustry(lower) !== null || WHICH_APPS.test(lower) || Boolean(adjective);
   // "what is this" carries to the app; "what is the meaning of life" does not — when the only
   // sign of an app question is a "what is / tell me about" opener, the rest must be nothing but a pronoun.
   const onlyInfo = INFO.test(lower) && !(section || asksCount || screenType || states.length || styles.length || findPlatform(lower) || PLATFORM_ASKED.test(lower) || INDUSTRY_ASKED.test(lower) || RATING_ASKED.test(lower) || SAVE.test(lower) || COPY.test(lower) || SIMILAR.test(lower));
   const infoRest = clean(lower.replace(INFO, ' ')).split(' ').filter((word) => word && !/^(it|its|this|that|one|app|here)$/.test(word));
   const vagueInfo = onlyInfo && infoRest.length > 0;
-  const carried = !mentioned.length && Boolean(subject) && asksAboutAnApp && !widened && !vagueInfo;
+  const definesAThing = DEFINE.test(original.trim()) && !REFERS_BACK.test(lower) && (findPatterns(working, patterns).length > 0 || namedElements.length > 0);
+  const carried = !mentioned.length && Boolean(subject) && asksAboutAnApp && !widened && !vagueInfo && !definesAThing;
   if (carried && subject) mentioned = [subject];
   // A way back out to the whole library, offered whenever the app was assumed.
   const wholeLibrary: NavTarget[] = carried ? [{ label: 'Whole library', hint: 'Ask', href: '', ask: `${original.replace(/\?\s*$/, '')} in the whole library` }] : [];
@@ -579,12 +659,40 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   // Things named in the library beyond apps: patterns, UI elements, flow categories.
   // On a pattern page, "this" / "it" is that pattern.
   const foundPatterns = findPatterns(working, patterns);
-  const namedPatterns = foundPatterns.length ? foundPatterns : pagePattern && !findApps(lower, apps).length && (REFERS_BACK.test(lower) || /\bpattern\b/.test(lower)) ? [pagePattern] : [];
-  const namedElements = findElements(working, elementKinds);
+  const scoped = Boolean(industryHit || platformHit) && (states.length > 0 || Boolean(screenType)) && !/\bpatterns?\b/.test(lower);
+  const namedPatterns = scoped ? [] : foundPatterns.length ? foundPatterns : pagePattern && !findApps(lower, apps).length && (REFERS_BACK.test(lower) || /\bpattern\b/.test(lower)) ? [pagePattern] : [];
   const flowCategory = findFlowCategory(working, flowCategories);
   const askedFlowCategory = findFlowCategory(working, [...FLOW_CATEGORY_PRESETS]);
   const numberFilter = findNumberFilter(lower);
   const topN = findTopN(lower);
+
+  // Things the library cannot know, said plainly, with the nearest thing it can show.
+  if (JUDGE.test(lower) && mentioned.length !== 1) {
+    if (mentioned.length >= 2) {
+      const side = compareApps(mentioned);
+      return { ...side, text: `Which is better is a matter of taste, so I won’t pick one. Here they are side by side. ${side.text}` };
+    }
+    const label = screenType ? `${screenType.label.toLowerCase()} screens` : 'screens';
+    return { text: `Which is better is a matter of taste, so I won’t pick for you. I can show you ${label} to compare yourself.`, targets: [{ label: `See ${label}`, hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}${screenQuery().toString() ? `?${screenQuery()}` : ''}` }, QUICK_PAGES[0]] };
+  }
+  const biggestApps = [...apps].sort((a, b) => b.screenCount - a.screenCount);
+  if (POPULAR.test(lower) && !mentioned.length) {
+    if (section?.tab === 'screens' || screenType) {
+      const go: NavTarget = { label: 'Most popular screens', hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}${screenQuery().toString() ? `?${screenQuery()}` : ''}` };
+      return { text: 'Showing the screens in their most popular order.', targets: [], go };
+    }
+    return { text: `I don’t track what’s popular or trending. By size, ${listNames(biggestApps.slice(0, 3).map((app) => app.name), 3)} have the most screens.`, targets: appResults(biggestApps.slice(0, 3)), results: appResults(biggestApps) };
+  }
+  if (UNTRACKED.test(lower) && !mentioned.length) {
+    return { text: 'Motvin doesn’t record whether an app is free or paid, or how many people use it. I can list every app, though.', targets: [QUICK_PAGES[0], ...appResults(biggestApps.slice(0, 2))] };
+  }
+  if (RECENT.test(lower) && !mentioned.length && (findRanking(lower) === null || /\bapps\b/.test(lower)) && !asksCount) {
+    const forApps = /\bapps\b/.test(lower);
+    const params = screenQuery('newest');
+    const go: NavTarget = forApps ? { label: 'Newest apps', hint: 'Apps', href: `${INSPIRATIONS_ROUTES.apps}?sort=newest` } : { label: 'Newest screens', hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}?${params}` };
+    const other: NavTarget = forApps ? { label: 'Newest screens', hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}?sort=newest` } : { label: 'Newest apps', hint: 'Apps', href: `${INSPIRATIONS_ROUTES.apps}?sort=newest` };
+    return { text: forApps ? 'Showing the newest apps first.' : 'Showing the newest screens first.', targets: [other], go };
+  }
 
   // Save and copy: small, safe, and always confirmed by the visitor first.
   if (SAVE.test(lower) || COPY.test(lower)) {
@@ -699,11 +807,46 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
       return { text: pick([`Opening ${app.name}’s ${section.label}.`, `Here are ${app.name}’s ${section.label}.`]), targets: followUps(app, section.tab), go, app };
     }
     if (question && !section && !screenType) return describeApp(app);
+    const extra = leftoverWords(working, apps).filter((word) => word.length >= 5 && !NOT_A_SUBJECT.has(word) && !/^\d+$/.test(word));
+    if (extra.length > 0 && !carried) {
+      const subject = extra.join(' ');
+      const go: NavTarget = { label: `${app.name} · ${subject}`, hint: 'Search', href: INSPIRATIONS_ROUTES.searchFor(`${app.name} ${subject}`) };
+      return { text: `Searching ${app.name} for “${subject}”.`, targets: [appTarget(app), ...followUps(app, null).slice(0, 2)], go, app };
+    }
     return { text: pick([`Opening ${app.name}.`, `Taking you to ${app.name}.`, `Here’s ${app.name}.`]), targets: followUps(app, null), go: appTarget(app), app };
   }
 
   if (mentioned.length > 1 && COMPARE.test(lower)) return compareApps(mentioned);
 
+  // "compare all apps": the biggest few side by side.
+  if (!mentioned.length && COMPARE.test(lower) && /\b(?:all|every|the|these|those)\s+apps\b|^compare apps\b/.test(lower) && apps.length >= 2) {
+    const top = [...apps].sort((a, b) => b.screenCount - a.screenCount).slice(0, 3);
+    const side = compareApps(top);
+    return { ...side, text: apps.length > 3 ? `The ${top.length} biggest of ${apps.length} apps, side by side. ${side.text}` : side.text };
+  }
+
+  if (mentioned.length > 1 && (asksCount || section || screenType)) {
+    const named = mentioned.slice(0, 4);
+    const saysFlows = hasWord(lower, 'flows') || hasWord(lower, 'flow');
+    const saysScreens = hasWord(lower, 'screens') || hasWord(lower, 'screen');
+    if (asksCount || section?.tab === 'flows' || section?.tab === 'screens') {
+      const flowsOnly = section?.tab === 'flows' || (saysFlows && !saysScreens);
+      const both = (saysFlows && saysScreens) || (asksCount && !saysFlows && !saysScreens);
+      const bits = (app: App) => (flowsOnly ? [plural(app.flowCount, 'flow')] : both ? [plural(app.screenCount, 'screen'), plural(app.flowCount, 'flow')] : [plural(app.screenCount, 'screen')]);
+      return {
+        text: `${named.map((app) => `${app.name} has ${bits(app).join(' and ')}`).join('. ')}.`,
+        targets: named.map((app) => ({ ...appTarget(app, flowsOnly ? 'flows' : undefined), label: flowsOnly ? `${app.name} flows` : app.name })),
+        results: appResults(named),
+      };
+    }
+    if (section) {
+      return { text: `Here are the ${section.label} of ${listNames(named.map((app) => app.name), 4)}.`, targets: named.map((app) => ({ ...appTarget(app, section.tab), label: `${app.name} ${section.label}` })), results: appResults(named) };
+    }
+    if (screenType) {
+      const type = screenType.label.toLowerCase();
+      return { text: `Here are the ${type} screens of ${listNames(named.map((app) => app.name), 4)}.`, targets: named.map((app) => ({ label: `${app.name} ${type}`, hint: 'Search', href: INSPIRATIONS_ROUTES.searchFor(`${app.name} ${type}`) })), results: appResults(named) };
+    }
+  }
   if (mentioned.length > 1) return { text: 'Which app do you mean?', targets: mentioned.slice(0, 6).map((app) => appTarget(app, section?.tab)), results: appResults(mentioned), kind: 'clarify' };
 
   // "apps except Swiggy": everything but.
@@ -718,6 +861,9 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
     if (namedPatterns.length === 1) {
       const pattern = namedPatterns[0];
       const used = appsUsingPattern(index, pattern);
+      if (DEFINE.test(original.trim()) && !WHICH_APPS.test(lower) && !asksCount) {
+        return { text: pattern.description ? `${pattern.name}: ${pattern.description}` : `${pattern.name} is a ${pattern.category.toLowerCase()} pattern.`, targets: [patternTarget(pattern), ...appResults(used.slice(0, 3))], card: patternCard(pattern, index), results: appResults(used) };
+      }
       if (WHICH_APPS.test(lower) || asksCount) {
         return used.length
           ? { text: `The “${pattern.name}” pattern appears in ${plural(used.length, 'app')} — ${listNames(used.map((app) => app.name), 4)}.`, targets: [patternTarget(pattern), ...appResults(used.slice(0, 3))], card: patternCard(pattern, index), results: appResults(used) }
@@ -729,11 +875,14 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   }
 
   // A UI element across the library.
-  if (namedElements.length > 0 && !screenType && (!section || section.tab === 'screens') && !(section?.tab === 'screens' && states.length)) {
+  if (namedElements.length > 0 && !screenType && (!section || section.tab === 'screens') && !(section?.tab === 'screens' && states.length) && !scoped) {
     const kind = namedElements[0];
     const label = elementLabel(kind).toLowerCase();
     const count = elements.find((element) => element.kind === kind)?.count ?? 0;
     const go: NavTarget = { label: `${elementLabel(kind)} examples`, hint: 'UI elements', href: `${INSPIRATIONS_ROUTES.uiElements}?element=${encodeURIComponent(kind)}` };
+    if (DEFINE.test(original.trim()) && !WHICH_APPS.test(lower) && !asksCount) {
+      return { text: `I don’t write definitions, but ${plural(count, 'screen')} in the library have ${label}s. Have a look.`, targets: [go] };
+    }
     if (WHICH_APPS.test(lower) || asksCount) {
       const found = await appsWithScreens({ element: kind }, index);
       if (found && found.apps.length) return { text: `${plural(count || found.total, 'screen')} have ${label}s, in ${listNames(found.apps.map((app) => app.name), 4)}.`, targets: [go, ...appResults(found.apps.slice(0, 3))], results: appResults(found.apps) };
@@ -750,16 +899,13 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   // Screens by state or style across the library — "empty states", "dark mode screens", "loading login screens".
   if (states.length || styles.length) {
     const what = [...styles.map((style) => STYLE_LABEL[style].toLowerCase()), ...states.map((state) => SCREEN_STATE_LABEL[state].toLowerCase()), screenType ? screenType.label.toLowerCase() : ''].filter(Boolean).join(' ');
-    const params = new URLSearchParams();
-    if (screenType) params.set('type', screenType.key);
-    if (states.length) params.set('state', states.join(','));
-    if (styles.length) params.set('style', styles.join(','));
+    const params = screenQuery();
     const go: NavTarget = { label: `${what.charAt(0).toUpperCase()}${what.slice(1)} screens`, hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}?${params}` };
     if (WHICH_APPS.test(lower) || asksCount) {
       const found = await appsWithScreens({ type: screenType?.key, states, styles }, index);
       if (found) return found.total > 0 ? { text: `The library has ${plural(found.total, `${what} screen`)}${found.apps.length ? `, in ${listNames(found.apps.map((app) => app.name), 4)}` : ''}.`, targets: [go, ...appResults(found.apps.slice(0, 3))], results: appResults(found.apps) } : { text: `No ${what} screens yet.`, targets: [QUICK_PAGES[1]] };
     }
-    return { text: `Showing ${what} screens.`, targets: [], go };
+    return { text: `Showing ${what} screens${screenScope}.`, targets: [], go };
   }
 
   if (askedFlowCategory && !flowCategory) return { text: `No ${flowCategoryLabel(askedFlowCategory).toLowerCase()} flows yet.`, targets: [QUICK_PAGES[2]] };
@@ -779,6 +925,12 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
     const singular = /\bflow\b/.test(lower) && !/\bflows\b/.test(lower);
     if (singular && inCategory.length > 1 && inCategory.length <= 6) return { text: `A few ${label.toLowerCase()} flows — which one?`, targets: [...inCategory.map((flow) => flowTarget(flow, index, true)), go], kind: 'clarify' };
     return { text: inCategory.length ? `Showing ${plural(inCategory.length, `${label.toLowerCase()} flow`)}.` : `Showing ${label.toLowerCase()} flows.`, targets: appResults(owners.slice(0, 3)), go, results: appResults(owners) };
+  }
+
+  // "login screens from food apps", "ios checkout screens": screens, narrowed to a kind of app.
+  if ((industryHit || platformHit) && screenType && !states.length && !styles.length && !asksCount && !WHICH_APPS.test(lower) && !numberFilter && findRanking(lower) === null) {
+    const go: NavTarget = { label: `${screenType.label} screens`, hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}?${screenQuery()}` };
+    return { text: `Showing ${screenType.label.toLowerCase()} screens${screenScope}.`, targets: [], go };
   }
 
   // Questions about the apps themselves, from the library's own numbers: what kind
@@ -822,6 +974,15 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   // "which apps do you have", "list all apps": the whole library.
   if (/^(?:(?:what|which|list|show|all|browse)\s+)*(?:all\s+)?apps?(?:\s+(?:do you have|are there|do you know|you have|available|list))?\s*\??$/i.test(original)) return allApps(apps);
 
+  // "i am lost", "recommend something": a gentle way in.
+  if (RECOMMEND.test(lower) && !mentioned.length) {
+    return {
+      text: `Not sure where to start? ${listNames(biggestApps.slice(0, 3).map((app) => app.name), 3)} have the most to explore, or I can pick one for you.`,
+      targets: [...appResults(biggestApps.slice(0, 3)), { label: 'Surprise me', hint: 'Ask', href: '', ask: 'surprise me an app' }],
+      results: appResults(biggestApps),
+    };
+  }
+
   // "surprise me", "a random app".
   if (RANDOM.test(lower) && /\bapps?\b|\bsurprise me\b|\bpick one for me\b/i.test(lower) && apps.length > 0) {
     const chosen = apps[Math.floor(Math.random() * apps.length)];
@@ -840,7 +1001,7 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   }
   if (screenType && WHICH_APPS.test(lower)) {
     const found = await appsWithScreens({ type: screenType.key }, index);
-    if (found) return found.apps.length ? { text: `${screenType.label} screens appear in ${listNames(found.apps.map((app) => app.name), 4)} (${plural(found.total, 'screen')}).`, targets: [{ label: `All ${screenType.label.toLowerCase()} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` }, ...appResults(found.apps.slice(0, 3))], results: appResults(found.apps) } : { text: `No ${screenType.label.toLowerCase()} screens yet.`, targets: [QUICK_PAGES[1]] };
+    if (found) return found.apps.length ? { text: `${screenType.label} screens appear in ${listNames(found.apps.map((app) => app.name), 4)} (${plural(found.total, 'screen')}).`, targets: [{ label: `All ${screenType.label.toLowerCase()} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` }, ...appResults(found.apps.slice(0, 3))], results: appResults(found.apps) } : found.total > 0 ? { text: `${plural(found.total, `${screenType.label.toLowerCase()} screen`)} in the library.`, targets: [{ label: `All ${screenType.label.toLowerCase()} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` }] } : { text: `No ${screenType.label.toLowerCase()} screens yet.`, targets: [QUICK_PAGES[1]] };
   }
 
   if (section?.tab === 'flows' && !asksCount) {
@@ -877,6 +1038,10 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   if (matches.length === 1 && searchQuery.length >= 4) return { text: `Opening ${matches[0].label}.`, targets: [], go: matches[0] };
   if (matches.length >= 1) return { text: matches.length === 1 ? 'Did you mean this?' : 'A few matches — which one?', targets: matches, kind: 'clarify' };
 
+  if (section?.tab === 'screens' && !question) {
+    const topic = searchQuery.replace(/\b(?:screens?|pages?|ui|designs?|examples?|ideas?|screenshots?)\b/g, ' ').replace(/\s+/g, ' ').trim();
+    if (topic.length >= 3) return { text: `Searching screens for “${topic}”.`, targets: [QUICK_PAGES[1]], go: { label: `Search for “${topic}”`, hint: 'Search', href: INSPIRATIONS_ROUTES.searchFor(topic) } };
+  }
   if (section) {
     const sectionPage = PAGES.find((entry) => entry.target.label.toLowerCase() === section.label.toLowerCase())?.target;
     if (sectionPage) return { text: `Opening ${sectionPage.label}.`, targets: [], go: sectionPage };

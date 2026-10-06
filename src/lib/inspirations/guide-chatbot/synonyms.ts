@@ -1,4 +1,4 @@
-import type { Industry, Platform } from './types';
+import type { Industry, Platform } from '../types';
 
 /**
  * Everyday wording the guide folds into the words the library uses, so that

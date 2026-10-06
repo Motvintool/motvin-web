@@ -1,5 +1,5 @@
-import { elementLabel } from './taxonomy';
-import type { Pattern, ScreenState, Style } from './types';
+import { elementLabel } from '../taxonomy';
+import type { Pattern, ScreenState, Style } from '../types';
 
 /**
  * The guide's reading of a sentence, one piece at a time. Each function finds
@@ -90,7 +90,7 @@ const ELEMENT_ALIASES: Record<string, RegExp> = {
   toast: /\btoasts?\b|\bsnack ?bars?\b/i,
   'bottom-sheet': /\bbottom[\s-]?sheets?\b/i,
   'coach-mark': /\bcoach[\s-]?marks?\b|\btool ?tips?\b/i,
-  button: /\bbuttons?\b/i,
+  button: /\bbuttons?\b|\bbtns?\b/i,
   list: /\blists?\b|\blist ?views?\b/i,
   form: /\bforms?\b/i,
   price: /\bprices?\b|\bpricing (?:labels?|tags?)\b|\bprice tags?\b/i,
@@ -107,6 +107,20 @@ export function findElements(text: string, kinds: string[]): string[] {
     if ((alias && alias.test(text)) || hasWord(text, label) || hasWord(text, `${label}s`) || hasWord(text, plain) || hasWord(text, `${plain}s`) || hasWord(text, kind) || hasWord(text, `${kind}s`)) found.push(kind);
   }
   return found;
+}
+
+/** The sentence with the named UI elements taken out, so "search bar" is never also read as a "search" screen. */
+export function stripElements(text: string, kinds: string[]): string {
+  let out = text;
+  for (const kind of kinds) {
+    const label = elementLabel(kind).toLowerCase();
+    const plain = kind.replace(/-/g, ' ');
+    const forms = [label, `${label}s`, plain, `${plain}s`, kind, `${kind}s`].map(escape);
+    out = out.replace(new RegExp(`(^|[^\\p{L}\\p{N}])(?:${forms.join('|')})(?=$|[^\\p{L}\\p{N}])`, 'giu'), '$1 ');
+    const alias = ELEMENT_ALIASES[kind];
+    if (alias) out = out.replace(new RegExp(alias.source, 'gi'), ' ');
+  }
+  return out.replace(/\s+/g, ' ').trim();
 }
 
 /** Whether the sentence is about UI elements as such ("ui elements", "components"), not a particular one. */

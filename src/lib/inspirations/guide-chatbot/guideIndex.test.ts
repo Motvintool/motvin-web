@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('./api', () => ({
+vi.mock('../api', () => ({
   inspirationsApi: {
     listApps: vi.fn(),
     listFlows: vi.fn(),
@@ -10,9 +10,9 @@ vi.mock('./api', () => ({
   },
 }));
 
-import { inspirationsApi } from './api';
+import { inspirationsApi } from '../api';
 import { appOfId, appsUsingPattern, buildVocabulary, loadIndex, makeIndex, resetIndex } from './guideIndex';
-import type { App, Pattern } from './types';
+import type { App, Pattern } from '../types';
 
 const apps = [
   { id: 'swiggy', name: 'Swiggy', slug: 'swiggy', screenCount: 1, flowCount: 1 },

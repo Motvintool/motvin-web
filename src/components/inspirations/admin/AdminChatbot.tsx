@@ -7,7 +7,7 @@ import { useAuth } from '@/components/shared/AuthProvider';
 import { useHydrated } from '@/components/shared/useHydrated';
 import { adminApi, isAdminEmail, type AdminAppRecord, type AdminState } from '@/lib/inspirations/admin';
 import { dayLabel, localDateString, parseDateInput } from '@/lib/inspirations/dates';
-import { describeOp, labelFor, type AdminOp, type ScreensAction } from '@/lib/inspirations/assistantActions';
+import { describeOp, labelFor, type AdminOp, type ScreensAction } from '@/lib/inspirations/admin-chatbot/assistantActions';
 import { inspirationsApi, invalidateInspirationsCache } from '@/lib/inspirations/api';
 import {
   INGEST_STAGES,
@@ -51,9 +51,9 @@ import {
   type ThreadEntry,
   type IngestJob,
   type UploadPlan,
-} from '@/lib/inspirations/ingestJobs';
+} from '@/lib/inspirations/admin-chatbot/ingestJobs';
 import { ArrowRightIcon, CheckIcon, ChevronDownIcon, CloseIcon, CopyIcon, ExpandIcon, ExternalIcon, MinusIcon, PencilIcon, PlusIcon, RetryIcon, StopIcon, TrashIcon, UndoIcon, UploadIcon } from '../Icons';
-import { tone } from './AiPicker';
+import { tone } from './AdminChatbotAiPicker';
 
 /**
  * The assistant in the corner — the library owner's helper on every page.
@@ -139,7 +139,7 @@ function appsOnPlatform(state: AdminState, platform: 'ios' | 'android' | 'web'):
   return state.apps.filter((app) => ids.has(app.id));
 }
 
-export function IngestDock() {
+export function AdminChatbot() {
   const { user, ready } = useAuth();
   const admin = ready && Boolean(user && !user.isAnonymous && isAdminEmail(user.email));
   const { jobs } = useIngestJobs(admin);
@@ -1703,7 +1703,7 @@ export function JobThread({ job, now, reviewSlot }: { job: IngestJob; now: numbe
       {/* Stop/Cancel lives in exactly one place — the pinned strip right
           above the composer — so it doesn't repeat itself down the
           conversation for the same run. A paused run's own Dismiss lives
-          there too now (see IngestDock's .ins-dock-held), so it isn't
+          there too now (see AdminChatbot's .ins-dock-held), so it isn't
           repeated here either. */}
       {!active && appHref && (
         <Link href={appHref} className="ins-linkbtn">

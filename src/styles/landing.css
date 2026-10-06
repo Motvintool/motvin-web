@@ -576,7 +576,7 @@ body {
   height: 40px;
   background: none;
   border: none;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .banner-close img {
@@ -919,7 +919,7 @@ body {
   margin-bottom: 20px;
   transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.3s ease;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .hero-badge:hover {
@@ -1292,12 +1292,12 @@ body {
 
 .typescale-widget,
 .typescale-widget * {
-  cursor: grab !important;
+  cursor: var(--ins-cursor-grab, grab) !important;
 }
 
 .typescale-widget:active,
 .typescale-widget:active * {
-  cursor: grabbing !important;
+  cursor: var(--ins-cursor-grabbing, grabbing) !important;
 }
 
 .tw-top-container {
@@ -1417,12 +1417,12 @@ body {
 
 .color-widget,
 .color-widget * {
-  cursor: grab !important;
+  cursor: var(--ins-cursor-grab, grab) !important;
 }
 
 .color-widget:active,
 .color-widget:active * {
-  cursor: grabbing !important;
+  cursor: var(--ins-cursor-grabbing, grabbing) !important;
 }
 
 .cw-header {
@@ -2133,7 +2133,7 @@ body {
   align-items: center;
   justify-content: center;
   box-shadow: 0px 10px 5px rgba(0, 0, 0, 0.06), 0px 2.2px 1.1px rgba(0, 0, 0, 0.16), 0px 0.6px 0.3px rgba(0, 0, 0, 0.18);
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .nav-btn.prev {
@@ -2287,7 +2287,7 @@ body {
   flex-direction: column;
   padding: 32px;
   margin-bottom: -1px;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .faq-question {
@@ -2348,7 +2348,7 @@ body {
 .faq-icon {
   width: 20px;
   height: 20px;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   background-color: black;
   -webkit-mask: url('/ASSET/svg/faq-toggle.svg') no-repeat center;
   mask: url('/ASSET/svg/faq-toggle.svg') no-repeat center;
@@ -2969,7 +2969,7 @@ body {
   background: transparent;
   color: #070707;
   font: 400 17px/23.2px var(--font-outfit), sans-serif;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
 }
 
 .footer-utility button:hover {
@@ -3163,7 +3163,7 @@ body {
   justify-content: center;
   background: transparent;
   border: none;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   opacity: 0.7;
   padding: 0;
   transition: opacity 0.2s;
@@ -3267,7 +3267,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   position: absolute;
   right: -19px;
   top: -19px;
@@ -3314,7 +3314,7 @@ body {
   font-size: 16px;
   font-weight: 600;
   line-height: 20px;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   letter-spacing: -0.07px;
   transition: all 0.2s;
   border: 1px solid #fff;
@@ -3401,7 +3401,7 @@ body {
 .cookie-switch {
   position: relative;
   display: inline-flex;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   flex-shrink: 0;
 }
 
@@ -3443,7 +3443,7 @@ body {
 
 .cookie-switch.disabled {
   opacity: 0.3;
-  cursor: not-allowed;
+  cursor: var(--ins-cursor-not-allowed, not-allowed);
 }
 
 .cookie-switch.disabled .cookie-switch-thumb {
@@ -3574,7 +3574,7 @@ body {
   display: flex;
   align-items: center;
   gap: 2px;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   position: relative;
 }
 
@@ -5786,7 +5786,7 @@ body {
     background: transparent;
     flex-shrink: 0;
     border: 0;
-    cursor: pointer;
+    cursor: var(--ins-cursor-hand, pointer);
     margin-left: 12px;
   }
 
@@ -5917,7 +5917,7 @@ body {
     padding: 8px;
     border: 0;
     background: transparent;
-    cursor: pointer;
+    cursor: var(--ins-cursor-hand, pointer);
   }
 
   .mi-nav-mobile-panel-close img {
@@ -6138,7 +6138,7 @@ body {
     border: 0;
     background: #000;
     color: #fff;
-    cursor: pointer;
+    cursor: var(--ins-cursor-hand, pointer);
   }
 
   .mi-nav-mobile-panel-actions #auth-signin-btn {

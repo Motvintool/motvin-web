@@ -5,11 +5,11 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type K
 import { useAuth } from '@/components/shared/AuthProvider';
 import { isAdminEmail } from '@/lib/inspirations/admin';
 import { inspirationsApi } from '@/lib/inspirations/api';
-import { greetingFor } from '@/lib/inspirations/guideGreeting';
-import { nextNudge, nudgeMessages, readNudgeState, writeNudgeState } from '@/lib/inspirations/guideNudge';
-import { groupChats, newChatId, previewOf, readHistory, relativeTime, removeChat, upsertChat, writeHistory, type SavedChat, type SavedLine } from '@/lib/inspirations/guideHistory';
-import { exportLog, readLog, recordFeedback, recordMiss, type Verdict } from '@/lib/inspirations/guideTelemetry';
-import { QUICK_PAGES, resolveNavigation, type GuideAction, type NavCard, type NavTarget, type ReplyKind } from '@/lib/inspirations/navAssistant';
+import { greetingFor } from '@/lib/inspirations/guide-chatbot/guideGreeting';
+import { nextNudge, nudgeMessages, readNudgeState, writeNudgeState } from '@/lib/inspirations/guide-chatbot/guideNudge';
+import { groupChats, newChatId, previewOf, readHistory, relativeTime, removeChat, upsertChat, writeHistory, type SavedChat, type SavedLine } from '@/lib/inspirations/guide-chatbot/guideHistory';
+import { exportLog, readLog, recordFeedback, recordMiss, type Verdict } from '@/lib/inspirations/guide-chatbot/guideTelemetry';
+import { QUICK_PAGES, resolveNavigation, type GuideAction, type NavCard, type NavTarget, type ReplyKind } from '@/lib/inspirations/guide-chatbot/navAssistant';
 import { libraryStore } from '@/lib/inspirations/store';
 import type { App } from '@/lib/inspirations/types';
 import {
@@ -50,7 +50,7 @@ function chipIcon(target: NavTarget): ReactNode {
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-export function UserDock() {
+export function UserChatbot() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, ready } = useAuth();
@@ -199,7 +199,8 @@ export function UserDock() {
   };
 
   const go = (target: NavTarget) => {
-    router.push(target.href);
+    if (target.href === '__back__') router.back();
+    else router.push(target.href);
     setDimmed(false);
     if (window.matchMedia('(max-width: 900px)').matches) setOpen(false);
   };
@@ -219,8 +220,11 @@ export function UserDock() {
     const slowTimer = setTimeout(() => patch(replyId, { slow: true }), SLOW_AFTER_MS);
     try {
       const reply = await resolveNavigation(text, { app: lastApp.current, results: lastResults.current, page: { pathname, search: typeof window !== 'undefined' ? window.location.search : '' } });
-      if (reply.app) lastApp.current = reply.app;
-      if (reply.results) lastResults.current = reply.results;
+      if (reply.app) {
+        lastApp.current = reply.app;
+        // A list belongs to the answer that made it; one about a single app ends it.
+        lastResults.current = reply.results ?? null;
+      } else if (reply.results) lastResults.current = reply.results;
       if (reply.kind === 'fallback' || reply.kind === 'clarify' || reply.kind === 'error') recordMiss(text, reply.kind, reply.text);
       const calm = reducedMotion();
       if (!calm) await sleep(320 + Math.random() * 280);
