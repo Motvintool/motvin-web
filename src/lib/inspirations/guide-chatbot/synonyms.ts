@@ -36,6 +36,8 @@ const INDUSTRY_WORDS: Record<Industry, RegExp> = {
   entertainment: /\b(?:entertainment|streaming|music|video apps?|games?|movies?)\b/,
   lifestyle: /\b(?:lifestyle|fitness|wellness|dating)\b/,
   saas: /\bsaas\b/,
+  // Nobody asks for "uncategorised apps" by that word, so it never matches.
+  unsorted: /(?!)/,
 };
 
 /**

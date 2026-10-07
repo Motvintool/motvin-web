@@ -44,8 +44,8 @@ export function StoreStrip({ name, platform }: { name: string; platform: Platfor
           <img
             src={store === 'ios' ? '/ASSET/Icons/Motvin/store-appstore.svg' : '/ASSET/Icons/Motvin/android.svg'}
             alt=""
-            width={20}
-            height={20}
+            width={24}
+            height={24}
             className={store === 'android' ? 'is-mono' : undefined}
           />
           {store === 'ios' ? 'Appstore' : storeName}

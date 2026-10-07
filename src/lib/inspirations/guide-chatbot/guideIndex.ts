@@ -44,7 +44,7 @@ export function buildVocabulary(apps: App[], flows: Flow[], patterns: Pattern[],
   Object.values(SCREEN_TYPE_LABEL).forEach(add);
   Object.values(SCREEN_STATE_LABEL).forEach(add);
   Object.values(STYLE_LABEL).forEach(add);
-  Object.values(INDUSTRY_LABEL).forEach(add);
+  Object.entries(INDUSTRY_LABEL).forEach(([key, label]) => key !== 'unsorted' && add(label));
   (meta?.taxonomy.flowCategories ?? []).forEach((category) => add(flowCategoryLabel(category)));
   ['flows', 'screens', 'patterns', 'elements', 'collections', 'android', 'iphone', 'websites', 'onboarding', 'checkout', 'signup', 'login', 'splash', 'pricing', 'permission', 'landing', 'dashboard', 'settings', 'notifications'].forEach((word) => vocabulary.add(word));
   return [...vocabulary];

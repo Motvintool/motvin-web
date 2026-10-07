@@ -76,8 +76,14 @@ export const INDUSTRIES = [
   'food',
   'entertainment',
   'lifestyle',
+  // "Needs category": an app whose category could not be worked out. Stored so it
+  // can still be published and flagged in the admin; never offered as a choice.
+  'unsorted',
 ] as const;
 export type Industry = (typeof INDUSTRIES)[number];
+
+/** The categories a person can actually pick — everything but `unsorted`. */
+export const PICKABLE_INDUSTRIES = INDUSTRIES.filter((industry) => industry !== 'unsorted');
 
 export const STYLES = [
   'minimal',
@@ -327,6 +333,17 @@ export type LibraryMeta = {
     styles: Style[];
     elements: ElementKind[];
     flowCategories: string[];
+  };
+  /**
+   * How many screens (or flows) each taxonomy value holds, for the platforms asked
+   * about. Lets a list lead with what the library has most of. Absent from an
+   * older backend, so callers fall back to the taxonomy's own order.
+   */
+  usage?: {
+    screenTypes: Record<string, number>;
+    elements: Record<string, number>;
+    industries: Record<string, number>;
+    flowCategories: Record<string, number>;
   };
   generatedAt: string;
 };

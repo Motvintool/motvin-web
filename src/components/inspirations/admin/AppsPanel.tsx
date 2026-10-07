@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { adminApi, type AdminAppRecord, type AdminState } from '@/lib/inspirations/admin';
 import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
-import { INDUSTRIES, type Industry } from '@/lib/inspirations/types';
+import { PICKABLE_INDUSTRIES, type Industry } from '@/lib/inspirations/types';
 import { PlusIcon, TrashIcon, UploadIcon } from '../Icons';
 import { AppCardScreens } from './AppCardScreens';
 import { AppVersionScreens } from './AppVersionScreens';
@@ -17,7 +17,9 @@ import { AppVersionScreens } from './AppVersionScreens';
  * rest.
  */
 
-const EMPTY: AdminAppRecord = { id: '', name: '', industry: 'saas', website: '', tagline: '' };
+// A new app starts with no category chosen (not SaaS): the form will not save until
+// somebody picks one, so a category is never an accident of the default.
+const EMPTY: AdminAppRecord = { id: '', name: '', industry: 'unsorted', website: '', tagline: '' };
 
 function slugify(value: string): string {
   return value
@@ -98,7 +100,9 @@ export function AppsPanel({
     void run(() => adminApi.uploadLogo(logoFor, file.name, file), () => setLogoFor(null));
   };
 
-  const valid = draft.id.trim().length > 0 && draft.name.trim().length > 0;
+  const needsCategory = draft.industry === 'unsorted';
+  // A new app needs a category; an existing one flagged "Needs category" can still be edited without one.
+  const valid = draft.id.trim().length > 0 && draft.name.trim().length > 0 && (Boolean(editingId) || !needsCategory);
 
   return (
     <div className="ins-admin-panel">
@@ -158,7 +162,12 @@ export function AppsPanel({
               value={draft.industry}
               onChange={(e) => setDraft((d) => ({ ...d, industry: e.target.value as Industry }))}
             >
-              {INDUSTRIES.map((i) => (
+              {needsCategory && (
+                <option value="unsorted" disabled={!editingId}>
+                  Choose a category…
+                </option>
+              )}
+              {PICKABLE_INDUSTRIES.map((i) => (
                 <option key={i} value={i}>
                   {INDUSTRY_LABEL[i]}
                 </option>
@@ -225,7 +234,17 @@ export function AppsPanel({
                     <span className="ins-admin-item-id">{app.id}</span>
                   </p>
                   <p className="ins-admin-item-sub">
-                    {INDUSTRY_LABEL[app.industry] ?? app.industry} · {published} of {screens.length} screens published
+                    {app.industry === 'unsorted' ? (
+                      <span className="ins-admin-needs" title="The category could not be worked out — pick one with Edit">
+                        Needs category
+                      </span>
+                    ) : (
+                      <>
+                        {INDUSTRY_LABEL[app.industry] ?? app.industry}
+                        {app.industrySource === 'ai' && <span className="ins-admin-source" title="Chosen by the model, not confirmed by the store"> · AI-suggested</span>}
+                      </>
+                    )}{' '}
+                    · {published} of {screens.length} screens published
                   </p>
                   {app.tagline && <p className="ins-admin-item-sub">{app.tagline}</p>}
                 </div>

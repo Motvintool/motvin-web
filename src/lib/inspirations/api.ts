@@ -231,8 +231,10 @@ export const inspirationsApi = {
     return request(`/pattern/${encodeURIComponent(slug)}`, TTL.item, null);
   },
 
-  listElements(): Promise<{ kind: ElementKind; count: number }[]> {
-    return request('/elements', TTL.list, []);
+  /** UI element kinds with how many screens carry each — for the given platforms, or the whole library. */
+  listElements(platforms?: string[]): Promise<{ kind: ElementKind; count: number }[]> {
+    const qs = platforms?.length ? `?platform=${encodeURIComponent(platforms.join(','))}` : '';
+    return request(`/elements${qs}`, TTL.list, []);
   },
 
   search(query: string, mode?: 'text', appId?: string): Promise<SearchResults> {

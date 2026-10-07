@@ -148,10 +148,19 @@ export function ExploreView() {
   // holds — rather than a fixed list, so a group disappears instead of
   // showing entries with nothing behind them. Each item links into the page
   // that already filters on that exact query param.
+  // Lead with what the library holds most of, not whichever values sort first
+  // (which put "Alert" and "Banner" ahead of the nav bar on every screen).
+  // Ties keep the taxonomy's own order. An older backend without usage numbers
+  // simply keeps that order.
+  const mostUsed = <T extends string>(values: T[], counts?: Record<string, number>): T[] =>
+    counts ? [...values].sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0)) : values;
+  // "Other" is where unclassified screens land — never a destination worth featuring.
+  const screenTypes = mostUsed(meta.taxonomy.screenTypes, meta.usage?.screenTypes).filter((type) => type !== 'other');
+
   const taxonomyGroups = [
     {
       title: 'Categories',
-      items: meta.taxonomy.industries.slice(0, MAX_TAXONOMY_ITEMS).map((industry) => ({
+      items: mostUsed(meta.taxonomy.industries, meta.usage?.industries).slice(0, MAX_TAXONOMY_ITEMS).map((industry) => ({
         key: industry,
         label: INDUSTRY_LABEL[industry] ?? industry,
         href: withPlatform(`${INSPIRATIONS_ROUTES.screens}?industry=${industry}`),
@@ -159,7 +168,7 @@ export function ExploreView() {
     },
     {
       title: 'Screens',
-      items: meta.taxonomy.screenTypes.slice(0, MAX_TAXONOMY_ITEMS).map((type) => ({
+      items: screenTypes.slice(0, MAX_TAXONOMY_ITEMS).map((type) => ({
         key: type,
         label: SCREEN_TYPE_LABEL[type] ?? type,
         href: withPlatform(`${INSPIRATIONS_ROUTES.screens}?type=${type}`),
@@ -167,7 +176,7 @@ export function ExploreView() {
     },
     {
       title: 'UI Elements',
-      items: meta.taxonomy.elements.slice(0, MAX_TAXONOMY_ITEMS).map((kind) => ({
+      items: mostUsed(meta.taxonomy.elements, meta.usage?.elements).slice(0, MAX_TAXONOMY_ITEMS).map((kind) => ({
         key: kind,
         label: elementLabel(kind),
         href: withPlatform(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(kind)}`),
@@ -175,7 +184,7 @@ export function ExploreView() {
     },
     {
       title: 'Flows',
-      items: meta.taxonomy.flowCategories.slice(0, MAX_TAXONOMY_ITEMS).map((category) => ({
+      items: mostUsed(meta.taxonomy.flowCategories, meta.usage?.flowCategories).slice(0, MAX_TAXONOMY_ITEMS).map((category) => ({
         key: category,
         label: flowCategoryLabel(category),
         href: withPlatform(`${INSPIRATIONS_ROUTES.flows}?category=${encodeURIComponent(category)}`),

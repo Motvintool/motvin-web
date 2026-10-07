@@ -588,7 +588,9 @@ function validateOp(
       if (clash) return { note: `An app with the id “${id}” already exists (${clash.name}).`, settled: true };
       const industries = state?.vocabulary?.industries ?? [];
       const wanted = typeof op.industry === 'string' ? norm(op.industry) : '';
-      const industry = industries.find((entry) => norm(entry) === wanted) ?? (industries.includes('saas') ? 'saas' : industries[0] ?? 'saas');
+      // No guessing a default: a category the admin did not give (and the agent could not
+      // infer from the name) is left as `unsorted`, which the admin shows as "Needs category".
+      const industry = industries.find((entry) => norm(entry) === wanted) ?? 'unsorted';
       return confirm({ kind: 'create-app', id, name, industry });
     }
     case 'set-screen-details': {

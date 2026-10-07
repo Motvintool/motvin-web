@@ -119,6 +119,8 @@ export type AdminAppRecord = {
   id: string;
   name: string;
   industry: Industry;
+  /** Who set the category: the App Store, the model, a person, or nobody (`unsorted`). */
+  industrySource?: 'store' | 'ai' | 'manual' | 'none';
   website?: string;
   tagline?: string;
   logo?: string;

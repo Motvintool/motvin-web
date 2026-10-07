@@ -34,6 +34,7 @@ import { dominantColors, fingerprint, fingerprintFromThumb, jaccard, THUMB } fro
 import { ScreenGraph } from './graph.js';
 import { segmentRecording, skeletonLike } from './segment.js';
 import { analyseScreen, complete, encodeForModel, groupIntoFlows, identifyApp, pickBackend } from './analyze.js';
+import { resolveIndustry } from './category.js';
 import { researchTree } from './researcher.js';
 import { extractJson } from './analyze.js';
 import { buildJourneys } from './journeys.js';
@@ -578,6 +579,7 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
         appId: identity.appId,
         name: identity.name,
         industry: identity.industry,
+        industrySource: identity.industrySource,
         website: identity.website,
         tagline: identity.tagline,
         authorization: options.authorization ?? {},
@@ -1345,7 +1347,10 @@ async function identifyFrom(frames, sourcePath, backend, existingApps, lineSets 
     return {
       name: guess,
       appId: slugify(guess) || 'untitled-app',
-      industry: 'productivity',
+      // Not "productivity": an invented default reads as an answer. `unsorted` shows
+      // up in the admin as "Needs category" until somebody sets a real one.
+      industry: 'unsorted',
+      industrySource: 'none',
       tagline: '',
       website: '',
       confident: false,
@@ -1362,10 +1367,18 @@ async function identifyFrom(frames, sourcePath, backend, existingApps, lineSets 
     // An app already in the library keeps its recorded name and industry —
     // a second upload should add screens to it, not rename it.
     const existing = existingApps?.find((app) => app.id === appId);
+    // A category somebody (or an earlier run) already settled on is kept; an
+    // app still marked `unsorted` gets another go at it.
+    const keepExisting = existing?.industry && existing.industry !== 'unsorted';
+    const decision = keepExisting
+      ? { industry: existing.industry, source: existing.industrySource ?? 'manual', detail: 'already recorded for this app' }
+      : await resolveIndustry({ name: existing?.name ?? identity.name, ai: { industry: identity.industry, confident: identity.confident } });
+    log.info(`category: ${decision.industry} — ${decision.detail}`);
     return {
       name: existing?.name ?? identity.name,
       appId,
-      industry: existing?.industry ?? identity.industry,
+      industry: decision.industry,
+      industrySource: decision.source,
       tagline: existing?.tagline || identity.tagline,
       website: existing?.website || identity.website,
       confident: identity.confident,

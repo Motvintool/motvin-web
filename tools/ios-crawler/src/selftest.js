@@ -20,6 +20,7 @@ import { actionSafety, assertAuthorized, isBlockingScreen } from './safety.js';
 import { extractJson, normaliseAnalysis, normaliseFlows } from './analyze.js';
 import { flowCategoryFor, publishedTypeFor, PUBLISHED_FLOW_CATEGORIES, PUBLISHED_TYPES, SCREEN_TYPES } from './taxonomy.js';
 import { publishCrawl, safeName } from './publish.js';
+import { industryFromStore, resolveIndustry, titleMatches } from './category.js';
 import { ingestFolder, selectStableFrames, slugify, _internals, validateTabBars } from './ingest.js';
 import { parseIdbElements } from './device.js';
 import { buildSections, classifyScreen, cleanTitle, groupFlowsLocally, guessBrand } from './heuristics.js';
@@ -367,6 +368,40 @@ export async function selfTest() {
       rejectedIndustry = true;
     }
     check('an industry the builder would reject fails early', rejectedIndustry);
+
+    log.heading('App category');
+    // A stand-in for the App Store so these never touch the network.
+    const listings = {
+      Spotify: [{ trackName: 'Spotify: Music and Podcasts', primaryGenreName: 'Music' }],
+      Weirdo: [{ trackName: 'Weirdo Studio', primaryGenreName: 'Developer Tools' }],
+      Spot: [{ trackName: 'Spotify Karaoke Clone', primaryGenreName: 'Music' }],
+    };
+    const fakeStore = async (url) => {
+      const term = decodeURIComponent(new URL(url).searchParams.get('term'));
+      return { ok: true, json: async () => ({ results: listings[term] ?? [] }) };
+    };
+    const offline = async () => {
+      throw new Error('offline');
+    };
+    check('a store title with a tagline still names the app', titleMatches('Spotify: Music and Podcasts', 'Spotify'));
+    check('a title that merely starts with the same letters does not', !titleMatches('Spotify Karaoke Clone', 'Spot'));
+    const fromStore = await industryFromStore('Spotify', { fetchImpl: fakeStore });
+    check('the store genre becomes the library category', fromStore?.industry === 'entertainment', JSON.stringify(fromStore));
+    check('a lookalike listing is not trusted', (await industryFromStore('Spot', { fetchImpl: fakeStore })) === null);
+    check('a genre with no honest mapping gives no category', (await industryFromStore('Weirdo', { fetchImpl: fakeStore })) === null);
+    check('an unreachable store gives no category rather than an error', (await industryFromStore('Spotify', { fetchImpl: offline })) === null);
+    const storeBeatsModel = await resolveIndustry({ name: 'Spotify', ai: { industry: 'productivity', confident: true } }, { fetchImpl: fakeStore });
+    check('the store genre outranks even a confident model', storeBeatsModel.industry === 'entertainment' && storeBeatsModel.source === 'store');
+    const modelFallback = await resolveIndustry({ name: 'Nobody', ai: { industry: 'travel', confident: true } }, { fetchImpl: fakeStore });
+    check('a confident model is used when the store has no match', modelFallback.industry === 'travel' && modelFallback.source === 'ai');
+    const unsure = await resolveIndustry({ name: 'Nobody', ai: { industry: 'productivity', confident: false } }, { fetchImpl: fakeStore });
+    check('an unsure model is not trusted — the app is left for a person', unsure.industry === 'unsorted' && unsure.source === 'none');
+    const invalid = await resolveIndustry({ name: 'Nobody', ai: { industry: 'cheese', confident: true } }, { fetchImpl: fakeStore });
+    check('a category outside the list is refused even when confident', invalid.industry === 'unsorted');
+    const gap = await publishCrawl({ graph: publishGraph, dataDir: store, app: { appId: 'gap-app', name: 'Gap App', industry: 'unsorted', industrySource: 'none' } });
+    check('an unsorted app still publishes', Boolean(gap), '');
+    const gapRecord = JSON.parse(readFileSync(join(store, 'apps.json'), 'utf-8')).apps.find((a) => a.id === 'gap-app');
+    check('the record keeps who set the category', gapRecord?.industry === 'unsorted' && gapRecord?.industrySource === 'none', JSON.stringify(gapRecord));
 
     log.heading('Ingest');
     // Classification is switched off, so this covers the folder → store path

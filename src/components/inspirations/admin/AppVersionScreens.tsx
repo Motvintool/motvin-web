@@ -6,8 +6,9 @@ import { splitScreenFile } from '@/lib/inspirations/screenPaths';
 import { localDateString } from '@/lib/inspirations/dates';
 import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { Platform } from '@/lib/inspirations/types';
-import { PlusIcon, TrashIcon, UploadIcon } from '../Icons';
+import { CheckIcon, PlusIcon, TrashIcon, UploadIcon } from '../Icons';
 import { screenLabel, thumbUrl } from './screenFiles';
+import { AdminImageLightbox } from './AdminImageLightbox';
 
 /**
  * Per-app, per-version screen management, inline in the Apps tab.
@@ -44,6 +45,15 @@ export function AppVersionScreens({
   const [editingDate, setEditingDate] = useState(false);
   const [dateDraft, setDateDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  // The screen opened full-size from a thumbnail, if any.
+  const [preview, setPreview] = useState<{ url: string; label: string } | null>(null);
+  // Select mode: tiles toggle instead of previewing, and a toolbar deletes the
+  // ticked ones in one go. `picked` holds file ids and is pruned against the
+  // version's current files, so screens that vanish after a delete drop out.
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  // Asking "delete this whole version?" inline, instead of in a browser dialog.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const platforms = Array.from(new Set(files.map((f) => f.platform)));
   const [platform, setPlatform] = useState<Platform>((platforms[0] as Platform) ?? 'ios');
@@ -62,8 +72,24 @@ export function AppVersionScreens({
   const activeVersion = draftVersion !== null ? null : (versions.find((v) => v.id === target) ?? null);
   const targetLabel = activeVersion ? versionLabel(activeVersion) : target;
   const screensInVersion = files.filter((f) => f.version === target);
+  const selectedFiles = screensInVersion.filter((f) => picked.has(f.id));
+
+  const toggleSelecting = () => {
+    setSelecting((on) => !on);
+    setPicked(new Set());
+  };
+  const togglePicked = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const pickExisting = (id: string) => {
+    setSelecting(false);
+    setPicked(new Set());
+    setConfirmingDelete(false);
     setDraftVersion(null);
     setEditingDate(false);
     setSelected(id);
@@ -104,6 +130,26 @@ export function AppVersionScreens({
     void run(() => adminApi.deleteScreen(file.platform, file.appId, name, version, flow));
   };
 
+  // One at a time: every delete rebuilds the store's index, so running them
+  // together would have the rebuilds race each other.
+  const removeSelected = () => {
+    const targets = selectedFiles;
+    if (!targets.length) return;
+    if (!window.confirm(`Delete ${targets.length} screen${targets.length === 1 ? '' : 's'}? The images are removed from the store.`)) return;
+    void run(
+      async () => {
+        for (const file of targets) {
+          const { name, version, flow } = splitScreenFile(file.file, file.version);
+          await adminApi.deleteScreen(file.platform, file.appId, name, version, flow);
+        }
+      },
+      () => {
+        setPicked(new Set());
+        setSelecting(false);
+      },
+    );
+  };
+
   const addScreens = (fileList: FileList) => {
     if (collision) return;
     const picked = Array.from(fileList);
@@ -119,14 +165,6 @@ export function AppVersionScreens({
 
   const removeVersion = () => {
     if (versions.length <= 1 || !activeVersion) return;
-    const label = versionLabel(activeVersion);
-    if (
-      !window.confirm(
-        `Delete the "${label}" version of ${app.name}? Its ${screensInVersion.length} screen(s) are removed for good.`,
-      )
-    ) {
-      return;
-    }
     const fallback = versions.find((v) => v.id !== target)?.id ?? '';
     void run(() => adminApi.deleteVersion(app.id, target), () => pickExisting(fallback));
   };
@@ -172,36 +210,81 @@ export function AppVersionScreens({
         </p>
       )}
 
+      {/* One action at a time: starting one replaces the whole row with just that
+          action's own controls, and finishing or cancelling brings the row back. */}
       <div className="ins-admin-actions ins-admin-actions--tight">
         {collision ? null : activeVersion ? (
-          <>
-            <span className="ins-muted">
-              {screensInVersion.length} screen{screensInVersion.length === 1 ? '' : 's'}
-            </span>
-            {editingDate ? (
-              <>
-                <input
-                  className="ins-input"
-                  type="date"
-                  value={dateDraft}
-                  onChange={(e) => setDateDraft(e.target.value)}
-                />
-                <button type="button" className="ins-linkbtn" disabled={busy} onClick={saveDate}>
-                  Save
-                </button>
-                <button type="button" className="ins-linkbtn" disabled={busy} onClick={() => setEditingDate(false)}>
-                  Cancel
-                </button>
-              </>
-            ) : (
+          editingDate ? (
+            <>
+              <input className="ins-input" type="date" value={dateDraft} onChange={(e) => setDateDraft(e.target.value)} />
+              <button type="button" className="ins-linkbtn" disabled={busy} onClick={saveDate}>
+                Save
+              </button>
+              <button type="button" className="ins-linkbtn" disabled={busy} onClick={() => setEditingDate(false)}>
+                Cancel
+              </button>
+            </>
+          ) : selecting ? (
+            <>
+              <span className="ins-muted">
+                {selectedFiles.length} of {screensInVersion.length} selected
+              </span>
+              <button
+                type="button"
+                className="ins-linkbtn"
+                disabled={busy}
+                onClick={() =>
+                  setPicked(selectedFiles.length === screensInVersion.length ? new Set() : new Set(screensInVersion.map((f) => f.id)))
+                }
+              >
+                {selectedFiles.length === screensInVersion.length ? 'Clear' : 'Select all'}
+              </button>
+              <button
+                type="button"
+                className="ins-linkbtn ins-linkbtn--danger"
+                disabled={busy || selectedFiles.length === 0}
+                onClick={removeSelected}
+              >
+                Delete {selectedFiles.length > 0 ? selectedFiles.length : ''} selected
+              </button>
+              <button type="button" className="ins-linkbtn" disabled={busy} onClick={toggleSelecting}>
+                Done
+              </button>
+            </>
+          ) : confirmingDelete ? (
+            <>
+              <span className="ins-muted">
+                Delete the &ldquo;{versionLabel(activeVersion)}&rdquo; version? Its {screensInVersion.length} screen
+                {screensInVersion.length === 1 ? '' : 's'} are removed for good.
+              </span>
+              <button type="button" className="ins-linkbtn ins-linkbtn--danger" disabled={busy} onClick={removeVersion}>
+                Delete
+              </button>
+              <button type="button" className="ins-linkbtn" disabled={busy} onClick={() => setConfirmingDelete(false)}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="ins-muted">
+                {screensInVersion.length} screen{screensInVersion.length === 1 ? '' : 's'}
+              </span>
               <button type="button" className="ins-linkbtn" disabled={busy} onClick={startEditDate}>
                 Edit date
               </button>
-            )}
-            <button type="button" className="ins-linkbtn ins-linkbtn--danger" disabled={busy || versions.length <= 1} onClick={removeVersion}>
-              Delete this version
-            </button>
-          </>
+              <button type="button" className="ins-linkbtn" disabled={busy || screensInVersion.length === 0} onClick={toggleSelecting}>
+                Select screens
+              </button>
+              <button
+                type="button"
+                className="ins-linkbtn ins-linkbtn--danger"
+                disabled={busy || versions.length <= 1}
+                onClick={() => setConfirmingDelete(true)}
+              >
+                Delete this version
+              </button>
+            </>
+          )
         ) : (
           <span className="ins-muted">Not created yet — add a screen below to start it.</span>
         )}
@@ -211,22 +294,62 @@ export function AppVersionScreens({
           picker, so a screen looks the same in every admin tab — these used
           to be square 84px crops, which cut every phone screen to its top
           third and lined up with nothing else on the page. */}
-      <div className="ins-flowbuild-pool">
+      <div className="ins-flowbuild-pool ins-flowbuild-pool--full">
         {!collision && screensInVersion.map((file) => {
           const url = thumbUrl(file);
           return (
-            <div key={file.id} className="ins-flowbuild-tile ins-admin-thumb-card" title={file.file}>
-              <span className="ins-flowbuild-tile-shot">
+            <div key={file.id} className={`ins-flowbuild-tile ins-admin-thumb-card ${selecting && picked.has(file.id) ? 'is-selected' : ''}`} title={file.file}>
+              <span
+                className={`ins-flowbuild-tile-shot ${url || selecting ? 'is-previewable' : ''}`}
+                {...(selecting
+                  ? {
+                      role: 'checkbox',
+                      tabIndex: 0,
+                      'aria-checked': picked.has(file.id),
+                      'aria-label': `Select ${screenLabel(file)}`,
+                      onClick: () => togglePicked(file.id),
+                      onKeyDown: (e: React.KeyboardEvent) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          togglePicked(file.id);
+                        }
+                      },
+                    }
+                  : url
+                    ? {
+                        role: 'button',
+                        tabIndex: 0,
+                        'aria-label': `Preview ${screenLabel(file)}`,
+                        onClick: () => setPreview({ url, label: screenLabel(file) }),
+                        onKeyDown: (e: React.KeyboardEvent) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setPreview({ url, label: screenLabel(file) });
+                          }
+                        },
+                      }
+                    : {})}
+              >
                 {url ? <img src={url} alt="" loading="lazy" /> : <span className="ins-flowbuild-noshot" aria-hidden />}
+                {selecting && (
+                  <span className={`ins-admin-thumb-check ${picked.has(file.id) ? 'is-on' : ''}`} aria-hidden>
+                    {picked.has(file.id) && <CheckIcon size={12} />}
+                  </span>
+                )}
+                {!selecting && (
                 <button
                   type="button"
                   className="ins-admin-thumb-remove"
                   aria-label={`Delete ${screenLabel(file)}`}
-                  onClick={() => removeScreen(file)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeScreen(file);
+                  }}
                   disabled={busy}
                 >
                   <TrashIcon size={12} />
                 </button>
+                )}
               </span>
               <span className="ins-flowbuild-tile-name">{screenLabel(file)}</span>
             </div>
@@ -234,6 +357,8 @@ export function AppVersionScreens({
         })}
         {!collision && screensInVersion.length === 0 && <p className="ins-muted">No screens in this version yet.</p>}
       </div>
+
+      {preview && <AdminImageLightbox url={preview.url} label={preview.label} onClose={() => setPreview(null)} />}
 
       <div className="ins-admin-actions">
         {platforms.length > 1 && (

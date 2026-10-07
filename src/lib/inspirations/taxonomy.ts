@@ -114,6 +114,8 @@ export const INDUSTRY_LABEL: Record<Industry, string> = {
   food: 'Food & drink',
   entertainment: 'Entertainment',
   lifestyle: 'Lifestyle',
+  // What a visitor sees. The admin says "Needs category" instead (see AppsPanel).
+  unsorted: 'Uncategorised',
 };
 
 export const STYLE_LABEL: Record<Style, string> = {
@@ -157,6 +159,7 @@ export const ELEMENT_LABEL: Record<string, string> = {
   stepper: 'Stepper',
   'date-picker': 'Date Picker',
   'filter-panel': 'Filter Panel',
+  cta: 'CTA',
   'empty-state': 'Empty State',
   'success-state': 'Success State',
   notification: 'Notification',

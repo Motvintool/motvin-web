@@ -98,7 +98,13 @@ export const PUBLISHED_FLOW_CATEGORIES = [
 export const INDUSTRIES = [
   'saas', 'fintech', 'healthcare', 'ecommerce', 'education', 'travel',
   'productivity', 'ai', 'social', 'finance', 'food', 'entertainment', 'lifestyle',
+  // "Could not work it out" — see category.js. Accepted by the builder so the app
+  // can still be published, but never offered to a model or a person as a choice.
+  'unsorted',
 ];
+
+/** The categories a model or a person can actually pick — everything but `unsorted`. */
+export const PICKABLE_INDUSTRIES = INDUSTRIES.filter((industry) => industry !== 'unsorted');
 
 /** Styles manifest.builder.ts accepts on a sidecar. Anything else is dropped. */
 export const STYLES = [

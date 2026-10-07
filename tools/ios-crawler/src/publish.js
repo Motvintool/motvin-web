@@ -396,7 +396,7 @@ export async function publishCrawl(options) {
       screen_type: analysis.screenType,
       published_as: publishedType,
       states,
-      category: analysis.category ?? app.industry,
+      category: analysis.category ?? (app.industry === 'unsorted' ? null : app.industry),
       flow: analysis.flow ?? flowCategoryFor(analysis.screenType),
       // The journey this screen was filed under, and where in it — the pair a
       // gallery needs to show a flow as a sequence.
@@ -492,6 +492,8 @@ export async function publishCrawl(options) {
     id: app.appId,
     name: app.name,
     industry: app.industry,
+    // Who set the category (store / ai / manual / none), so a wrong one can be traced.
+    ...(app.industrySource ? { industrySource: app.industrySource } : {}),
     website: app.website ?? '',
     tagline: app.tagline ?? '',
   };

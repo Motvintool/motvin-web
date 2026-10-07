@@ -10129,14 +10129,14 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 
 /* Store stats banner under the masthead (StoreStrip) */
 .ins-masthead:has(+ .ins-storebar) { margin-bottom: 24px; }
-.ins-storebar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 36px; padding: 12px 20px 12px 12px; border-radius: 14px; background: #f3f3f2; animation: insStripIn .3s ease-out; }
+.ins-storebar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 20px; margin-bottom: 40px; padding: 12px 24px 12px 14px; border-radius: 16px; background: #f3f3f2; animation: insStripIn .3s ease-out; }
 @keyframes insStripIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-.ins-storebar-left { display: flex; align-items: center; gap: 16px; min-width: 0; flex-wrap: wrap; }
-.ins-storebar-pill { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 4px; border-radius: 100px; background: #111; color: #fff; font: 600 13px/13px var(--font-manrope), Inter, sans-serif; }
-.ins-storebar-pill img { width: 20px; height: 20px; }
+.ins-storebar-left { display: flex; align-items: center; gap: 20px; min-width: 0; flex-wrap: wrap; }
+.ins-storebar-pill { flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px 8px 8px; border-radius: 100px; background: #111; color: #fff; font: 600 13px/13px var(--font-manrope), Inter, sans-serif; }
+.ins-storebar-pill img { width: 24px; height: 24px; }
 .ins-storebar-pill img.is-mono { filter: brightness(0) invert(1); padding: 3px; box-sizing: border-box; }
 .ins-storebar-list { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; flex-wrap: wrap; min-width: 0; }
-.ins-storebar-item { display: inline-flex; align-items: center; gap: 4px; padding: 0 14px; border-left: 1px solid #dcdcda; font: 400 14px/14px var(--font-manrope), Inter, sans-serif; color: #111; white-space: nowrap; }
+.ins-storebar-item { display: inline-flex; align-items: center; gap: 5px; padding: 0 16px; border-left: 1px solid #dcdcda; font: 400 14px/14px var(--font-manrope), Inter, sans-serif; color: #111; white-space: nowrap; }
 .ins-storebar-item b { font-weight: 600; font-size: 15px; line-height: 15px; }
 .ins-storebar-muted { color: #696969; }
 .ins-storebar-star { margin-right: 1px; }
@@ -10220,3 +10220,22 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 .ins-ranktip-text em { margin-top: 5px; padding: 5px 11px; border-radius: 100px; font-style: normal; font-weight: 700; font-size: 12.5px; color: #111; background: rgb(var(--rb-glow) / .2); }
 @keyframes insTipWiggle { 0%, 100% { transform: rotate(0) scale(1); } 30% { transform: rotate(-12deg) scale(1.08); } 60% { transform: rotate(10deg) scale(1.08); } }
 @media (prefers-reduced-motion: reduce) { .ins-ranktip { transition: opacity .15s; transform: none; } .ins-ranktip-cup { animation: none; } }
+
+/* A version's screens at their full height — the shared tile's 3:4 crop cut every
+   phone screen to its top, so these show the whole image and click through to a
+   full-size preview. (The flow builder and card picker keep the compact crop.) */
+.ins-flowbuild-pool--full { align-items: start; }
+.ins-admin-thumb-card .ins-flowbuild-tile-shot { aspect-ratio: auto; }
+.ins-admin-thumb-card .ins-flowbuild-tile-shot img { height: auto; object-fit: contain; }
+.ins-admin-thumb-card .ins-flowbuild-tile-shot.is-previewable { cursor: var(--ins-cursor-zoom-in, zoom-in); }
+.ins-admin-thumb-card .ins-flowbuild-tile-shot.is-previewable:focus-visible { outline: 2px solid #111; outline-offset: 2px; }
+.ins-admin-thumb-card .ins-flowbuild-noshot { min-height: 160px; }
+
+/* Multi-select for deleting screens: a round tick in each tile's top-left corner. */
+.ins-admin-thumb-check { position: absolute; top: 6px; left: 6px; z-index: 1; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; border: 2px solid #fff; background: rgba(0, 0, 0, .35); color: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); transition: background .15s, transform .15s; }
+.ins-admin-thumb-check.is-on { background: var(--ins-accent, #111); transform: scale(1.06); }
+.ins-admin-selectbar { margin-bottom: 8px; }
+
+/* Admin: an app whose category could not be worked out, and one the model (not the store) chose. */
+.ins-admin-needs { display: inline-block; padding: 1px 8px; border-radius: 100px; background: #FFF1D2; color: #8a5a00; font-weight: 600; }
+.ins-admin-source { color: #8a5a00; }

@@ -7,7 +7,7 @@ import { EMPTY_FILTERS } from '@/lib/inspirations/filters';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { suggestQueries, type SearchSuggestion } from '@/lib/inspirations/search';
-import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
+import { elementLabel, INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { App, Flow, Industry, Platform, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { FLOW_PARAM } from './FlowPreview';
@@ -144,7 +144,10 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   const [screens, setScreens] = useState<Screen[]>([]);
   const [elements, setElements] = useState<{ kind: string; count: number }[]>([]);
   const [flows, setFlows] = useState<Flow[]>([]);
-  const [categories, setCategories] = useState<{ value: string; label: string; count: number }[]>([]);
+  // Every category the library has, and every app — the counts shown are worked out
+  // per platform below (`categories`), so the platform pills actually change them.
+  const [industries, setIndustries] = useState<string[]>([]);
+  const [allApps, setAllApps] = useState<App[]>([]);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>(loadRecentSearches);
   const inputRef = useRef<HTMLInputElement>(null);
   const modalInputRef = useRef<HTMLInputElement>(null);
@@ -262,10 +265,9 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     Promise.all([
       inspirationsApi.listApps(undefined, 'rating'),
       inspirationsApi.listScreens(EMPTY_FILTERS, 0, 'curated'),
-      inspirationsApi.listElements(),
       inspirationsApi.listFlows(),
       inspirationsApi.getMeta(),
-    ]).then(([apps, screensPage, elementsList, flowsList, meta]) => {
+    ]).then(([apps, screensPage, flowsList, meta]) => {
       if (cancelled) return;
       appsRef.current = apps;
       setTopApps(apps.slice(0, 7));
@@ -274,20 +276,27 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
         return app && !search.iconSrc ? { ...search, icon: 'app', iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined } : search;
       }));
         setScreens(screensPage.items);
-      setElements(elementsList);
         setFlows(flowsList);
-        setCategories(
-          meta.taxonomy.industries.map((industry) => ({
-            value: industry,
-            label: INDUSTRY_LABEL[industry as Industry] ?? industry,
-            count: apps.filter((app) => app.industry === industry).length,
-          })),
-        );
+        setIndustries(meta.taxonomy.industries);
+        setAllApps(apps);
     });
     return () => {
       cancelled = true;
     };
   }, [open]);
+
+  // UI elements are counted for the platform picked in the modal — iOS shows iOS's
+  // numbers, not the whole library's — so they refetch when the pill changes.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    inspirationsApi.listElements(modalPlatform ? [modalPlatform] : undefined).then((list) => {
+      if (!cancelled) setElements(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, modalPlatform]);
 
   useEffect(() => {
     if (!open) return;
@@ -356,7 +365,19 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // Matched against the full fetched list, not a 7-item preview slice — a
   // kind that exists but didn't happen to make the Top Rated row's cutoff
   // would otherwise never be found here no matter how exactly it's typed.
-  const matchingElements = elements.filter(({ kind }) => kind.toLocaleLowerCase().includes(value.trim().toLocaleLowerCase()));
+  const matchingElements = elements.filter(({ kind }) => {
+    const q = value.trim().toLocaleLowerCase();
+    return kind.toLocaleLowerCase().includes(q) || elementLabel(kind).toLocaleLowerCase().includes(q);
+  });
+  // Categories on the picked platform only, busiest first; one with no apps there is left out.
+  const categories = industries
+    .map((industry) => ({
+      value: industry,
+      label: INDUSTRY_LABEL[industry as Industry] ?? industry,
+      count: allApps.filter((app) => app.industry === industry && (!modalPlatform || app.platforms.includes(modalPlatform))).length,
+    }))
+    .filter((c) => c.count > 0)
+    .sort((a, b) => b.count - a.count);
   const visibleTopApps = modalPlatform ? topApps.filter((app) => app.platforms.includes(modalPlatform)) : topApps;
   const visibleFlows = modalPlatform ? flows.filter((flow) => flow.platform === modalPlatform) : flows;
   // Unlike the Top Rated tab's decorative Screens showcase (fixed stock
@@ -690,7 +711,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             onFocus={() => setBrowseActive(itemIndex)}
                             onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}
                           >
-                            <span><img src="/ASSET/search-modal/top-rated/element.svg" alt="" width={20} height={20} /></span>{element.kind}
+                            <span><img src="/ASSET/search-modal/top-rated/element.svg" alt="" width={20} height={20} /></span>{elementLabel(element.kind)}
                           </button>
                         );
                       })}
@@ -738,6 +759,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       <span>{count}</span>
                     </button>
                   ))}
+                  {modalPlatform && categories.length === 0 && <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} categories yet.</p>}
                 </div>
               ) : !value.trim() && section === 'screens' ? (
                 <div className="ins-search-resource-list" aria-label="Screens">
@@ -773,10 +795,11 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       onFocus={() => setBrowseActive(index)}
                       onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}
                     >
-                      <strong>{element.kind}</strong>
+                      <strong>{elementLabel(element.kind)}</strong>
                       <span>{element.count}</span>
                     </button>
                   ))}
+                  {modalPlatform && elements.length === 0 && <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} UI elements yet.</p>}
                 </div>
               ) : !value.trim() && section === 'flows' ? (
                 <div className="ins-search-resource-list" aria-label="Flows">
@@ -853,7 +876,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                     <section className="ins-search-suggestion-section ins-search-suggestion-elements">
                       <div className="ins-search-suggestion-heading">UI Elements</div>
                       <div className="ins-search-top-elements">
-                        {matchingElements.map((element) => <button key={element.kind} type="button" onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}><span><img src="/ASSET/search-modal/top-rated/element.svg" alt="" width={20} height={20} /></span>{element.kind}</button>)}
+                        {matchingElements.map((element) => <button key={element.kind} type="button" onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}><span><img src="/ASSET/search-modal/top-rated/element.svg" alt="" width={20} height={20} /></span>{elementLabel(element.kind)}</button>)}
                       </div>
                     </section>
                   )}

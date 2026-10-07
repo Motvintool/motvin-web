@@ -4,7 +4,7 @@ import { useRef, useState, type DragEvent } from 'react';
 import { adminApi, safeFileName, type AdminState } from '@/lib/inspirations/admin';
 import { localDateString } from '@/lib/inspirations/dates';
 import { INDUSTRY_LABEL, PLATFORM_LABEL, SCREEN_TYPE_LABEL } from '@/lib/inspirations/taxonomy';
-import { INDUSTRIES, SCREEN_TYPES, type Industry, type Platform, type ScreenType } from '@/lib/inspirations/types';
+import { PICKABLE_INDUSTRIES, SCREEN_TYPES, type Industry, type Platform, type ScreenType } from '@/lib/inspirations/types';
 import { CheckIcon, CloseIcon, PlusIcon, UploadIcon } from '../Icons';
 import { AppModeSelect } from './AppModeSelect';
 
@@ -60,7 +60,7 @@ export function UploadPanel({
   // picked from the list — same split as Automatic's New app / Old app.
   const [appMode, setAppMode] = useState<'new' | 'old'>(state.apps.length === 0 ? 'new' : 'old');
   const [appId, setAppId] = useState(state.apps[0]?.id ?? '');
-  const [newApp, setNewApp] = useState({ name: '', id: '', industry: 'saas' as Industry });
+  const [newApp, setNewApp] = useState({ name: '', id: '', industry: 'unsorted' as Industry });
   const [idTouched, setIdTouched] = useState(false);
   const [platform, setPlatform] = useState<Platform>('web');
   // "New app": blank means today, the same default a brand-new app gets from
@@ -105,7 +105,7 @@ export function UploadPanel({
     if (ok) {
       setAppId(id);
       setAppMode('old');
-      setNewApp({ name: '', id: '', industry: 'saas' });
+      setNewApp({ name: '', id: '', industry: 'unsorted' });
       setIdTouched(false);
     }
   };
@@ -286,7 +286,12 @@ export function UploadPanel({
                 value={newApp.industry}
                 onChange={(e) => setNewApp((a) => ({ ...a, industry: e.target.value as Industry }))}
               >
-                {INDUSTRIES.map((i) => (
+                {newApp.industry === 'unsorted' && (
+                  <option value="unsorted" disabled>
+                    Choose a category…
+                  </option>
+                )}
+                {PICKABLE_INDUSTRIES.map((i) => (
                   <option key={i} value={i}>
                     {INDUSTRY_LABEL[i]}
                   </option>
@@ -303,7 +308,7 @@ export function UploadPanel({
             <button
               type="button"
               className="ins-btn ins-btn--primary"
-              disabled={busy || !newApp.name.trim()}
+              disabled={busy || !newApp.name.trim() || newApp.industry === 'unsorted'}
               onClick={() => void createApp()}
             >
               <PlusIcon size={15} /> Create app

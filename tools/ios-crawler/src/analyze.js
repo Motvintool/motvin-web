@@ -26,7 +26,7 @@ import { luminance } from './hash.js';
 import { buildOcr, readText } from './ocr.js';
 import { classifyScreen, groupFlowsLocally, guessBrand } from './heuristics.js';
 import { aiChat, aiConfig, aiStatus } from './ai.js';
-import { ELEMENTS, INDUSTRIES, PUBLISHED_FLOW_CATEGORIES, SCREEN_TYPE_NAMES, STYLES } from './taxonomy.js';
+import { ELEMENTS, PICKABLE_INDUSTRIES, PUBLISHED_FLOW_CATEGORIES, SCREEN_TYPE_NAMES, STYLES } from './taxonomy.js';
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const API_VERSION = '2023-06-01';
@@ -161,7 +161,7 @@ function systemPrompt() {
 Return exactly this shape, no prose, no markdown fence:
 {
   "screen_type": one of ${SCREEN_TYPE_NAMES.join('|')},
-  "category": one of ${INDUSTRIES.join('|')},
+  "category": one of ${PICKABLE_INDUSTRIES.join('|')},
   "flow": short lowercase flow name, e.g. "shopping", "onboarding", "account",
   "name": short human title, max 6 words,
   "description": one sentence describing layout and purpose,
@@ -358,7 +358,7 @@ export function normaliseAnalysis(raw, elements) {
     screenType,
     states: stateOfType[screenType] ? [stateOfType[screenType]] : [],
     external: screenType === 'external_auth' ? 'model recognised a third-party sign-in page' : null,
-    category: INDUSTRIES.includes(raw.category) ? raw.category : null,
+    category: PICKABLE_INDUSTRIES.includes(raw.category) ? raw.category : null,
     flow: typeof raw.flow === 'string' ? raw.flow.toLowerCase().trim() : null,
     name: String(raw.name || '').trim() || 'Untitled screen',
     description: String(raw.description || '').trim(),
@@ -377,7 +377,7 @@ const IDENTIFY_SYSTEM = `You identify an app from screenshots of it. Return JSON
 {
   "name": the app's name as a user would say it, e.g. "Airbnb". If you cannot tell, use a short description of what it does instead, e.g. "Recipe planner",
   "confident": true only when you actually recognise the app or its name is visible on screen,
-  "industry": one of ${INDUSTRIES.join('|')},
+  "industry": one of ${PICKABLE_INDUSTRIES.join('|')},
   "tagline": one short sentence describing what the app is for,
   "website": the app's website if you are certain of it, otherwise ""
 }
@@ -483,7 +483,7 @@ export { encodeForModel };
  * screen plus a settings screen usually is not.
  *
  * @param {string[]} imagePaths a handful of representative frames
- * @returns {Promise<{name: string, confident: boolean, industry: string, tagline: string, website: string}>}
+ * @returns {Promise<{name: string, confident: boolean, industry: string | null, tagline: string, website: string}>}
  */
 export async function identifyApp(imagePaths, options = {}) {
   const backend = pickBackend(options.backend);
@@ -501,7 +501,7 @@ export async function identifyApp(imagePaths, options = {}) {
     return {
       name: brand.name,
       confident: false,
-      industry: 'productivity',
+      industry: null,
       tagline: '',
       website: '',
       evidence: brand.evidence,
@@ -547,7 +547,9 @@ export async function identifyApp(imagePaths, options = {}) {
   return {
     name: String(raw.name || '').trim() || 'Untitled app',
     confident: raw.confident === true,
-    industry: INDUSTRIES.includes(raw.industry) ? raw.industry : 'productivity',
+    // null — not a made-up default — when the model gave nothing usable, so the
+    // caller can fall back to the store's genre (category.js) or flag it.
+    industry: PICKABLE_INDUSTRIES.includes(raw.industry) ? raw.industry : null,
     tagline: String(raw.tagline || '').trim(),
     website: /^https?:\/\//.test(String(raw.website || '')) ? String(raw.website).trim() : '',
   };

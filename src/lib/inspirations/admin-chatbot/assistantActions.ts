@@ -9,6 +9,11 @@
  * the client, which performs them.
  */
 
+import { INDUSTRY_LABEL } from '../taxonomy';
+import type { Industry } from '../types';
+
+const industryLabel = (industry: string) => INDUSTRY_LABEL[industry as Industry] ?? industry;
+
 export type AppFields = Partial<{ name: string; tagline: string; industry: string; website: string }>;
 
 export type AdminOp =
@@ -116,7 +121,7 @@ export function labelFor(op: AdminOp): string {
     case 'reorder-flow':
       return `Reorder “${op.name}”`;
     case 'create-app':
-      return `Create ${op.name}`;
+      return `Create ${op.name}${op.industry && op.industry !== 'unsorted' ? ` as ${industryLabel(op.industry)}` : ' (category still needed)'}`;
     case 'set-screen-details':
       return `Update “${op.name}”’s details`;
     case 'start-ingest':
