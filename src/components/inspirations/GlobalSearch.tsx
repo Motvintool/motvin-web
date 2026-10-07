@@ -142,6 +142,13 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // real, full list, so nothing here gets truncated at fetch time. The
   // preview-sized slices for the Top Rated tab are derived below instead.
   const [screens, setScreens] = useState<Screen[]>([]);
+  // The Screens tab's own list: the selected platform's screens, loaded a page at a
+  // time as you scroll. (`screens` above is only the Top Rated showcase's sample.)
+  // `key` says which platform the items are for, so a pill change shows a loading
+  // state instead of the previous platform's list or a false "no screens yet".
+  const [screensTab, setScreensTab] = useState<{ key: string; items: Screen[]; next: number | null } | null>(null);
+  const [screensSentinel, setScreensSentinel] = useState<HTMLDivElement | null>(null);
+  const loadingMoreScreens = useRef(false);
   const [elements, setElements] = useState<{ kind: string; count: number }[]>([]);
   const [flows, setFlows] = useState<Flow[]>([]);
   // Every category the library has, and every app — the counts shown are worked out
@@ -285,6 +292,44 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     };
   }, [open]);
 
+  const screensKey = modalPlatform ?? 'all';
+
+  // First page of the Screens tab, fetched when the tab is opened or the platform changes.
+  useEffect(() => {
+    if (!open || section !== 'screens' || screensTab?.key === screensKey) return;
+    let cancelled = false;
+    inspirationsApi.listScreens({ ...EMPTY_FILTERS, platforms: modalPlatform ? [modalPlatform] : [] }, 0, 'curated').then((page) => {
+      if (!cancelled) setScreensTab({ key: screensKey, items: page.items, next: page.nextOffset });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, section, screensKey, screensTab?.key, modalPlatform]);
+
+  // Next page, when the end of the list scrolls into view.
+  const loadMoreScreens = useCallback(() => {
+    if (!screensTab || screensTab.next === null || loadingMoreScreens.current) return;
+    loadingMoreScreens.current = true;
+    const { key, next } = screensTab;
+    inspirationsApi
+      .listScreens({ ...EMPTY_FILTERS, platforms: modalPlatform ? [modalPlatform] : [] }, next, 'curated')
+      .then((page) => {
+        setScreensTab((prev) => (prev && prev.key === key ? { key, items: [...prev.items, ...page.items], next: page.nextOffset } : prev));
+      })
+      .finally(() => {
+        loadingMoreScreens.current = false;
+      });
+  }, [screensTab, modalPlatform]);
+
+  useEffect(() => {
+    if (!screensSentinel) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) loadMoreScreens();
+    });
+    observer.observe(screensSentinel);
+    return () => observer.disconnect();
+  }, [screensSentinel, loadMoreScreens]);
+
   // UI elements are counted for the platform picked in the modal — iOS shows iOS's
   // numbers, not the whole library's — so they refetch when the pill changes.
   useEffect(() => {
@@ -384,7 +429,9 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // imagery, positionally paired with whichever screen happens to fill that
   // slot), the dedicated Screens tab lists real screens with real names —
   // each one does carry a genuine platform, so filtering it is honest too.
-  const visibleScreens = modalPlatform ? screens.filter((screen) => screen.platform === modalPlatform) : screens;
+  const screensLoaded = screensTab && screensTab.key === screensKey ? screensTab : null;
+  const screensReady = screensLoaded !== null;
+  const visibleScreens = screensLoaded?.items ?? [];
   // Preview-sized slices for the Top Rated tab only — the sidebar's own
   // Screens/UI Elements/Flows sections use the full lists above instead, so
   // browsing there isn't artificially capped to whatever fits in this row.
@@ -778,7 +825,13 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       <span>{screen.elements.length}</span>
                     </button>
                   ))}
-                  {modalPlatform && visibleScreens.length === 0 && (
+                  {!screensReady && <p className="ins-muted">Loading screens…</p>}
+                  {screensLoaded && screensLoaded.next !== null && (
+                    <div ref={setScreensSentinel} className="ins-muted" aria-hidden>
+                      Loading more…
+                    </div>
+                  )}
+                  {screensReady && modalPlatform && visibleScreens.length === 0 && (
                     <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} screens yet.</p>
                   )}
                 </div>

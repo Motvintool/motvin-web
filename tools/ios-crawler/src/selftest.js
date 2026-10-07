@@ -398,6 +398,25 @@ export async function selfTest() {
     check('an unsure model is not trusted — the app is left for a person', unsure.industry === 'unsorted' && unsure.source === 'none');
     const invalid = await resolveIndustry({ name: 'Nobody', ai: { industry: 'cheese', confident: true } }, { fetchImpl: fakeStore });
     check('a category outside the list is refused even when confident', invalid.industry === 'unsorted');
+    // Identification failing is the common case with a small local model; the file name
+    // is then the only name there is. These run that fallback against the fake store.
+    const identify = (file, existing) => _internals.identifyFrom([], file, 'none', existing, [], { fetchImpl: fakeStore2 });
+    const listings2 = { Linkedin: [{ trackName: 'LinkedIn: Community & Network', primaryGenreName: 'Business' }] };
+    const fakeStore2 = async (url) => {
+      const term = decodeURIComponent(new URL(url).searchParams.get('term'));
+      return { ok: true, json: async () => ({ results: listings2[term] ?? [] }) };
+    };
+    const fromFile = await identify('/tmp/linkedIn.mp4', []);
+    check('a failed identification still finds the category from the file name', fromFile.industry === 'saas' && fromFile.industrySource === 'store', JSON.stringify(fromFile));
+    const noListing = await identify('/tmp/screen-recording-17.mp4', []);
+    check('a file name with no clear store listing is left for a person', noListing.industry === 'unsorted' && noListing.industrySource === 'none');
+    const inLibrary = await identify('/tmp/linkedIn.mp4', [{ id: 'linkedin', name: 'LinkedIn', industry: 'food', industrySource: 'manual', tagline: 'Kept tagline', website: 'https://example.com' }]);
+    check('a failed identification never overwrites an app already in the library', inLibrary.industry === 'food' && inLibrary.name === 'LinkedIn' && inLibrary.tagline === 'Kept tagline' && inLibrary.website === 'https://example.com', JSON.stringify(inLibrary));
+
+    // Nothing passes the run the library's apps, so ingest reads them from the store itself.
+    check('the library\'s apps are read from the store when none are passed', _internals.readStoredApps(store).some((a) => a.id === 'selftest-app'));
+    check('a store with no apps.json reads as empty rather than failing', _internals.readStoredApps(join(store, 'nowhere')).length === 0);
+
     const gap = await publishCrawl({ graph: publishGraph, dataDir: store, app: { appId: 'gap-app', name: 'Gap App', industry: 'unsorted', industrySource: 'none' } });
     check('an unsorted app still publishes', Boolean(gap), '');
     const gapRecord = JSON.parse(readFileSync(join(store, 'apps.json'), 'utf-8')).apps.find((a) => a.id === 'gap-app');

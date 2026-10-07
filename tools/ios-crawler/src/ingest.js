@@ -572,7 +572,9 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
         representativeFrames(nodes),
         source,
         analyzer.usable ? options.backend : 'none',
-        options.existingApps,
+        // Nothing hands the run the library's apps, so read them from the store: an upload
+        // of an app that is already there must add to it, not write a fresh record over it.
+        options.existingApps ?? readStoredApps(options.dataDir),
         nodes.map((node) => node.analysis.lines ?? []).filter((lines) => lines.length),
       );
       resolvedApp = {
@@ -1341,16 +1343,51 @@ export function slugify(value) {
  * is used: wrong, but visible and editable afterwards, which beats refusing
  * the upload.
  */
-async function identifyFrom(frames, sourcePath, backend, existingApps, lineSets = []) {
-  const fallback = () => {
+/** The apps already in the store (apps.json), or none when there is no store yet. */
+function readStoredApps(dataDirOption) {
+  try {
+    const file = join(resolveDataDir(dataDirOption), 'apps.json');
+    if (!existsSync(file)) return [];
+    const doc = JSON.parse(readFileSync(file, 'utf-8'));
+    return Array.isArray(doc.apps) ? doc.apps : [];
+  } catch {
+    return [];
+  }
+}
+
+async function identifyFrom(frames, sourcePath, backend, existingApps, lineSets = [], lookup = {}) {
+  const fallback = async () => {
     const guess = titleFrom(basename(sourcePath));
+    const appId = slugify(guess) || 'untitled-app';
+
+    // The recording is named after an app that is already in the library: it is that
+    // app. Keep everything recorded for it — publishing writes this record over the
+    // stored one, so a bare guess here would wipe its category, tagline and website.
+    const existing = existingApps?.find((app) => app.id === appId);
+    if (existing?.industry && existing.industry !== 'unsorted') {
+      log.info(`category: ${existing.industry} — already recorded for this app`);
+      return {
+        name: existing.name ?? guess,
+        appId,
+        industry: existing.industry,
+        industrySource: existing.industrySource ?? 'manual',
+        tagline: existing.tagline ?? '',
+        website: existing.website ?? '',
+        confident: false,
+        detected: false,
+      };
+    }
+
+    // The model could not say what the app is, but the file name usually can
+    // ("linkedIn.mp4"). The App Store settles it only when a listing clearly carries
+    // that name; otherwise the app is left as "Needs category" for a person to set.
+    const decision = await resolveIndustry({ name: guess }, lookup);
+    log.info(`category: ${decision.industry} — ${decision.detail}${decision.source === 'store' ? ' (looked up from the recording’s file name)' : ''}`);
     return {
       name: guess,
-      appId: slugify(guess) || 'untitled-app',
-      // Not "productivity": an invented default reads as an answer. `unsorted` shows
-      // up in the admin as "Needs category" until somebody sets a real one.
-      industry: 'unsorted',
-      industrySource: 'none',
+      appId,
+      industry: decision.industry,
+      industrySource: decision.source,
       tagline: '',
       website: '',
       confident: false,
@@ -1372,7 +1409,7 @@ async function identifyFrom(frames, sourcePath, backend, existingApps, lineSets 
     const keepExisting = existing?.industry && existing.industry !== 'unsorted';
     const decision = keepExisting
       ? { industry: existing.industry, source: existing.industrySource ?? 'manual', detail: 'already recorded for this app' }
-      : await resolveIndustry({ name: existing?.name ?? identity.name, ai: { industry: identity.industry, confident: identity.confident } });
+      : await resolveIndustry({ name: existing?.name ?? identity.name, ai: { industry: identity.industry, confident: identity.confident } }, lookup);
     log.info(`category: ${decision.industry} — ${decision.detail}`);
     return {
       name: existing?.name ?? identity.name,
@@ -1697,4 +1734,4 @@ function classifyLines(lines, sidecar) {
 }
 
 /** Exported for the self-test. */
-export const _internals = { listImages, titleFrom, unclassified, PUBLISHED_TYPES, wordsOf, labelFor, isPublishable, fingerprintFromThumb, buildReviewCandidates, frameQuality, applyExclusions, bridgeEdges };
+export const _internals = { identifyFrom, readStoredApps, listImages, titleFrom, unclassified, PUBLISHED_TYPES, wordsOf, labelFor, isPublishable, fingerprintFromThumb, buildReviewCandidates, frameQuality, applyExclusions, bridgeEdges };
