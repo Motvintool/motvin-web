@@ -10,6 +10,10 @@ import { appPlatform, storeAction } from '@/lib/inspirations/storeAction';
 import { AppLogo } from '../AppLogo';
 import { AppMenu } from '../AppMenu';
 import { AppRating } from '../AppRating';
+import { StoreStrip } from '../StoreStrip';
+import { StoreButton } from '../StoreButton';
+import { StoreRankBadge } from '../StoreRankBadge';
+import { useDownloadAllScreens } from '../useDownloadAllScreens';
 import { useLibrary } from '../useLibrary';
 import { FloatCollectionBar } from '../FloatCollectionBar';
 import { EmptyState } from '../EmptyState';
@@ -461,6 +465,7 @@ export function AppDetailView({
 
   // "View in App Store" for a phone app, "Visit website" for a Web one.
   const store = storeAction(appPlatform(app), app.website);
+  const dl = useDownloadAllScreens(app, screens);
   const screenIds = new Set(screens.map((s) => s.id));
   const screenById = new Map(screens.map((s) => [s.id, s]));
   const appsMap = new Map([[app.id, app]]);
@@ -694,7 +699,10 @@ export function AppDetailView({
       */}
       <header className="ins-masthead">
         <div className="ins-masthead-main">
-        <AppLogo app={app} size={90} className="ins-masthead-logo" />
+        <div className="ins-masthead-brand">
+          <AppLogo app={app} size={90} className="ins-masthead-logo" />
+          <StoreRankBadge name={app.name} platform={appPlatform(app)} />
+        </div>
 
         <h1 className="ins-masthead-title">
           {app.name}
@@ -747,15 +755,12 @@ export function AppDetailView({
             <img src={`/ASSET/Icons/Motvin/${saved ? 'saved.svg' : 'unsaved.svg'}`} alt="" width={16} height={16} />
             <span>{saved ? 'Saved' : 'Save'}</span>
           </button>
-          {store && (
-            <a href={store.href} target="_blank" rel="noopener noreferrer" className="ins-btn ins-btn--masthead-store">
-              <img src={store.icon} alt="" width={16} height={16} />
-              <span>{store.label}</span>
-            </a>
-          )}
-          <AppMenu app={app} screens={screens} />
+          {store && <StoreButton name={app.name} platform={appPlatform(app)} action={store} />}
+          <AppMenu count={dl.count} busy={dl.busy} onDownloadAll={() => void dl.downloadAll()} />
         </div>
       </header>
+
+      <StoreStrip name={app.name} platform={appPlatform(app)} />
 
       {floatOpen && (
         <FloatCollectionBar
