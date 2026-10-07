@@ -33,13 +33,10 @@ const MusicIcon = (p: IconProps) => (
 const PauseIcon = (p: IconProps) => (
   <svg {...base(p)} fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
 );
-const AudioBarsIcon = (p: IconProps) => (
-  <svg {...base(p)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10 18v-6" />
-    <path d="M14 18v-12" />
-    <path d="M18 18v-8" />
-    <path d="M6 18v-3" />
-  </svg>
+const AudioWaveIcon = ({ size = 18 }: { size?: number }) => (
+  <span className="ins-wave" style={{ width: size, height: Math.round(size * 0.8) }} aria-hidden>
+    <i /><i /><i /><i />
+  </span>
 );
 
 const VolumeLowIcon = (p: IconProps) => (
@@ -83,13 +80,6 @@ export function AudioMenu() {
     if (audioRef.current) audioRef.current.volume = volume;
   }, [volume]);
 
-  // Closing the panel (X, Escape, outside click, header toggle) stops playback.
-  useEffect(() => {
-    if (open) return;
-    setPlaying(null);
-    audioRef.current?.pause();
-  }, [open]);
-
   // Clean up audio on unmount
   useEffect(() => {
     return () => {
@@ -127,13 +117,14 @@ export function AudioMenu() {
       <button
         type="button"
         className={`ins-header-action-link ${open || playing ? 'is-active' : ''}`}
-        aria-label="Tune In"
+        aria-label={playing ? `Tune In — playing ${playing}` : 'Tune In'}
+        title={playing ? `Playing ${playing}` : undefined}
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={() => setOpen((o) => !o)}
       >
         {playing ? (
-           <AudioBarsIcon size={18} stroke="#111" />
+           <AudioWaveIcon size={18} />
         ) : (
            <img src="/ASSET/Icons/Motvin/music.svg" alt="" width={18} height={18} />
         )}
