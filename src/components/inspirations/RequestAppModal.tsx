@@ -157,7 +157,9 @@ export function RequestAppModal({
             <h2>{step === 0 ? (existing ? 'Edit request' : 'Request an app') : 'Anything else?'}</h2>
             <p className="ins-request-intro">
               {step === 0
-                ? 'Tell us which app you’d like to see. We add popular requests.'
+                ? existing
+                  ? 'Update the details of your request.'
+                  : 'Tell us which app you’d like to see. We add popular requests.'
                 : 'All optional — a link or short note helps us capture it.'}
             </p>
 

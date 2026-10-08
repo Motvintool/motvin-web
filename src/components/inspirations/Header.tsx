@@ -102,7 +102,12 @@ export function Header() {
   const platformLinkRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const [indicator, setIndicator] = useState<{ left: number; width: number } | null>({ left: 6, width: 83 });
 
+  // The settings page swaps this bar for a logo-only one, which unmounts the platform links; measure
+  // again when they come back, or the pill is left with no size.
+  const onSettings = pathname.startsWith(INSPIRATIONS_ROUTES.settings);
+
   useLayoutEffect(() => {
+    if (onSettings) return;
     const measure = () => {
       const el = visuallyActivePlatform ? platformLinkRefs.current[visuallyActivePlatform] : null;
       setIndicator(el ? { left: el.offsetLeft, width: el.offsetWidth } : null);
@@ -110,7 +115,24 @@ export function Header() {
     measure();
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
-  }, [visuallyActivePlatform]);
+  }, [visuallyActivePlatform, onSettings]);
+
+  // The settings page is a quiet, personal page: the top bar shows the logo and nothing else.
+  if (onSettings) {
+    return (
+      <header className="ins-header">
+        <div className="ins-header-inner">
+          <div className="ins-header-content">
+            <div className="ins-header-left">
+              <Link href={INSPIRATIONS_ROUTES.explore} className="ins-brand-logo" aria-label="Motvin Inspirations home">
+                <img src="/ASSET/svg/nav-motvin-logo.svg" alt="" className="ins-brand-logo-img" width={48} height={48} />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="ins-header">

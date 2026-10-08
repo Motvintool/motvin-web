@@ -10,7 +10,7 @@ import { deleteMyRequest, listMyRequests, MAX_REQUESTS_PER_USER, type MyRequest 
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import { EmptyState } from './EmptyState';
-import { PlusIcon, SparklesIcon, TrashIcon, UserIcon } from './Icons';
+import { PlusIcon, TrashIcon } from './Icons';
 import { RequestAppModal } from './RequestAppModal';
 
 /**
@@ -20,6 +20,29 @@ import { RequestAppModal } from './RequestAppModal';
  */
 
 type Section = 'account' | 'requests';
+
+/** An invisible marker the stylesheet looks for, so the settings page gets its own side padding in every state. */
+function PageScope() {
+  return <span className="ins-set-scope" hidden />;
+}
+
+/**
+ * Motvin's own icons, drawn from the SVG files in public/ASSET/Icons. They are black in the file, so
+ * they are used as a mask over currentColor: that way they grey back and turn black with the label.
+ */
+function SetIcon({ name, size = 22 }: { name: 'user-account' | 'app-request'; size?: number }) {
+  const url = `url(/ASSET/Icons/${name}.svg)`;
+  return (
+    <span
+      className="ins-set-icon"
+      aria-hidden
+      style={{ width: size, height: size, WebkitMaskImage: url, maskImage: url }}
+    />
+  );
+}
+
+/** Requests older than the five-spot rule have a different id; they are listed but do not use a spot. */
+const usesSpot = (id: string) => /_[0-4]$/.test(id);
 
 function since(ms: number): string {
   const days = Math.floor((Date.now() - ms) / 86_400_000);
@@ -45,21 +68,24 @@ export function SettingsView() {
     if (!uid || !signedIn) return;
     let cancelled = false;
     listMyRequests(uid)
-      .then((all) => !cancelled && setRequestCount(all.length))
+      .then((all) => !cancelled && setRequestCount(all.filter((r) => usesSpot(r.id)).length))
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
   }, [uid, signedIn]);
 
-  if (!ready) return <p className="ins-muted ins-admin-status">Loading your account…</p>;
+  if (!ready) return <><PageScope /><p className="ins-muted ins-admin-status">Loading your account…</p></>;
   if (!signedIn || !user) {
     return (
-      <EmptyState
+      <>
+        <PageScope />
+        <EmptyState
         title="Sign in to see your settings"
         description="Your profile and the apps you’ve requested live here."
         action={{ label: 'Sign in', onClick: () => openAuth('login') }}
       />
+      </>
     );
   }
 
@@ -67,12 +93,13 @@ export function SettingsView() {
 
   return (
     <div className="ins-set">
+      <PageScope />
       <nav className="ins-set-tree" aria-label="Settings">
         <button type="button" className={`ins-set-tree-item ${section === 'account' ? 'is-active' : ''}`} aria-current={section === 'account'} onClick={() => go('account')}>
-          <UserIcon size={22} /> Account
+          <SetIcon name="user-account" /> Account
         </button>
         <button type="button" className={`ins-set-tree-item ${section === 'requests' ? 'is-active' : ''}`} aria-current={section === 'requests'} onClick={() => go('requests')}>
-          <SparklesIcon size={22} /> App requests
+          <SetIcon name="app-request" /> App requests
           {requestCount !== null && <span className="ins-set-tree-count">{requestCount}/{MAX_REQUESTS_PER_USER}</span>}
         </button>
       </nav>
@@ -80,10 +107,10 @@ export function SettingsView() {
       {/* Narrow screens have no room for a side tree, so it becomes a pill switch. */}
       <div className="ins-set-tabs" role="tablist" aria-label="Settings">
         <button type="button" role="tab" aria-selected={section === 'account'} className={section === 'account' ? 'is-active' : ''} onClick={() => go('account')}>
-          <UserIcon size={16} /> Account
+          <SetIcon name="user-account" size={16} /> Account
         </button>
         <button type="button" role="tab" aria-selected={section === 'requests'} className={section === 'requests' ? 'is-active' : ''} onClick={() => go('requests')}>
-          <SparklesIcon size={16} /> App requests
+          <SetIcon name="app-request" size={16} /> App requests
         </button>
       </div>
 
@@ -289,7 +316,7 @@ function RequestsSection({ uid, onCount }: { uid: string; onCount: (count: numbe
     try {
       const all = await listMyRequests(uid);
       setRequests(all);
-      onCount(all.length);
+      onCount(all.filter((r) => usesSpot(r.id)).length);
       setError('');
     } catch {
       setError('We couldn’t load your requests just now.');
@@ -307,7 +334,7 @@ function RequestsSection({ uid, onCount }: { uid: string; onCount: (count: numbe
       await deleteMyRequest(id);
       setRequests((current) => {
         const next = current?.filter((r) => r.id !== id) ?? null;
-        if (next) onCount(next.length);
+        if (next) onCount(next.filter((r) => usesSpot(r.id)).length);
         return next;
       });
     } catch {
@@ -317,14 +344,14 @@ function RequestsSection({ uid, onCount }: { uid: string; onCount: (count: numbe
     }
   };
 
-  const used = requests?.length ?? 0;
+  const used = requests?.filter((r) => usesSpot(r.id)).length ?? 0;
   const empty = Math.max(0, MAX_REQUESTS_PER_USER - used);
 
   return (
     <>
       <section className="ins-set-hero ins-set-hero--requests">
         <span className="ins-set-badge" aria-hidden>
-          <SparklesIcon size={26} />
+          <SetIcon name="app-request" size={28} />
         </span>
         <div className="ins-set-hero-text">
           <h1 className="ins-set-name">App requests</h1>

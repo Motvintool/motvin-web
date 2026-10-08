@@ -10505,7 +10505,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 }
 
 /* ---- /inspirations/settings: Motvin's own take — soft cards, pill controls, five "spots" ---------- */
-.ins-set { padding: 28px 0 96px; display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 780px) minmax(0, 1fr); column-gap: 72px; row-gap: 32px; align-items: start; }
+.ins-set { padding: 0 0 96px; display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 860px) minmax(0, 1fr); column-gap: 96px; row-gap: 32px; align-items: start; }
 .ins-set-main { grid-column: 2; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .ins-set-tabs { align-self: flex-start; display: inline-flex; gap: 4px; padding: 5px; border-radius: 99px; background: var(--ins-card-alt); }
 .ins-set-tabs button { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 99px; font-size: 15px; font-weight: 600; color: var(--ins-muted); transition: background 200ms, color 200ms, box-shadow 200ms; }
@@ -10560,7 +10560,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 .ins-set-slot--empty { align-items: center; justify-content: center; flex-direction: row; gap: 10px; border-style: dashed; background: transparent; color: var(--ins-muted); font-size: 15px; font-weight: 600; }
 .ins-set-slot--empty:hover { color: var(--ins-text); border-color: var(--ins-text); background: var(--ins-card-alt); }
 @media (max-width: 820px) {
-  .ins-set { padding-top: 12px; gap: 16px; }
+  .ins-set { gap: 16px; }
   .ins-set-hero { padding: 22px; gap: 16px; flex-wrap: wrap; border-radius: 24px; }
   .ins-set-avatar { width: 72px; height: 72px; font-size: 28px; }
   .ins-set-name { font-size: 26px; }
@@ -10578,7 +10578,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 
 /* Side list: icon + label, current page in full ink, the rest greyed back. */
 .ins-set-tree { position: sticky; top: calc(var(--ins-header-h, 82px) + 28px); display: flex; flex-direction: column; gap: 6px; padding: 4px 0; }
-.ins-set-tree-item { display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; color: var(--ins-muted); text-align: left; }
+.ins-set-tree-item { display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; color: var(--ins-muted); text-align: left; }
 .ins-set-tree-item svg { flex: none; stroke-width: 1.9; }
 .ins-set-tree-item.is-active { color: var(--ins-text); }
 .ins-set-tabs { display: none; }
@@ -10616,3 +10616,16 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 .ins-set-tools button, .ins-set-confirm button { display: inline-flex; align-items: center; justify-content: center; height: 32px; min-width: 32px; padding: 0 12px; line-height: 1; }
 .ins-set-tools button:last-child { padding: 0; width: 32px; }
 .ins-set-tools svg { display: block; }
+
+.ins-set-icon { display: inline-block; flex: none; background: currentColor; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; -webkit-mask-size: contain; mask-size: contain; }
+
+/* Unselected side items: a clear mid grey (about #737373 on light), derived from the theme so dark mode follows. */
+.ins-set-tree-item { color: color-mix(in srgb, var(--ins-text) 55%, var(--ins-card)); }
+.ins-set-tree-item:hover, .ins-set-tree-item.is-active { color: var(--ins-text); }
+
+/* Settings page only: 32px on the left and right, for the page and for the logo bar above it. */
+.ins-root:has(.ins-set-scope) .ins-main { padding-left: 32px; padding-right: 32px; }
+.ins-root:has(.ins-set-scope) .ins-header-content { padding-left: 32px; padding-right: 32px; }
+
+/* Settings: visible keyboard focus on every control. */
+.ins-set :is(button, a):focus-visible { outline: 2px solid var(--ins-text); outline-offset: 3px; border-radius: 10px; }
