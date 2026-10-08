@@ -10168,7 +10168,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   display: inline-flex; align-items: center; gap: 3px; padding: 7px 12px 7px 11px;
   border: 3px solid transparent; border-radius: 100px;
   /* Dark glossy fill inside a metal-gradient ring (gold / silver / bronze, set by
-     data-tier below): the two backgrounds are clipped to the padding box and the
+     data-tier above): the two backgrounds are clipped to the padding box and the
      border box, so the ring shows through the transparent border. */
   background:
     linear-gradient(180deg, #2f2f2f 0%, #0b0b0b 55%, #000 100%) padding-box,
