@@ -21,6 +21,15 @@ import { RequestAppModal } from './RequestAppModal';
 
 type Section = 'account' | 'requests';
 
+function since(ms: number): string {
+  const days = Math.floor((Date.now() - ms) / 86_400_000);
+  if (days < 1) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  return months < 12 ? `${months} month${months === 1 ? '' : 's'} ago` : `${Math.floor(months / 12)}y ago`;
+}
+
 export function SettingsView() {
   const { user, ready } = useAuth();
   const { open: openAuth } = useAuthModal();
@@ -28,6 +37,20 @@ export function SettingsView() {
   const params = useSearchParams();
   const section: Section = params.get('section') === 'requests' ? 'requests' : 'account';
   const signedIn = Boolean(user && !user.isAnonymous);
+  const [requestCount, setRequestCount] = useState<number | null>(null);
+  const uid = user?.uid;
+
+  // The side list shows how many of the five spots are used, whichever page you are on.
+  useEffect(() => {
+    if (!uid || !signedIn) return;
+    let cancelled = false;
+    listMyRequests(uid)
+      .then((all) => !cancelled && setRequestCount(all.length))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [uid, signedIn]);
 
   if (!ready) return <p className="ins-muted ins-admin-status">Loading your account…</p>;
   if (!signedIn || !user) {
@@ -44,15 +67,27 @@ export function SettingsView() {
 
   return (
     <div className="ins-set">
-      <nav className="ins-set-nav" aria-label="Settings">
-        <button type="button" className={section === 'account' ? 'is-active' : ''} onClick={() => go('account')}>
-          <UserIcon size={20} /> Account
+      <nav className="ins-set-tree" aria-label="Settings">
+        <button type="button" className={`ins-set-tree-item ${section === 'account' ? 'is-active' : ''}`} aria-current={section === 'account'} onClick={() => go('account')}>
+          <UserIcon size={22} /> Account
         </button>
-        <button type="button" className={section === 'requests' ? 'is-active' : ''} onClick={() => go('requests')}>
-          <SparklesIcon size={20} /> App requests
+        <button type="button" className={`ins-set-tree-item ${section === 'requests' ? 'is-active' : ''}`} aria-current={section === 'requests'} onClick={() => go('requests')}>
+          <SparklesIcon size={22} /> App requests
+          {requestCount !== null && <span className="ins-set-tree-count">{requestCount}/{MAX_REQUESTS_PER_USER}</span>}
         </button>
       </nav>
-      <div className="ins-set-body">{section === 'account' ? <AccountSection /> : <RequestsSection uid={user.uid} />}</div>
+
+      {/* Narrow screens have no room for a side tree, so it becomes a pill switch. */}
+      <div className="ins-set-tabs" role="tablist" aria-label="Settings">
+        <button type="button" role="tab" aria-selected={section === 'account'} className={section === 'account' ? 'is-active' : ''} onClick={() => go('account')}>
+          <UserIcon size={16} /> Account
+        </button>
+        <button type="button" role="tab" aria-selected={section === 'requests'} className={section === 'requests' ? 'is-active' : ''} onClick={() => go('requests')}>
+          <SparklesIcon size={16} /> App requests
+        </button>
+      </div>
+
+      <div className="ins-set-main">{section === 'account' ? <AccountSection /> : <RequestsSection uid={user.uid} onCount={setRequestCount} />}</div>
     </div>
   );
 }
@@ -77,6 +112,25 @@ function AccountSection() {
   const [message, setMessage] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [facts, setFacts] = useState<{ via: string; joined: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    ensureReady().then((auth) => {
+      const current = auth?.currentUser;
+      if (cancelled || !current) return;
+      const id = current.providerData[0]?.providerId ?? 'password';
+      const created = current.metadata.creationTime ? new Date(current.metadata.creationTime) : null;
+      setFacts({
+        via: id === 'google.com' ? 'Google' : 'Email',
+        joined: created ? created.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : '',
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   if (!user) return null;
 
   const displayName = shownName ?? (user.displayName || user.email.split('@')[0]);
@@ -90,7 +144,8 @@ function AccountSection() {
       if (auth?.currentUser) await updateProfile(auth.currentUser, { displayName: next });
       setShownName(next);
       setName(null);
-      setMessage('');
+      setMessage('Name saved.');
+      window.setTimeout(() => setMessage((m) => (m === 'Name saved.' ? '' : m)), 2500);
     } catch {
       setMessage('We couldn’t save your name just now — please try again.');
     } finally {
@@ -135,77 +190,95 @@ function AccountSection() {
 
   return (
     <>
-      <div className="ins-set-avatar">
-        {user.photoURL ? <img src={user.photoURL} alt="" referrerPolicy="no-referrer" /> : <span>{displayName[0]?.toUpperCase()}</span>}
-      </div>
-      <h1 className="ins-set-name">{displayName}</h1>
-      <p className="ins-set-email">{user.email}</p>
+      <section className="ins-set-hero">
+        <div className="ins-set-avatar">
+          {user.photoURL ? <img src={user.photoURL} alt="" referrerPolicy="no-referrer" /> : <span>{displayName[0]?.toUpperCase()}</span>}
+        </div>
+        <div className="ins-set-hero-text">
+          <h1 className="ins-set-name">{displayName}</h1>
+          <p className="ins-set-email">{user.email}</p>
+          {facts && (
+            <div className="ins-set-facts">
+              <span>Signed in with {facts.via}</span>
+              {facts.joined && <span>Member since {facts.joined}</span>}
+            </div>
+          )}
+        </div>
+      </section>
 
       {message && <p className="ins-set-note" role="status">{message}</p>}
 
-      <h2 className="ins-set-heading">Personal details</h2>
-      <Row
-        label="Name"
-        value={
-          name === null ? (
-            displayName
-          ) : (
-            <input className="ins-set-input" autoFocus value={name} maxLength={60} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void saveName()} aria-label="Name" />
-          )
-        }
-        action={
-          name === null ? (
-            <button type="button" onClick={() => setName(displayName)}>Edit</button>
-          ) : (
-            <>
-              <button type="button" onClick={() => void saveName()} disabled={busy}>Save</button>
-              <button type="button" onClick={() => setName(null)} className="is-quiet">Cancel</button>
-            </>
-          )
-        }
-      />
-      <Row label="Email address" value={user.email} />
-      <Row
-        label="Password"
-        value="Sent to your email to set or change"
-        action={<button type="button" onClick={() => void resetPassword()} disabled={busy}>Email me a link</button>}
-      />
+      <section className="ins-set-card" id="set-profile">
+        <h2 className="ins-set-heading">Profile</h2>
+        <Row
+          label="Name"
+          value={
+            name === null ? (
+              displayName
+            ) : (
+              <input className="ins-set-input" autoFocus value={name} maxLength={60} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void saveName(); if (e.key === 'Escape') setName(null); }} aria-label="Name" />
+            )
+          }
+          action={
+            name === null ? (
+              <button type="button" onClick={() => setName(displayName)}>Edit</button>
+            ) : (
+              <>
+                <button type="button" className="is-primary" onClick={() => void saveName()} disabled={busy}>Save</button>
+                <button type="button" onClick={() => setName(null)} className="is-quiet">Cancel</button>
+              </>
+            )
+          }
+        />
+        <Row label="Email" value={user.email} />
+      </section>
 
-      <h2 className="ins-set-heading">Manage account</h2>
-      <Row
-        label="Log out"
-        value="You will be logged out on this device."
-        action={
-          <button
-            type="button"
-            onClick={async () => {
-              await signOut();
-              router.replace(INSPIRATIONS_ROUTES.explore);
-            }}
-          >
-            Log out
-          </button>
-        }
-      />
-      <Row
-        label="Delete account"
-        value="Permanently delete your Motvin account and your app requests."
-        action={
-          confirmDelete ? (
-            <>
-              <button type="button" className="is-danger" onClick={() => void removeAccount()} disabled={busy}>Yes, delete</button>
-              <button type="button" className="is-quiet" onClick={() => setConfirmDelete(false)}>Keep</button>
-            </>
-          ) : (
-            <button type="button" className="is-danger" onClick={() => setConfirmDelete(true)}>Delete</button>
-          )
-        }
-      />
+      <section className="ins-set-card" id="set-security">
+        <h2 className="ins-set-heading">Security</h2>
+        <Row
+          label="Password"
+          value="We’ll email you a link to set or change it."
+          action={<button type="button" onClick={() => void resetPassword()} disabled={busy}>Email me a link</button>}
+        />
+        <Row
+          label="Log out"
+          value="Sign out of Motvin on this device."
+          action={
+            <button
+              type="button"
+              onClick={async () => {
+                await signOut();
+                router.replace(INSPIRATIONS_ROUTES.explore);
+              }}
+            >
+              Log out
+            </button>
+          }
+        />
+      </section>
+
+      <section className="ins-set-card ins-set-card--danger" id="set-delete">
+        <h2 className="ins-set-heading">Delete account</h2>
+        <Row
+          label="Remove everything"
+          value="Permanently deletes your account and your app requests. This can’t be undone."
+          action={
+            confirmDelete ? (
+              <>
+                <button type="button" className="is-danger" onClick={() => void removeAccount()} disabled={busy}>Yes, delete</button>
+                <button type="button" className="is-quiet" onClick={() => setConfirmDelete(false)}>Keep</button>
+              </>
+            ) : (
+              <button type="button" className="is-danger" onClick={() => setConfirmDelete(true)}>Delete</button>
+            )
+          }
+        />
+      </section>
     </>
   );
 }
 
-function RequestsSection({ uid }: { uid: string }) {
+function RequestsSection({ uid, onCount }: { uid: string; onCount: (count: number) => void }) {
   const [requests, setRequests] = useState<MyRequest[] | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<MyRequest | null>(null);
@@ -214,13 +287,15 @@ function RequestsSection({ uid }: { uid: string }) {
 
   const load = useCallback(async () => {
     try {
-      setRequests(await listMyRequests(uid));
+      const all = await listMyRequests(uid);
+      setRequests(all);
+      onCount(all.length);
       setError('');
     } catch {
       setError('We couldn’t load your requests just now.');
       setRequests([]);
     }
-  }, [uid]);
+  }, [uid, onCount]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount
@@ -230,7 +305,11 @@ function RequestsSection({ uid }: { uid: string }) {
   const remove = async (id: string) => {
     try {
       await deleteMyRequest(id);
-      setRequests((current) => current?.filter((r) => r.id !== id) ?? null);
+      setRequests((current) => {
+        const next = current?.filter((r) => r.id !== id) ?? null;
+        if (next) onCount(next.length);
+        return next;
+      });
     } catch {
       setError('We couldn’t delete that just now — please try again.');
     } finally {
@@ -239,59 +318,72 @@ function RequestsSection({ uid }: { uid: string }) {
   };
 
   const used = requests?.length ?? 0;
+  const empty = Math.max(0, MAX_REQUESTS_PER_USER - used);
 
   return (
     <>
-      <div className="ins-set-top">
-        <div>
+      <section className="ins-set-hero ins-set-hero--requests">
+        <span className="ins-set-badge" aria-hidden>
+          <SparklesIcon size={26} />
+        </span>
+        <div className="ins-set-hero-text">
           <h1 className="ins-set-name">App requests</h1>
-          <p className="ins-set-email">
-            {used} of {MAX_REQUESTS_PER_USER} used. Edit or delete one to make room.
-          </p>
+          <p className="ins-set-email">Apps you’d like us to add. You have {MAX_REQUESTS_PER_USER} spots — edit or delete one to free it up.</p>
         </div>
-        <button type="button" className="ins-set-add" onClick={() => setAdding(true)} disabled={used >= MAX_REQUESTS_PER_USER}>
-          <PlusIcon size={16} /> Request an app
-        </button>
-      </div>
+        <div className="ins-set-meter" aria-label={`${used} of ${MAX_REQUESTS_PER_USER} used`}>
+          {Array.from({ length: MAX_REQUESTS_PER_USER }, (_, i) => (
+            <i key={i} className={i < used ? 'is-on' : ''} />
+          ))}
+          <span>{used}/{MAX_REQUESTS_PER_USER}</span>
+        </div>
+      </section>
 
       {error && <p className="ins-set-note" role="alert">{error}</p>}
-      {!requests && <p className="ins-muted ins-admin-status">Loading…</p>}
-      {requests && requests.length === 0 && !error && (
-        <p className="ins-muted ins-admin-status">You haven’t requested any apps yet.</p>
-      )}
 
-      <div className="ins-set-requests">
-        {requests?.map((request) => (
-          <article key={request.id} className="ins-set-req">
-            <div>
-              <h3>
-                {request.appName} <span>{PLATFORM_LABEL[request.platform]}</span>
-              </h3>
+      {requests ? (
+        <div className="ins-set-slots">
+          {requests.map((request) => (
+            <article key={request.id} className="ins-set-slot">
+              <header>
+                <span className="ins-set-chip">{PLATFORM_LABEL[request.platform]}</span>
+                {confirming === request.id ? (
+                  <span className="ins-set-confirm">
+                    <button type="button" className="is-danger" onClick={() => void remove(request.id)}>Delete</button>
+                    <button type="button" onClick={() => setConfirming(null)}>Keep</button>
+                  </span>
+                ) : (
+                  <span className="ins-set-tools">
+                    <button type="button" aria-label={`Edit ${request.appName}`} onClick={() => setEditing(request)}>Edit</button>
+                    <button type="button" aria-label={`Delete ${request.appName}`} onClick={() => setConfirming(request.id)}>
+                      <TrashIcon size={15} />
+                    </button>
+                  </span>
+                )}
+              </header>
+              <h3>{request.appName}</h3>
               {request.link && (
                 <a href={request.link} target="_blank" rel="noreferrer noopener">
                   {request.link.replace(/^https?:\/\//, '')}
                 </a>
               )}
               {request.note && <p>{request.note}</p>}
-            </div>
-            <div className="ins-set-action">
-              {confirming === request.id ? (
-                <>
-                  <button type="button" className="is-danger" onClick={() => void remove(request.id)}>Delete</button>
-                  <button type="button" className="is-quiet" onClick={() => setConfirming(null)}>Keep</button>
-                </>
-              ) : (
-                <>
-                  <button type="button" onClick={() => setEditing(request)}>Edit</button>
-                  <button type="button" className="is-icon" aria-label={`Delete ${request.appName}`} onClick={() => setConfirming(request.id)}>
-                    <TrashIcon size={16} />
-                  </button>
-                </>
-              )}
-            </div>
-          </article>
-        ))}
-      </div>
+              <time className="ins-set-when">Requested {since(request.createdAtMs)}</time>
+            </article>
+          ))}
+          {Array.from({ length: empty }, (_, i) => (
+            <button key={`empty-${i}`} type="button" className="ins-set-slot ins-set-slot--empty" onClick={() => setAdding(true)}>
+              <PlusIcon size={18} />
+              <span>{i === 0 ? 'Request an app' : 'Open spot'}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="ins-set-slots" aria-busy="true">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="ins-set-slot ins-set-skeleton" />
+          ))}
+        </div>
+      )}
 
       {(editing || adding) && (
         <RequestAppModal
