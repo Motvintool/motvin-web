@@ -3,13 +3,15 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { EMPTY_FILTERS } from '@/lib/inspirations/filters';
+import { EMPTY_FILTERS, browsedPlatforms } from '@/lib/inspirations/filters';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { OPEN_SEARCH_EVENT, type SearchSection } from '@/lib/inspirations/openSearch';
 import { suggestQueries, type SearchSuggestion } from '@/lib/inspirations/search';
 import { elementLabel, INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { App, Flow, Industry, Platform, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
+import { RequestAppModal } from './RequestAppModal';
 import { FLOW_PARAM } from './FlowPreview';
 import { AndroidIcon, AppleIcon, ChevronDownIcon, CloseIcon, SearchIcon, WebIcon } from './Icons';
 import { SCREEN_PARAM } from './ScreenPreviewModal';
@@ -171,6 +173,32 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   const close = () => {
     setOpen(false);
   };
+
+  // The "Request app" popup: opened from the empty-results footer, prefilled with what was searched for.
+  const [requesting, setRequesting] = useState<{ name: string; platform: Platform } | null>(null);
+
+  // The modal opens on the platform being browsed (?platform=web …), not always iOS, so what it
+  // lists matches the page behind it. Re-synced each time it opens; a change made inside the
+  // modal sticks until it is closed.
+  const browsedPlatform = browsedPlatforms(params)[0];
+  useEffect(() => {
+    if (open) setModalPlatform(browsedPlatform);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when it opens
+  }, [open]);
+
+  // Another part of the page (the Explore columns' titles) asks for the modal on a given
+  // section: show that section, clear any query so the section list is what appears, open.
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const section = (event as CustomEvent<{ section: SearchSection }>).detail?.section ?? 'top';
+      setValue('');
+      setSection(section);
+      setBrowseActive(-1);
+      setOpen(true);
+    };
+    window.addEventListener(OPEN_SEARCH_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_SEARCH_EVENT, onOpen);
+  }, []);
 
   // Keep the field in sync when the URL query changes (Back/Forward). Adjusts
   // state during render — React's documented pattern for deriving from props.
@@ -588,6 +616,10 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
         )}
       </form>
 
+      {requesting && (
+        <RequestAppModal initialName={requesting.name} initialPlatform={requesting.platform} onClose={() => setRequesting(null)} />
+      )}
+
       {open && typeof document !== 'undefined' && createPortal(
         <div className="ins-search-overlay" onClick={close}>
         <div 
@@ -935,7 +967,16 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                   )}
                   <p className="ins-search-suggestion-footer">
                      Looking for something else?{' '}
-                    <a href={`mailto:surendarv638@gmail.com?subject=${encodeURIComponent(`App request: ${value.trim()}`)}`}>Request app</a>
+                    <a
+                      href="#request-app"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setRequesting({ name: value.trim(), platform: modalPlatform ?? browsedPlatform });
+                        close();
+                      }}
+                    >
+                      Request app
+                    </a>
                   </p>
                 </div>
               );

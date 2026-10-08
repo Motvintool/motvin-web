@@ -18,6 +18,8 @@ export const INSPIRATIONS_ROUTES = {
    */
   collections: '/inspirations/collections',
   admin: '/inspirations/admin',
+  settings: '/inspirations/settings',
+  settingsRequests: '/inspirations/settings?section=requests',
   app: (app: Pick<App, 'slug'>) => `/inspirations/app/${app.slug}`,
   pattern: (pattern: Pick<Pattern, 'slug'>) => `/inspirations/pattern/${pattern.slug}`,
   searchFor: (query: string, mode?: 'text') => `/inspirations/search?q=${encodeURIComponent(query)}${mode === 'text' ? '&mode=text' : ''}`,

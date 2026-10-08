@@ -7,9 +7,11 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
+import { openSearch, type SearchSection } from '@/lib/inspirations/openSearch';
 import { INDUSTRY_LABEL, SCREEN_TYPE_LABEL, elementLabel, flowCategoryLabel } from '@/lib/inspirations/taxonomy';
 import { FilteredGallery } from '../FilteredGallery';
 import { PageHeading } from '../PageHeading';
+import { RotatingTitle } from '../RotatingTitle';
 import { usePlatformMeta } from '../useMeta';
 import { ExploreSkeleton } from '../Skeletons';
 import { useAsync } from '../useAsync';
@@ -157,36 +159,45 @@ export function ExploreView() {
   // "Other" is where unclassified screens land — never a destination worth featuring.
   const screenTypes = mostUsed(meta.taxonomy.screenTypes, meta.usage?.screenTypes).filter((type) => type !== 'other');
 
+  const usage = meta.usage;
   const taxonomyGroups = [
     {
       title: 'Categories',
-      items: mostUsed(meta.taxonomy.industries, meta.usage?.industries).slice(0, MAX_TAXONOMY_ITEMS).map((industry) => ({
+      section: 'categories' as SearchSection,
+      items: mostUsed(meta.taxonomy.industries, usage?.industries).slice(0, MAX_TAXONOMY_ITEMS).map((industry) => ({
         key: industry,
         label: INDUSTRY_LABEL[industry] ?? industry,
+        count: usage?.industries[industry],
         href: withPlatform(`${INSPIRATIONS_ROUTES.screens}?industry=${industry}`),
       })),
     },
     {
       title: 'Screens',
+      section: 'screens' as SearchSection,
       items: screenTypes.slice(0, MAX_TAXONOMY_ITEMS).map((type) => ({
         key: type,
         label: SCREEN_TYPE_LABEL[type] ?? type,
+        count: usage?.screenTypes[type],
         href: withPlatform(`${INSPIRATIONS_ROUTES.screens}?type=${type}`),
       })),
     },
     {
       title: 'UI Elements',
-      items: mostUsed(meta.taxonomy.elements, meta.usage?.elements).slice(0, MAX_TAXONOMY_ITEMS).map((kind) => ({
+      section: 'elements' as SearchSection,
+      items: mostUsed(meta.taxonomy.elements, usage?.elements).slice(0, MAX_TAXONOMY_ITEMS).map((kind) => ({
         key: kind,
         label: elementLabel(kind),
+        count: usage?.elements[kind],
         href: withPlatform(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(kind)}`),
       })),
     },
     {
       title: 'Flows',
-      items: mostUsed(meta.taxonomy.flowCategories, meta.usage?.flowCategories).slice(0, MAX_TAXONOMY_ITEMS).map((category) => ({
+      section: 'flows' as SearchSection,
+      items: mostUsed(meta.taxonomy.flowCategories, usage?.flowCategories).slice(0, MAX_TAXONOMY_ITEMS).map((category) => ({
         key: category,
         label: flowCategoryLabel(category),
+        count: usage?.flowCategories[category],
         href: withPlatform(`${INSPIRATIONS_ROUTES.flows}?category=${encodeURIComponent(category)}`),
       })),
     },
@@ -198,36 +209,34 @@ export function ExploreView() {
 
   return (
     <div className="ins-explore-view">
-      <PageHeading title="Inspirations" />
+      <PageHeading title={<RotatingTitle />} />
       {taxonomyGroups.length > 0 && (
         <section className="ins-explore-taxonomy" aria-label="Explore categories">
           {taxonomyGroups.map((group) => (
             <div key={group.title} className="ins-explore-taxonomy-group">
-              <h2 className="ins-explore-taxonomy-title">{group.title}</h2>
+              <h2 className="ins-explore-taxonomy-title">
+                <button type="button" className="ins-explore-taxonomy-titlebtn" onClick={() => openSearch(group.section)}>
+                  {group.title}
+                </button>
+              </h2>
               <ul className="ins-explore-taxonomy-list">
                 {group.items.map((item) => (
                   <li key={item.key}>
-                    <Link 
-                      href={item.href} 
+                    <Link
+                      href={item.href}
                       className="ins-explore-taxonomy-link"
                       onMouseEnter={(e) => {
-                        if (group.title === 'Categories' || group.title === 'Screens' || group.title === 'Flows' || group.title === 'UI Elements') {
-                          setHoveredCategory({ id: item.key, title: group.title });
-                          setMousePos({ x: e.clientX, y: e.clientY });
-                        }
+                        setHoveredCategory({ id: item.key, title: group.title });
+                        setMousePos({ x: e.clientX, y: e.clientY });
                       }}
-                      onMouseMove={(e) => {
-                        if (group.title === 'Categories' || group.title === 'Screens' || group.title === 'Flows' || group.title === 'UI Elements') {
-                          setMousePos({ x: e.clientX, y: e.clientY });
-                        }
-                      }}
-                      onMouseLeave={() => {
-                        if (group.title === 'Categories' || group.title === 'Screens' || group.title === 'Flows' || group.title === 'UI Elements') {
-                          setHoveredCategory(null);
-                        }
-                      }}
+                      onMouseMove={(e) => setMousePos({ x: e.clientX, y: e.clientY })}
+                      onMouseLeave={() => setHoveredCategory(null)}
                     >
-                      {item.label}
+                      <span className="ins-explore-index-label">{item.label}</span>
+                      <span className="ins-explore-index-leader" aria-hidden />
+                      {item.count !== undefined && (
+                        <span className="ins-explore-index-count">{item.count.toLocaleString('en-US')}</span>
+                      )}
                     </Link>
                   </li>
                 ))}

@@ -67,3 +67,30 @@ service cloud.firestore {
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// "Request an app" — merge this block into the live rules too.
+//
+// Visitors need no account to ask for an app, so creating is open, but only for a
+// well-formed document with sane lengths. Nobody can change a request. Reading and
+// deleting are for the library admin only (the same address the admin area allows).
+//
+//   match /appRequests/{requestId} {
+//     allow create: if request.resource.data.keys().hasOnly(
+//         ['appName', 'key', 'platform', 'link', 'note', 'email', 'createdAtMs', 'uid', 'userEmail'])
+//       && request.resource.data.appName is string
+//       && request.resource.data.appName.size() >= 2 && request.resource.data.appName.size() <= 80
+//       && request.resource.data.key is string && request.resource.data.key.size() <= 80
+//       && request.resource.data.platform in ['ios', 'android', 'web']
+//       && request.resource.data.link is string && request.resource.data.link.size() <= 300
+//       && request.resource.data.note is string && request.resource.data.note.size() <= 500
+//       && request.resource.data.email is string && request.resource.data.email.size() <= 120
+//       && request.resource.data.createdAtMs is int
+//       && request.resource.data.createdAtMs > request.time.toMillis() - 600000
+//       && request.resource.data.createdAtMs < request.time.toMillis() + 600000;
+//     allow read, delete: if request.auth != null
+//       && request.auth.token.email_verified == true
+//       && request.auth.token.email == 'surendarv638@gmail.com';
+//     allow update: if false;
+//   }
+// ---------------------------------------------------------------------------

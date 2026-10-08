@@ -11,7 +11,7 @@ import { isAdminEmail } from '@/lib/inspirations/admin';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { applyTheme, getStoredTheme, storeTheme, type ThemePreference } from '@/lib/theme';
 import { ADMIN_PARAM } from './admin/AdminDrawer';
-import { FolderIcon, UploadIcon } from './Icons';
+import { FolderIcon, SettingsIcon, UploadIcon } from './Icons';
 
 /**
  * Avatar chip + dropdown for the Inspirations header. The chip and dropdown
@@ -107,6 +107,12 @@ export function ProfileMenu() {
               <FolderIcon size={16} />
               <span>Collections</span>
             </Link>
+            {signedIn && (
+              <Link href={INSPIRATIONS_ROUTES.settings} className="mi-profile-item" role="menuitem" onClick={() => setOpen(false)}>
+                <SettingsIcon size={16} />
+                <span>Settings</span>
+              </Link>
+            )}
             {showAdmin && (
               <Link href={adminHref} scroll={false} className="mi-profile-item" role="menuitem" onClick={() => setOpen(false)}>
                 <UploadIcon size={16} />

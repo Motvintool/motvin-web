@@ -3,10 +3,11 @@
 import { useState, type ReactElement } from 'react';
 import { adminApi } from '@/lib/inspirations/admin';
 import { PageHeading } from '../PageHeading';
-import { CloseIcon, FlowIcon, FolderIcon, ImageIcon, LayersIcon, UploadIcon } from '../Icons';
+import { CloseIcon, FlowIcon, FolderIcon, ImageIcon, LayersIcon, PlusIcon, UploadIcon } from '../Icons';
 import { AddScreensPanel } from './AddScreensPanel';
 import { AppsPanel } from './AppsPanel';
 import { FlowsPanel } from './FlowsPanel';
+import { RequestsPanel } from './RequestsPanel';
 import { ScreensPanel } from './ScreensPanel';
 import { useAdminState } from './useAdminState';
 
@@ -25,13 +26,14 @@ import { useAdminState } from './useAdminState';
  * the same thing; they are now one tab with a switch, in AddScreensPanel.
  */
 
-type Tab = 'add' | 'screens' | 'apps' | 'flows';
+type Tab = 'add' | 'screens' | 'apps' | 'flows' | 'requests';
 
 const TABS: { id: Tab; label: string; icon: (props: { size?: number }) => ReactElement }[] = [
   { id: 'add', label: 'Add screens', icon: UploadIcon },
   { id: 'screens', label: 'Screens', icon: ImageIcon },
   { id: 'apps', label: 'Apps', icon: FolderIcon },
   { id: 'flows', label: 'Flows', icon: FlowIcon },
+  { id: 'requests', label: 'Requests', icon: PlusIcon },
 ];
 
 export function AdminView() {
@@ -139,6 +141,7 @@ export function AdminView() {
           {tab === 'screens' && <ScreensPanel state={state} busy={busy} run={run} />}
           {tab === 'apps' && <AppsPanel state={state} busy={busy} run={run} />}
           {tab === 'flows' && <FlowsPanel state={state} busy={busy} run={run} />}
+          {tab === 'requests' && <RequestsPanel />}
         </section>
       )}
     </>

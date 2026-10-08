@@ -5,6 +5,7 @@ import type {
   Flow,
   LibraryMeta,
   Pattern,
+  Platform,
   Screen,
   UiAnalysis,
 } from './types';
