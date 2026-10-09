@@ -123,6 +123,8 @@ export type AdminAppRecord = {
   industrySource?: 'store' | 'ai' | 'manual' | 'none';
   website?: string;
   tagline?: string;
+  /** Where the app lives, as the admin declared it. Screens an app has published count too. */
+  platforms?: Platform[];
   logo?: string;
   versions?: AdminAppVersion[];
   currentVersion?: string | null;

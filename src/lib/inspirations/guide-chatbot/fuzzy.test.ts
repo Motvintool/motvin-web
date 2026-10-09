@@ -115,14 +115,14 @@ describe('findIndustry', () => {
 
 describe('findPlatform', () => {
   it.each([
-    ['web apps', 'web'],
-    ['web application', 'web'],
+    ['web apps', 'webapp'],
+    ['web application', 'webapp'],
+    ['webapp', 'webapp'],
+    ['how many web apps are there', 'webapp'],
     ['web', 'web'],
+    ['websites', 'web'],
     ['ios apps', 'ios'],
     ['iphone', 'ios'],
-    ['android apps', 'android'],
-    ['android', 'android'],
-    ['how many web apps are there', 'web'],
   ])('%s → %s', (input, expected) => {
     expect(findPlatform(input)).toBe(expected);
   });

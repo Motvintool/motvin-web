@@ -58,7 +58,7 @@ export async function POST(request: Request) {
   const keepBrief = params.get('brief') !== '0';
   const keepLoading = params.get('loading') === '1';
   const platform = (params.get('platform') ?? 'ios').trim().toLowerCase();
-  if (!['ios', 'android', 'web'].includes(platform)) return fail('platform must be ios, android or web.', 400);
+  if (!['ios', 'webapp', 'web'].includes(platform)) return fail('platform must be ios, webapp or web.', 400);
   // Which dated capture to publish into — omit to let the crawler default to
   // today, so a re-run on a later day lands alongside the last one instead of
   // merging into it.

@@ -39,7 +39,7 @@ export const EMPTY_FILTERS: ScreenFilters = {
  * The platform actually browsed when the URL names none. Mobbin's model, and
  * ours: a visitor is always in exactly one platform's section — iOS by
  * default — rather than an "all platforms" soup no control can describe. The
- * URL stays clean for the default; only Android/Web are ever written to it.
+ * URL stays clean for the default; only Web Apps/Webs are ever written to it.
  */
 export const DEFAULT_PLATFORM: Platform = 'ios';
 

@@ -9,7 +9,6 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import {
   CONTENT_KINDS,
   INDUSTRY_LABEL,
-  PLATFORM_LABEL,
   SCREEN_TYPE_LABEL,
   STYLE_LABEL,
   elementLabel,
@@ -17,16 +16,15 @@ import {
   SCREEN_STATE_LABEL,
 } from '@/lib/inspirations/taxonomy';
 import {
-  PLATFORMS,
   type Industry,
   type LibraryCounts,
-  type Platform,
   type ScreenState,
   type ScreenType,
   type Style,
 } from '@/lib/inspirations/types';
 import { useMeta } from './useMeta';
-import { CheckIcon, ChevronDownIcon, CloseIcon } from './Icons';
+import { AppTabs } from './AppTabs';
+import { CheckIcon, CloseIcon } from './Icons';
 
 /**
  * The Screens-page filter row, in Mobbin's shape: one dropdown pill per
@@ -41,7 +39,7 @@ import { CheckIcon, ChevronDownIcon, CloseIcon } from './Icons';
 
 export type SortOption<S extends string> = { value: S; label: string };
 
-/** True when the current selection is exactly the web platform. */
+/** True when the current selection is exactly the Webs (websites) platform. */
 export function isWebPlatform(platforms: string[]): boolean {
   return platforms.length === 1 && platforms[0] === 'web';
 }
@@ -187,7 +185,7 @@ export function FilterPill({
             <CloseIcon size={10} strokeWidth={4} />
           </span>
         ) : (
-          <ChevronDownIcon size={14} />
+          <span className="ins-fpill-chev" aria-hidden />
         )}
       </button>
       {open && (
@@ -265,7 +263,7 @@ export function NavPill({ counts }: { counts: LibraryCounts | null }) {
         onKeyDown={(e) => onTriggerKeyDown(e, open, setOpen)}
       >
         {active?.label ?? 'Explore'}
-        <ChevronDownIcon size={14} />
+        <span className="ins-fpill-chev" aria-hidden />
       </button>
       {open && (
         <div className="ins-popover ins-fmenu" role="menu" aria-label="Content type" onKeyDown={onMenuKeyDown}>
@@ -341,7 +339,7 @@ export function SortPill<S extends string>({
         onClick={() => setOpen((o) => !o)}
         onKeyDown={(e) => onTriggerKeyDown(e, open, setOpen)}
       >
-        <img src="/ASSET/Icons/Motvin/filter-inspiration.svg" alt="" className="ins-fsort-icon" width={20} height={20} />
+        <img src="/ASSET/Icons/Motvin/sort-curated.svg" alt="" className="ins-fsort-icon" width={20} height={20} />
         {options.find((o) => o.value === value)?.label}
       </button>
       {open && (
@@ -446,6 +444,42 @@ export function useDockingRow() {
 }
 
 /**
+ * The platform switch (Figma "Apps or web", node 1311:15892): a grey pill with the current platform
+ * lifted onto a white one. It switches between iOS and Web Apps; websites ("Webs") have no sub-platforms,
+ * so on wide screens it steps aside there (the Apps / Webs tabs carry that choice). On narrow screens the
+ * tabs are not shown, so the switch carries all three and is the only way to move between them.
+ */
+const SWITCH_OPTIONS: { value: string; label: string; param: string | null }[] = [
+  { value: 'ios', label: 'iOS', param: null },
+  { value: 'webapp', label: 'Web Apps', param: 'webapp' },
+  { value: 'web', label: 'Webs', param: 'web' },
+];
+
+function PlatformSwitch({ platform, onPick }: { platform: string; onPick: (param: string | null) => void }) {
+  return (
+    <div className={`ins-ftoolbar-context ${platform === 'web' ? 'is-webs' : ''}`} role="radiogroup" aria-label="Platform">
+      {SWITCH_OPTIONS.map((o) => {
+        const on = o.value === platform;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            data-platform={o.value}
+            className={on ? 'is-active' : ''}
+            onClick={() => !on && onPick(o.param)}
+          >
+            {o.label}
+            {on && o.value === 'ios' && <span className="ins-ftoolbar-context-apple" aria-hidden />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * The row itself: dimension pills on the left, "Showing N <unit>s" and any
  * `right` control (usually a SortPill) on the right edge. Pages whose
  * dimensions aren't ScreenFilters (Flows) compose this directly.
@@ -463,22 +497,21 @@ export function ToolbarRow({
 }) {
   const { docked, anchorRef, rowRef, headerContent } = useDockingRow();
 
-  // The docked bar's Apps/Web switcher — Mobbin's top-level split. "Web" sets
-  // ?platform=web (and the Platform pill hides, web having no sub-platforms);
-  // "Apps" clears it back to the mobile default, where the Platform pill
-  // offers iOS/Android.
+  // Apps / Webs is the top-level split (the header's tabs, and this bar's copy of them while it is docked
+  // over the header). Inside "Apps" the switch beside it picks iOS or Web Apps.
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
   const activePlatforms = (searchParams.get('platform') ?? '').split(',').filter(Boolean);
   const webMode = isWebPlatform(activePlatforms);
-  const setPlatformParam = (value: string | null) => {
+  const platformHref = (value: string | null) => {
     const sp = new URLSearchParams(searchParams.toString());
     if (value) sp.set('platform', value);
     else sp.delete('platform');
     const qs = sp.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    return qs ? `${pathname}?${qs}` : pathname;
   };
+  const setPlatformParam = (value: string | null) => router.replace(platformHref(value), { scroll: false });
 
   const toolbar = (inHeader = false) => (
     <div
@@ -490,31 +523,17 @@ export function ToolbarRow({
     >
         {docked && (
           <>
-            <div className="ins-ftoolbar-context" role="group" aria-label="Apps or web">
-              <button
-                type="button"
-                className={webMode ? '' : 'is-active'}
-                aria-pressed={!webMode}
-                onClick={() => {
-                  if (webMode) setPlatformParam(null);
-                }}
-              >
-                Apps
-              </button>
-              <button
-                type="button"
-                className={webMode ? 'is-active' : ''}
-                aria-pressed={webMode}
-                onClick={() => {
-                  if (!webMode) setPlatformParam('web');
-                }}
-              >
-                Web
-              </button>
-            </div>
+            <AppTabs
+              appsOn={!webMode}
+              appsHref={platformHref(activePlatforms[0] === 'webapp' ? 'webapp' : null)}
+              webHref={platformHref('web')}
+              scroll={false}
+            />
             <span className="ins-ftoolbar-divider" aria-hidden="true" />
           </>
         )}
+        <PlatformSwitch platform={activePlatforms[0] ?? 'ios'} onPick={setPlatformParam} />
+        <span className="ins-ftoolbar-divider ins-ftoolbar-divider--switch" aria-hidden="true" />
         {children}
         <div className="ins-ftoolbar-right">
           {total !== null && (
@@ -614,19 +633,6 @@ export function FilterToolbar<S extends string>({
         selected={filters.styles}
         onToggle={(v) => onChange({ styles: toggle(filters.styles, v as Style) })}
         onClear={() => onChange({ styles: [] })}
-      />
-      <FilterPill
-        label="Platform"
-        options={PLATFORMS.map((v) => ({ value: v, label: PLATFORM_LABEL[v] ?? v }))}
-        // Single-select switcher over all three platforms, with iOS as the
-        // real default: the pill always names exactly what the feed shows —
-        // including "Web" — and always agrees with the header's platform nav
-        // and the docked Apps/Web chip. iOS keeps the URL clean.
-        selected={[filters.platforms[0] ?? 'ios']}
-        onToggle={(v) => onChange({ platforms: v === 'ios' ? [] : [v as Platform] })}
-        onClear={() => onChange({ platforms: [] })}
-        multi={false}
-        clearable={false}
       />
       {filters.query && (
         <button

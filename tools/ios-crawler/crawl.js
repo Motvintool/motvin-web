@@ -115,7 +115,7 @@ ${bold('resume options')}
 
 ${bold('classify options')}
   --app-id <id>             app slug as stored under screens/<platform>/    ${dim('required')}
-  --platform <p>            ios | android | web                             ${dim('default ios')}
+  --platform <p>            ios | webapp | web                             ${dim('default ios')}
   --overwrite               re-analyse screens that already have a screenType
   --remove-external         remove Google/Apple/Facebook sign-in pages found
                             in the store (kept by default, same as an ingest)

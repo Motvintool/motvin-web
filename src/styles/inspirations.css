@@ -339,89 +339,79 @@ body {
   height: 48px;
 }
 
-/* Figma "PrimaryToggle" (node 1011:7995), three states: for iOS/Android
-  the track is a gradient fading from solid to transparent; Web uses the full
-  solid track. All corners stay at the requested 100px radius in every state. */
-.ins-platform-nav {
+/* Figma "Tabs" (node 1311:15013): two text tabs. The current one is black with a short underline;
+   "Apps" carries a pair of overlapping app marks. */
+.ins-apptabs {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: none;
+}
+
+.ins-apptab {
   position: relative;
   display: flex;
   align-items: center;
-  flex: none;
-  height: 52px;
-  padding: 6px;
-  overflow: visible;
-  background: linear-gradient(to right, #e2e2e2, transparent);
-  border-radius: 100px;
-  transition: width var(--ins-slow) var(--ins-ease), background var(--ins-slow) var(--ins-ease), border-radius var(--ins-slow) var(--ins-ease);
-}
-
-.ins-platform-nav--ios {
-  width: 68px;
-}
-
-.ins-platform-nav--android {
-  width: 139px;
-}
-
-.ins-platform-nav--web {
-  width: auto;
-  background: #f1f1f1;
-  border-radius: 100px;
-}
-
-/* The pill that actually slides — see indicator/setIndicator in Header.tsx.
-   Sits behind the links (z-index 0) and morphs position + width with a
-   spring-like overshoot rather than a linear ease, which is what reads as
-   "jelly" rather than a mechanical slide. */
-.ins-platform-indicator {
-  position: absolute;
-  top: 6px;
-  bottom: 6px;
-  left: 0;
-  border-radius: 100px;
-  background: #000;
-  z-index: 0;
-  pointer-events: none;
-  transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.ins-platform-link {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   gap: 6px;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 100px;
-  font-size: 16px;
-  line-height: 20px;
-  letter-spacing: 0.2px;
+  padding: 10px 0;
+  font-size: 17px;
+  line-height: 24px;
   font-weight: 600;
-  color: #878787;
+  color: var(--ins-muted, #6c6c6c);
   white-space: nowrap;
   transition: color var(--ins-fast) var(--ins-ease);
 }
 
-.ins-platform-link:hover {
-  color: #141414;
+.ins-apptab::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 15px;
+  height: 2px;
+  background: transparent;
+  transition: background var(--ins-fast) var(--ins-ease);
 }
 
-.ins-platform-link.is-active {
-  color: #fff;
-  font-weight: 600;
+.ins-apptab:hover,
+.ins-apptab.is-active {
+  color: var(--ins-text, #000);
 }
 
-.ins-platform-link.is-active:hover {
-  color: #fff;
+.ins-apptab.is-active::after {
+  background: var(--ins-text, #000);
 }
 
-.ins-platform-icon {
+.ins-apptab-icons {
+  display: flex;
+  align-items: center;
+}
+
+.ins-apptab-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  overflow: hidden;
+  border-radius: 80px;
+  background: #fff;
+  box-shadow: 0 0.8px 2.4px -0.8px rgba(0, 0, 0, 0.2), 0 1.6px 3.2px rgba(0, 0, 0, 0.1);
+}
+
+.ins-apptab-icon + .ins-apptab-icon {
+  margin-left: -8px;
+}
+
+.ins-apptab-icon img {
   display: block;
-  flex: none;
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
+  object-fit: cover;
+  border-radius: 13px;
+}
+
+.ins-apptab-icon + .ins-apptab-icon img {
+  border-radius: 100px;
 }
 
 /* Figma "actions" (node 1104:8796): 40px Save and Collections icon targets,
@@ -520,7 +510,7 @@ body {
 
 
 /* Figma "profile" (node 1012:8852): same gradient-track pattern as
-   .ins-platform-nav, mirrored — fill fades toward the open edge (here, the
+   the old platform toggle, mirrored — fill fades toward the open edge (here, the
    left, next to the avatar) and rounding only runs along the closed edge (the
    right, past the menu button). */
 .ins-header-profile {
@@ -1565,7 +1555,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   width: 1px;
   height: 26px;
   background: #d6d8dd;
-  margin: 0 24px;
+  margin: 0 8px;
   flex: none;
 }
 
@@ -6416,12 +6406,12 @@ select.ins-input {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* Below ~1140px the full header no longer fits: the platform toggle's
-     "Android / Web" labels overflow their column into the search bar and
-     "Try Icons" runs into the right-hand icons. Use the compact header
-     (logo | search | profile) from here down; platform switching stays
-     available in the toolbar's platform pill. */
-  .ins-platform-nav,
+  /* Below ~1140px the full header no longer fits: the Apps / Webs tabs
+     overflow their column into the search bar and "Try Icons" runs into the
+     right-hand icons. Use the compact header (logo | search | profile) from
+     here down; Apps / iOS / Web Apps / Webs switching stays available in the
+     toolbar's platform switch. */
+  .ins-apptabs,
   .ins-header-action-links,
   .ins-header-try-icons {
     display: none;
@@ -6479,13 +6469,13 @@ select.ins-input {
   }
 
   /* The phone header keeps the search (logo | search | profile) — the
-     platform nav, Try Icons and action links are what step aside. */
+     tabs, Try Icons and action links are what step aside. */
   .ins-header-content {
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 10px;
   }
 
-  .ins-platform-nav,
+  .ins-apptabs,
   .ins-header-action-links,
   .ins-header-try-icons,
   .ins-kbd-group {
@@ -6649,7 +6639,7 @@ select.ins-input {
   }
 
   .ins-ftoolbar-divider {
-    margin: 0 10px;
+    margin: 0 8px;
   }
 
   .ins-fpill,
@@ -9502,7 +9492,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   border-color: var(--ins-text);
 }
 
-/* iOS / Android / Web — a small segmented control. */
+/* iOS / Web Apps / Webs — a small segmented control. */
 .ins-segmented {
   display: inline-flex;
   padding: 3px;
@@ -10629,3 +10619,68 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 
 /* Settings: visible keyboard focus on every control. */
 .ins-set :is(button, a):focus-visible { outline: 2px solid var(--ins-text); outline-offset: 3px; border-radius: 10px; }
+
+/* Figma "Apps or web" (node 1311:15892) and the toolbar's pills (node 1311:15177). */
+.ins-ftoolbar-context button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px 6px 16px;
+  color: #2a2a2a;
+  opacity: 0.7;
+}
+
+.ins-ftoolbar-context .is-active {
+  background: #fff;
+  color: #0b0c0e;
+  opacity: 1;
+}
+
+/* The Figma files are single-colour shapes; drawing them as a mask over currentColor keeps them exact
+   and lets the surrounding text colour (and the theme) decide the ink. */
+.ins-ftoolbar-context-apple {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: url(/ASSET/Icons/Motvin/apple-dark.svg) center / contain no-repeat;
+  mask: url(/ASSET/Icons/Motvin/apple-dark.svg) center / contain no-repeat;
+}
+
+.ins-fpill-chev {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  transform: rotate(90deg);
+  -webkit-mask: url(/ASSET/Icons/Motvin/chevron-dark.svg) center / contain no-repeat;
+  mask: url(/ASSET/Icons/Motvin/chevron-dark.svg) center / contain no-repeat;
+}
+
+/* Websites have no sub-platforms: on wide screens the Apps / Webs tabs carry that choice and this
+   switch steps aside. Below 1140px the tabs are hidden, so the switch lists all three. */
+.ins-ftoolbar-context button[data-platform='web'] {
+  display: none;
+}
+
+.ins-ftoolbar-context.is-webs,
+.ins-ftoolbar-context.is-webs + .ins-ftoolbar-divider--switch {
+  display: none;
+}
+
+@media (max-width: 1139px) {
+  .ins-ftoolbar-context button[data-platform='web'] {
+    display: inline-flex;
+  }
+
+  .ins-ftoolbar-context.is-webs {
+    display: inline-flex;
+  }
+
+  .ins-ftoolbar-context.is-webs + .ins-ftoolbar-divider--switch {
+    display: block;
+  }
+}
+
+/* The platform chips in the admin's app form. */
+.ins-admin-chips { display: flex; flex-wrap: wrap; gap: 8px; }

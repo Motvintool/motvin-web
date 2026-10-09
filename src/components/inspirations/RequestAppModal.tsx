@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { submitAppRequest, updateMyRequest, type MyRequest } from '@/lib/firebase/appRequests';
 import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { Platform } from '@/lib/inspirations/types';
-import { AndroidIcon, AppleIcon, CheckIcon, CloseIcon, WebIcon } from './Icons';
+import { AppleIcon, CheckIcon, CloseIcon, WebAppIcon, WebIcon } from './Icons';
 
 /**
  * "Request an app": the popup behind the search modal's "Request app" link. It looks like the
@@ -16,7 +16,7 @@ import { AndroidIcon, AppleIcon, CheckIcon, CloseIcon, WebIcon } from './Icons';
 
 const PLATFORMS: { value: Platform; Icon: typeof AppleIcon }[] = [
   { value: 'ios', Icon: AppleIcon },
-  { value: 'android', Icon: AndroidIcon },
+  { value: 'webapp', Icon: WebAppIcon },
   { value: 'web', Icon: WebIcon },
 ];
 
@@ -55,7 +55,7 @@ export function RequestAppModal({
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(existing?.appName ?? initialName);
-  const [platform, setPlatform] = useState<Platform>(existing?.platform ?? initialPlatform);
+  const [platform, setPlatform] = useState<Platform>(PLATFORMS.some((p) => p.value === existing?.platform) ? (existing!.platform as Platform) : initialPlatform);
   const [link, setLink] = useState(existing?.link ?? '');
   const [note, setNote] = useState(existing?.note ?? '');
   const [email, setEmail] = useState(existing?.email ?? '');

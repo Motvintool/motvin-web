@@ -372,7 +372,7 @@ function RequestsSection({ uid, onCount }: { uid: string; onCount: (count: numbe
           {requests.map((request) => (
             <article key={request.id} className="ins-set-slot">
               <header>
-                <span className="ins-set-chip">{PLATFORM_LABEL[request.platform]}</span>
+                <span className="ins-set-chip">{PLATFORM_LABEL[request.platform] ?? request.platform}</span>
                 {confirming === request.id ? (
                   <span className="ins-set-confirm">
                     <button type="button" className="is-danger" onClick={() => void remove(request.id)}>Delete</button>

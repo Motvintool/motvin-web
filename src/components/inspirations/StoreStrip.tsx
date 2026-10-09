@@ -7,8 +7,8 @@ import { useStoreStats } from './useStoreStats';
 /**
  * A slim banner under the masthead with the app's live store numbers: a store
  * pill, then one line of text. iOS gets rank, rating, price, size and last
- * update; Android gets its install bucket (see storeStats.ts for what each store publishes). Shows a
- * skeleton while loading and nothing for Web or when the store has no numbers.
+ * update (see storeStats.ts for what the store publishes). Shows a
+ * skeleton while loading and nothing for Web Apps, Webs or when the store has no numbers.
  */
 
 type Stat = { key: string; prefix?: string; star?: boolean; value: string; suffix?: string };
@@ -18,9 +18,8 @@ function formatDate(iso: string): string {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function statsFor(store: 'ios' | 'android', s: StoreStats): Stat[] {
+function statsFor(s: StoreStats): Stat[] {
   const out: Stat[] = [];
-  if (store === 'android' && s.downloads) out.push({ key: 'downloads', prefix: 'Downloads', value: s.downloads });
   if (s.rating) out.push({ key: 'rating', star: true, value: s.rating.toFixed(1), suffix: s.ratings ? `(${s.ratings} ratings)` : undefined });
   else if (s.ratings) out.push({ key: 'ratings', value: s.ratings, suffix: 'ratings' });
   if (s.size) out.push({ key: 'size', prefix: 'Size', value: s.size });
@@ -32,23 +31,17 @@ export function StoreStrip({ name, platform }: { name: string; platform: Platfor
   const { store, stats } = useStoreStats(name, platform);
   if (!store) return null;
   const loading = stats === undefined;
-  const items = stats ? statsFor(store, stats) : [];
+  const items = stats ? statsFor(stats) : [];
   if (!loading && !items.length) return null;
 
-  const storeName = store === 'ios' ? 'App Store' : 'Google Play';
+  const storeName = 'App Store';
 
   return (
     <section className="ins-storebar" aria-label={`${storeName} stats`} aria-busy={loading}>
       <div className="ins-storebar-left">
         <span className="ins-storebar-pill">
-          <img
-            src={store === 'ios' ? '/ASSET/Icons/Motvin/store-appstore.svg' : '/ASSET/Icons/Motvin/android.svg'}
-            alt=""
-            width={24}
-            height={24}
-            className={store === 'android' ? 'is-mono' : undefined}
-          />
-          {store === 'ios' ? 'Appstore' : storeName}
+          <img src="/ASSET/Icons/Motvin/store-appstore.svg" alt="" width={24} height={24} />
+          Appstore
         </span>
         {loading ? (
           <span className="ins-skel ins-skel--line ins-storebar-skel" aria-hidden />

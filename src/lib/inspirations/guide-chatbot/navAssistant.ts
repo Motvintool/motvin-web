@@ -5,9 +5,9 @@ import { asksElements, findElements, findFlowCategory, findNegations, findNumber
 import { INSPIRATIONS_ROUTES } from '../routes';
 import { suggestQueries, type SearchSuggestion } from '../search';
 import { EMPTY_FILTERS } from '../filters';
-import { applySynonyms, findIndustry, findPlatform, findPlatforms, PLATFORM_LABEL, stripChatter } from './synonyms';
+import { applySynonyms, findIndustry, findPlatform, findPlatforms, PLATFORM_ADJECTIVE, PLATFORM_LABEL, PLATFORM_QUERY, stripChatter } from './synonyms';
 import { elementLabel, flowCategoryLabel, INDUSTRY_LABEL, SCREEN_STATE_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from '../taxonomy';
-import { FLOW_CATEGORY_PRESETS, type App, type Flow, type Pattern, type Platform, type SavedItemType, type ScreenState, type ScreenType, type Style } from '../types';
+import { FLOW_CATEGORY_PRESETS, isDesktopPlatform, type App, type Flow, type Pattern, type Platform, type SavedItemType, type ScreenState, type ScreenType, type Style } from '../types';
 
 /**
  * The visitor-facing assistant: it answers "where do you want to go?" and the
@@ -286,8 +286,8 @@ const CREATE_WORD = /^(?:please\s+)?(?:(?:how (?:do|can) i|can i|i want to|i wan
 const DELETE_WORD = /^(?:please\s+)?(?:how (?:do|can) i\s+|can i\s+)?(?:delete|remove|erase|rename|edit|destroy)\b/i;
 const GO_BACK = /^(?:go back|back|go to the previous page|previous page|take me back|go back please|back please)[\s!.?]*$/i;
 const REOPEN = /^(?:(?:please\s+)?(?:open|show|take me to|go to|take me back to|go back to|back to)\s+(?:me\s+)?(?:the\s+)?(?:last|previous|same|that|this)(?:\s+one|\s+app)?(?:\s+again)?|(?:open|show)\s+(?:it|that|this)\s+again|back to (?:it|that|this))[\s!.?]*$/i;
-/** "what about android", "and web?", "only ios ones": the same question, for another platform. */
-const FOLLOW_PLATFORM = /^(?:and|what about|how about|only|just|but|now|then|also)\s+(?:me\s+)?(?:the\s+)?(web|ios|android|iphone|website|websites)(?:\s+(?:ones?|version|too|also))*\s*[?!.]*$/i;
+/** "what about web apps", "and websites?", "only ios ones": the same question, for another platform. */
+const FOLLOW_PLATFORM = /^(?:and|what about|how about|only|just|but|now|then|also)\s+(?:me\s+)?(?:the\s+)?(web ?apps?|webs|web|ios|iphone|websites?)(?:\s+(?:ones?|version|too|also))*\s*[?!.]*$/i;
 /** A judgement of taste is not something the library can answer. */
 const JUDGE = /\b(?:better|worse|nicer|prettier|best looking|best designed|good design|best ui|best ux|most beautiful|ugliest)\b/i;
 const POPULAR = /\b(?:popular|trending|trends?|famous|viral|most used|most viewed|most downloaded|hottest)\b/i;
@@ -331,7 +331,7 @@ const SIMILAR = /\b(?:similar(?: to)?|like|alternatives? (?:to|for)|competitors?
 const WHERE_AM_I = /\b(?:which app is this|what app is this|where am i|what page is this|what is this page|what am i looking at)\b/i;
 const RANDOM = /\b(?:random|surprise me|anything|pick one for me|something)\b/i;
 
-const ON_LABEL: Record<Platform, string> = { web: 'the web', ios: 'iOS', android: 'Android' };
+const ON_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web Apps', web: 'the web' };
 const article = (word: string) => (/^[aeiou]/i.test(word) ? 'an' : 'a');
 const platformList = (app: App) => listNames((app.platforms ?? []).map((platform) => ON_LABEL[platform]));
 
@@ -393,14 +393,14 @@ async function answerAboutApp(app: App, text: string, question: boolean, yesNo: 
     if (!app.platforms?.length) return { text: `${app.name} doesn’t list a platform yet.`, targets: [appTarget(app)], app };
     const onAll = `${app.name} is on ${platformList(app)}.`;
     if (wantsMobile) {
-      const mobile = app.platforms.some((platform) => platform !== 'web');
+      const mobile = app.platforms.some((platform) => !isDesktopPlatform(platform));
       return { text: mobile ? `Yes — ${onAll}` : `No — ${app.name} isn’t on mobile. It’s on ${platformList(app)}.`, targets: [appTarget(app)], app };
     }
     if (platformsAsked.length === 1) {
       const asked = platformsAsked[0];
       const on = app.platforms.includes(asked);
       const text = on ? (yesNo ? `Yes — ${onAll}` : onAll) : `${yesNo ? 'No — ' : ''}${app.name} isn’t on ${ON_LABEL[asked]}. It’s on ${platformList(app)}.`;
-      // "show Swiggy on Android" still opens Swiggy when it is there; a question never navigates.
+      // "show Swiggy on iOS" still opens Swiggy when it is there; a question never navigates.
       return { text, targets: [appTarget(app), ...followUps(app, null).slice(0, 2)], go: !question && on ? appTarget(app) : undefined, app };
     }
     return { text: onAll, targets: [appTarget(app), ...followUps(app, null).slice(0, 2)], app };
@@ -553,7 +553,7 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   const states = findStates(lower);
   const styles = findStyles(lower);
   const industryHit = findIndustry(lower);
-  const adjective = /\b(ios|iphone|android|web|website)\s+(?:[\w-]+\s+){0,2}?(?:screens?|pages?|flows?|ui)\b/.exec(lower);
+  const adjective = /\b(ios|iphone|web ?apps?|webs|web|websites?)\s+(?:[\w-]+\s+){0,2}?(?:screens?|pages?|flows?|ui)\b/.exec(lower);
   const platformHit = findPlatform(lower) ?? (adjective ? findPlatform(`on ${adjective[1]}`) : null);
   /** The Screens page, filtered by everything the sentence named. */
   const screenQuery = (sort?: string) => {
@@ -610,7 +610,7 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
     return { text: `I only listed ${plural(listed.length, 'app')} — ${listNames(listed.map((app) => app.name), 6)}. Which one?`, targets: appResults(listed), results: appResults(listed) };
   }
 
-  // "what about android", "and web?": the same question for another platform, about what was just listed or opened.
+  // "what about web apps", "and web?": the same question for another platform, about what was just listed or opened.
   const followPlatform = FOLLOW_PLATFORM.exec(lower.trim());
   const followAsked = followPlatform ? findPlatform(`on ${followPlatform[1]}`) : null;
   if (followPlatform && followAsked && findApps(lower, apps).length === 0) {
@@ -626,7 +626,7 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
       const on = current.platforms?.includes(asked);
       return { text: on ? `Yes — ${current.name} is on ${platformList(current)}.` : `${current.name} isn’t on ${ON_LABEL[asked]}. It’s on ${platformList(current)}.`, targets: [appTarget(current), ...followUps(current, null).slice(0, 2)], app: current };
     }
-    return resolveInner(`${asked} apps`, undefined, notes);
+    return resolveInner(PLATFORM_QUERY[asked], undefined, notes);
   }
 
   // "open the last app again", "back to that one".
@@ -934,10 +934,10 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   }
 
   // Questions about the apps themselves, from the library's own numbers: what kind
-  // they are (food, fintech), where they run (web, iOS, Android), how big they are.
+  // they are (food, fintech), where they run (iOS, Web Apps, Webs), how big they are.
   const industry = findIndustry(lower);
   const platform = findPlatform(lower);
-  const kind = [industry ? INDUSTRY_LABEL[industry] : '', platform ? PLATFORM_LABEL[platform] : ''].filter(Boolean).join(' ');
+  const kind = [industry ? INDUSTRY_LABEL[industry] : '', platform ? PLATFORM_ADJECTIVE[platform] : ''].filter(Boolean).join(' ');
   let pool = apps.filter((app) => (!industry || app.industry === industry) && (!platform || app.platforms?.includes(platform)) && !negatedApps.includes(app) && !negatedPlatforms.some((excluded) => app.platforms?.includes(excluded)));
   const ranking = findRanking(lower);
   if (numberFilter) {
@@ -956,7 +956,7 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
     const params = new URLSearchParams();
     if (platform) params.set('platform', platform);
     if (industry) params.set('industry', industry);
-    const scopeLabel = kind || (negatedPlatforms.length ? `non-${negatedPlatforms.map((excluded) => PLATFORM_LABEL[excluded]).join('/')}` : '');
+    const scopeLabel = kind || (negatedPlatforms.length ? `non-${negatedPlatforms.map((excluded) => PLATFORM_ADJECTIVE[excluded]).join('/')}` : '');
     const kindPage: NavTarget = { label: `All ${scopeLabel} apps`, hint: 'Apps', href: params.toString() ? `${INSPIRATIONS_ROUTES.apps}?${params}` : INSPIRATIONS_ROUTES.apps };
     if (byScreens.length === 0) return { text: `There are no ${scopeLabel} apps in the library yet.`, targets: [QUICK_PAGES[0]] };
     const exceptNote = negatedApps.length ? ` (leaving out ${listNames(negatedApps.map((app) => app.name), 3)})` : '';

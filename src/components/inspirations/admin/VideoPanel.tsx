@@ -54,7 +54,7 @@ export function VideoPanel({ state, busy, onIngested }: { state: AdminState; bus
   const { jobs, error: listError } = useIngestJobs(admin);
 
   const [video, setVideo] = useState<File | null>(null);
-  const [platform, setPlatform] = useState<'ios' | 'android' | 'web'>('ios');
+  const [platform, setPlatform] = useState<'ios' | 'webapp' | 'web'>('ios');
   // A brand-new app is identified from the screens themselves, same as
   // before; an existing one is picked here instead, so these screens are
   // added to it rather than possibly identified as a look-alike new app.
@@ -212,7 +212,7 @@ export function VideoPanel({ state, busy, onIngested }: { state: AdminState; bus
           <select
             className="ins-input"
             value={platform}
-            onChange={(e) => setPlatform(e.target.value as 'ios' | 'android' | 'web')}
+            onChange={(e) => setPlatform(e.target.value as 'ios' | 'webapp' | 'web')}
             disabled={running}
           >
             {PLATFORM_CHOICES.map((choice) => (

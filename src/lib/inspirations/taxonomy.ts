@@ -16,9 +16,9 @@ import type {
  */
 
 export const PLATFORM_LABEL: Record<Platform, string> = {
-  web: 'Web',
   ios: 'iOS',
-  android: 'Android',
+  webapp: 'Web Apps',
+  web: 'Webs',
 };
 
 export const SCREEN_TYPE_LABEL: Record<ScreenType, string> = {

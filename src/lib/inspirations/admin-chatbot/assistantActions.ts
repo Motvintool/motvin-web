@@ -41,9 +41,9 @@ export type AdminOp =
   /** The sidecar fields the Screens tab edits that have no op of their own: when it was captured, its components, its style. */
   | { kind: 'set-screen-details'; platform: string; appId: string; file: string; version?: string; flow?: string; name: string; capturedAt?: string; elements?: string[]; style?: string[] }
   /** A dropped recording, every question answered — the run starts on Confirm. The file itself is held by the dock. */
-  | { kind: 'start-ingest'; fileName: string; platform: 'ios' | 'android' | 'web'; appId?: string; appName?: string; version?: string; versionLabel?: string; startedBy: string }
+  | { kind: 'start-ingest'; fileName: string; platform: 'ios' | 'webapp' | 'web'; appId?: string; appName?: string; version?: string; versionLabel?: string; startedBy: string }
   /** Dropped screenshots, every question answered — uploaded on Confirm, creating the app first when it is new. */
-  | { kind: 'upload-screens'; count: number; platform: 'ios' | 'android' | 'web'; appId: string; appName: string; version: string; versionLabel: string; newApp?: { id: string; name: string; industry?: string } }
+  | { kind: 'upload-screens'; count: number; platform: 'ios' | 'webapp' | 'web'; appId: string; appName: string; version: string; versionLabel: string; newApp?: { id: string; name: string; industry?: string } }
   | { kind: 'set-flow-parent'; flowId: string; name: string; parentId: string | null; parentName: string | null }
   | { kind: 'set-source-status'; appId: string; name: string; status: 'pending' | 'review' | 'approved' | 'rejected' }
   | { kind: 'delete-app-version'; appId: string; name: string; versionId: string; versionLabel: string; screens: number }
@@ -78,7 +78,7 @@ export function isDestructive(op: AdminOp): boolean {
 
 const list = (names: string[]) => (names.length <= 3 ? names.map((name) => `“${name}”`).join(', ') : `${names.length} screens`);
 
-const PLATFORM_NAME: Record<string, string> = { ios: 'iOS', android: 'Android', web: 'Web' };
+const PLATFORM_NAME: Record<string, string> = { ios: 'iOS', webapp: 'Web Apps', web: 'Webs' };
 const platformName = (id: string) => PLATFORM_NAME[id] ?? id;
 
 /** The button text for an operation. */

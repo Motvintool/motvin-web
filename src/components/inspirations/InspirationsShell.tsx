@@ -19,14 +19,9 @@ function InspirationsHeaderSkeleton() {
             <span className="ins-brand-logo">
               <img src="/ASSET/svg/nav-motvin-logo.svg" alt="" className="ins-brand-logo-img" width={48} height={48} />
             </span>
-            <div className="ins-platform-nav ins-platform-nav--ios">
-              <span className="ins-platform-indicator" style={{ transform: 'translateX(6px)', width: 83 }} />
-              <span className="ins-platform-link is-active">
-                <img src="/ASSET/Icons/Motvin/apple.svg" alt="" className="ins-platform-icon" width={18} height={18} />
-                iOS
-              </span>
-              <span className="ins-platform-link">Android</span>
-              <span className="ins-platform-link">Web</span>
+            <div className="ins-apptabs">
+              <span className="ins-apptab is-active">Apps</span>
+              <span className="ins-apptab">Webs</span>
             </div>
           </div>
           <div className="ins-header-center" />

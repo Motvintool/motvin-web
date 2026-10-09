@@ -81,7 +81,7 @@ service cloud.firestore {
 //       && request.resource.data.appName is string
 //       && request.resource.data.appName.size() >= 2 && request.resource.data.appName.size() <= 80
 //       && request.resource.data.key is string && request.resource.data.key.size() <= 80
-//       && request.resource.data.platform in ['ios', 'android', 'web']
+//       && request.resource.data.platform in ['ios', 'webapp', 'web']
 //       && request.resource.data.link is string && request.resource.data.link.size() <= 300
 //       && request.resource.data.note is string && request.resource.data.note.size() <= 500
 //       && request.resource.data.email is string && request.resource.data.email.size() <= 120

@@ -9,7 +9,7 @@ import { useStoreStats } from './useStoreStats';
  * it opens a small tooltip with the category and store). It is the page's
  * headline credential, so it rides on the logo itself rather than taking a row.
  * Renders nothing until the store answers, and nothing if the app is not on the
- * chart (or on Android, which has no chart API).
+ * chart.
  */
 /** Gold for #1, silver for #2, bronze for everything below. */
 function cupFor(position: number): string {
@@ -33,7 +33,7 @@ export function StoreRankBadge({ name, platform }: { name: string; platform: Pla
   const { stats } = useStoreStats(name, platform);
   const rank = stats?.rank;
   if (!rank || rank.position > MAX_RANK) return null;
-  const store = platform === 'android' ? 'Google Play' : 'App Store';
+  const store = 'App Store';
   // Name the storefront when it is not the default US one, so a rank earned in
   // India is not read as a US rank.
   const where = rank.country && rank.country !== 'US' ? `${rank.country} ${store}` : store;

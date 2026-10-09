@@ -7,8 +7,17 @@
  * filler.
  */
 
-export const PLATFORMS = ['ios', 'android', 'web'] as const;
+/**
+ * The three places the library covers: iOS apps, online web applications ("Web Apps", `webapp`) and
+ * websites ("Webs", `web`). Android is not part of the library.
+ */
+export const PLATFORMS = ['ios', 'webapp', 'web'] as const;
 export type Platform = (typeof PLATFORMS)[number];
+
+/** Web Apps and Webs are both seen in a browser, so their screens are wide and laid out alike. */
+export function isDesktopPlatform(platform: string | null | undefined): boolean {
+  return platform === 'web' || platform === 'webapp';
+}
 
 export const SCREEN_TYPES = [
   'landing',

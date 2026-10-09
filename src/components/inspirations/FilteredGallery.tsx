@@ -4,8 +4,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { inspirationsApi, type Page, type ScreenSort } from '@/lib/inspirations/api';
 import { EMPTY_FILTERS, parseFilters, serializeFilters, toggleValue, withDefaultPlatform, type ScreenFilters } from '@/lib/inspirations/filters';
-import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
-import { PLATFORMS, type App, type ContentKind, type Industry, type LibraryCounts, type Platform, type Screen } from '@/lib/inspirations/types';
+import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
+import { isDesktopPlatform, type App, type ContentKind, type Industry, type LibraryCounts, type Screen } from '@/lib/inspirations/types';
 import { AppsGrid } from './AppsGrid';
 import { EmptyState } from './EmptyState';
 import { FilterPill, FilterToolbar, NavPill, SortPill, ToolbarRow, type SortOption } from './FilterToolbar';
@@ -214,15 +214,6 @@ export function FilteredGallery({
               onToggle={(v) => update({ industries: toggleValue(filters.industries, v as Industry) })}
               onClear={() => update({ industries: [] })}
             />
-            <FilterPill
-              label="Platform"
-              options={PLATFORMS.map((v) => ({ value: v, label: PLATFORM_LABEL[v] ?? v }))}
-              selected={[filters.platforms[0] ?? 'ios']}
-              onToggle={(v) => update({ platforms: v === 'ios' ? [] : [v as Platform] })}
-              onClear={() => update({ platforms: [] })}
-              multi={false}
-              clearable={false}
-            />
           </ToolbarRow>
           {droppedFilterCount > 0 && (
             <p className="ins-muted ins-explore-hint">
@@ -232,7 +223,7 @@ export function FilteredGallery({
           <AppsGrid
             apps={apps}
             loading={appsLoading}
-            webLayout={filters.platforms.length === 1 && filters.platforms[0] === 'web'}
+            webLayout={filters.platforms.length === 1 && isDesktopPlatform(filters.platforms[0])}
             emptyTitle={appsLibraryEmpty ? 'No apps in the library yet' : 'No apps match these filters'}
             emptyDescription={
               appsLibraryEmpty
@@ -256,10 +247,10 @@ export function FilteredGallery({
           />
           {/* .ins-shot-panel applies the app-page gallery treatment: five
               frameless, hairline-bordered shots per row. */}
-          <div className={filters.platforms.length === 1 && filters.platforms[0] === 'web' ? '' : 'ins-shot-panel'}>
+          <div className={filters.platforms.length === 1 && isDesktopPlatform(filters.platforms[0]) ? '' : 'ins-shot-panel'}>
             <ScreenGrid
               screens={items}
-              webLayout={filters.platforms.length === 1 && filters.platforms[0] === 'web'}
+              webLayout={filters.platforms.length === 1 && isDesktopPlatform(filters.platforms[0])}
               showMeta={false}
               selectable
               loading={!ready || loadingMore}

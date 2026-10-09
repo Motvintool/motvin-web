@@ -3,8 +3,8 @@
 import { useRef, useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { adminApi, type AdminAppRecord, type AdminState } from '@/lib/inspirations/admin';
-import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
-import { PICKABLE_INDUSTRIES, type Industry } from '@/lib/inspirations/types';
+import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
+import { PICKABLE_INDUSTRIES, PLATFORMS, type Industry, type Platform } from '@/lib/inspirations/types';
 import { PlusIcon, TrashIcon, UploadIcon } from '../Icons';
 import { AppCardScreens } from './AppCardScreens';
 import { AppVersionScreens } from './AppVersionScreens';
@@ -19,7 +19,7 @@ import { AppVersionScreens } from './AppVersionScreens';
 
 // A new app starts with no category chosen (not SaaS): the form will not save until
 // somebody picks one, so a category is never an accident of the default.
-const EMPTY: AdminAppRecord = { id: '', name: '', industry: 'unsorted', website: '', tagline: '' };
+const EMPTY: AdminAppRecord = { id: '', name: '', industry: 'unsorted', website: '', tagline: '', platforms: ['ios'] };
 
 function slugify(value: string): string {
   return value
@@ -57,7 +57,9 @@ export function AppsPanel({
   };
 
   const edit = (app: AdminAppRecord) => {
-    setDraft({ ...EMPTY, ...app });
+    // An app with no declared platforms is shown with the ones its screens are on.
+    const fromScreens = PLATFORMS.filter((p) => state.files.some((f) => f.appId === app.id && f.platform === p));
+    setDraft({ ...EMPTY, ...app, platforms: app.platforms?.length ? app.platforms : fromScreens });
     setEditingId(app.id);
     setIdTouched(true);
   };
@@ -196,6 +198,34 @@ export function AppsPanel({
               placeholder="One line about the product."
             />
           </label>
+        </div>
+
+        <div className="ins-field">
+          <span className="ins-field-label" id="ins-app-platforms">
+            Platform
+          </span>
+          <div className="ins-admin-chips" role="group" aria-labelledby="ins-app-platforms">
+            {PLATFORMS.map((p) => {
+              const on = draft.platforms?.includes(p) ?? false;
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  aria-pressed={on}
+                  className={`ins-chip ins-chip--sm ${on ? 'is-active' : ''}`}
+                  onClick={() =>
+                    setDraft((d) => ({
+                      ...d,
+                      platforms: on ? (d.platforms ?? []).filter((x) => x !== p) : PLATFORMS.filter((x) => x === p || d.platforms?.includes(x)),
+                    }))
+                  }
+                >
+                  {PLATFORM_LABEL[p as Platform]}
+                </button>
+              );
+            })}
+          </div>
+          <span className="ins-field-hint">Where the app is listed. Its screens follow this choice, whichever platform they were uploaded as. Leave all off to follow the uploads.</span>
         </div>
 
         <div className="ins-admin-actions">

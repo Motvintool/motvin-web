@@ -2,26 +2,19 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
-import { PLATFORMS } from '@/lib/inspirations/types';
+import { AppTabs } from './AppTabs';
 import { GlobalSearch } from './GlobalSearch';
 import { useApps } from './useApps';
 import { CloseIcon } from './Icons';
 import { ProfileMenu } from './ProfileMenu';
 import { AudioMenu } from './AudioMenu';
 
-const PLATFORM_ICON: Record<(typeof PLATFORMS)[number], string> = {
-  ios: '/ASSET/Icons/Motvin/apple.svg',
-  android: '/ASSET/Icons/Motvin/android.svg',
-  web: '/ASSET/Icons/Motvin/web.svg',
-};
-
 /**
- * Compact sticky header: wordmark · Web / iOS / Android · search · Save ·
+ * Compact sticky header: wordmark · Apps / Webs tabs · search · Save ·
  * Collections · profile · menu. On mobile it collapses to wordmark and the
- * menu; the platform nav, search and text links move into the drawer.
+ * menu; the tabs, search and text links move into the drawer.
  */
 export function Header() {
   const pathname = usePathname();
@@ -85,37 +78,21 @@ export function Header() {
     INSPIRATIONS_ROUTES.patterns,
     INSPIRATIONS_ROUTES.search,
   ];
-  const platformHref = (p: string) => {
+  // "Apps" covers iOS and Web Apps (the toolbar's switch picks between them); "Webs" is websites.
+  // Switching keeps the visitor on the same browse page with the same filters, only the platform changes.
+  const appsOn = visuallyActivePlatform !== 'web';
+  const tabHref = (target: 'apps' | 'web') => {
     const staying = BROWSE_PATHS.includes(pathname);
     const base = staying ? pathname : INSPIRATIONS_ROUTES.explore;
     const sp = staying ? new URLSearchParams(params.toString()) : new URLSearchParams();
-    const on = activePlatforms.length === 1 && activePlatforms[0] === p;
-    if (on) sp.delete('platform');
-    else sp.set('platform', p);
+    if (target === 'web') sp.set('platform', 'web');
+    else if (visuallyActivePlatform === 'webapp') sp.set('platform', 'webapp');
+    else sp.delete('platform');
     const qs = sp.toString();
     return qs ? `${base}?${qs}` : base;
   };
 
-  // The black pill is a single element that slides and resizes between
-  // platforms, rather than each link toggling its own background — that's
-  // what makes the switch read as one shape moving instead of a colour swap.
-  const platformLinkRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
-  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>({ left: 6, width: 83 });
-
-  // The settings page swaps this bar for a logo-only one, which unmounts the platform links; measure
-  // again when they come back, or the pill is left with no size.
   const onSettings = pathname.startsWith(INSPIRATIONS_ROUTES.settings);
-
-  useLayoutEffect(() => {
-    if (onSettings) return;
-    const measure = () => {
-      const el = visuallyActivePlatform ? platformLinkRefs.current[visuallyActivePlatform] : null;
-      setIndicator(el ? { left: el.offsetLeft, width: el.offsetWidth } : null);
-    };
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [visuallyActivePlatform, onSettings]);
 
   // The settings page is a quiet, personal page: the top bar shows the logo and nothing else.
   if (onSettings) {
@@ -142,32 +119,7 @@ export function Header() {
           <Link href={INSPIRATIONS_ROUTES.explore} className="ins-brand-logo" aria-label="Motvin Inspirations home">
             <img src="/ASSET/svg/nav-motvin-logo.svg" alt="" className="ins-brand-logo-img" width={48} height={48} />
           </Link>
-          <nav className={`ins-platform-nav ${visuallyActivePlatform ? `ins-platform-nav--${visuallyActivePlatform}` : ''}`} aria-label="Platform">
-            {indicator && (
-              <span
-                className="ins-platform-indicator"
-                style={{ transform: `translateX(${indicator.left}px)`, width: indicator.width }}
-                aria-hidden="true"
-              />
-            )}
-            {PLATFORMS.map((p) => {
-              const visuallyOn = p === visuallyActivePlatform;
-              return (
-                <Link
-                  key={p}
-                  ref={(node) => {
-                    platformLinkRefs.current[p] = node;
-                  }}
-                  href={platformHref(p)}
-                  className={`ins-platform-link ${visuallyOn ? 'is-active' : ''}`}
-                  aria-current={visuallyOn ? 'true' : undefined}
-                >
-                  {visuallyOn && <img src={PLATFORM_ICON[p]} alt="" className="ins-platform-icon" width={18} height={18} />}
-                  {PLATFORM_LABEL[p]}
-                </Link>
-              );
-            })}
-          </nav>
+          <AppTabs appsOn={appsOn} appsHref={tabHref('apps')} webHref={tabHref('web')} />
         </div>
 
         <div className="ins-header-center">

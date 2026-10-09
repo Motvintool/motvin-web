@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { FLOW_PARAM } from './FlowPreview';
 import { flowCategoryLabel, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
-import type { App, Flow, Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type App, type Flow, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { ChevronRightIcon, PlayIcon } from './Icons';
 import { Screenshot } from './Screenshot';
@@ -23,7 +23,7 @@ import { Screenshot } from './Screenshot';
  */
 export function FlowCard({ flow, screens = [], app }: { flow: Flow; screens?: Screen[]; app?: App }) {
   const params = useSearchParams();
-  const mobile = flow.platform !== 'web';
+  const mobile = !isDesktopPlatform(flow.platform);
   const visible = mobile ? 4 : 3;
   const steps = flow.screenIds.length;
 

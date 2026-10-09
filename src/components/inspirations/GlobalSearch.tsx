@@ -13,7 +13,7 @@ import type { App, Flow, Industry, Platform, Screen } from '@/lib/inspirations/t
 import { AppLogo } from './AppLogo';
 import { RequestAppModal } from './RequestAppModal';
 import { FLOW_PARAM } from './FlowPreview';
-import { AndroidIcon, AppleIcon, ChevronDownIcon, CloseIcon, SearchIcon, WebIcon } from './Icons';
+import { AppleIcon, ChevronDownIcon, CloseIcon, SearchIcon, WebAppIcon, WebIcon } from './Icons';
 import { SCREEN_PARAM } from './ScreenPreviewModal';
 
 const FIGMA_APP_ART = '/ASSET/search-modal/figma-02.png';
@@ -31,14 +31,14 @@ const FIGMA_MODAL_ICONS = {
   categories: '/ASSET/search-modal/icons/categories.svg',
 } as const;
 /** The modal's platform switch — Apple's icon reads as "iOS" here, matching
- * the header's own platform nav. Inline icon components rather than the
+ * the header's own tabs. Inline icon components rather than the
  * `<img src>` asset files the rest of this modal uses: an externally-loaded
  * SVG image can't be recolored by the surrounding page's CSS (`currentColor`
  * only resolves through CSS inheritance when the SVG is actually in the DOM),
  * so there'd be no way to switch between the active/inactive colors below. */
 const MODAL_PLATFORMS: { value: Platform; Icon: typeof AppleIcon }[] = [
   { value: 'ios', Icon: AppleIcon },
-  { value: 'android', Icon: AndroidIcon },
+  { value: 'webapp', Icon: WebAppIcon },
   { value: 'web', Icon: WebIcon },
 ];
 const FIGMA_TOP_RATED_CARDS = [

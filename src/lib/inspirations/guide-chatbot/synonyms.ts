@@ -59,22 +59,30 @@ export function findIndustry(text: string): Industry | null {
 
 /** Words for where an app runs. Matched on the visitor's own wording, before the synonyms above. */
 const PLATFORM_WORDS: Record<Platform, RegExp> = {
-  web: /\b(?:web(?: ?(?:apps?|applications?|sites?|platform))?|websites?|desktop)\b/,
   ios: /\b(?:ios|iphone|ipad|apple)(?: ?(?:apps?|applications?))?\b/,
-  android: /\b(?:android|google play)(?: ?(?:apps?|applications?))?\b/,
+  // Online applications: "web apps", "web applications", "browser apps".
+  webapp: /\b(?:web ?apps?|web applications?|browser apps?|online apps?)\b/,
+  // Websites: "web", "webs", "websites", "desktop" — but not the "web" of "web apps".
+  web: /\b(?:websites?|web ?sites?|webs|desktop|web(?! ?apps?\b| applications?\b)(?: ?(?:sites?|platform))?)\b/,
 };
 
-export const PLATFORM_LABEL: Record<Platform, string> = { web: 'web', ios: 'iOS', android: 'Android' };
+export const PLATFORM_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web Apps', web: 'Webs' };
+
+/** The platform as a describing word before "apps": "Showing web apps", "Among website apps". */
+export const PLATFORM_ADJECTIVE: Record<Platform, string> = { ios: 'iOS', webapp: 'web', web: 'website' };
+
+/** A phrase that reads back as that platform when the assistant re-asks itself. */
+export const PLATFORM_QUERY: Record<Platform, string> = { ios: 'ios apps', webapp: 'web apps', web: 'website apps' };
 
 /**
- * Where the apps they mean run — "web apps", "iOS", "android applications" — or
+ * Where the apps they mean run — "web apps", "iOS", "websites" — or
  * null. As with kinds of app, a bare word only counts when they also say apps,
  * or say nothing else.
  */
 export function findPlatforms(text: string): Platform[] {
   const lower = text.toLowerCase();
-  // "ios apps", or a platform as a place: "on iOS", "on the web", "for Android".
-  const talksAboutApps = /\b(?:apps?|applications?|platforms?)\b/.test(lower) || /\b(?:on|for|to|via|in)\s+(?:the\s+)?(?:web|ios|android|iphone|ipad|desktop|websites?)\b/.test(lower);
+  // "ios apps", or a platform as a place: "on iOS", "on the web", "for web apps".
+  const talksAboutApps = /\b(?:apps?|applications?|platforms?)\b/.test(lower) || /\b(?:on|for|to|via|in)\s+(?:the\s+)?(?:web|webs|web apps?|ios|iphone|ipad|desktop|websites?)\b/.test(lower);
   const bare = lower.replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
   const found: Platform[] = [];
   for (const [key, pattern] of Object.entries(PLATFORM_WORDS) as [Platform, RegExp][]) {

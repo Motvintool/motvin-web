@@ -7,10 +7,10 @@ const cache = new Map<string, StoreStats | null>();
 /**
  * Live store numbers for an app (see storeStats.ts), fetched once per app and
  * shared by everything on the page that wants them. `stats` is undefined while
- * loading and null when the store has nothing; `store` is null for Web.
+ * loading and null when the store has nothing; `store` is null for Web Apps and Webs.
  */
 export function useStoreStats(name: string, platform: Platform) {
-  const store: 'ios' | 'android' | null = platform === 'android' ? 'android' : platform === 'ios' ? 'ios' : null;
+  const store: 'ios' | null = platform === 'ios' ? 'ios' : null;
   const key = `${store}:${name}`;
   const [stats, setStats] = useState<StoreStats | null | undefined>(cache.get(key));
 

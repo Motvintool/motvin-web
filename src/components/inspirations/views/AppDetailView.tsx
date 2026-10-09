@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { elementLabel, INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
-import type { App, ElementKind, Flow, Pattern, Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type App, type ElementKind, type Flow, type Pattern, type Screen } from '@/lib/inspirations/types';
 import { appPlatform, storeAction } from '@/lib/inspirations/storeAction';
 import { AppLogo } from '../AppLogo';
 import { AppMenu } from '../AppMenu';
@@ -794,7 +794,7 @@ export function AppDetailView({
             <ScreenGrid
               screens={sortedScreens}
               apps={appsMap}
-              webGrid={app.platforms.includes('web')}
+              webGrid={app.platforms.some(isDesktopPlatform)}
               showApp={false}
               showMeta={false}
               selectable
@@ -840,7 +840,7 @@ export function AppDetailView({
             <ScreenGrid
               screens={sortedUiElementScreens}
               apps={appsMap}
-              webGrid={app.platforms.includes('web')}
+              webGrid={app.platforms.some(isDesktopPlatform)}
               showApp={false}
               showMeta={false}
               selectable
@@ -865,7 +865,7 @@ export function AppDetailView({
             <ScreenGrid
               screens={sortedPatternScreens}
               apps={appsMap}
-              webGrid={app.platforms.includes('web')}
+              webGrid={app.platforms.some(isDesktopPlatform)}
               showApp={false}
               showMeta={false}
               selectable

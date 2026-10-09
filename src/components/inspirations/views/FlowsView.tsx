@@ -3,8 +3,8 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { DEFAULT_PLATFORM } from '@/lib/inspirations/filters';
-import { PLATFORM_LABEL, flowCategoryLabel } from '@/lib/inspirations/taxonomy';
-import { PLATFORMS, type App, type Flow, type Platform, type Screen } from '@/lib/inspirations/types';
+import { flowCategoryLabel } from '@/lib/inspirations/taxonomy';
+import { type App, type Flow, type Platform, type Screen } from '@/lib/inspirations/types';
 import { EmptyState } from '../EmptyState';
 import { FilterPill, NavPill, ToolbarRow } from '../FilterToolbar';
 import { FlowList } from '../FlowList';
@@ -79,15 +79,6 @@ export function FlowsView() {
           onToggle={(v) => setParam('category', v === category ? undefined : v)}
           onClear={() => setParam('category')}
           multi={false}
-        />
-        <FilterPill
-          label="Platform"
-          options={PLATFORMS.map((p) => ({ value: p, label: PLATFORM_LABEL[p] ?? p }))}
-          selected={[platform]}
-          onToggle={(v) => setParam('platform', v === DEFAULT_PLATFORM ? undefined : v)}
-          onClear={() => setParam('platform')}
-          multi={false}
-          clearable={false}
         />
       </ToolbarRow>
 

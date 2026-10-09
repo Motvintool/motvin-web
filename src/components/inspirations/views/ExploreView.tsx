@@ -1,6 +1,6 @@
 'use client';
 
-import type { Platform, Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type Platform, type Screen } from '@/lib/inspirations/types';
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -35,7 +35,7 @@ function HoverPreview({
   platforms: Platform[];
 }) {
   const platformKey = platforms.join(',');
-  const isWeb = platforms.length === 1 && platforms[0] === 'web';
+  const isWeb = platforms.length === 1 && isDesktopPlatform(platforms[0]);
   const isScreens = category.title === 'Screens' || category.title === 'Flows' || category.title === 'UI Elements';
   const isFlows = category.title === 'Flows';
   const isCategories = category.title === 'Categories';

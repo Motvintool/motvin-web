@@ -8,7 +8,7 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
 import { flowCategoryLabel, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
-import type { Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { ExternalIcon } from './Icons';
 import { SaveButton } from './SaveButton';
@@ -231,7 +231,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                   {screens.map((s, i) => (
                     <div
                       key={s.id}
-                      className={`ins-screen-preview-shot ${s.platform === 'web' ? 'ins-screen-preview-shot--web' : ''}`}
+                      className={`ins-screen-preview-shot ${isDesktopPlatform(s.platform) ? 'ins-screen-preview-shot--web' : ''}`}
                       data-screen-id={s.id}
                       onClick={() => setZoomScreen(s)}
                     >
@@ -242,7 +242,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
               ) : (
                 <div className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--single">
                   <div
-                    className={`ins-screen-preview-shot ${active?.platform === 'web' ? 'ins-screen-preview-shot--web' : ''}`}
+                    className={`ins-screen-preview-shot ${isDesktopPlatform(active?.platform) ? 'ins-screen-preview-shot--web' : ''}`}
                     data-screen-id={active?.id}
                     onClick={() => active && setZoomScreen(active)}
                   >

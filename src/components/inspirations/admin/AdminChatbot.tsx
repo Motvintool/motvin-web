@@ -1,5 +1,6 @@
 'use client';
 
+import { isDesktopPlatform } from '@/lib/inspirations/types';
 import Link from 'next/link';
 import { useEffect, useRef, useState, type DragEvent, type FormEvent, type Ref } from 'react';
 import { createPortal } from 'react-dom';
@@ -134,7 +135,7 @@ function matchHeldVersion(versions: { id: string; label: string; isLatest: boole
 }
 
 /** Apps that already have at least one screen filed under the given platform — an app's platform isn't a field on AdminAppRecord itself, only on its screen files. */
-function appsOnPlatform(state: AdminState, platform: 'ios' | 'android' | 'web'): AdminAppRecord[] {
+function appsOnPlatform(state: AdminState, platform: 'ios' | 'webapp' | 'web'): AdminAppRecord[] {
   const ids = new Set(state.files.filter((file) => file.platform === platform).map((file) => file.appId));
   return state.apps.filter((app) => ids.has(app.id));
 }
@@ -353,7 +354,7 @@ export function AdminChatbot() {
    * as any other change — nothing is sent until it is pressed (or a typed
    * yes). The files themselves stay held by the chat store until then.
    */
-  const offerHeld = (opts: { platform: 'ios' | 'android' | 'web'; appId?: string; version?: string; newApp?: { id: string; name: string } }) => {
+  const offerHeld = (opts: { platform: 'ios' | 'webapp' | 'web'; appId?: string; version?: string; newApp?: { id: string; name: string } }) => {
     const held = heldUpload;
     const files = heldUploadFilesNow();
     if (!held || !files.length || !user) return;
@@ -437,7 +438,7 @@ export function AdminChatbot() {
     if (plan.step === 'platform') {
       const platform = platformIn(text);
       if (!platform) {
-        assistantSays('Which platform — iOS, Android or Web?', [...PLATFORM_CHOICES.map((choice) => chip(choice.label)), chip('Cancel')]);
+        assistantSays('Which platform — iOS, Web Apps or Webs?', [...PLATFORM_CHOICES.map((choice) => chip(choice.label)), chip('Cancel')]);
         return;
       }
       await askApp({ ...plan, platform });
@@ -760,7 +761,7 @@ export function AdminChatbot() {
             )}{' '}
             —{' '}
             {heldUpload.plan.step === 'platform'
-              ? 'which platform? iOS, Android or Web.'
+              ? 'which platform? iOS, Web Apps or Webs.'
               : heldUpload.plan.step === 'app'
                 ? 'a new app, or which existing one?'
                 : heldUpload.plan.step === 'name'
@@ -1536,7 +1537,7 @@ export function ReviewGrid({ job, slot }: { job: IngestJob; slot?: HTMLDivElemen
           {expanded ? <CloseIcon size={15} /> : <ExpandIcon size={15} />}
         </button>
       </div>
-      <div className={`ins-chat-screens-grid ${job.mode !== 'research' && job.platform !== 'web' ? 'is-apps-platform' : ''}`} role={picking ? 'listbox' : 'list'} aria-multiselectable={picking || undefined}>
+      <div className={`ins-chat-screens-grid ${job.mode !== 'research' && !isDesktopPlatform(job.platform) ? 'is-apps-platform' : ''}`} role={picking ? 'listbox' : 'list'} aria-multiselectable={picking || undefined}>
         {screens.map((screen, index) => {
           const isPicked = picked.has(screen.id);
           let screenLabel = '';

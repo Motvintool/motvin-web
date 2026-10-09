@@ -8,7 +8,7 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
 import { INDUSTRY_LABEL, PLATFORM_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from '@/lib/inspirations/taxonomy';
-import type { Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { DownloadIcon, ExternalIcon } from './Icons';
 import { SaveButton } from './SaveButton';
@@ -292,7 +292,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   {screens.map((s) => (
                     <div
                       key={s.id}
-                      className={`ins-screen-preview-shot ${s.platform === 'web' ? 'ins-screen-preview-shot--web' : ''}`}
+                      className={`ins-screen-preview-shot ${isDesktopPlatform(s.platform) ? 'ins-screen-preview-shot--web' : ''}`}
                       data-screen-id={s.id}
                       onClick={() => setZoomScreen(s)}
                     >
@@ -303,7 +303,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               ) : (
                 <div className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--single">
                   <div
-                    className={`ins-screen-preview-shot ${(screens[activeIndex] ?? screen).platform === 'web' ? 'ins-screen-preview-shot--web' : ''}`}
+                    className={`ins-screen-preview-shot ${isDesktopPlatform((screens[activeIndex] ?? screen).platform) ? 'ins-screen-preview-shot--web' : ''}`}
                     data-screen-id={screens[activeIndex]?.id ?? screen.id}
                     onClick={() => setZoomScreen(screens[activeIndex] ?? screen)}
                   >

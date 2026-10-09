@@ -158,44 +158,14 @@ export const WebIcon = (p: IconProps) => (
     />
   </svg>
 );
-/** Android's dome silhouette with its antenna lines and eyes cut out via an
- * SVG mask (luminance masking is the SVG default, so it needs no extra
- * declaration) rather than painted on top — a painted-on background color
- * would only match a plain white host and break on anything else. */
-export const AndroidIcon = (p: IconProps) => {
-  const { size = 16, ...rest } = p;
-  const maskId = useId();
-  return (
-    <svg
-      width={size}
-      height={size * (13.7224 / 22.1227)}
-      viewBox="0 0 22.1227 13.7224"
-      fill="currentColor"
-      stroke="none"
-      aria-hidden
-      {...rest}
-    >
-      <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="23" height="14">
-        <path
-          fillRule="evenodd"
-          clipRule="evenodd"
-          d="M21.0116 12.6113H1.11112C1.61262 7.5578 5.87612 3.6113 11.0611 3.6113C16.2471 3.6113 20.5101 7.5578 21.0116 12.6113Z"
-          fill="white"
-          stroke="white"
-          strokeWidth="2.22222"
-          strokeLinejoin="round"
-        />
-        <path d="M6.06164 4.6113L4.06164 1.1113M15.5616 4.6113L17.5616 1.1113" stroke="white" strokeWidth="2.22222" strokeLinecap="round" strokeLinejoin="round" />
-        <path fillRule="evenodd" clipRule="evenodd" d="M6.56164 10.1113C7.11392 10.1113 7.56164 9.66359 7.56164 9.1113C7.56164 8.55902 7.11392 8.1113 6.56164 8.1113C6.00935 8.1113 5.56164 8.55902 5.56164 9.1113C5.56164 9.66359 6.00935 10.1113 6.56164 10.1113Z" fill="black" />
-        <path fillRule="evenodd" clipRule="evenodd" d="M15.5616 10.1113C16.1139 10.1113 16.5616 9.66359 16.5616 9.1113C16.5616 8.55902 16.1139 8.1113 15.5616 8.1113C15.0094 8.1113 14.5616 8.55902 14.5616 9.1113C14.5616 9.66359 15.0094 10.1113 15.5616 10.1113Z" fill="black" />
-      </mask>
-      <g mask={`url(#${maskId})`}>
-        <path fillRule="evenodd" clipRule="evenodd" d="M-0.937712 -5.3887H23.0623V18.6113H-0.937712V-5.3887Z" />
-      </g>
-    </svg>
-  );
-};
-
+/** An app window: a rounded frame with a title bar and two dots. Stands for "Web Apps". */
+export const WebAppIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4.5" width="18" height="15" rx="3.5" />
+    <path d="M3 9.5h18" />
+    <path d="M7 7.1h.01M10.2 7.1h.01" strokeWidth="2.2" />
+  </svg>
+);
 export const SettingsIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <circle cx="12" cy="12" r="3" />

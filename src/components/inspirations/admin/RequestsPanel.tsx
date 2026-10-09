@@ -65,7 +65,7 @@ export function RequestsPanel() {
             </span>
             <div className="ins-reqrow-main">
               <h3>
-                {request.appName} <span>{PLATFORM_LABEL[request.platform]}</span>
+                {request.appName} <span>{PLATFORM_LABEL[request.platform] ?? request.platform}</span>
               </h3>
               {request.link && (
                 <a href={request.link} target="_blank" rel="noreferrer noopener">

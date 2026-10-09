@@ -594,10 +594,10 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
       );
     }
     // The platform is the admin's call — a recording does not say whether it
-    // is an iPhone, an Android phone or a browser — and it decides where the
+    // is an iPhone app, a web app or a website — and it decides where the
     // screens live: screens/<platform>/<app>.
     if (options.platform) {
-      if (!['ios', 'android', 'web'].includes(options.platform)) throw new Error(`platform must be ios, android or web, not "${options.platform}"`);
+      if (!['ios', 'webapp', 'web'].includes(options.platform)) throw new Error(`platform must be ios, webapp or web, not "${options.platform}"`);
       resolvedApp = { ...resolvedApp, platform: options.platform };
     }
     if (!resolvedApp.platform) resolvedApp = { ...resolvedApp, platform: 'ios' };

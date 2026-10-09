@@ -3,8 +3,8 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { DEFAULT_PLATFORM } from '@/lib/inspirations/filters';
-import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
-import { PLATFORMS, type Industry, type Platform } from '@/lib/inspirations/types';
+import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
+import { PLATFORMS, isDesktopPlatform, type Industry, type Platform } from '@/lib/inspirations/types';
 import { AppsGrid } from '../AppsGrid';
 import { FilterPill, NavPill, SortPill, ToolbarRow, type SortOption } from '../FilterToolbar';
 import { PageHeading } from '../PageHeading';
@@ -83,15 +83,6 @@ export function AppsView() {
           onClear={() => setParam('industry')}
           multi={false}
         />
-        <FilterPill
-          label="Platform"
-          options={PLATFORMS.map((p) => ({ value: p, label: PLATFORM_LABEL[p] ?? p }))}
-          selected={[platform]}
-          onToggle={(v) => setParam('platform', v === DEFAULT_PLATFORM ? undefined : v)}
-          onClear={() => setParam('platform')}
-          multi={false}
-          clearable={false}
-        />
       </ToolbarRow>
 
       {/* "Filtered" means an explicit choice beyond the defaults — a category,
@@ -100,7 +91,7 @@ export function AppsView() {
       <AppsGrid
         apps={visible}
         loading={loading}
-        webLayout={platform === 'web'}
+        webLayout={isDesktopPlatform(platform)}
         emptyTitle={industry || params.get('platform') ? 'No apps match these filters' : 'No apps in the library yet'}
         emptyDescription={
           industry || params.get('platform')

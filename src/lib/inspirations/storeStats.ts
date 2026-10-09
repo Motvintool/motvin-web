@@ -4,19 +4,15 @@
  *  - iOS: iTunes Search for the listing (rating count, category), Apple's
  *    top-free charts for the rank. Apple publishes no download counts, so the
  *    rating count stands in for "popularity" on iOS.
- *  - Android: the Play listing page — its "Downloads" bucket (e.g. "1B+").
- *    Play has no public chart API, so there is no Android rank.
  *
  * Every field is optional: a store that changes its markup or is unreachable
  * just yields nulls, and the UI shows a dash.
  */
 
 export type StoreStats = {
-  platform: 'ios' | 'android';
+  platform: 'ios';
   /** Store listing URL. */
   url: string | null;
-  /** Android: install bucket such as "1B+". */
-  downloads: string | null;
   /** iOS: how many ratings the listing has, compacted ("42.5M"). */
   ratings: string | null;
   /** iOS: average star rating out of 5. */
@@ -36,7 +32,7 @@ export type StoreStats = {
 };
 
 const BLANK: StoreStats = {
-  platform: 'ios', url: null, downloads: null, ratings: null, rating: null, price: null, size: null,
+  platform: 'ios', url: null, ratings: null, rating: null, price: null, size: null,
   updated: null, version: null, rank: null, overallRank: null,
 };
 
@@ -157,17 +153,6 @@ async function iosStats(name: string): Promise<StoreStats> {
   };
 }
 
-async function androidStats(name: string): Promise<StoreStats> {
-  const empty: StoreStats = { ...BLANK, platform: 'android' };
-  const search = await getText(`https://play.google.com/store/search?q=${encodeURIComponent(name)}&c=apps&hl=en&gl=us`);
-  const id = search?.match(/\/store\/apps\/details\?id=([A-Za-z0-9._]+)/)?.[1];
-  if (!id) return empty;
-  const url = `https://play.google.com/store/apps/details?id=${id}`;
-  const page = await getText(`${url}&hl=en&gl=us`);
-  const downloads = page?.match(/>([\d.,]+[KMB]?\+)<\/div><div[^>]*>Downloads</)?.[1] ?? null;
-  return { ...empty, url, downloads };
-}
-
-export function getStoreStats(name: string, platform: 'ios' | 'android'): Promise<StoreStats> {
-  return platform === 'android' ? androidStats(name) : iosStats(name);
+export function getStoreStats(name: string, _platform: 'ios' = 'ios'): Promise<StoreStats> {
+  return iosStats(name);
 }
