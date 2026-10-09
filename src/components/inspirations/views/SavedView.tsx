@@ -14,7 +14,7 @@ import { CollectionCard } from '../CollectionCard';
 import { EmptyState } from '../EmptyState';
 import { FlowCard } from '../FlowCard';
 import { FloatCollectionBar } from '../FloatCollectionBar';
-import { BookmarkIcon, FolderIcon, PlusIcon } from '../Icons';
+import { BookmarkIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
 import { PatternCard } from '../PatternCard';
 import { ScreenGrid } from '../ScreenGrid';
@@ -26,9 +26,6 @@ import { useAppSelection } from '../useAppSelection';
 import { useScreensByIds } from '../useScreensByIds';
 
 type SavedTab = 'apps' | 'screens' | 'flows' | 'patterns' | 'components';
-
-/** Suggested starting boards for a visitor with none yet. */
-const BOARD_STARTERS = ['My Inspiration', 'Dashboard Ideas', 'Checkout References', 'AI Products', 'Mobile Navigation'];
 
 const COLLECTION_TABS: { id: SavedTab; label: string }[] = [
   { id: 'apps', label: 'Apps' },
@@ -160,24 +157,22 @@ export function SavedView() {
         />
 
         {collections.length === 0 ? (
-          <>
-            <EmptyState
-              icon={<FolderIcon size={22} />}
-              title="No collections yet"
-              description="Collections are visual boards. Save screens, apps, flows and patterns into them as you explore."
-              action={{ label: 'Start exploring', href: INSPIRATIONS_ROUTES.explore }}
-            />
-            <div className="ins-starters">
-              <p className="ins-muted">Start with a board:</p>
-              <div className="ins-chips">
-                {BOARD_STARTERS.map((s) => (
-                  <button key={s} type="button" className="ins-chip" onClick={() => createCollection(s)}>
-                    <PlusIcon size={12} /> {s}
-                  </button>
-                ))}
-              </div>
+          <div className="ins-collempty">
+            <div className="ins-collempty-stack" aria-hidden>
+              <span className="ins-collempty-tile ins-collempty-tile--a" />
+              <span className="ins-collempty-tile ins-collempty-tile--b" />
+              <span className="ins-collempty-tile ins-collempty-tile--c">
+                <BookmarkIcon size={26} />
+              </span>
             </div>
-          </>
+            <h2>Save what inspires you</h2>
+            <p>Group screens, apps, flows and patterns into boards you can come back to.</p>
+            <div className="ins-collempty-actions">
+              <Link href={INSPIRATIONS_ROUTES.explore} className="ins-collempty-primary">
+                Start exploring
+              </Link>
+            </div>
+          </div>
         ) : (
           <div className="ins-collection-grid">
             {collections.map((c) => (

@@ -9,17 +9,18 @@ import { useAuthModal } from '@/components/shared/AuthModal';
 import { useHydrated } from '@/components/shared/useHydrated';
 import { isAdminEmail } from '@/lib/inspirations/admin';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import { applyTheme, getStoredTheme, storeTheme, type ThemePreference } from '@/lib/theme';
 import { ADMIN_PARAM } from './admin/AdminDrawer';
-import { FolderIcon, SettingsIcon, UploadIcon } from './Icons';
+import { RequestAppModal } from './RequestAppModal';
 
 /**
- * Avatar chip + dropdown for the Inspirations header. The chip and dropdown
- * shell are the same mi-profile-menu-container/mi-profile-dropdown markup as
- * motvin-library's LibraryProfileMenu (profile-menu.css) — but the menu
- * items themselves stay Inspirations' own: Saved, Collections, admin-only
- * Admin link, and theme switching, none of which LibraryProfileMenu has.
+ * Avatar chip + profile menu for the Inspirations header. The chip is the library's own badge; the menu is
+ * the Figma "profile-menu" (node 1329-2714): who you are and a Manage profile button, then Collections,
+ * Settings (signed in), Admin Settings (admin only) and Request apps, then Icon library and Release notes, Log out, and a
+ * footer with the legal links and Instagram.
  */
+const ICON = '/ASSET/Icons/Motvin';
+const INSTAGRAM_URL = 'https://www.instagram.com/siren.uix';
+
 export function ProfileMenu() {
   const { user: liveUser, signOut } = useAuth();
   const { open: openAuth } = useAuthModal();
@@ -31,8 +32,9 @@ export function ProfileMenu() {
   const hydrated = useHydrated();
   const user = hydrated ? liveUser : null;
   const [open, setOpen] = useState(false);
-  const [theme, setTheme] = useState<ThemePreference>('dark');
+  const [requesting, setRequesting] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const signedIn = Boolean(user && !user.isAnonymous);
@@ -53,15 +55,32 @@ export function ProfileMenu() {
     const onDown = (e: PointerEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
+    // Keyboard: Esc closes and hands focus back to the avatar; the arrow keys, Home and End move between rows.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+        return;
+      }
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+      const items = Array.from(rootRef.current?.querySelectorAll<HTMLElement>('.ins-pmenu [role="menuitem"]') ?? []);
+      if (!items.length) return;
+      e.preventDefault();
+      const at = items.indexOf(document.activeElement as HTMLElement);
+      let next = 0;
+      if (e.key === 'ArrowDown') next = at < 0 ? 0 : (at + 1) % items.length;
+      else if (e.key === 'ArrowUp') next = at < 0 ? items.length - 1 : (at - 1 + items.length) % items.length;
+      else if (e.key === 'End') next = items.length - 1;
+      items[next].focus();
+    };
     document.addEventListener('pointerdown', onDown);
-    return () => document.removeEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [open]);
-
-  const pickTheme = (pref: ThemePreference) => {
-    applyTheme(pref);
-    storeTheme(pref);
-    setTheme(pref);
-  };
 
   return (
     <div className="mi-profile-menu-container" ref={rootRef}>
@@ -73,99 +92,147 @@ export function ProfileMenu() {
         )}
         <button
           type="button"
+          ref={triggerRef}
           className={badgeWrapClassName(user)}
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={signedIn ? user?.displayName || 'Account' : 'Account menu'}
-          onClick={() => {
-            // Read the stored preference as the menu opens so the radio group
-            // reflects a change made on another page.
-            setTheme(getStoredTheme());
-            setOpen((o) => !o);
-          }}
+          onClick={() => setOpen((o) => !o)}
         >
           <LibraryProfileBadge user={user} />
         </button>
       </div>
 
-      <div className={`mi-profile-dropdown${open ? ' is-open' : ''}`} role="menu">
-        <div className="mi-profile-dropdown-inner">
-          {signedIn && user && (
-            <div className="mi-profile-user-info-section">
-              <div className="mi-profile-user-info">
-                <p className="mi-profile-name">{user.displayName || 'User'}</p>
-                <p className="mi-profile-email">{user.email}</p>
+      <div className={`ins-pmenu${open ? ' is-open' : ''}`} role="menu" aria-hidden={!open}>
+        <div className="ins-pmenu-body">
+          <div className="ins-pmenu-top">
+            <div className="ins-pmenu-head">
+              <div className="ins-pmenu-id">
+                <div className="ins-pmenu-idtext">
+                  <p className="ins-pmenu-name">{signedIn && user ? user.displayName || 'User' : 'Guest'}</p>
+                  {signedIn && user ? (
+                    <a className="ins-pmenu-email" href={`mailto:${user.email}`}>
+                      {user.email}
+                    </a>
+                  ) : (
+                    <span className="ins-pmenu-email">name@example.com</span>
+                  )}
+                </div>
+                {signedIn && user?.photoURL ? (
+                  <img className="ins-pmenu-avatar" src={user.photoURL} alt="" referrerPolicy="no-referrer" />
+                ) : signedIn && user ? (
+                  <span className="ins-pmenu-avatar ins-pmenu-avatar--initial" aria-hidden>
+                    {(user.displayName || user.email || 'U')[0].toUpperCase()}
+                  </span>
+                ) : null}
               </div>
-              <div className="mi-profile-divider-wrap">
-                <div className="mi-profile-divider" />
+              {signedIn ? (
+                <Link href={`${INSPIRATIONS_ROUTES.settings}#set-profile`} className="ins-pmenu-edit" role="menuitem" onClick={() => setOpen(false)}>
+                  Manage profile
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className="ins-pmenu-edit"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpen(false);
+                    openAuth('login');
+                  }}
+                >
+                  Login account
+                </button>
+              )}
+            </div>
+
+            <div className="ins-pmenu-panel">
+              <div className="ins-pmenu-list">
+                <Link href={INSPIRATIONS_ROUTES.collections} className="ins-pmenu-item" role="menuitem" onClick={() => setOpen(false)}>
+                  <span className="ins-pmenu-lead">
+                    <img src={`${ICON}/profile-collections.svg`} alt="" width={18} height={18} />
+                    Collections
+                  </span>
+                  <img src={`${ICON}/profile-arrow.svg`} alt="" width={12} height={12} />
+                </Link>
+                {signedIn && (
+                  <Link href={INSPIRATIONS_ROUTES.settings} className="ins-pmenu-item" role="menuitem" onClick={() => setOpen(false)}>
+                    <span className="ins-pmenu-lead">
+                      <img src={`${ICON}/profile-settings.svg`} alt="" width={18} height={18} />
+                      Settings
+                    </span>
+                    <img src={`${ICON}/profile-arrow.svg`} alt="" width={12} height={12} />
+                  </Link>
+                )}
+                {showAdmin && (
+                  <Link href={adminHref} scroll={false} className="ins-pmenu-item" role="menuitem" onClick={() => setOpen(false)}>
+                    <span className="ins-pmenu-lead">
+                      <img src={`${ICON}/profile-admin.svg`} alt="" width={18} height={18} />
+                      Admin Settings
+                    </span>
+                    <img src={`${ICON}/profile-arrow.svg`} alt="" width={12} height={12} />
+                  </Link>
+                )}
+                {(
+                  <button
+                    type="button"
+                    className="ins-pmenu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpen(false);
+                      setRequesting(true);
+                    }}
+                  >
+                    <span className="ins-pmenu-lead">
+                      <img src={`${ICON}/profile-app-request.svg`} alt="" width={18} height={18} />
+                      Request apps
+                      <span className="ins-pmenu-new">New</span>
+                    </span>
+                    <img src={`${ICON}/profile-arrow.svg`} alt="" width={12} height={12} />
+                  </button>
+                )}
+              </div>
+
+              <div className="ins-pmenu-rule" />
+
+              <div className="ins-pmenu-list">
+                <a href="/icons" className="ins-pmenu-item" role="menuitem">
+                  <span>Icon library</span>
+                  <img src={`${ICON}/profile-redirect.svg`} alt="" width={14} height={14} />
+                </a>
+                <a href="/updates/" className="ins-pmenu-item" role="menuitem" target="_blank" rel="noopener noreferrer">
+                  <span>Release notes</span>
+                  <img src={`${ICON}/profile-redirect.svg`} alt="" width={14} height={14} />
+                </a>
+                {signedIn && (
+                  <button
+                    type="button"
+                    className="ins-pmenu-item ins-pmenu-item--danger"
+                    role="menuitem"
+                    onClick={async () => {
+                      setOpen(false);
+                      await signOut();
+                    }}
+                  >
+                    <span>Log out</span>
+                  </button>
+                )}
               </div>
             </div>
-          )}
-
-          <div className="mi-profile-menu-items">
-            <Link href={INSPIRATIONS_ROUTES.collections} className="mi-profile-item" role="menuitem" onClick={() => setOpen(false)}>
-              <FolderIcon size={16} />
-              <span>Collections</span>
-            </Link>
-            {signedIn && (
-              <Link href={INSPIRATIONS_ROUTES.settings} className="mi-profile-item" role="menuitem" onClick={() => setOpen(false)}>
-                <SettingsIcon size={16} />
-                <span>Settings</span>
-              </Link>
-            )}
-            {showAdmin && (
-              <Link href={adminHref} scroll={false} className="mi-profile-item" role="menuitem" onClick={() => setOpen(false)}>
-                <UploadIcon size={16} />
-                <span>Admin</span>
-                <span className="ins-popover-item-tag">Upload</span>
-              </Link>
-            )}
           </div>
 
-          <div className="mi-profile-divider-wrap">
-            <div className="mi-profile-divider" />
-          </div>
-
-          <p className="ins-popover-title">Theme</p>
-          <div className="ins-theme-row" role="radiogroup" aria-label="Theme">
-            {(['light', 'dark', 'system'] as ThemePreference[]).map((pref) => (
-              <button key={pref} type="button" role="radio" aria-checked={theme === pref} className={`ins-chip ins-chip--sm ${theme === pref ? 'is-active' : ''}`} onClick={() => pickTheme(pref)}>
-                {pref[0].toUpperCase() + pref.slice(1)}
-              </button>
-            ))}
-          </div>
-
-          <div className="mi-profile-divider-wrap">
-            <div className="mi-profile-divider" />
-          </div>
-
-          <div className="mi-profile-menu-items">
-            <a href="/icons" className="mi-profile-item" role="menuitem">
-              <span>Icon library</span>
-            </a>
-            <a href="/updates/" className="mi-profile-item" role="menuitem" target="_blank" rel="noopener noreferrer">
-              <span>Release notes</span>
+          <div className="ins-pmenu-foot">
+            <div className="ins-pmenu-legal">
+              <Link href="/privacy" onClick={() => setOpen(false)}>Privacy</Link>
+              <Link href="/terms" onClick={() => setOpen(false)}>Terms</Link>
+              <Link href="/copyrights" onClick={() => setOpen(false)}>Copyrights</Link>
+            </div>
+            <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" aria-label="Motvin on Instagram">
+              <img src={`${ICON}/profile-external.svg`} alt="" width={20} height={20} />
             </a>
           </div>
-
-          <div className="mi-profile-divider-wrap">
-            <div className="mi-profile-divider" />
-          </div>
-
-          <button
-            type="button"
-            className="mi-profile-item"
-            role="menuitem"
-            onClick={async () => {
-              setOpen(false);
-              if (signedIn) await signOut();
-              else openAuth('login');
-            }}
-          >
-            <span>{signedIn ? 'Log out' : 'Log in'}</span>
-          </button>
         </div>
       </div>
+      {requesting && <RequestAppModal initialName="" initialPlatform="ios" onClose={() => setRequesting(false)} />}
     </div>
   );
 }

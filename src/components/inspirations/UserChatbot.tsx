@@ -8,7 +8,7 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { greetingFor } from '@/lib/inspirations/guide-chatbot/guideGreeting';
 import { nextNudge, nudgeMessages, readNudgeState, writeNudgeState } from '@/lib/inspirations/guide-chatbot/guideNudge';
 import { groupChats, newChatId, previewOf, readHistory, relativeTime, removeChat, upsertChat, writeHistory, type SavedChat, type SavedLine } from '@/lib/inspirations/guide-chatbot/guideHistory';
-import { exportLog, readLog, recordFeedback, recordMiss, type Verdict } from '@/lib/inspirations/guide-chatbot/guideTelemetry';
+import { recordFeedback, recordMiss, type Verdict } from '@/lib/inspirations/guide-chatbot/guideTelemetry';
 import { QUICK_PAGES, resolveNavigation, type GuideAction, type NavCard, type NavTarget, type ReplyKind } from '@/lib/inspirations/guide-chatbot/navAssistant';
 import { libraryStore } from '@/lib/inspirations/store';
 import type { App } from '@/lib/inspirations/types';
@@ -19,7 +19,6 @@ import {
   ChevronRightIcon,
   CloseIcon,
   CopyIcon,
-  DownloadIcon,
   ExternalIcon,
   PencilIcon,
   RetryIcon,
@@ -67,6 +66,7 @@ export function UserChatbot() {
   const [dimmed, setDimmed] = useState(true);
   const [nudge, setNudge] = useState<{ text: string; key: number } | null>(null);
   const topAppName = useRef<string | null>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const [canLeft, setCanLeft] = useState(false);
   const [canRight, setCanRight] = useState(false);
   // Past conversations, kept in this browser, and which screen the panel shows.
@@ -134,6 +134,17 @@ export function UserChatbot() {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [open]);
+
+  // Once the guide has taken the visitor somewhere it floats over the live page (no backdrop), so a
+  // click anywhere outside it closes it.
+  useEffect(() => {
+    if (!open || dimmed) return;
+    const onDown = (event: PointerEvent) => {
+      if (!panelRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [open, dimmed]);
 
   // The most-browsed app's name, so one of the nudges can mention something real.
   useEffect(() => {
@@ -363,17 +374,6 @@ export function UserChatbot() {
     say('No problem.');
   };
 
-  const exportFeedback = () => {
-    const report = exportLog(readLog());
-    const blob = new Blob([report], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `motvin-guide-feedback-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-
   // The suggestion row above the composer follows the conversation: the places
   // to go at first, then whatever the latest answer offers next. While a reply
   // is still being written, the last settled answer's suggestions stay put.
@@ -454,8 +454,8 @@ export function UserChatbot() {
           type="button"
           className={`ins-dock-pill ins-dock-user ${alongsideAdmin ? 'is-beside-admin' : ''} ${nudge ? 'is-calling' : ''}`}
           onClick={openGuide}
-          aria-label="Open the guide"
-          title="Ask Motvin to take you somewhere"
+          aria-label="Open Motvin Buddy"
+          title="Ask Motvin Buddy"
         >
           <img src="/ASSET/Icons/Motvin/bot-Illustration.svg" alt="" width={33} height={33} />
         </button>
@@ -469,7 +469,7 @@ export function UserChatbot() {
   return (
     <>
       {dimmed && <div className="ins-guide-backdrop" onClick={() => setOpen(false)} aria-hidden />}
-      <aside className={`ins-guide ${dimmed ? '' : 'is-floating'}`} role="dialog" aria-modal={dimmed || undefined} aria-label="Motvin guide" onKeyDown={keepFocusInside}>
+      <aside ref={panelRef} className={`ins-guide ${dimmed ? '' : 'is-floating'}`} role="dialog" aria-modal={dimmed || undefined} aria-label="Motvin Buddy" onKeyDown={keepFocusInside}>
         <div className="ins-guide-top">
           {inHistory ? (
             <button type="button" className="ins-guide-back" onClick={() => setView('chat')} title="Back to the chat">
@@ -484,7 +484,7 @@ export function UserChatbot() {
                 <span className="ins-guide-mark" aria-hidden>
                   <img src="/ASSET/Icons/Motvin/bot-Illustration.svg" alt="" width={28} height={28} />
                 </span>
-                <strong>Motvin Guide</strong>
+                <strong>Motvin Buddy</strong>
               </span>
             )
           )}
@@ -534,9 +534,6 @@ export function UserChatbot() {
                       <h3>{group.label}</h3>
                       {groupIndex === 0 && (
                         <span className="ins-guide-grouphead-actions">
-                          <button type="button" className="ins-guide-link" onClick={exportFeedback} title="Download what the guide could not answer, and your thumbs up and down, as a file">
-                            <DownloadIcon size={13} /> Export feedback
-                          </button>
                           <button type="button" className="ins-guide-link" onClick={clearHistory}>
                             Clear all
                           </button>
@@ -558,7 +555,7 @@ export function UserChatbot() {
                               </span>
                             </button>
                             <button type="button" className="ins-guide-history-del" onClick={() => deleteChat(chat.id)} aria-label={`Delete “${chat.title}”`} title="Delete this chat">
-                              <TrashIcon size={15} />
+                              <TrashIcon size={20} />
                             </button>
                           </li>
                         );
@@ -736,7 +733,7 @@ export function UserChatbot() {
         <form className="ins-guide-composer" onSubmit={submit}>
           <input ref={inputRef} value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={onComposerKey} placeholder="Ask for an app or a page…" aria-label="Ask where to go" maxLength={200} />
           <div className="ins-guide-composer-bar">
-            <button type="button" className="ins-guide-esc" onClick={() => setOpen(false)} title="Close the guide">
+            <button type="button" className="ins-guide-esc" onClick={() => setOpen(false)} title="Close Motvin Buddy">
               <kbd>Esc</kbd>
               <span className="ins-guide-esc-label">to close</span>
               <span className="ins-guide-close-label">Close</span>

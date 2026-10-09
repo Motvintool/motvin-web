@@ -11,10 +11,10 @@ export type NudgeState = { shown: number; dismissed: boolean };
 
 export function nudgeMessages(appName?: string | null): string[] {
   return [
-    'Need help finding something?',
+    'Hi, I’m Motvin Buddy. Need help finding something?',
     'Looking for an app or a screen? Ask me 👋',
     appName ? `Curious how many screens ${appName} has?` : 'Not sure where to start? Just ask.',
-    'I can take you anywhere in Motvin. Just say where.',
+    'I’m Motvin Buddy. I can take you anywhere in Motvin. Just say where.',
   ];
 }
 

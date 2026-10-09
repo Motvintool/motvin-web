@@ -43,7 +43,7 @@ beforeEach(() => resetIndex());
 const ask = (text: string, app: Parameters<typeof resolveNavigation>[1] = undefined) => resolveNavigation(text, app);
 
 describe('small talk never navigates', () => {
-  it.each(['hi', 'hello', 'hey!', 'thanks', 'who are you', 'how are you', 'help'])('%s', async (text) => {
+  it.each(['hi', 'hello', 'hey!', 'hey buddy', 'hi motvin buddy', 'hello there', 'buddy', 'thanks', 'who are you', 'how are you', 'help'])('%s', async (text) => {
     const reply = await ask(text);
     expect(reply.go).toBeUndefined();
     expect(reply.text.length).toBeGreaterThan(0);

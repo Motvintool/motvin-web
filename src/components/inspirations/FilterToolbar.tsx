@@ -23,8 +23,7 @@ import {
   type Style,
 } from '@/lib/inspirations/types';
 import { useMeta } from './useMeta';
-import { AppTabs } from './AppTabs';
-import { CheckIcon, CloseIcon } from './Icons';
+import { AppleIcon, CheckIcon, CloseIcon, WebAppIcon, WebIcon } from './Icons';
 
 /**
  * The Screens-page filter row, in Mobbin's shape: one dropdown pill per
@@ -444,20 +443,24 @@ export function useDockingRow() {
 }
 
 /**
- * The platform switch (Figma "Apps or web", node 1311:15892): a grey pill with the current platform
- * lifted onto a white one. It switches between iOS and Web Apps; websites ("Webs") have no sub-platforms,
+ * The platform switch: the library's own segmented control (the same one the admin uses), with the current
+ * platform on the black pill. It switches between iOS and Web Apps; websites ("Webs") have no sub-platforms,
  * so on wide screens it steps aside there (the Apps / Webs tabs carry that choice). On narrow screens the
  * tabs are not shown, so the switch carries all three and is the only way to move between them.
  */
-const SWITCH_OPTIONS: { value: string; label: string; param: string | null }[] = [
-  { value: 'ios', label: 'iOS', param: null },
-  { value: 'webapp', label: 'Web Apps', param: 'webapp' },
-  { value: 'web', label: 'Webs', param: 'web' },
+const SWITCH_OPTIONS: { value: string; label: string; param: string | null; Icon: typeof AppleIcon }[] = [
+  { value: 'ios', label: 'iOS', param: null, Icon: AppleIcon },
+  { value: 'webapp', label: 'Web Apps', param: 'webapp', Icon: WebAppIcon },
+  { value: 'web', label: 'Webs', param: 'web', Icon: WebIcon },
 ];
 
 function PlatformSwitch({ platform, onPick }: { platform: string; onPick: (param: string | null) => void }) {
   return (
-    <div className={`ins-ftoolbar-context ${platform === 'web' ? 'is-webs' : ''}`} role="radiogroup" aria-label="Platform">
+    <div
+      className={`ins-segmented ins-segmented--toolbar ins-ftoolbar-context ${platform === 'web' ? 'is-webs' : ''}`}
+      role="radiogroup"
+      aria-label="Platform"
+    >
       {SWITCH_OPTIONS.map((o) => {
         const on = o.value === platform;
         return (
@@ -467,11 +470,11 @@ function PlatformSwitch({ platform, onPick }: { platform: string; onPick: (param
             role="radio"
             aria-checked={on}
             data-platform={o.value}
-            className={on ? 'is-active' : ''}
+            className={`ins-segmented-item ${on ? 'is-active' : ''}`}
             onClick={() => !on && onPick(o.param)}
           >
             {o.label}
-            {on && o.value === 'ios' && <span className="ins-ftoolbar-context-apple" aria-hidden />}
+            {on && <o.Icon size={16} />}
           </button>
         );
       })}
@@ -497,8 +500,8 @@ export function ToolbarRow({
 }) {
   const { docked, anchorRef, rowRef, headerContent } = useDockingRow();
 
-  // Apps / Webs is the top-level split (the header's tabs, and this bar's copy of them while it is docked
-  // over the header). Inside "Apps" the switch beside it picks iOS or Web Apps.
+  // Apps / Webs is the top-level split and lives in the header's tabs. Inside "Apps" the switch here picks
+  // iOS or Web Apps.
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -521,17 +524,6 @@ export function ToolbarRow({
       aria-label="Filters and sort"
       aria-hidden={docked && !inHeader ? true : undefined}
     >
-        {docked && (
-          <>
-            <AppTabs
-              appsOn={!webMode}
-              appsHref={platformHref(activePlatforms[0] === 'webapp' ? 'webapp' : null)}
-              webHref={platformHref('web')}
-              scroll={false}
-            />
-            <span className="ins-ftoolbar-divider" aria-hidden="true" />
-          </>
-        )}
         <PlatformSwitch platform={activePlatforms[0] ?? 'ios'} onPick={setPlatformParam} />
         <span className="ins-ftoolbar-divider ins-ftoolbar-divider--switch" aria-hidden="true" />
         {children}

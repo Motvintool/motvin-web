@@ -276,7 +276,7 @@ function compareApps(list: App[]): NavReply {
   };
 }
 
-const GREETING = /^(hi+|hello+|hey+|hola|yo|howdy|good (morning|afternoon|evening)|sup|namaste|vanakkam)\b[\s!.?]*$/i;
+const GREETING = /^((hi+|hello+|hey+|hola|yo|howdy|good (morning|afternoon|evening)|sup|namaste|vanakkam)(,?\s+(there|buddy|motvin( buddy)?|friend))?|(motvin )?buddy)\b[\s!.?]*$/i;
 const THANKS = /^(?:thanks?|thank you|thx|ty|tysm|cheers|ok(?:ay)?|cool|great|nice|awesome|perfect|got it|brilliant|wonderful|love it)\b(?:[\s,!.]+(?:so much|a lot|very much|a ton|again|buddy|mate|man|bro|you|guide|motvin|that'?s (?:great|perfect|helpful)|for (?:the )?help|for that|thanks?|thank you))*[\s!.?]*$/i;
 const BYE = /^(?:(?:ok(?:ay)?|alright|cool|thanks?|thank you)[\s,!.]*)?(?:bye+|goodbye|good bye|see (?:you|ya)(?: later)?|cya|later|good night|take care|talk (?:to you )?later)[\s!.]*$/i;
 const HELP = /^(?:help|what can you do|what do you do|how (?:does this|do you) work|what is this|what can i (?:find|do|see|ask)(?: here| in here| on here)?|what(?:'s| is| are)? (?:in )?here|what do you have|what have you got|how can you help(?: me)?|what can you help (?:me )?with|how do i use (?:this|you|it)|how to use (?:this|you)|what is this for|what are you for)\b[\s!.?]*$/i;
@@ -491,8 +491,8 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   if (GREETING.test(original)) return { text: pick(['Hi! Where would you like to go? Tell me an app or a page, or pick one below.', 'Hello! What are you looking for today? An app, a page, or a type of screen?', 'Hey there! Say an app or page and I’ll take you straight to it.']), targets: QUICK_PAGES, kind: 'smalltalk' };
   if (THANKS.test(original)) return { text: pick(['Anytime. Tell me where to go next.', 'Happy to help. Where to next?', 'You’re welcome. Anything else you’d like to see?']), targets: [], kind: 'smalltalk' };
   if (HOW_ARE_YOU.test(original)) return { text: 'Doing great, thanks for asking! Where would you like to go?', targets: QUICK_PAGES.slice(0, 4), kind: 'smalltalk' };
-  if (WHO.test(original)) return { text: 'I’m the Motvin guide. I help you find apps, screens and flows, and answer quick questions like how many screens an app has.', targets: QUICK_PAGES.slice(0, 4), kind: 'smalltalk' };
-  if (ABOUT_MOTVIN.test(original)) return { text: 'Motvin is a library of real app screens, flows and UI patterns to get inspired by. I’m its guide: I take you to the right app or page.', targets: QUICK_PAGES.slice(0, 4), kind: 'answer' };
+  if (WHO.test(original)) return { text: 'I’m Motvin Buddy. I help you find apps, screens and flows, and answer quick questions like how many screens an app has.', targets: QUICK_PAGES.slice(0, 4), kind: 'smalltalk' };
+  if (ABOUT_MOTVIN.test(original)) return { text: 'Motvin is a library of real app screens, flows and UI patterns to get inspired by. I’m Motvin Buddy: I take you to the right app or page.', targets: QUICK_PAGES.slice(0, 4), kind: 'answer' };
   if (PLAN_Q.test(original)) return { text: 'I don’t know about plans or prices. I only take you around the library. Try asking me for an app or a page.', targets: QUICK_PAGES.slice(0, 4), kind: 'answer' };
   if (BYE.test(original)) return { text: pick(['Bye! I’m here whenever you need a hand.', 'See you! Come back any time.', 'Take care! Just open me when you need to find something.']), targets: [], kind: 'smalltalk' };
   if (GO_BACK.test(original)) return { text: 'Going back.', targets: [], go: { label: 'Back', hint: 'Back', href: '__back__' } };
@@ -1051,7 +1051,7 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   const sounded = /\?\s*$/.test(original) || searchQuery.split(' ').length >= 4;
   return {
     text: sounded
-      ? 'I’m a guide for getting around Motvin, so I can’t answer that one. I can open an app or page, tell you how many screens an app has, or search the library.'
+      ? 'I’m Motvin Buddy, here to help you get around Motvin, so I can’t answer that one. I can open an app or page, tell you how many screens an app has, or search the library.'
       : `I couldn’t find a page called “${searchQuery}”. I can search the library for it.`,
     targets: [search, ...QUICK_PAGES.slice(0, 3)],
     kind: 'fallback',
