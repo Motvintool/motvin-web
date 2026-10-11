@@ -117,6 +117,9 @@ export function Navbar() {
 
   const navLinks = (
     <nav className="nav-links">
+      <Link href="/inspirations" className="nav-item" onClick={closePanel}>
+        <span>Inspirations</span>
+      </Link>
       <a
         href="#"
         className={`nav-item${productsOpen ? ' active' : ''}${productsAccordionOpen ? ' is-accordion-open' : ''}`}

@@ -3,9 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
-import { inspirationsApi } from '@/lib/inspirations/api';
-import { appCardScreens } from '@/lib/inspirations/cover';
-import type { Screen } from '@/lib/inspirations/types';
+import { FALLBACK_COVER_SHOTS, loadAppCoverShots, type CoverShot } from '@/lib/inspirations/coverShots';
 
 const GOOGLE_LOGO_FALLBACK =
   'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg';
@@ -13,16 +11,7 @@ const GOOGLE_LOGO_FALLBACK =
 // Message from buildAuthErrorMessage in lib/firebase/auth.ts — matched so the login error can point to sign-up.
 const MSG_INVALID_LOGIN = 'Invalid email or password.';
 
-type Shot = { src: string; ratio: number };
-
-const PHONE_RATIO = 390 / 844;
-
-// Shown until (or instead of) real library screens — the backend may be off.
-const FALLBACK_SHOTS: Shot[] = [
-  'home-front', 'checkout-back', 'dashboard-front', 'login-back', 'search-front',
-  'signup-back', 'setting-front', 'home-back', 'checkout-front', 'dashboard-back',
-  'login-front', 'search-back', 'signup-front', 'setting-back', 'app',
-].map((name) => ({ src: `/ASSET/search-modal/top-rated/${name}.png`, ratio: PHONE_RATIO }));
+type Shot = CoverShot;
 
 const COLUMNS = 5;
 const PER_COLUMN = 7;
@@ -53,32 +42,16 @@ function useCollage(): Shot[][] | null {
   useEffect(() => {
     let cancelled = false;
     const fallback = window.setTimeout(() => {
-      if (!cancelled) setShots((current) => current ?? FALLBACK_SHOTS);
+      if (!cancelled) setShots((current) => current ?? FALLBACK_COVER_SHOTS);
     }, 2500);
 
-    // The pictures the Apps page puts on its app cards: each iOS app's carousel
-    // (the admin's picks, else its single cover), dealt out one app at a time so
-    // neighbouring cards come from different apps.
-    void (async () => {
-      const apps = (await inspirationsApi.listApps()).filter((app) => app.platforms.includes('ios'));
-      const details = await Promise.all(apps.map((app) => inspirationsApi.getApp(app.id)));
-      const perApp = apps.map((app, i) =>
-        appCardScreens(app, (details[i]?.screens ?? []).filter((screen) => screen.platform === 'ios')),
-      );
-      const dealt: Screen[] = [];
-      for (let round = 0; dealt.length < perApp.flat().length; round++) {
-        for (const screens of perApp) if (screens[round]) dealt.push(screens[round]);
-      }
-      const loaded = dealt
-        .map((screen) => ({
-          src: inspirationsApi.mediaUrl(screen.url) ?? '',
-          ratio: screen.width && screen.height ? screen.width / screen.height : PHONE_RATIO,
-        }))
-        .filter((shot) => shot.src);
-      if (!cancelled) setShots(loaded.length >= 4 ? loaded : FALLBACK_SHOTS);
-    })().catch(() => {
-      if (!cancelled) setShots(FALLBACK_SHOTS);
-    });
+    loadAppCoverShots()
+      .then((loaded) => {
+        if (!cancelled) setShots(loaded.length >= 4 ? loaded : FALLBACK_COVER_SHOTS);
+      })
+      .catch(() => {
+        if (!cancelled) setShots(FALLBACK_COVER_SHOTS);
+      });
 
     return () => {
       cancelled = true;

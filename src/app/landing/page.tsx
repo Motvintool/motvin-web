@@ -5,6 +5,7 @@ import { Explore } from '@/components/landing/Explore';
 import { Faq } from '@/components/landing/Faq';
 import { Footer } from '@/components/landing/Footer';
 import { Hero } from '@/components/landing/Hero';
+import { InspirationsSection } from '@/components/landing/InspirationsSection';
 import { HowItWork } from '@/components/landing/HowItWork';
 import { IconsLibrary } from '@/components/landing/IconsLibrary';
 import { LandingAnimations } from '@/components/landing/LandingAnimations';
@@ -27,6 +28,7 @@ export default function HomePage() {
       <Navbar />
       <main id="main-content">
         <Hero />
+        <InspirationsSection />
         <Demo />
         <IconsLibrary />
         <HowItWork />

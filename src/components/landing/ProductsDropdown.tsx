@@ -56,6 +56,19 @@ export function ProductsDropdown({ open }: { open: boolean }) {
         <div className="products-dropdown-right">
           <p className="dropdown-heading">Explore all products</p>
           <div className="dropdown-products-grid">
+            {/* Motvin Inspirations */}
+            <a href="/inspirations" className="product-link">
+              <div
+                className="product-link-icon"
+                style={{ backgroundColor: "rgba(92,74,225,0.08)" }}
+              >
+                <img src="/ASSET/Icons/motvin-logo.svg" alt="" />
+              </div>
+              <div className="product-link-text">
+                <h4>Motvin Inspirations</h4>
+                <p>Browse screens, flows and patterns from real apps</p>
+              </div>
+            </a>
             {/* Motvin Convert */}
             <a href="/MOTVIN" target="_blank" className="product-link">
               <div
