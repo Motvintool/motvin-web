@@ -23,7 +23,7 @@ import '@/styles/landing.css';
  */
 export default function HomePage() {
   return (
-    <>
+    <div className="landing-root">
       <Navbar />
       <main id="main-content">
         <Hero />
@@ -39,6 +39,6 @@ export default function HomePage() {
       <ConsentBanners />
       <LandingAnimations />
       <ButtonEffects />
-    </>
+    </div>
   );
 }

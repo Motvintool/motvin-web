@@ -2,6 +2,13 @@ html {
   scroll-behavior: smooth;
 }
 
+/* global.css forces Manrope on every element with !important; the landing page is the one place that uses Outfit only.
+   The extra class in the selector is what lets this win over `body *`. */
+.landing-root,
+.landing-root * {
+  font-family: var(--font-outfit), sans-serif !important;
+}
+
 /* Base styles */
 :root {
   --stroke-thin: 1px;
