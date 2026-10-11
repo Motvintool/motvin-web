@@ -8,7 +8,7 @@ import { Suspense, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { openSearch, type SearchSection } from '@/lib/inspirations/openSearch';
-import { INDUSTRY_LABEL, SCREEN_TYPE_LABEL, elementLabel, flowCategoryLabel } from '@/lib/inspirations/taxonomy';
+import { elementLabel, flowCategoryLabel, INDUSTRY_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
 import { FilteredGallery } from '../FilteredGallery';
 import { PageHeading } from '../PageHeading';
 import { RotatingTitle } from '../RotatingTitle';
@@ -176,7 +176,7 @@ export function ExploreView() {
       section: 'screens' as SearchSection,
       items: screenTypes.slice(0, MAX_TAXONOMY_ITEMS).map((type) => ({
         key: type,
-        label: SCREEN_TYPE_LABEL[type] ?? type,
+        label: screenTypeLabel(type),
         count: usage?.screenTypes[type],
         href: withPlatform(`${INSPIRATIONS_ROUTES.screens}?type=${type}`),
       })),

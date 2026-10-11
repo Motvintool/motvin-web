@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { inspirationsApi, type Page, type ScreenSort } from '@/lib/inspirations/api';
-import { EMPTY_FILTERS, parseFilters, serializeFilters, toggleValue, withDefaultPlatform, type ScreenFilters } from '@/lib/inspirations/filters';
+import { EMPTY_FILTERS, matchesFilters, parseFilters, serializeFilters, toggleValue, withDefaultPlatform, type ScreenFilters } from '@/lib/inspirations/filters';
 import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type App, type ContentKind, type Industry, type LibraryCounts, type Screen } from '@/lib/inspirations/types';
 import { AppsGrid } from './AppsGrid';
@@ -11,6 +11,7 @@ import { EmptyState } from './EmptyState';
 import { FilterPill, FilterToolbar, NavPill, SortPill, ToolbarRow, type SortOption } from './FilterToolbar';
 import { ImageIcon } from './Icons';
 import { ScreenGrid } from './ScreenGrid';
+import { ScreenshotTextSearch } from './ScreenshotTextSearch';
 import { useAsync } from './useAsync';
 import { useExploreFilters } from './useExploreFilters';
 import { useMeta } from './useMeta';
@@ -133,6 +134,16 @@ export function FilteredGallery({
     const params = serializeFilters({ ...EMPTY_FILTERS, query: filters.query }, new URLSearchParams(searchParams.toString()));
     params.delete('element');
     params.delete('kind');
+    params.delete('text');
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  // The Filters panel's "Clear all": the same single write, but the platform stays — it's the switch, not a filter.
+  const clearDimensions = () => {
+    const params = serializeFilters({ ...EMPTY_FILTERS, platforms: filters.platforms, query: filters.query }, new URLSearchParams(searchParams.toString()));
+    params.delete('element');
+    params.delete('kind');
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
@@ -184,7 +195,22 @@ export function FilteredGallery({
       .finally(() => setLoadingMore(false));
   }, [ready, pages.next, loadingMore, key, appId]);
 
-  const items = ready ? pages.items : [];
+  // "Search text in screenshot": the screens whose text matches (up to the 200 the server returns), narrowed by
+  // the same filters as the feed, with the matching words highlighted. It replaces the paged feed while on.
+  const textQuery = searchParams.get('text')?.trim() ?? '';
+  const { data: textHits, loading: textLoading } = useAsync(
+    () => (textQuery && !exploreMode ? inspirationsApi.search(textQuery, 'text', appId, { limit: 200 }) : Promise.resolve(null)),
+    `gallery-text:${textQuery}:${appId ?? ''}`,
+  );
+  const textScreens = textHits
+    ? textHits.screens.filter(
+        (s) => matchesFilters(s, withDefaultPlatform(filters)) && (!element || s.elements.includes(element)) && (!appId || s.appId === appId),
+      )
+    : [];
+  const textOn = Boolean(textQuery) && !exploreMode;
+  const setText = (text: string | undefined) => setUrlParam('text', text ?? null);
+
+  const items = textOn ? textScreens : ready ? pages.items : [];
   const libraryEmpty = meta.counts.screens === 0;
 
   const { data: allApps, loading: appsLoading } = useAsync<App[]>(
@@ -239,11 +265,13 @@ export function FilteredGallery({
             onChange={update}
             element={element}
             onElement={setElement}
-            total={ready ? pages.total : null}
+            total={textOn ? (textHits ? textScreens.length : null) : ready ? pages.total : null}
             sort={screenSort}
             sortOptions={SCREEN_SORTS}
             onSort={(next) => setUrlParam('sort', next === 'curated' ? null : next)}
             counts={counts}
+            onClearAll={clearDimensions}
+            beforeSort={<ScreenshotTextSearch applied={textQuery} onApply={setText} />}
           />
           {/* .ins-shot-panel applies the app-page gallery treatment: five
               frameless, hairline-bordered shots per row. */}
@@ -253,9 +281,10 @@ export function FilteredGallery({
               webLayout={filters.platforms.length === 1 && isDesktopPlatform(filters.platforms[0])}
               showMeta={false}
               selectable
-              loading={!ready || loadingMore}
-              hasMore={ready && pages.next !== null}
+              loading={textOn ? textLoading || !textHits : !ready || loadingMore}
+              hasMore={!textOn && ready && pages.next !== null}
               onLoadMore={loadMore}
+              textHighlights={textOn ? textHits?.textHighlights : undefined}
               empty={
                 libraryEmpty ? (
                   <EmptyState

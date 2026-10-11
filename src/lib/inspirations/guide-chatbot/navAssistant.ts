@@ -6,7 +6,7 @@ import { INSPIRATIONS_ROUTES } from '../routes';
 import { suggestQueries, type SearchSuggestion } from '../search';
 import { EMPTY_FILTERS } from '../filters';
 import { applySynonyms, findIndustry, findPlatform, findPlatforms, PLATFORM_ADJECTIVE, PLATFORM_LABEL, PLATFORM_QUERY, stripChatter } from './synonyms';
-import { elementLabel, flowCategoryLabel, INDUSTRY_LABEL, SCREEN_STATE_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from '../taxonomy';
+import { elementLabel, flowCategoryLabel, INDUSTRY_LABEL, SCREEN_TYPE_LABEL, screenStateLabel, styleLabel } from '../taxonomy';
 import { FLOW_CATEGORY_PRESETS, isDesktopPlatform, type App, type Flow, type Pattern, type Platform, type SavedItemType, type ScreenState, type ScreenType, type Style } from '../types';
 
 /**
@@ -746,14 +746,14 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
 
     // Screens in a certain state or style inside one app.
     if ((states.length || styles.length) && !asksCount) {
-      const what = [...styles.map((style) => STYLE_LABEL[style].toLowerCase()), ...states.map((state) => SCREEN_STATE_LABEL[state].toLowerCase()), screenType ? screenType.label.toLowerCase() : ''].filter(Boolean).join(' ');
+      const what = [...styles.map((style) => styleLabel(style).toLowerCase()), ...states.map((state) => screenStateLabel(state).toLowerCase()), screenType ? screenType.label.toLowerCase() : ''].filter(Boolean).join(' ');
       const total = await countScreens({ type: screenType?.key, states, styles }, app);
       const go: NavTarget = { label: `${app.name} ${what} screens`, hint: 'Search', href: INSPIRATIONS_ROUTES.searchFor(`${app.name} ${what}`) };
       if (yesNo && total !== null) return total > 0 ? { text: `Yes — ${app.name} has ${plural(total, `${what} screen`)}.`, targets: [go, ...followUps(app, null).slice(0, 2)], app } : { text: `No — ${app.name} has no ${what} screens.`, targets: followUps(app, null), app };
       return { text: total !== null && total > 0 ? `${app.name} has ${plural(total, `${what} screen`)}. Showing them.` : `Showing ${app.name}’s ${what} screens.`, targets: followUps(app, null).slice(0, 2), go, app };
     }
     if ((states.length || styles.length) && asksCount) {
-      const what = [...styles.map((style) => STYLE_LABEL[style].toLowerCase()), ...states.map((state) => SCREEN_STATE_LABEL[state].toLowerCase()), screenType ? screenType.label.toLowerCase() : ''].filter(Boolean).join(' ');
+      const what = [...styles.map((style) => styleLabel(style).toLowerCase()), ...states.map((state) => screenStateLabel(state).toLowerCase()), screenType ? screenType.label.toLowerCase() : ''].filter(Boolean).join(' ');
       const total = await countScreens({ type: screenType?.key, states, styles }, app);
       if (total !== null) return { text: `${app.name} has ${plural(total, `${what} screen`)}.`, targets: [...wholeLibrary, { label: `See them`, hint: 'Search', href: INSPIRATIONS_ROUTES.searchFor(`${app.name} ${what}`) }, ...followUps(app, 'count').slice(0, 1)], app };
     }
@@ -898,7 +898,7 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
 
   // Screens by state or style across the library — "empty states", "dark mode screens", "loading login screens".
   if (states.length || styles.length) {
-    const what = [...styles.map((style) => STYLE_LABEL[style].toLowerCase()), ...states.map((state) => SCREEN_STATE_LABEL[state].toLowerCase()), screenType ? screenType.label.toLowerCase() : ''].filter(Boolean).join(' ');
+    const what = [...styles.map((style) => styleLabel(style).toLowerCase()), ...states.map((state) => screenStateLabel(state).toLowerCase()), screenType ? screenType.label.toLowerCase() : ''].filter(Boolean).join(' ');
     const params = screenQuery();
     const go: NavTarget = { label: `${what.charAt(0).toUpperCase()}${what.slice(1)} screens`, hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}?${params}` };
     if (WHICH_APPS.test(lower) || asksCount) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AuthUser } from '@/lib/firebase/auth';
 
 /**
@@ -26,6 +26,54 @@ function firstAlphanumericChar(text: string): string {
 }
 
 /**
+ * The ring around the avatar takes the picture's own colour: the flat colour of Google's generated letter
+ * avatar, or the average colour along the rim of a real photo. It is sampled on a small canvas and handed to
+ * the wrapper as --mi-ring; until then (or if the canvas is blocked) the ring keeps its default grey.
+ */
+function useAvatarRing(src: string, host: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const wrap = host.current?.parentElement;
+    wrap?.style.removeProperty('--mi-ring');
+    let cancelled = false;
+    const probe = new Image();
+    probe.crossOrigin = 'anonymous';
+    probe.referrerPolicy = 'no-referrer';
+    probe.onload = () => {
+      if (cancelled || !wrap) return;
+      try {
+        const size = 32;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return;
+        ctx.drawImage(probe, 0, 0, size, size);
+        const centre = size / 2;
+        const radius = size / 2 - 3;
+        const steps = 16;
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        for (let i = 0; i < steps; i += 1) {
+          const angle = (i / steps) * Math.PI * 2;
+          const d = ctx.getImageData(Math.round(centre + Math.cos(angle) * radius), Math.round(centre + Math.sin(angle) * radius), 1, 1).data;
+          r += d[0];
+          g += d[1];
+          b += d[2];
+        }
+        wrap.style.setProperty('--mi-ring', `rgb(${Math.round(r / steps)}, ${Math.round(g / steps)}, ${Math.round(b / steps)})`);
+      } catch {
+        /* tainted canvas: keep the default ring */
+      }
+    };
+    probe.src = src;
+    return () => {
+      cancelled = true;
+    };
+  }, [src, host]);
+}
+
+/**
  * The photo state, hardened against Google's avatar host:
  *
  * - `referrerPolicy="no-referrer"` — lh3.googleusercontent.com intermittently
@@ -42,6 +90,8 @@ function firstAlphanumericChar(text: string): string {
 function AvatarPhoto({ src }: { src: string }) {
   const [attempt, setAttempt] = useState(0);
   const [failed, setFailed] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+  useAvatarRing(src, imgRef);
 
   if (failed) {
     return <img className="mi-top-avatar" src={AVATAR_PLACEHOLDER} alt="" />;
@@ -49,6 +99,7 @@ function AvatarPhoto({ src }: { src: string }) {
 
   return (
     <img
+      ref={imgRef}
       className="mi-top-avatar"
       src={attempt === 0 ? src : `${src}${src.includes('?') ? '&' : '?'}mretry=${attempt}`}
       alt=""

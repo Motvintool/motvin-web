@@ -90,16 +90,21 @@ export function ProfileMenu() {
             Login
           </button>
         )}
+        {signedIn && (
+          <span className={badgeWrapClassName(user)} role="img" aria-label={user?.displayName || 'Account'}>
+            <LibraryProfileBadge user={user} />
+          </span>
+        )}
         <button
           type="button"
           ref={triggerRef}
-          className={badgeWrapClassName(user)}
+          className="ins-profile-menu-btn"
           aria-haspopup="menu"
           aria-expanded={open}
-          aria-label={signedIn ? user?.displayName || 'Account' : 'Account menu'}
+          aria-label="Open menu"
           onClick={() => setOpen((o) => !o)}
         >
-          <LibraryProfileBadge user={user} />
+          <img src={`${ICON}/profile-menu-lines.svg`} alt="" width={18} height={15} />
         </button>
       </div>
 

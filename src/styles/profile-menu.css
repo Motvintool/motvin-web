@@ -17,11 +17,36 @@
 
 .ins-profile-pill {
   transition: all var(--ins-fast) var(--ins-ease);
-  border-radius: 9999px;
+  /* Figma "ins-header-profile": rounded on the right, with no background fill. */
+  border-radius: 0 9999px 9999px 0;
   align-items: center;
-  gap: 8px;
-  padding: 4px 0px 4px 0px;
+  gap: 4px;
+  padding: 8px 0 8px 0;
   display: flex;
+}
+
+/* The avatar is only a picture; the menu opens from the button beside it. */
+.ins-profile-pill .mi-top-avatar-wrap {
+  cursor: default;
+}
+
+/* The menu button beside the avatar: three lines, no chrome. */
+.ins-profile-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 100px;
+  background: transparent;
+  cursor: var(--ins-cursor-hand, pointer);
+}
+
+.ins-profile-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .ins-profile-pill.is-logged-out {
@@ -47,7 +72,7 @@
 .mi-top-avatar-wrap {
   width: 40px;
   height: 40px;
-  border: 1.8px solid rgb(92, 74, 228);
+  border: 1.5px solid var(--mi-ring, #464848);
   border-radius: 50%;
   padding: 1.8px;
   background: #fff;

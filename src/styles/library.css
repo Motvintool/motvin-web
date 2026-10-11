@@ -889,7 +889,7 @@ body.is-panel-floating .mi-main {
 .mi-top-avatar-wrap {
   width: 40px;
   height: 40px;
-  border: 1.8px solid #5c4ae4;
+  border: 1.5px solid var(--mi-ring, #464848);
   border-radius: 50%;
   padding: 1.8px;
   display: flex;

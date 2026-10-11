@@ -51,7 +51,8 @@ export function AppsGrid({
   const { selected, toggle, clear } = useAppSelection();
 
   if (loading || previewsLoading) {
-    return <ScreenGridSkeleton count={4} />;
+    // One placeholder per app being loaded (up to a row), so the count doesn't jump when the cards land.
+    return <ScreenGridSkeleton count={Math.min(Math.max(apps.length, 1), 4)} />;
   }
 
   if (!loading && !previewsLoading && apps.length === 0) {

@@ -7,6 +7,7 @@ import { ScreenCard } from './ScreenCard';
 import { WebScreenCard } from './WebScreenCard';
 
 import { useApps } from './useApps';
+import { ScreenGridSkeleton } from './Skeletons';
 
 /**
  * Fixed-size gallery: every card is the same 380x590 footprint (see
@@ -81,8 +82,9 @@ export function ScreenGrid({
     return () => io.disconnect();
   }, [hasMore, onLoadMore, loading, screens.length]);
 
+  // The first page is on its way: placeholders in the same layout the screens will land in.
   if (loading && screens.length === 0) {
-    return null;
+    return <ScreenGridSkeleton count={10} meta={showMeta} web={webLayout || webGrid} />;
   }
 
   if (!loading && screens.length === 0) {

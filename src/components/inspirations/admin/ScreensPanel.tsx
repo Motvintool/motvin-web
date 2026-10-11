@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { adminApi, type AdminScreenFile, type AdminState, type ScreenSidecar, adminScreenImagePath } from '@/lib/inspirations/admin';
 import { splitScreenFile } from '@/lib/inspirations/screenPaths';
-import { PLATFORM_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from '@/lib/inspirations/taxonomy';
+import { PLATFORM_LABEL, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
 import { SCREEN_TYPES, STYLES, type Platform, type ScreenType, type Style } from '@/lib/inspirations/types';
 import { CheckIcon, PencilIcon, TrashIcon } from '../Icons';
 
@@ -198,7 +198,7 @@ function ScreenRow({
   const save = () => {
     const meta: ScreenSidecar = {
       name: name.trim() || undefined,
-      screenType,
+      screenType: (screenType.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'other') as ScreenType,
       tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
       elements: elements.split(',').map((t) => t.trim()).filter(Boolean),
       style,
@@ -262,13 +262,21 @@ function ScreenRow({
             </label>
             <label className="ins-field">
               <span className="ins-field-label">Screen type</span>
-              <select className="ins-input" value={screenType} onChange={(e) => setScreenType(e.target.value as ScreenType)}>
-                {SCREEN_TYPES.map((t) => (
+              {/* Pick a known type or type a new one — a new type shows up in the filters after the next build. */}
+              <input
+                className="ins-input"
+                list={`ins-screen-types-${file.id}`}
+                value={screenType}
+                onChange={(e) => setScreenType(e.target.value as ScreenType)}
+                placeholder="home, paywall, …"
+              />
+              <datalist id={`ins-screen-types-${file.id}`}>
+                {Array.from(new Set<string>([...(state.vocabulary.screenTypes ?? SCREEN_TYPES)])).map((t) => (
                   <option key={t} value={t}>
-                    {SCREEN_TYPE_LABEL[t]}
+                    {screenTypeLabel(t)}
                   </option>
                 ))}
-              </select>
+              </datalist>
             </label>
             <label className="ins-field">
               <span className="ins-field-label">Captured</span>
@@ -297,17 +305,17 @@ function ScreenRow({
           <fieldset className="ins-field">
             <legend className="ins-field-label">Style</legend>
             <div className="ins-filter-options">
-              {STYLES.map((s) => {
-                const on = style.includes(s);
+              {Array.from(new Set<string>([...(state.vocabulary.styles ?? STYLES), ...style])).map((s) => {
+                const on = style.includes(s as Style);
                 return (
                   <button
                     key={s}
                     type="button"
                     className={`ins-chip ins-chip--sm ${on ? 'is-active' : ''}`}
                     aria-pressed={on}
-                    onClick={() => setStyle(on ? style.filter((v) => v !== s) : [...style, s])}
+                    onClick={() => setStyle(on ? style.filter((v) => v !== s) : [...style, s as Style])}
                   >
-                    {STYLE_LABEL[s]}
+                    {styleLabel(s)}
                   </button>
                 );
               })}

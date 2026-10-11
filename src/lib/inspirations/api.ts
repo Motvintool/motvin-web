@@ -119,6 +119,7 @@ export type SearchResults = {
     screenTypes: string[];
     platforms: string[];
     styles: string[];
+    states?: string[];
     free: string[];
   };
   apps: App[];
@@ -128,6 +129,11 @@ export type SearchResults = {
   total: number;
   screenTotal: number;
   textHighlights?: Record<string, Array<{ left: number; top: number; width: number; height: number }>>;
+  /**
+   * Screens per filter value among the matches, each dimension counted with every other filter applied — so a
+   * pill can list every value the results hold (new ones included) with what picking it would show.
+   */
+  facets?: Record<'screenTypes' | 'states' | 'industries' | 'styles' | 'elements', Record<string, number>>;
 };
 
 const EMPTY_SEARCH: SearchResults = {
@@ -238,10 +244,26 @@ export const inspirationsApi = {
     return request(`/elements${qs}`, TTL.list, []);
   },
 
-  search(query: string, mode?: 'text', appId?: string): Promise<SearchResults> {
+  /**
+   * `page` asks for a later slice of the ranked screens (the server caps `limit` at 200). `filters` narrows the
+   * results server-side with the screen-list dimensions (platform, type, state, industry, style, element) and
+   * an app set (`app`), each a comma list.
+   */
+  search(
+    query: string,
+    mode?: 'text',
+    appId?: string,
+    page?: { offset?: number; limit?: number },
+    filters?: Partial<Record<'platform' | 'type' | 'state' | 'industry' | 'style' | 'element' | 'app' | 'literal', string>>,
+  ): Promise<SearchResults> {
     if (!query.trim()) return Promise.resolve(EMPTY_SEARCH);
     const scope = mode === 'text' ? `&mode=text${appId ? `&appId=${encodeURIComponent(appId)}` : ''}` : '';
-    return request(`/search?q=${encodeURIComponent(query)}${scope}`, TTL.search, EMPTY_SEARCH);
+    const paging = `${page?.offset ? `&offset=${page.offset}` : ''}${page?.limit ? `&limit=${page.limit}` : ''}`;
+    const narrowing = Object.entries(filters ?? {})
+      .filter(([, value]) => value)
+      .map(([key, value]) => `&${key}=${encodeURIComponent(value as string)}`)
+      .join('');
+    return request(`/search?q=${encodeURIComponent(query)}${scope}${paging}${narrowing}`, TTL.search, EMPTY_SEARCH);
   },
 
   /** Screens resolved by id, for saved items and collections. */

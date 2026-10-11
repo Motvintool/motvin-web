@@ -53,12 +53,12 @@ function versionOptions(versions: App['versions']): SortOption<string>[] {
 /**
  * A tabbar filter pill (Figma: "ui-elements-menu") — a checkbox multi-select
  * with a live search, rather than the plain single-select list the other
- * FilterPill dimensions use. Kept local to this page rather than folded into
- * FilterPill since no other dimension has a search box or lets more than one
- * value apply at once. Reused for both the UI Elements and Patterns tabs —
- * only the label, options and search copy differ.
+ * FilterPill dimensions use. Not folded into FilterPill since no other
+ * dimension has a search box or lets more than one value apply at once. Used
+ * by the UI Elements and Patterns tabs here and by the search page's Patterns
+ * tab — only the label, options and search copy differ.
  */
-function CheckboxFilterPill({
+export function CheckboxFilterPill({
   label,
   options,
   selected,
@@ -789,7 +789,7 @@ export function AppDetailView({
       {tab === 'screens' && (
         <section className="ins-tabpanel ins-shot-panel">
           {textLoading ? (
-            <ScreenGridSkeleton count={versionScreens.length || 8} />
+            <ScreenGridSkeleton count={versionScreens.length || 8} meta={false} />
           ) : (
             <ScreenGrid
               screens={sortedScreens}
@@ -833,7 +833,7 @@ export function AppDetailView({
           {elementCounts.size === 0 ? (
             <EmptyState title="No components recorded for this app's screens yet" />
           ) : textLoading ? (
-            <ScreenGridSkeleton count={uiElementScreens.length || 8} />
+            <ScreenGridSkeleton count={uiElementScreens.length || 8} meta={false} />
           ) : (
             // Defaults to every screen; the UI Elements pill above narrows
             // this same grid rather than swapping in a separate grouped list.
@@ -858,7 +858,7 @@ export function AppDetailView({
           {versionPatternCount === 0 ? (
             <EmptyState title="No patterns matched this app's screens yet" />
           ) : textLoading ? (
-            <ScreenGridSkeleton count={patternScreens.length || 6} />
+            <ScreenGridSkeleton count={patternScreens.length || 6} meta={false} />
           ) : (
             // Defaults to every screen shown in a pattern; the Patterns pill
             // above narrows this same grid rather than grouping by pattern.

@@ -104,7 +104,34 @@ export async function submitAppRequest(input: RequestFields & { website?: string
     });
   } catch (failure) {
     if (failure instanceof RequestLimitError) throw failure;
-    throw new Error('We couldn’t send that just now — please try again.');
+    throw new Error(explainFailure(failure, 'send'));
+  }
+}
+
+/**
+ * What went wrong, in words a person can act on, with Firebase's own code in brackets so a report says exactly
+ * which failure it was. The full error also goes to the console for debugging.
+ */
+function explainFailure(failure: unknown, action: 'send' | 'save'): string {
+  console.error(`App request ${action} failed`, failure);
+  const code = typeof failure === 'object' && failure && 'code' in failure ? String((failure as { code: unknown }).code) : '';
+  const short = code.replace(/^firestore\//, '');
+  const tag = short ? ` (${short})` : '';
+  switch (short) {
+    case 'permission-denied':
+      return `The request wasn’t accepted${tag}. Try signing out and in again — if it keeps happening, the request rules may need updating.`;
+    case 'unauthenticated':
+      return `Your session has expired${tag}. Sign in again, then send it.`;
+    case 'unavailable':
+    case 'deadline-exceeded':
+      return `We couldn’t reach the server${tag}. Check your connection and try again.`;
+    case 'resource-exhausted':
+      return `Too many requests right now${tag}. Please try again in a minute.`;
+    case 'aborted':
+    case 'failed-precondition':
+      return `Something changed while sending${tag}. Please try again.`;
+    default:
+      return `We couldn’t ${action} that just now${tag || (failure instanceof Error && failure.message ? ` (${failure.message})` : '')} — please try again.`;
   }
 }
 
@@ -135,8 +162,8 @@ export async function updateMyRequest(id: string, input: RequestFields): Promise
   const fields = validate(input);
   try {
     await updateDoc(doc(firestore(), COLLECTION, id), { ...fields, updatedAtMs: Date.now() });
-  } catch {
-    throw new Error('We couldn’t save that just now — please try again.');
+  } catch (failure) {
+    throw new Error(explainFailure(failure, 'save'));
   }
 }
 

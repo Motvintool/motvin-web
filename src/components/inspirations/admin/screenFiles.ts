@@ -1,7 +1,6 @@
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { adminScreenImagePath, type AdminScreenFile } from '@/lib/inspirations/admin';
-import { SCREEN_TYPE_LABEL } from '@/lib/inspirations/taxonomy';
-import type { ScreenType } from '@/lib/inspirations/types';
+import { screenTypeLabel } from '@/lib/inspirations/taxonomy';
 
 /**
  * How a stored screen file is named and pictured in the admin tabs — shared
@@ -13,7 +12,7 @@ import type { ScreenType } from '@/lib/inspirations/types';
 export function screenLabel(file: AdminScreenFile): string {
   const sidecar = file.sidecar ?? {};
   if (sidecar.name) return sidecar.name;
-  if (sidecar.screenType) return SCREEN_TYPE_LABEL[sidecar.screenType as ScreenType] ?? sidecar.screenType;
+  if (sidecar.screenType) return screenTypeLabel(sidecar.screenType);
   return file.file.replace(/\.[^.]+$/, '');
 }
 

@@ -158,13 +158,26 @@ export const WebIcon = (p: IconProps) => (
     />
   </svg>
 );
-/** An app window: a rounded frame with a title bar and two dots. Stands for "Web Apps". */
-export const WebAppIcon = (p: IconProps) => (
-  <svg {...base(p)}>
-    <rect x="3" y="4.5" width="18" height="15" rx="3.5" />
-    <path d="M3 9.5h18" />
-    <path d="M7 7.1h.01M10.2 7.1h.01" strokeWidth="2.2" />
-  </svg>
+/**
+ * The "Web Apps" icon, drawn from /ASSET/Icons/Motvin/web-app.svg. The file has a fixed grey fill, so it
+ * is used as a mask over the current text colour: the shape is the file's, and the colour follows the
+ * button (hover, selected) like every other icon here.
+ */
+export const WebAppIcon = ({ size = 16, className, style }: IconProps) => (
+  <span
+    aria-hidden
+    className={className}
+    style={{
+      display: 'inline-block',
+      flex: 'none',
+      width: size,
+      height: size,
+      backgroundColor: 'currentColor',
+      WebkitMask: 'url(/ASSET/Icons/Motvin/web-app.svg) center / contain no-repeat',
+      mask: 'url(/ASSET/Icons/Motvin/web-app.svg) center / contain no-repeat',
+      ...style,
+    }}
+  />
 );
 export const SettingsIcon = (p: IconProps) => (
   <svg {...base(p)}>

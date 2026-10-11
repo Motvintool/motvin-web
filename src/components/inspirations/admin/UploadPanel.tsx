@@ -3,7 +3,8 @@
 import { useRef, useState, type DragEvent } from 'react';
 import { adminApi, safeFileName, type AdminState } from '@/lib/inspirations/admin';
 import { localDateString } from '@/lib/inspirations/dates';
-import { INDUSTRY_LABEL, PLATFORM_LABEL, SCREEN_TYPE_LABEL } from '@/lib/inspirations/taxonomy';
+import { INDUSTRY_LABEL, PLATFORM_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
+import { splitScreenFile } from '@/lib/inspirations/screenPaths';
 import { PICKABLE_INDUSTRIES, SCREEN_TYPES, type Industry, type Platform, type ScreenType } from '@/lib/inspirations/types';
 import { CheckIcon, CloseIcon, PlusIcon, UploadIcon } from '../Icons';
 import { AppModeSelect } from './AppModeSelect';
@@ -168,9 +169,17 @@ export function UploadPanel({
         // reads when no sidecar exists, and it keeps ids predictable.
         const base = item.name.replace(/\.[^.]+$/, '');
         const ext = item.name.slice(item.name.lastIndexOf('.'));
-        const fileName = base.startsWith(item.screenType) ? item.name : `${item.screenType}-${base}${ext}`;
+        const type = slugify(item.screenType) || 'other';
+        const fileName = base.startsWith(type) ? item.name : `${type}-${base}${ext}`;
 
-        await adminApi.uploadScreen(platform, appId, fileName, item.file, overwrite, resolvedVersion);
+        const uploaded = await adminApi.uploadScreen(platform, appId, fileName, item.file, overwrite, resolvedVersion);
+        // The builder only reads known types from a file name, so a new type is also written to the screen's
+        // details — that is what makes it appear in the filters.
+        if (!(SCREEN_TYPES as readonly string[]).includes(type)) {
+          const version = /^versions\/([^/]+)\//.exec(uploaded.file)?.[1] ?? '';
+          const where = splitScreenFile(uploaded.file, version);
+          await adminApi.saveScreenMeta(platform, appId, where.name, { screenType: type as ScreenType }, where.version, where.flow);
+        }
         update(item.key, { status: 'done', message: 'Uploaded' });
       } catch (err) {
         update(item.key, { status: 'failed', message: (err as Error).message });
@@ -184,6 +193,13 @@ export function UploadPanel({
 
   return (
     <div className="ins-admin-panel">
+      <datalist id="ins-upload-screen-types">
+        {(state.vocabulary.screenTypes ?? SCREEN_TYPES).map((t) => (
+          <option key={t} value={t}>
+            {screenTypeLabel(t)}
+          </option>
+        ))}
+      </datalist>
       <div className="ins-admin-row ins-align-controls">
         <AppModeSelect mode={appMode} onChange={setAppMode} noApps={state.apps.length === 0} />
 
@@ -415,18 +431,15 @@ export function UploadPanel({
                   </label>
                   <label className="ins-field">
                     <span className="ins-field-label">Screen type</span>
-                    <select
+                    {/* Pick a known type or type a new one. */}
+                    <input
                       className="ins-input"
+                      list="ins-upload-screen-types"
                       value={item.screenType}
                       onChange={(e) => update(item.key, { screenType: e.target.value as ScreenType })}
                       disabled={item.status === 'done'}
-                    >
-                      {SCREEN_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {SCREEN_TYPE_LABEL[t]}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="home, paywall, …"
+                    />
                   </label>
                 </div>
                 <div className="ins-admin-queue-status">

@@ -1,7 +1,7 @@
 import { inspirationsApi } from './api';
 import { INSPIRATIONS_ROUTES } from './routes';
-import { INDUSTRY_LABEL, SCREEN_TYPE_LABEL } from './taxonomy';
-import type { Industry, ScreenType } from './types';
+import { INDUSTRY_LABEL, screenTypeLabel } from './taxonomy';
+import type { Industry } from './types';
 
 /**
  * Suggestions for the global search field.
@@ -45,7 +45,7 @@ export async function suggestQueries(raw: string, limit = 7): Promise<SearchSugg
   }
 
   for (const type of meta.taxonomy.screenTypes) {
-    const label = SCREEN_TYPE_LABEL[type as ScreenType] ?? type;
+    const label = screenTypeLabel(type);
     if (!q || label.toLowerCase().includes(q) || type.includes(q)) {
       push({ label: `${label} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${type}` });
     }

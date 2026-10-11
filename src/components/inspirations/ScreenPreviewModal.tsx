@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
-import { INDUSTRY_LABEL, PLATFORM_LABEL, SCREEN_TYPE_LABEL, STYLE_LABEL } from '@/lib/inspirations/taxonomy';
+import { INDUSTRY_LABEL, PLATFORM_LABEL, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { DownloadIcon, ExternalIcon } from './Icons';
@@ -278,7 +278,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                 <div className="ins-screen-preview-head-title">
                   {app && <span>{app.name}</span>}
                   {app && <span className="ins-screen-preview-head-sep">/</span>}
-                  <span>{SCREEN_TYPE_LABEL[screen.screenType]}</span>
+                  <span>{screenTypeLabel(screen.screenType)}</span>
                 </div>
               </div>
               <button ref={closeRef} type="button" className="ins-screen-preview-close" aria-label="Close" onClick={close}>
@@ -422,7 +422,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               <div className="ins-screen-preview-details-row">
                 <dt className="ins-screen-preview-details-term">Screen type</dt>
                 <dd className="ins-screen-preview-details-value ins-screen-preview-details-value--linked">
-                  <Link href={`${INSPIRATIONS_ROUTES.screens}?type=${screen.screenType}`}>{SCREEN_TYPE_LABEL[screen.screenType]}</Link>
+                  <Link href={`${INSPIRATIONS_ROUTES.screens}?type=${screen.screenType}`}>{screenTypeLabel(screen.screenType)}</Link>
                 </dd>
               </div>
               <div className="ins-screen-preview-details-row">
@@ -440,7 +440,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               {screen.style.length > 0 && (
                 <div className="ins-screen-preview-details-row">
                   <dt className="ins-screen-preview-details-term">Style</dt>
-                  <dd className="ins-screen-preview-details-value">{screen.style.map((s) => STYLE_LABEL[s]).join(', ')}</dd>
+                  <dd className="ins-screen-preview-details-value">{screen.style.map((s) => styleLabel(s)).join(', ')}</dd>
                 </div>
               )}
               <div className="ins-screen-preview-details-row">

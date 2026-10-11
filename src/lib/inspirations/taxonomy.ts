@@ -133,6 +133,11 @@ export const STYLE_LABEL: Record<Style, string> = {
  * Element kinds are open-ended: a sidecar file may record a kind this table
  * has never seen, and it should still read properly in the UI.
  */
+/** Label for a style, including one this build has not seen. */
+export function styleLabel(style: string): string {
+  return STYLE_LABEL[style as Style] ?? style.split(/[-_\s]+/).map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
+}
+
 export const ELEMENT_LABEL: Record<string, string> = {
   button: 'Button',
   input: 'Input',

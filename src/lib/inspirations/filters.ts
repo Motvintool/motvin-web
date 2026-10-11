@@ -1,9 +1,6 @@
 import {
   INDUSTRIES,
   PLATFORMS,
-  SCREEN_STATES,
-  SCREEN_TYPES,
-  STYLES,
   type Industry,
   type Platform,
   type Screen,
@@ -64,13 +61,23 @@ export function browsedPlatforms(params: { get(name: string): string | null }): 
   return named.length ? named : [DEFAULT_PLATFORM];
 }
 
+/**
+ * Screen types, states and styles grow with the library (a new type appears as soon as a screen carries it), so
+ * the URL keeps any filter-safe value rather than only the built-in ones; a value nothing carries just matches
+ * nothing.
+ */
+function parseSlugs<T extends string>(raw: string | null): T[] {
+  if (!raw) return [];
+  return Array.from(new Set(raw.split(',').map((v) => v.trim().toLowerCase()).filter((v) => /^[a-z0-9]+(-[a-z0-9]+)*$/.test(v)))) as T[];
+}
+
 export function parseFilters(params: URLSearchParams): ScreenFilters {
   return {
     platforms: parseList(params.get('platform'), PLATFORMS),
-    screenTypes: parseList(params.get('type'), SCREEN_TYPES),
-    states: parseList(params.get('state'), SCREEN_STATES),
+    screenTypes: parseSlugs<ScreenType>(params.get('type')),
+    states: parseSlugs<ScreenState>(params.get('state')),
     industries: parseList(params.get('industry'), INDUSTRIES),
-    styles: parseList(params.get('style'), STYLES),
+    styles: parseSlugs<Style>(params.get('style')),
     query: params.get('q')?.trim() ?? '',
   };
 }

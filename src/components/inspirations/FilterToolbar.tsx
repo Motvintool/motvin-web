@@ -6,15 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { ScreenFilters } from '@/lib/inspirations/filters';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import {
-  CONTENT_KINDS,
-  INDUSTRY_LABEL,
-  SCREEN_TYPE_LABEL,
-  STYLE_LABEL,
-  elementLabel,
-  formatCount,
-  SCREEN_STATE_LABEL,
-} from '@/lib/inspirations/taxonomy';
+import { CONTENT_KINDS, elementLabel, formatCount, INDUSTRY_LABEL, screenStateLabel, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
 import {
   type Industry,
   type LibraryCounts,
@@ -22,6 +14,7 @@ import {
   type ScreenType,
   type Style,
 } from '@/lib/inspirations/types';
+import { AppliedFilterPills, FiltersPill, type FilterSection } from './FiltersPanel';
 import { useMeta } from './useMeta';
 import { AppleIcon, CheckIcon, CloseIcon, WebAppIcon, WebIcon } from './Icons';
 
@@ -43,7 +36,8 @@ export function isWebPlatform(platforms: string[]): boolean {
   return platforms.length === 1 && platforms[0] === 'web';
 }
 
-type Option = { value: string; label: string };
+/** A menu choice; `count`, when given, is shown at the right (how many results picking it would give). */
+type Option = { value: string; label: string; count?: number };
 
 export function useDismiss(open: boolean, close: () => void, ref: React.RefObject<HTMLDivElement | null>) {
   useEffect(() => {
@@ -209,8 +203,8 @@ export function FilterPill({
                   if (!multi) setOpen(false);
                 }}
               >
-
                 {o.label}
+                {o.count !== undefined && <span className="ins-fmenu-count">{formatCount(o.count)}</span>}
               </button>
             );
           })}
@@ -229,7 +223,7 @@ export function FilterPill({
  * filter whose meaning carries across content types — and drops the rest,
  * which are dimension-specific.
  */
-export function NavPill({ counts }: { counts: LibraryCounts | null }) {
+export function NavPill({ counts, activeCount = null }: { counts: LibraryCounts | null; activeCount?: number | null }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
@@ -262,6 +256,8 @@ export function NavPill({ counts }: { counts: LibraryCounts | null }) {
         onKeyDown={(e) => onTriggerKeyDown(e, open, setOpen)}
       >
         {active?.label ?? 'Explore'}
+        {/* How many results the page is showing, right on the pill that names it. */}
+        {activeCount !== null && <span className="ins-fpill-count">{formatCount(activeCount)}</span>}
         <span className="ins-fpill-chev" aria-hidden />
       </button>
       {open && (
@@ -559,6 +555,8 @@ export function FilterToolbar<S extends string>({
   onSort,
   counts = null,
   end,
+  onClearAll,
+  beforeSort,
 }: {
   filters: ScreenFilters;
   onChange: (patch: Partial<ScreenFilters>) => void;
@@ -574,58 +572,85 @@ export function FilterToolbar<S extends string>({
   counts?: LibraryCounts | null;
   /** Extra controls rendered after the divider, before the right edge. */
   end?: ReactNode;
+  /** Clears every dimension in one URL write (two writes in a row would undo each other). */
+  onClearAll?: () => void;
+  /** A control on the right, before the sort (the screenshot-text search). */
+  beforeSort?: ReactNode;
 }) {
   const meta = useMeta();
   const toggle = <T extends string>(list: T[], value: T) =>
     list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
+  // The five screen filters live in one "Filters" panel (as on the search page); each applied value is also a
+  // pill of its own on the row.
+  const allSections: FilterSection[] = [
+    {
+      key: 'industry',
+      label: 'Categories',
+      options: meta.taxonomy.industries.map((v) => ({ value: v, label: INDUSTRY_LABEL[v as Industry] ?? v })),
+      selected: filters.industries,
+      onToggle: (v) => onChange({ industries: toggle(filters.industries, v as Industry) }),
+      onClear: () => onChange({ industries: [] }),
+    },
+    {
+      key: 'type',
+      label: 'Screen type',
+      options: meta.taxonomy.screenTypes.map((v) => ({ value: v, label: screenTypeLabel(v) })),
+      selected: filters.screenTypes,
+      onToggle: (v) => onChange({ screenTypes: toggle(filters.screenTypes, v as ScreenType) }),
+      onClear: () => onChange({ screenTypes: [] }),
+    },
+    {
+      // The condition a screen is in, separate from what it is: "empty states" or "loading screens".
+      key: 'state',
+      label: 'State',
+      options: meta.taxonomy.states.map((v) => ({ value: v, label: screenStateLabel(v) })),
+      selected: filters.states,
+      onToggle: (v) => onChange({ states: toggle(filters.states, v as ScreenState) }),
+      onClear: () => onChange({ states: [] }),
+    },
+    {
+      // Single-select: the screens API takes one kind.
+      key: 'element',
+      label: 'Element',
+      options: meta.taxonomy.elements.map((v) => ({ value: v, label: elementLabel(v) })),
+      selected: element ? [element] : [],
+      onToggle: (v) => onElement(v === element ? null : v),
+      onClear: () => onElement(null),
+    },
+    {
+      key: 'style',
+      label: 'Style',
+      options: meta.taxonomy.styles.map((v) => ({ value: v, label: styleLabel(v) })),
+      selected: filters.styles,
+      onToggle: (v) => onChange({ styles: toggle(filters.styles, v as Style) }),
+      onClear: () => onChange({ styles: [] }),
+    },
+  ];
+  const sections = allSections.filter((section) => section.options.length > 0 || section.selected.length > 0);
+  const clearAll =
+    onClearAll ??
+    (() => {
+      onChange({ industries: [], screenTypes: [], states: [], styles: [] });
+      if (element) onElement(null);
+    });
+
   return (
-    <ToolbarRow total={total} unit={unit} right={<SortPill value={sort} options={sortOptions} onChange={onSort} />}>
-      {counts && <NavPill counts={counts} />}
-      <FilterPill
-        label="Categories"
-        options={meta.taxonomy.industries.map((v) => ({ value: v, label: INDUSTRY_LABEL[v as Industry] ?? v }))}
-        selected={filters.industries}
-        onToggle={(v) => onChange({ industries: toggle(filters.industries, v as Industry) })}
-        onClear={() => onChange({ industries: [] })}
-      />
-      <FilterPill
-        label="Screen type"
-        options={meta.taxonomy.screenTypes.map((v) => ({ value: v, label: SCREEN_TYPE_LABEL[v as ScreenType] ?? v }))}
-        selected={filters.screenTypes}
-        onToggle={(v) => onChange({ screenTypes: toggle(filters.screenTypes, v as ScreenType) })}
-        onClear={() => onChange({ screenTypes: [] })}
-      />
-      {meta.taxonomy.states.length > 0 && (
-        <FilterPill
-          // The condition a screen is in, separate from what it is: "empty
-          // states" or "loading screens" across every app is one click here.
-          label="State"
-          options={meta.taxonomy.states.map((v) => ({ value: v, label: SCREEN_STATE_LABEL[v as ScreenState] ?? v }))}
-          selected={filters.states}
-          onToggle={(v) => onChange({ states: toggle(filters.states, v as ScreenState) })}
-          onClear={() => onChange({ states: [] })}
-        />
-      )}
-      <FilterPill
-        // "Element" (the field name), not "UI Elements" — the content-type
-        // switcher pill already reads "UI Elements" on this page, and two
-        // pills sharing one label read as one confused control instead of two
-        // distinct filters.
-        label="Element"
-        options={meta.taxonomy.elements.map((v) => ({ value: v, label: elementLabel(v) }))}
-        selected={element ? [element] : []}
-        onToggle={(v) => onElement(v === element ? null : v)}
-        onClear={() => onElement(null)}
-        multi={false}
-      />
-      <FilterPill
-        label="Style"
-        options={meta.taxonomy.styles.map((v) => ({ value: v, label: STYLE_LABEL[v as Style] ?? v }))}
-        selected={filters.styles}
-        onToggle={(v) => onChange({ styles: toggle(filters.styles, v as Style) })}
-        onClear={() => onChange({ styles: [] })}
-      />
+    // With the type pill shown, the count rides on it ("Screens 100") instead of the right edge.
+    <ToolbarRow
+      total={counts ? null : total}
+      unit={unit}
+      right={
+        <>
+          {beforeSort}
+          {beforeSort && <span className="ins-ftoolbar-divider" aria-hidden />}
+          <SortPill value={sort} options={sortOptions} onChange={onSort} />
+        </>
+      }
+    >
+      {counts && <NavPill counts={counts} activeCount={total} />}
+      <FiltersPill sections={sections} onClearAll={clearAll} total={total} unit={unit} />
+      <AppliedFilterPills sections={sections} />
       {filters.query && (
         <button
           type="button"

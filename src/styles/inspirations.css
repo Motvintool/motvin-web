@@ -965,6 +965,11 @@ body {
   margin-bottom: 38px;
 }
 
+/* The search page's "Results for “…”" heading gets a little more room above its toolbar. */
+.ins-pagehead:has(.ins-title-query) {
+  margin-bottom: 52px;
+}
+
 .ins-pagehead-text {
   min-width: 0;
 }
@@ -1563,6 +1568,11 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   flex: none;
 }
 
+/* An app page's tab row: the divider between the tabs and the filter pill sits 16px from each. */
+.ins-tabbar-row > .ins-ftoolbar-divider {
+  margin: 0 16px;
+}
+
 /* Tighter than the tab row's own divider — this one only separates the two
    right-edge controls (text search, sort), not whole sections of the row. */
 .ins-ftoolbar-right .ins-ftoolbar-divider {
@@ -1613,6 +1623,11 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 .ins-text-search-trigger:hover {
   background: rgba(0, 0, 0, 0.04);
   color: var(--ins-text);
+}
+
+/* On while the search page is matching text inside screenshots. */
+.ins-text-search-trigger.is-active {
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .ins-text-search {
@@ -1698,7 +1713,8 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
 
 .ins-popover.ins-fmenu {
   min-width: 220px;
-  max-height: 236px;
+  /* Tall enough to show a long list (every screen type) at a glance, but never past the window. */
+  max-height: min(560px, calc(100vh - 200px));
   overflow-y: auto;
   z-index: 200;
   background: #ffffff;
@@ -1846,7 +1862,7 @@ body.ins-toolbar-docked .ins-header-content > :not(.ins-ftoolbar):not(.ins-tabba
   flex-direction: column;
   gap: 6px;
   padding: 8px 6px;
-  max-height: 236px;
+  max-height: min(400px, calc(100vh - 300px));
   overflow-y: auto;
 }
 
@@ -2477,6 +2493,23 @@ select.ins-input {
   aspect-ratio: 282 / 611;
   border-radius: 12.06% / 5.56%;
   background: transparent;
+}
+
+/* The 1px #eee stroke round a phone screenshot, drawn above the hover footer so it stays visible when the
+   Save / Copy overlay fades in over the bottom of the card. */
+.ins-shot-panel .ins-card-shot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  box-sizing: border-box;
+  border: 1px solid #eee;
+  border-radius: 12.41% / 5.65%;
+  pointer-events: none;
+}
+
+.ins-shot-panel .ins-grid.ins-web-grid .ins-card-shot::before {
+  display: none;
 }
 
 .ins-shot-panel .ins-grid.ins-web-grid .ins-card-shot {
@@ -5017,6 +5050,18 @@ select.ins-input {
 
 .ins-skel--line {
   height: 14px;
+}
+
+/* In the frameless app-page cards the placeholder fills the whole card, with the card's own corners, so it
+   lines up with the card's hairline border instead of stopping short of it. */
+.ins-shot-panel .ins-card--skeleton .ins-skel--shot {
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 12.41% / 5.65%;
+}
+
+.ins-shot-panel .ins-grid.ins-web-grid .ins-card--skeleton .ins-skel--shot {
+  border-radius: 1% / 1.75%;
 }
 
 /* Explore loading frame (Figma 1141:36936). The taxonomy remains visible so
@@ -10673,14 +10718,15 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 .ins-admin-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* ---- Profile menu (Figma node 1329-2714, "profile-menu") -------------------------------------------------
-   290px card: a 7px #f0f0f0 frame round a white body, 24px corners, soft drop shadow, 6px backdrop blur. */
+   280px card: a 7px #f0f0f0 frame round a white body, 24px corners, soft drop shadow, 6px backdrop blur. */
 .ins-pmenu {
   position: absolute;
   top: calc(100% + 12px);
-  right: 0;
+  /* The header's profile track has 6px of right padding; line the card up with the track's edge, not the buttons. */
+  right: -6px;
   z-index: 10000;
   display: none;
-  width: 290px;
+  width: 280px;
   box-sizing: border-box;
   border: 7px solid #f0f0f0;
   border-radius: 24px;
@@ -10791,7 +10837,14 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
 .ins-pmenu-legal a + a::before { content: '/'; margin-right: 6px; opacity: 0.28; text-decoration: none; display: inline-block; }
 .ins-pmenu-legal a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-/* Small polish: keyboard focus, press feedback and a nudge on the trailing arrows. */
+/* In the top group the trailing arrow only appears on hover or keyboard focus (always on touch screens). The
+   Icon library and Release notes links keep their arrows visible. */
+.ins-pmenu-panel > .ins-pmenu-list:first-child .ins-pmenu-item > img:last-child { opacity: 0; transition: opacity 0.15s; }
+.ins-pmenu-panel > .ins-pmenu-list:first-child .ins-pmenu-item:hover > img:last-child,
+.ins-pmenu-panel > .ins-pmenu-list:first-child .ins-pmenu-item:focus-visible > img:last-child { opacity: 1; }
+@media (hover: none) { .ins-pmenu-panel > .ins-pmenu-list:first-child .ins-pmenu-item > img:last-child { opacity: 1; } }
+
+/* Small polish: keyboard focus and press feedback. */
 .ins-pmenu-item:focus-visible,
 .ins-pmenu-edit:focus-visible,
 .ins-pmenu-legal a:focus-visible,
@@ -10799,8 +10852,6 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
 .ins-pmenu-edit { transition: background 0.15s, transform 0.1s; }
 .ins-pmenu-edit:active { transform: scale(0.98); }
 .ins-pmenu-item:active { background: rgba(0, 0, 0, 0.07); }
-.ins-pmenu-item > img:last-child { transition: transform 0.15s; }
-.ins-pmenu-item:hover > img:last-child { transform: translateX(2px); }
 .ins-pmenu-foot > a { opacity: 0.85; transition: opacity 0.15s; }
 .ins-pmenu-foot > a:hover { opacity: 1; }
 
@@ -10817,3 +10868,56 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
 .ins-collempty-primary { display: inline-flex; align-items: center; gap: 8px; height: 52px; padding: 0 32px; border: 1px solid #e3e3e3; border-radius: 9999px; background: transparent; color: #323232; font-size: 15px; font-weight: 600; text-decoration: none; cursor: var(--ins-cursor-hand, pointer); transition: border-color 0.15s, transform 0.1s; }
 .ins-collempty-primary:hover { border-color: #c4c4c4; }
 .ins-collempty-primary:active { transform: scale(0.98); }
+
+/* App picker tree (search page): a group with only some apps ticked shows a dash. */
+.ins-uielements-checkbox.is-partial { position: relative; }
+.ins-uielements-checkbox.is-partial::after { content: ''; position: absolute; left: 50%; top: 50%; width: 10px; height: 2px; margin: -1px 0 0 -5px; border-radius: 1px; background: #111; }
+/* It sits at the right end of the tab row, so it opens leftwards to stay on screen. */
+.ins-apptree-menu { left: auto; right: 0; }
+/* The logo sits at the far right of the app row. */
+.ins-apptree-logo { flex: none; margin-left: auto; border-radius: 6px; }
+.ins-apptree-menu .ins-flowtree-checkbox-name { flex: 1; min-width: 0; }
+/* Any checkbox menu opened from the right end of a tab row (search page: Patterns, UI Elements) opens leftwards. */
+.ins-tabbar-row .ins-ftoolbar-right .ins-uielements-menu { left: auto; right: 0; }
+
+/* Search page: "Load more" under a screen grid. */
+.ins-loadmore { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 40px 0 16px; }
+.ins-loadmore-count { font-size: 13px; color: #8a8f9a; }
+.ins-loadmore-btn { height: 44px; padding: 0 28px; border: 1px solid #e3e3e3; border-radius: 9999px; background: transparent; color: #323232; font-size: 15px; font-weight: 600; cursor: var(--ins-cursor-hand, pointer); transition: border-color 0.15s; }
+.ins-loadmore-btn:hover:not(:disabled) { border-color: #c4c4c4; }
+.ins-loadmore-btn:disabled { opacity: 0.6; cursor: default; }
+
+/* Search page: the line under the tabs that names the filters in force. */
+.ins-filtersum { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -8px 0 24px; padding: 0 8px; font-size: 14px; color: #6b6f76; }
+.ins-filtersum-count { margin-right: 4px; }
+.ins-filtersum-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 6px 0 12px; border-radius: 9999px; background: #f1f1f1; color: #323232; font-weight: 500; }
+.ins-filtersum-chip button { display: inline-grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #6b6f76; cursor: var(--ins-cursor-hand, pointer); }
+.ins-filtersum-chip button:hover { background: rgba(0, 0, 0, 0.08); color: #111; }
+.ins-filtersum-clear { padding: 0 4px; border: 0; background: transparent; color: #323232; font-size: 14px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: var(--ins-cursor-hand, pointer); }
+
+/* Search page: the one "Filters" pill's panel — a header, sections of toggle chips (applied straight away) and
+   a footer whose button shows the live result count. */
+.ins-popover.ins-fpanel { left: 0; display: flex; flex-direction: column; width: min(360px, 100vw - 48px); padding: 0; overflow: hidden; }
+.ins-fpanel-body { max-height: min(480px, calc(100vh - 300px)); overflow-y: auto; padding: 4px 18px 8px; }
+.ins-fpanel-section { padding: 14px 0; }
+.ins-fpanel-section + .ins-fpanel-section { border-top: 1px solid #f1f1f1; }
+.ins-fpanel-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.ins-fpanel-section-head h3 { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #8a8f9a; }
+.ins-fpanel-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9999px; background: #111; color: #fff; font-size: 11px; letter-spacing: 0; }
+.ins-fpanel-options { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ins-fpanel-option { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 15px; border: 1px solid #e8e8e8; border-radius: 9999px; background: #fff; color: #323232; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: var(--ins-cursor-hand, pointer); transition: border-color 0.15s, background 0.15s, color 0.15s; }
+.ins-fpanel-option:hover:not(:disabled) { border-color: #c4c4c4; }
+.ins-fpanel-option.is-on { padding-left: 12px; border-color: #111; background: #111; color: #fff; }
+.ins-fpanel-option.is-empty { opacity: 0.4; cursor: default; }
+.ins-fpanel-count { color: #a0a4ab; font-size: 12px; font-variant-numeric: tabular-nums; }
+.ins-fpanel-option.is-on .ins-fpanel-count { color: rgba(255, 255, 255, 0.65); }
+.ins-fpanel-link { padding: 0; border: 0; background: transparent; color: #6b6f76; font-size: 13px; font-weight: 600; cursor: var(--ins-cursor-hand, pointer); }
+.ins-fpanel-link:hover:not(:disabled) { color: #111; text-decoration: underline; text-underline-offset: 3px; }
+.ins-fpanel-link:disabled { opacity: 0.4; cursor: default; }
+.ins-fpanel-more { height: 36px; padding: 0 6px; }
+.ins-fpanel-foot { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px 12px 18px; border-top: 1px solid #efefef; background: #fff; }
+.ins-fpanel-done { height: 40px; padding: 0 20px; border: 0; border-radius: 9999px; background: #111; color: #fff; font-size: 14px; font-weight: 600; cursor: var(--ins-cursor-hand, pointer); transition: background 0.15s; }
+.ins-fpanel-done:hover { background: #2a2a2a; }
+
+/* Search page: the result count inside the type pill ("Screens 100"). */
+.ins-fpill-count { color: #8a8f9a; font-variant-numeric: tabular-nums; }

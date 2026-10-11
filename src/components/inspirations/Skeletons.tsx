@@ -61,21 +61,27 @@ export function ExploreSkeleton() {
   );
 }
 
-export function ScreenGridSkeleton({ count = 12 }: { count?: number }) {
+/**
+ * `meta={false}` drops the app line under each card, for grids whose cards don't show one (showMeta={false});
+ * `web` lays the placeholders out as website screenshots.
+ */
+export function ScreenGridSkeleton({ count = 12, meta = true, web = false }: { count?: number; meta?: boolean; web?: boolean }) {
   return (
-    <div className="ins-grid" aria-busy aria-label="Loading screens">
+    <div className={`ins-grid ${web ? 'ins-web-grid' : ''}`} aria-busy aria-label="Loading screens">
       {Array.from({ length: count }, (_, i) => (
         <article className="ins-card ins-card--skeleton" key={i}>
           <div className="ins-card-shot">
             <div className="ins-skel ins-skel--shot" />
           </div>
-          <div className="ins-card-meta">
-            <div className="ins-skel ins-skel--app-icon" />
-            <div className="ins-card-meta-text">
-              <div className="ins-skel ins-skel--line ins-skel--app-name" />
-              <div className="ins-skel ins-skel--line ins-skel--app-description" />
+          {meta && (
+            <div className="ins-card-meta">
+              <div className="ins-skel ins-skel--app-icon" />
+              <div className="ins-card-meta-text">
+                <div className="ins-skel ins-skel--line ins-skel--app-name" />
+                <div className="ins-skel ins-skel--line ins-skel--app-description" />
+              </div>
             </div>
-          </div>
+          )}
         </article>
       ))}
     </div>
