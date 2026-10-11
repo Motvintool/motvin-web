@@ -10921,3 +10921,110 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
 
 /* Search page: the result count inside the type pill ("Screens 100"). */
 .ins-fpill-count { color: #8a8f9a; font-variant-numeric: tabular-nums; }
+
+/* ============================================================
+   Login gate — full-screen sign-in shown to signed-out visitors.
+   Always light, whatever the site theme: the right half is a tilted
+   collage of library screens and the screenshots are the colour.
+   ============================================================ */
+.ins-login { position: fixed; inset: 0; z-index: 200; display: grid; grid-template-columns: minmax(460px, 1fr) auto; background: #fff; color: #111; overflow: hidden; }
+
+.ins-login-pane { min-width: 0; display: flex; flex-direction: column; align-items: center; padding: 40px 32px 28px; overflow-y: auto;
+  /* A whisper of the logo's colours behind the form. */
+  background:
+    radial-gradient(300px 200px at 44% 26%, rgba(139, 92, 246, 0.04), transparent 72%),
+    radial-gradient(300px 200px at 56% 26%, rgba(56, 189, 248, 0.04), transparent 72%); }
+.ins-login-card { width: min(380px, 100%); margin: auto 0; display: flex; flex-direction: column; align-items: stretch; text-align: center; }
+.ins-login-logo { width: 48px; height: 48px; display: block; align-self: center; }
+.ins-login-title { margin: 24px 0 8px; font-size: 32px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; color: #111; }
+.ins-login-sub { margin: 0 0 32px; font-size: 15px; line-height: 1.5; color: #6b6b70; }
+
+.ins-login-google { width: 100%; height: 48px; display: flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid #e2e2e6; border-radius: 12px; background: #fff; color: #111; font-size: 15px; font-weight: 500; box-shadow: 0 1px 2px rgba(17, 17, 17, 0.04); cursor: var(--ins-cursor-hand, pointer); transition: background 0.15s, border-color 0.15s; }
+.ins-login-google:hover { background: #fafafa; border-color: #cfcfd5; }
+.ins-login-google:disabled { opacity: 0.55; cursor: default; }
+.ins-login-google img { width: 20px; height: 20px; display: block; }
+
+.ins-login-or { width: 100%; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px; margin: 20px 0; color: #a0a0a6; font-size: 13px; }
+.ins-login-or::before, .ins-login-or::after { content: ''; height: 1px; background: #ececef; }
+
+.ins-login-form { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.ins-login-field { position: relative; display: flex; align-items: center; }
+.ins-login-field-icon { position: absolute; left: 16px; color: #9a9aa0; pointer-events: none; transition: color 0.15s; }
+.ins-login-field:focus-within .ins-login-field-icon { color: #111; }
+.ins-login-input { box-sizing: border-box; width: 100%; height: 48px; padding: 0 16px 0 44px; border: 1px solid transparent; border-radius: 12px; background: #efefef; color: #111; font-size: 15px; outline: none; transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s; }
+.ins-login-input--has-action { padding-right: 64px; }
+.ins-login-input::placeholder { color: #8a8a8f; }
+.ins-login-input:focus { border-color: #111; background: #fff; box-shadow: inset 0 0 0 0.5px #111; }
+.ins-login-input:disabled { opacity: 0.55; }
+.ins-login-reveal { position: absolute; right: 8px; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: #6b6b70; font-size: 13px; font-weight: 500; cursor: var(--ins-cursor-hand, pointer); }
+.ins-login-reveal:hover { background: rgba(17, 17, 17, 0.07); color: #111; }
+
+.ins-login-identity { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; height: 48px; padding: 0 16px; border: 1px solid transparent; border-radius: 12px; background: #f6f6f6; color: #111; font-size: 14px; cursor: var(--ins-cursor-hand, pointer); text-align: left; }
+.ins-login-identity-email { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ins-login-identity-change { flex: none; color: #6b6b70; font-weight: 500; }
+.ins-login-identity:hover .ins-login-identity-change { color: #111; text-decoration: underline; text-underline-offset: 3px; }
+
+.ins-login-forgot { align-self: flex-end; margin-top: -2px; padding: 2px 0; border: 0; background: none; color: #6b6b70; font-size: 13px; cursor: var(--ins-cursor-hand, pointer); }
+.ins-login-forgot:hover { color: #111; text-decoration: underline; text-underline-offset: 3px; }
+
+.ins-login-continue { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 48px; margin-top: 2px; border: 0; border-radius: 12px; background: #111; color: #fff; font-size: 15px; font-weight: 600; box-shadow: 0 1px 2px rgba(17, 17, 17, 0.2); cursor: var(--ins-cursor-hand, pointer); transition: background 0.15s, transform 0.1s; }
+.ins-login-continue:hover { background: #2c2c2e; }
+.ins-login-continue:active { transform: translateY(1px); }
+.ins-login-continue:disabled { opacity: 0.55; cursor: default; }
+/* Busy: a thin ring whose gradient fades out behind the head, turning clockwise. */
+.ins-login-continue:disabled[aria-busy='true'] { opacity: 0.9; }
+.ins-login-loader { flex: none; width: 18px; height: 18px; border-radius: 50%; background: conic-gradient(from 0deg, rgba(255, 255, 255, 0) 0%, #fff 100%); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px)); mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px)); animation: ins-login-orbit 0.8s linear infinite; }
+@keyframes ins-login-orbit { to { transform: rotate(360deg); } }
+
+.ins-login-error { margin: 14px 0 0; padding: 10px 14px; border-radius: 10px; background: #fff1f1; font-size: 13.5px; line-height: 1.45; color: #c62f36; }
+.ins-login-error p { margin: 0; }
+.ins-login-error .ins-login-error-hint { margin-top: 4px; color: #55555a; }
+.ins-login-error-hint button { border: 0; background: none; padding: 0; color: #111; font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: var(--ins-cursor-hand, pointer); }
+.ins-login-autofill-username { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.ins-login-notice { margin: 14px 0 0; padding: 10px 14px; border-radius: 10px; background: #eefaf0; font-size: 13.5px; line-height: 1.45; color: #1e7a35; }
+
+.ins-login-switch { margin: 24px 0 0; font-size: 14px; color: #6b6b70; }
+.ins-login-switch button { border: 0; background: none; padding: 0; color: #111; font-size: inherit; font-weight: 600; cursor: var(--ins-cursor-hand, pointer); }
+.ins-login-switch button:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.ins-login-terms { margin: 24px 0 0; font-size: 13px; line-height: 1.6; color: #9a9aa0; text-align: center; }
+.ins-login-terms a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.ins-login-terms a:hover { color: #111; }
+
+/* The collage: oversized tilted flex of columns, bleeding off every edge. */
+.ins-login-art { position: relative; overflow: hidden; background: #f7f6f4; margin: 12px; border-radius: 20px; width: 700px; max-width: calc(100vw - 460px - 24px); }
+.ins-login-art-grid { position: absolute; top: 50%; left: 50%; display: flex; gap: 10px; transform-origin: 50% 25%; transform: translate(-50%, -25%) rotate(-24deg); }
+.ins-login-art-col { flex: none; width: 216px; }
+/* Each column holds its screens twice and slides up by exactly one copy, so the loop has no seam. Even columns run the other way. */
+.ins-login-art-track { display: flex; flex-direction: column; will-change: transform; animation: ins-login-scroll 320s linear infinite; }
+.ins-login-art-col:nth-child(even) .ins-login-art-track { animation-direction: reverse; }
+.ins-login-art-col:nth-child(2) .ins-login-art-track { animation-duration: 370s; }
+.ins-login-art-col:nth-child(3) .ins-login-art-track { animation-duration: 280s; }
+.ins-login-art-col:nth-child(4) .ins-login-art-track { animation-duration: 345s; }
+.ins-login-art-col:nth-child(5) .ins-login-art-track { animation-duration: 330s; }
+.ins-login-art-set { display: flex; flex-direction: column; gap: 10px; padding-bottom: 10px; }
+@keyframes ins-login-scroll { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+@media (prefers-reduced-motion: reduce) { .ins-login-art-track, .ins-login-card > *, .ins-login-loader { animation: none; } .ins-login-art-grid, .ins-login-art-card img { transition: none; } }
+.ins-login-art-col:nth-child(even) { transform: translateY(-170px); }
+.ins-login-art-card { width: 100%; border-radius: 18px; overflow: hidden; background: #fff; box-shadow: 0 0 0 1px rgba(17, 17, 17, 0.04), 0 2px 8px rgba(17, 17, 17, 0.04); }
+.ins-login-art-card img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity 0.5s ease; }
+.ins-login-art-card.is-loaded img { opacity: 1; }
+.ins-login-art-grid { opacity: 0; transition: opacity 0.8s ease; }
+.ins-login-art-grid.is-ready { opacity: 1; }
+
+/* The form eases in, piece by piece. */
+.ins-login-card > * { animation: ins-login-rise 0.55s ease both; }
+.ins-login-card > :nth-child(2) { animation-delay: 0.05s; }
+.ins-login-card > :nth-child(3) { animation-delay: 0.1s; }
+.ins-login-card > :nth-child(4) { animation-delay: 0.15s; }
+.ins-login-card > :nth-child(5) { animation-delay: 0.2s; }
+.ins-login-card > :nth-child(6) { animation-delay: 0.25s; }
+.ins-login-card > :nth-child(n+7) { animation-delay: 0.3s; }
+@keyframes ins-login-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+
+@media (max-width: 960px) {
+  .ins-login { grid-template-columns: 1fr; }
+  .ins-login-art { display: none; }
+  .ins-login-title { font-size: 28px; }
+}

@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAuthModal } from '@/components/shared/AuthModal';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { CommunityDropdown } from './CommunityDropdown';
 import { ProductsDropdown } from './ProductsDropdown';
@@ -24,7 +23,6 @@ const NAV_MOBILE_BREAKPOINT = 1300;
 type Menu = 'products' | 'community' | null;
 
 export function Navbar() {
-  const { open: openAuthModal } = useAuthModal();
   const { user } = useAuth();
   // Desktop mega-menu (>1300px) — only one open at a time.
   const [openMenu, setOpenMenu] = useState<Menu>(null);
@@ -186,46 +184,38 @@ export function Navbar() {
   );
 
   const signinButton = (
-    <a
-      href="#"
+    <Link
+      href="/login"
       className="btn-secondary"
       id="auth-signin-btn"
       style={{ display: user ? 'none' : undefined }}
-      onClick={(e) => {
-        e.preventDefault();
-        openAuthModal('login');
-      }}
     >
       <span>Sign in</span>
       <img src="/ASSET/Icons/btn-arrow-black.svg" alt="" className="btn-secondary-arrow" />
-    </a>
+    </Link>
   );
 
   const signupButton = (
-    <a
-      href="#"
+    <Link
+      href="/signup"
       className="btn-primary"
       id="auth-signup-btn"
       ref={signupRef}
       style={{ display: user ? 'none' : undefined }}
-      onClick={(e) => {
-        e.preventDefault();
-        openAuthModal('register');
-      }}
     >
       <span>Get started for free</span>
       <img src="/ASSET/Icons/btn-arrow.svg" alt="" className="btn-primary-arrow" />
-    </a>
+    </Link>
   );
 
   const dashboardButton = (
     <Link
-      href="/files"
+      href="/inspirations"
       className="btn-secondary"
       id="auth-dashboard-btn"
       style={{ display: user ? undefined : 'none' }}
     >
-      <span>Go to Dashboard</span>
+      <span>Go to Library</span>
     </Link>
   );
 
@@ -319,14 +309,24 @@ export function Navbar() {
         </div>
         <div className="mi-nav-mobile-panel-actions">
           {isMobile && signinButton}
-          <button
-            className="mi-nav-mobile-panel-signup"
-            id="nav-mobile-panel-signup"
-            type="button"
-            onClick={() => signupRef.current?.click()}
-          >
-            Get started
-          </button>
+          {user ? (
+            <Link
+              href="/inspirations"
+              className="mi-nav-mobile-panel-signup mi-nav-mobile-panel-library"
+              onClick={closePanel}
+            >
+              Go to Library
+            </Link>
+          ) : (
+            <button
+              className="mi-nav-mobile-panel-signup"
+              id="nav-mobile-panel-signup"
+              type="button"
+              onClick={() => signupRef.current?.click()}
+            >
+              Get started
+            </button>
+          )}
         </div>
       </div>
     </div>

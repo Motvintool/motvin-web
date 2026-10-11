@@ -6147,6 +6147,13 @@ body {
     padding: 14px 24px;
   }
 
+  .mi-nav-mobile-panel-library {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+
   /* ---- Products / Community dropdowns ---- */
   .products-dropdown,
   .community-dropdown {

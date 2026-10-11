@@ -5,12 +5,12 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { LibraryProfileBadge, badgeWrapClassName } from '@/components/library/LibraryProfileBadge';
 import { useAuth } from '@/components/shared/AuthProvider';
-import { useAuthModal } from '@/components/shared/AuthModal';
 import { useHydrated } from '@/components/shared/useHydrated';
 import { isAdminEmail } from '@/lib/inspirations/admin';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { ADMIN_PARAM } from './admin/AdminDrawer';
 import { RequestAppModal } from './RequestAppModal';
+import { useGoToLogin } from './useGoToLogin';
 
 /**
  * Avatar chip + profile menu for the Inspirations header. The chip is the library's own badge; the menu is
@@ -23,7 +23,7 @@ const INSTAGRAM_URL = 'https://www.instagram.com/siren.uix';
 
 export function ProfileMenu() {
   const { user: liveUser, signOut } = useAuth();
-  const { open: openAuth } = useAuthModal();
+  const goToLogin = useGoToLogin();
   // The server always renders this menu signed out. This header hydrates
   // inside its own Suspense boundary, after AuthProvider has already swapped
   // in the cached user — so without this gate the hydration render shows the
@@ -86,7 +86,7 @@ export function ProfileMenu() {
     <div className="mi-profile-menu-container" ref={rootRef}>
       <div className={`ins-profile-pill ${!signedIn ? 'is-logged-out' : ''}`}>
         {!signedIn && (
-          <button type="button" className="ins-profile-login-btn" onClick={() => openAuth('login')}>
+          <button type="button" className="ins-profile-login-btn" onClick={goToLogin}>
             Login
           </button>
         )}
@@ -142,7 +142,7 @@ export function ProfileMenu() {
                   role="menuitem"
                   onClick={() => {
                     setOpen(false);
-                    openAuth('login');
+                    goToLogin();
                   }}
                 >
                   Login account

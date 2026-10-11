@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { deleteUser, updateProfile } from 'firebase/auth';
-import { useAuthModal } from '@/components/shared/AuthModal';
+import { useGoToLogin } from './useGoToLogin';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { ensureReady } from '@/lib/firebase/auth';
 import { deleteMyRequest, listMyRequests, MAX_REQUESTS_PER_USER, type MyRequest } from '@/lib/firebase/appRequests';
@@ -55,7 +55,7 @@ function since(ms: number): string {
 
 export function SettingsView() {
   const { user, ready } = useAuth();
-  const { open: openAuth } = useAuthModal();
+  const goToLogin = useGoToLogin();
   const router = useRouter();
   const params = useSearchParams();
   const section: Section = params.get('section') === 'requests' ? 'requests' : 'account';
@@ -83,7 +83,7 @@ export function SettingsView() {
         <EmptyState
         title="Sign in to see your settings"
         description="Your profile and the apps you’ve requested live here."
-        action={{ label: 'Sign in', onClick: () => openAuth('login') }}
+        action={{ label: 'Sign in', onClick: goToLogin }}
       />
       </>
     );

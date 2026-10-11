@@ -1,18 +1,9 @@
 'use client';
 
-import { Suspense } from 'react';
-import { SignupPage } from '@/components/signup/SignupPage';
-import '@/styles/login.css';
+import { InspirationsAuthPage } from '@/components/inspirations/InspirationsAuthPage';
+import '@/styles/inspirations.css';
 
-/**
- * /signup — renders the same auth flow as /login but with the register form
- * selected by default. Suspense is required because AuthFlow reads
- * `useSearchParams` (Next 16 static generation).
- */
+/** /signup — the same page as /login, opened on the create-account form. */
 export default function Signup() {
-  return (
-    <Suspense fallback={null}>
-      <SignupPage />
-    </Suspense>
-  );
+  return <InspirationsAuthPage defaultMode="signup" />;
 }

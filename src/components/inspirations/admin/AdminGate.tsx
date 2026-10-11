@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
-import { useAuthModal } from '@/components/shared/AuthModal';
+import { useGoToLogin } from '../useGoToLogin';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { adminApi, isAdminEmail } from '@/lib/inspirations/admin';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
@@ -19,7 +19,7 @@ import { CheckIcon, CloseIcon } from '../Icons';
  */
 export function AdminGate({ children }: { children: ReactNode }) {
   const { user, ready } = useAuth();
-  const { open: openAuth } = useAuthModal();
+  const goToLogin = useGoToLogin();
   // Keyed by account so a sign-out or account switch invalidates the previous
   // answer rather than leaving a stale "allowed" on screen.
   const [check, setCheck] = useState<{ uid: string; allowed: boolean; error?: string } | null>(null);
@@ -55,7 +55,7 @@ export function AdminGate({ children }: { children: ReactNode }) {
       <EmptyState
         title="Sign in to continue"
         description="The library admin is limited to one account."
-        action={{ label: 'Sign in', onClick: () => openAuth('login') }}
+        action={{ label: 'Sign in', onClick: goToLogin }}
       />
     );
   }
