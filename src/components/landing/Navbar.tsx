@@ -198,6 +198,12 @@ export function Navbar() {
       >
         <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Community</span>
         <img
+          src="/ASSET/Icons/desktop-arrow.svg"
+          alt=""
+          className="community-desktop-arrow"
+          style={{ width: '18px', height: '18px' }}
+        />
+        <img
           src="/ASSET/Icons/nav-drop-arrow.svg"
           alt=""
           className="community-mobile-arrow"

@@ -3355,14 +3355,42 @@ body {
 
 .interactive-word {
   color: #767676;
-  transition: color 0.3s ease;
   white-space: nowrap;
+}
+
+/* The highlight sweeps through the word like ink: purple fills it from the
+   left when it becomes active, and drains out to the left when the next
+   word takes over, so the colour seems to travel along the line. Painted
+   with a two-tone background clipped to the text: purple half, grey half,
+   and a soft edge between. */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .interactive-word {
+    color: transparent;
+    background-image: linear-gradient(90deg, #5c4ae1 0%, #5c4ae1 44%, #767676 56%, #767676 100%);
+    background-size: 230% 100%;
+    background-position: 100% 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    transition: background-position 0.8s cubic-bezier(0.65, 0, 0.35, 1);
+  }
 }
 
 /* Hover and Active states */
 .interactive-word-wrapper:hover .interactive-word,
 .interactive-word-wrapper.active .interactive-word {
   color: #5c4ae1;
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .interactive-word-wrapper:hover .interactive-word,
+  .interactive-word-wrapper.active .interactive-word {
+    color: transparent;
+    background-position: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interactive-word { transition: none; }
 }
 
 /* Floatings containers */
@@ -3401,12 +3429,18 @@ body {
   height: 158px;
 }
 
+/* Both clusters drawn 20% larger, anchored at their outer edges so they
+   grow in towards the headline without moving off it. */
 .container-left {
   left: 0;
+  scale: 1.2;
+  transform-origin: left center;
 }
 
 .container-right {
   right: 0;
+  scale: 1.2;
+  transform-origin: right center;
 }
 
 /* `rotate` rather than `transform`, so GSAP's entrance tween keeps the tilt. */
@@ -7450,7 +7484,7 @@ body {
   .navbar-container {
     pointer-events: auto;
     width: 100%;
-    max-width: 700px;
+    max-width: 660px;
     padding: 12px 28px;
     border-radius: 100px;
     background-color: #f9f9f9;

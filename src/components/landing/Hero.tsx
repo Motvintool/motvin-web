@@ -18,7 +18,7 @@ const WORDS = [
   { label: 'Screens', href: INSPIRATIONS_ROUTES.screens },
   { label: 'Flows', href: INSPIRATIONS_ROUTES.flows },
   { label: 'Patterns', href: INSPIRATIONS_ROUTES.patterns },
-  { label: 'UI Elements', href: INSPIRATIONS_ROUTES.uiElements },
+  { label: 'UI Designs', href: INSPIRATIONS_ROUTES.uiElements },
 ];
 const INITIAL_INDEX = 1;
 const CYCLE_MS = 3000;

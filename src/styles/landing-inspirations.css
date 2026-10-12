@@ -2507,6 +2507,7 @@
   /* Links are dark and simply fade to grey on hover; no background, no
      underline. */
   .landing-root .navbar .nav-item {
+    padding: 6px 8px;
     background: transparent;
     transition: opacity 0.2s ease;
   }
@@ -2567,13 +2568,15 @@
 
   .landing-root .nav-social-link:hover img { opacity: 1; }
 
-  .landing-root .navbar .products-desktop-arrow {
+  .landing-root .navbar .products-desktop-arrow,
+  .landing-root .navbar .community-desktop-arrow {
     width: 16px !important;
     height: 16px !important;
     opacity: 0.5;
   }
 
-  .landing-root .navbar .nav-item.active .products-desktop-arrow {
+  .landing-root .navbar .nav-item.active .products-desktop-arrow,
+  .landing-root .navbar .nav-item.active .community-desktop-arrow {
     opacity: 1;
   }
 
