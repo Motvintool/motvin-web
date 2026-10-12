@@ -27,7 +27,7 @@ export function ProductsDropdown({ open }: { open: boolean }) {
                     alt="Convert websites graphic"
                   />
                 </div>
-                <p>Capture any website and turn it into ediable design layers.</p>
+                <p>Capture any website and turn it into editable design layers.</p>
               </div>
             </a>
             {/* Feature 2 */}
@@ -79,7 +79,7 @@ export function ProductsDropdown({ open }: { open: boolean }) {
               </div>
               <div className="product-link-text">
                 <h4>Motvin Convert</h4>
-                <p>Turn any webite into an editable design</p>
+                <p>Turn any website into an editable design</p>
               </div>
             </a>
             {/* Motvin Extension */}
@@ -144,7 +144,7 @@ export function ProductsDropdown({ open }: { open: boolean }) {
               </div>
               <div className="product-link-text">
                 <h4>Motvin Typescales</h4>
-                <p>Generate and customize typeface varients</p>
+                <p>Generate and customize typeface variants</p>
               </div>
             </a>
           </div>

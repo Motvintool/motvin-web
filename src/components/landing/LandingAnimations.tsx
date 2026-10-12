@@ -1,7 +1,6 @@
 'use client';
 
 import { gsap } from 'gsap';
-import { Draggable } from 'gsap/Draggable';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useEffect } from 'react';
 
@@ -14,8 +13,7 @@ import { useEffect } from 'react';
  *
  * Four groups:
  *  1. Hero scroll timeline (>1300px only) — pins the hero, crops its bottom
- *     edge, shrinks the demo window and floats the two widgets up, then makes
- *     them draggable.
+ *     edge and shrinks the demo window.
  *  2. Hero entrance — a one-off rise-and-settle on load.
  *  3. Word animation — per-word colour pop on `.animated-word` groups, played
  *     on first scroll into view and replayed on hover.
@@ -28,34 +26,24 @@ import { useEffect } from 'react';
  */
 
 const HERO_SCROLL_MIN_WIDTH = 1300;
-const HERO_WIDGETS = ['.color-widget', '.typescale-widget'];
 
-const WORD_ANIMATION_CONTAINERS = [
-  '.demo-title',
-  '.howitwork-title',
-  '.faq-subtitle',
-  '.faq-title',
-];
+// Headings whose words animate on hover. None on the page right now: the
+// sections that used it were removed or restyled, but the effect is kept.
+const WORD_ANIMATION_CONTAINERS: string[] = [];
 
 const REVEAL_SECTIONS = [
-  {
-    selector: '.demo-section',
-    items: '.demo-title, .demo-description, .demo-body-container, .demo-features-grid',
-  },
-  { selector: '.icons-library-section', items: '.il-heading, .il-content, .il-text-content' },
-  {
-    selector: '.howitwork-redesign',
-    items: '.howitwork-redesign-intro > *, .howitwork-redesign-cta > *',
-  },
-  { selector: '.templates-section', items: '.templates-header, .templates-slider-container' },
-  { selector: '.faq-section', items: '.faq-header, .faq-list' },
-  { selector: '.explore-section', items: '.explore-section-container > *' },
-  { selector: '.footer-section', items: '.figma-footer-content > *' },
+  { selector: '.lpi-story', items: '.lpi-story-inner > *' },
+  { selector: '.lpi-stack-section', items: '.lpi-stack-section > .lpi-heading' },
+  { selector: '.lpi-grid-section', items: '.lpi-heading, .lpi-bento-card' },
+  { selector: '.lpi-templates', items: '.lpi-templates-head, .lpi-templates-slider' },
+  { selector: '.lpi-faq', items: '.lpi-faq-intro, .lpi-faq-list' },
+  { selector: '.lpi-explore', items: '.lpi-heading, .lpi-explore-grid' },
+  { selector: '.lpi-closing', items: '.lpi-closing > *' },
 ];
 
 export function LandingAnimations() {
   useEffect(() => {
-    gsap.registerPlugin(ScrollTrigger, Draggable);
+    gsap.registerPlugin(ScrollTrigger);
 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -68,7 +56,7 @@ export function LandingAnimations() {
         const tl = gsap.timeline({
           scrollTrigger: {
             trigger: '.hero-section',
-            start: 'top 65px',
+            start: 'top top',
             end: '+=250px', // Exactly matches the clip-path shrink below.
             pin: true,
             // Without this GSAP pads the page with the pinned height, which
@@ -94,29 +82,9 @@ export function LandingAnimations() {
           .fromTo(
             '.demo-window',
             { scale: 1, y: 0 },
-            { scale: 0.8, y: -250, duration: 0.5, ease: 'sine.inOut' },
-            0.1,
-          )
-          .fromTo(
-            HERO_WIDGETS,
-            { scale: 1.1, y: 150 },
-            { scale: 1, y: 0, duration: 0.5, ease: 'sine.inOut' },
-            0.1,
-          )
-          .fromTo(
-            HERO_WIDGETS,
-            { opacity: 0, filter: 'blur(4px)' },
-            { opacity: 1, filter: 'blur(0px)', duration: 0.2, ease: 'none' },
+            { scale: 0.9, y: -250, duration: 0.5, ease: 'sine.inOut' },
             0.1,
           );
-
-        Draggable.create(HERO_WIDGETS, {
-          // Layout properties, not transforms — transforms would fight the
-          // ScrollTrigger tweens above.
-          type: 'left,top',
-          bounds: '.hero-section',
-          edgeResistance: 0.65,
-        });
       }
 
       if (prefersReducedMotion) return;
@@ -203,6 +171,8 @@ export function LandingAnimations() {
             duration: 0.8,
             ease: 'power3.out',
             stagger: 0.12,
+            // Hand the elements back to CSS afterwards, so hover transforms work.
+            clearProps: 'transform,opacity,visibility',
             scrollTrigger: { trigger: section, start: 'top 78%', once: true },
           },
         );

@@ -1,17 +1,16 @@
 import { ButtonEffects } from '@/components/landing/ButtonEffects';
 import { ConsentBanners } from '@/components/landing/ConsentBanners';
-import { Demo } from '@/components/landing/Demo';
 import { Explore } from '@/components/landing/Explore';
 import { Faq } from '@/components/landing/Faq';
 import { Footer } from '@/components/landing/Footer';
 import { Hero } from '@/components/landing/Hero';
-import { InspirationsSection } from '@/components/landing/InspirationsSection';
-import { HowItWork } from '@/components/landing/HowItWork';
-import { IconsLibrary } from '@/components/landing/IconsLibrary';
+import { ClosingCta } from '@/components/landing/inspirations/ClosingCta';
+import { InspirationsSections } from '@/components/landing/inspirations/InspirationsSections';
 import { LandingAnimations } from '@/components/landing/LandingAnimations';
 import { Navbar } from '@/components/landing/Navbar';
 import { Templates } from '@/components/landing/Templates';
 import '@/styles/landing.css';
+import '@/styles/landing-inspirations.css';
 
 /**
  * Landing page — port of motvin-ui/index.html.
@@ -26,17 +25,18 @@ export default function HomePage() {
   return (
     <div className="landing-root">
       <Navbar />
-      <main id="main-content">
-        <Hero />
-        <InspirationsSection />
-        <Demo />
-        <IconsLibrary />
-        <HowItWork />
-        <Templates />
-        <Faq />
-      </main>
-      {/* Outside <main>, as in the original markup. */}
-      <Explore />
+      {/* The white "sheet" scrolls up off the footer, which waits underneath. */}
+      <div className="landing-sheet">
+        <main id="main-content">
+          <Hero />
+          <InspirationsSections />
+          <Templates />
+          <Explore />
+          <Faq />
+          {/* Last, right above the footer, the way the page signs off. */}
+          <ClosingCta />
+        </main>
+      </div>
       <Footer />
       <ConsentBanners />
       <LandingAnimations />

@@ -19,6 +19,16 @@ import { ProductsDropdown } from './ProductsDropdown';
  */
 
 const NAV_MOBILE_BREAKPOINT = 1300;
+// Past this scroll depth (desktop) the pill tucks away for the compact buttons.
+const COMPACT_AFTER = 160;
+// Once reopened from the compact menu button, the pill stays until the page
+// has scrolled this much further down.
+const REOPEN_SCROLL_SLACK = 120;
+// How far the page has to move before it counts as scrolling up or down.
+const SCROLL_DIRECTION_THRESHOLD = 6;
+const INSTAGRAM_URL = 'https://www.instagram.com/siren.uix';
+// TODO: Motvin's X profile URL — none exists in the codebase yet.
+const X_URL = '#';
 
 type Menu = 'products' | 'community' | null;
 
@@ -40,6 +50,46 @@ export function Navbar() {
   const signupRef = useRef<HTMLAnchorElement>(null);
 
   const closePanel = useCallback(() => setPanelOpen(false), []);
+
+  // Desktop only: scrolling down past the hero swaps the full pill for the
+  // compact buttons; scrolling up anywhere brings the full pill straight
+  // back. The round menu button also brings it back, until the next scroll
+  // down of some length.
+  const [scrolled, setScrolled] = useState(false);
+  const [pillReopened, setPillReopened] = useState(false);
+  const reopenedAtRef = useRef(0);
+  const lastYRef = useRef(0);
+
+  useEffect(() => {
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const y = window.scrollY;
+        const dy = y - lastYRef.current;
+        if (y <= COMPACT_AFTER) {
+          setScrolled(false);
+          lastYRef.current = y;
+        } else if (Math.abs(dy) > SCROLL_DIRECTION_THRESHOLD) {
+          // Small jitters don't count as a change of direction.
+          setScrolled(dy > 0);
+          lastYRef.current = y;
+        }
+        if (y - reopenedAtRef.current > REOPEN_SCROLL_SLACK) setPillReopened(false);
+      });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, []);
+
+  const reopenPill = () => {
+    reopenedAtRef.current = window.scrollY;
+    setPillReopened(true);
+  };
 
   useEffect(() => {
     const sync = () => {
@@ -110,6 +160,9 @@ export function Navbar() {
     }
   };
 
+  // Never collapse while a mega-menu is open.
+  const collapsed = !isMobile && scrolled && !pillReopened && !openMenu;
+
   const productsOpen = openMenu === 'products';
   const communityOpen = openMenu === 'community';
   const productsAccordionOpen = openAccordion === 'products';
@@ -117,9 +170,6 @@ export function Navbar() {
 
   const navLinks = (
     <nav className="nav-links">
-      <Link href="/inspirations" className="nav-item" onClick={closePanel}>
-        <span>Inspirations</span>
-      </Link>
       <a
         href="#"
         className={`nav-item${productsOpen ? ' active' : ''}${productsAccordionOpen ? ' is-accordion-open' : ''}`}
@@ -148,12 +198,6 @@ export function Navbar() {
       >
         <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Community</span>
         <img
-          src="/ASSET/Icons/desktop-arrow.svg"
-          alt=""
-          className="community-desktop-arrow"
-          style={{ width: '18px', height: '18px' }}
-        />
-        <img
           src="/ASSET/Icons/nav-drop-arrow.svg"
           alt=""
           className="community-mobile-arrow"
@@ -168,9 +212,6 @@ export function Navbar() {
       >
         {isMobile && <ProductsDropdown open={productsAccordionOpen} />}
       </div>
-      <a href="#demo-section" className="nav-item" onClick={closePanel}>
-        <span>Features</span>
-      </a>
       <div
         className={`mi-nav-community-accordion${communityAccordionOpen ? ' is-open' : ''}`}
         id="mi-nav-community-accordion"
@@ -178,10 +219,7 @@ export function Navbar() {
         {isMobile && <CommunityDropdown open={communityAccordionOpen} />}
       </div>
       <a href="/updates/" target="_blank" className="nav-item" onClick={closePanel}>
-        <span>Release Notes</span>
-      </a>
-      <a href="#faq-section" className="nav-item" onClick={closePanel}>
-        <span>F&amp;Q</span>
+        <span>Updates</span>
       </a>
     </nav>
   );
@@ -222,30 +260,36 @@ export function Navbar() {
     </Link>
   );
 
+  const navSocial = (
+    <div className="nav-social">
+      <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="nav-social-link" aria-label="Motvin on Instagram">
+        <img src="/ASSET/landing/nav-instagram-filled.svg" alt="" width={20} height={20} />
+      </a>
+      <a href={X_URL} target="_blank" rel="noopener noreferrer" className="nav-social-link" aria-label="Motvin on X">
+        <img src="/ASSET/landing/nav-x.svg" alt="" width={20} height={20} />
+      </a>
+    </div>
+  );
+
   const navActions = (
     <div className="nav-actions">
-      <div className="nav-extra-links">
-        <Link href="/icons" className="nav-item" onClick={closePanel}>
-          <span>Icons Library</span>
-          <span className="mi-nav-badge">New</span>
+      {navSocial}
+      {user ? (
+        <Link href="/inspirations" className="nav-login" onClick={closePanel}>
+          Go to Library
         </Link>
-        <a href="#" className="nav-item" style={{ display: 'none' }}>
-          <img src="/ASSET/Icons/community.svg" alt="Community" />
-          <span>Join Community</span>
-        </a>
-      </div>
-      {/* Below the breakpoint these three move out: sign-in to the panel
-          footer, sign-up and dashboard to the collapsed navbar's CTA slot. */}
-      {!isMobile && signinButton}
-      {!isMobile && signupButton}
-      {!isMobile && dashboardButton}
+      ) : (
+        <Link href="/login" className="nav-login" onClick={closePanel}>
+          Log in
+        </Link>
+      )}
     </div>
   );
 
   return (
     <div className="sticky-header">
       <header className="navbar" ref={navRef}>
-        <div className="navbar-container">
+        <div className={`navbar-container${collapsed ? ' is-collapsed' : ''}`} inert={collapsed || undefined}>
           <div className="navbar-left">
             <a href="#" className="logo">
               <img src="/ASSET/Icons/motvin-logo.svg" alt="" className="mi-logo-mark" />
@@ -277,6 +321,38 @@ export function Navbar() {
         </div>
       </header>
 
+      {/* Desktop, once scrolled: the pill gives way to these, Mobbin style. */}
+      {!isMobile && (
+        <div className={`nav-compact${collapsed ? ' is-visible' : ''}`} inert={!collapsed || undefined}>
+          {user ? (
+            <Link href="/inspirations" className="nav-compact-btn is-dark">
+              Go to Library
+            </Link>
+          ) : (
+            <>
+              <Link href="/login" className="nav-compact-btn">
+                Log in
+              </Link>
+              <Link href="/signup" className="nav-compact-btn is-dark">
+                Get started
+              </Link>
+            </>
+          )}
+          <button
+            type="button"
+            className="nav-compact-menu"
+            aria-label="Show menu"
+           
+            onClick={reopenPill}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+              <path d="M5 8h14" />
+              <path d="M5 16h14" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       <div className={`dropdown-backdrop${openMenu ? ' active' : ''}`} id="dropdown-backdrop" />
 
       {/* Desktop mega-menus. On mobile the same components render inside the
@@ -306,7 +382,7 @@ export function Navbar() {
           <div className="mi-nav-mobile-panel-content">
             <div className="mi-nav-mobile-panel-list">
               <div id="nav-mobile-links-slot">{isMobile && navLinks}</div>
-              <div id="nav-mobile-actions-slot">{isMobile && navActions}</div>
+              <div id="nav-mobile-actions-slot">{isMobile && navSocial}</div>
             </div>
           </div>
         </div>

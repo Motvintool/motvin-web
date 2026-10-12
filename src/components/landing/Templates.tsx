@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 /**
- * Templates carousel — port of `.templates-section` in motvin-ui/index.html
- * and the slider handler in JS/index.js.
+ * Templates carousel, styled like the Inspirations sections above it.
  *
  * The loop is a scroll illusion: two clone groups sit on each side of the real
  * cards, and once scrolling settles the scroll position is snapped back by one
@@ -15,47 +14,67 @@ import { useCallback, useEffect, useRef } from 'react';
 type TemplateCard = {
   title: string;
   img: string;
-  width: number;
-  height: number;
   href: string;
 };
 
 const TEMPLATE_CARDS: TemplateCard[] = [
-  { title: 'Claude UI', img: '/ASSET/Images/motvin-template1.webp', width: 384, height: 480, href: '#' },
-  { title: 'Smart Home App', img: '/ASSET/Images/motvin-template2.webp', width: 286, height: 358, href: '#' },
-  { title: 'Whatsapp UI', img: '/ASSET/Images/motvin-template3.webp', width: 342, height: 427, href: '#' },
-  { title: 'LinkedIn App', img: '/ASSET/Images/motvin-template4.webp', width: 342, height: 427, href: '#' },
-  { title: 'Medical App', img: '/ASSET/Images/motvin-template5.webp', width: 283, height: 354, href: '#' },
-  { title: 'Gemini UI', img: '/ASSET/Images/motvin-template6.webp', width: 469, height: 586, href: '#' },
+  { title: 'Claude UI', img: '/ASSET/Images/motvin-template1.webp', href: '#' },
+  { title: 'Whatsapp UI', img: '/ASSET/Images/motvin-template2.webp', href: '#' },
+  { title: 'Smart Home App', img: '/ASSET/Images/motvin-template3.webp', href: '#' },
+  { title: 'Gemini UI', img: '/ASSET/Images/motvin-template4.webp', href: '#' },
+  { title: 'Medical App', img: '/ASSET/Images/motvin-template5.webp', href: '#' },
+  { title: 'LinkedIn App', img: '/ASSET/Images/motvin-template6.webp', href: '#' },
 ];
 
-// Clone groups on each side of the real cards. Two per side, as in the original.
+const AUTHOR_URL = 'https://www.instagram.com/siren.uix';
+
+// Clone groups on each side of the real cards.
 const CLONE_GROUPS = 2;
-const SCROLL_STEP = 350;
-// Extra offset the original applied to the initial scroll position.
-const INITIAL_OFFSET = 120;
+// One card plus the gap between cards.
+const SCROLL_STEP = 376;
 // Debounce before snapping the loop back, so the snap never fights a smooth scroll.
 const SETTLE_DELAY = 100;
+// Drift speed of the self-moving loop, in pixels per second.
+const DRIFT_SPEED = 36;
+// How long the drift waits after someone scrolls, drags or presses an arrow.
+const DRIFT_RESUME_DELAY = 2500;
+
+const chevron = (d: string) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d={d} />
+  </svg>
+);
 
 function Card({ card, clone }: { card: TemplateCard; clone?: boolean }) {
   return (
-    <div className="template-card" aria-hidden={clone || undefined} inert={clone || undefined}>
-      <div
-        className="template-image-wrapper"
-        style={{ width: `${card.width}px`, height: `${card.height}px` }}
-      >
-        <img src={card.img} alt={card.title} />
-      </div>
-      <a href={card.href} className="template-link">
-        <u>{card.title}</u> <img src="/ASSET/Icons/arrow-redirect.svg" alt="Link" />
-      </a>
-    </div>
+    <a
+      href={card.href}
+      className="lpi-template-card"
+      aria-hidden={clone || undefined}
+      tabIndex={clone ? -1 : undefined}
+      inert={clone || undefined}
+    >
+      <span className="lpi-template-tile">
+        <img src={card.img} alt={clone ? '' : card.title} draggable={false} />
+      </span>
+      <span className="lpi-template-name">
+        {card.title}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M7 17 17 7" />
+          <path d="M8 7h9v9" />
+        </svg>
+      </span>
+    </a>
   );
 }
 
 export function Templates() {
   const sliderRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
+  const headRef = useRef<HTMLDivElement>(null);
+  // The drift holds off until this time (ms, performance.now) after any
+  // interaction, so it never fights the visitor.
+  const driftPausedUntil = useRef(0);
 
   useEffect(() => {
     const slider = sliderRef.current;
@@ -70,15 +89,20 @@ export function Templates() {
 
     const originalStart = firstOriginal.offsetLeft;
     const cycleWidth = firstTrailingClone.offsetLeft - originalStart;
-    slider.scrollLeft = originalStart + INITIAL_OFFSET;
+    // Start with the first real card lined up with the heading text above it.
+    const head = headRef.current;
+    const inset = head
+      ? head.getBoundingClientRect().left - slider.getBoundingClientRect().left + parseFloat(getComputedStyle(head).paddingLeft)
+      : 24;
+    slider.scrollLeft = originalStart - inset;
 
     let settleTimer: ReturnType<typeof setTimeout>;
     const normalize = () => {
-      const position = slider.scrollLeft;
+      const position = slider.scrollLeft + inset;
       if (position < originalStart) {
-        slider.scrollLeft = position + cycleWidth;
+        slider.scrollLeft += cycleWidth;
       } else if (position >= originalStart + cycleWidth) {
-        slider.scrollLeft = position - cycleWidth;
+        slider.scrollLeft -= cycleWidth;
       }
     };
 
@@ -88,86 +112,117 @@ export function Templates() {
     };
 
     slider.addEventListener('scroll', onScroll);
+
+    // The loop drifts on its own: a few pixels each frame, wrapping back by one
+    // cycle (seamless, thanks to the clones) when it reaches the end. It rests
+    // while hovered, after any interaction, and while off screen.
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let hovered = false;
+    let onScreen = false;
+    let frame = 0;
+    let last = 0;
+    let position = slider.scrollLeft;
+
+    const pause = () => {
+      driftPausedUntil.current = performance.now() + DRIFT_RESUME_DELAY;
+    };
+    const onEnter = () => {
+      hovered = true;
+    };
+    const onLeave = () => {
+      hovered = false;
+    };
+
+    const tick = (now: number) => {
+      frame = requestAnimationFrame(tick);
+      const dt = last ? Math.min(now - last, 64) : 0;
+      last = now;
+      // Someone moved it by hand: carry on from wherever they left it.
+      if (Math.abs(slider.scrollLeft - position) > 2) position = slider.scrollLeft;
+      if (hovered || !onScreen || now < driftPausedUntil.current) return;
+      position += (DRIFT_SPEED * dt) / 1000;
+      if (position + inset >= originalStart + cycleWidth) position -= cycleWidth;
+      slider.scrollLeft = position;
+    };
+
+    const observer = new IntersectionObserver(([entry]) => {
+      onScreen = entry.isIntersecting;
+    });
+
+    if (!reduceMotion) {
+      observer.observe(slider);
+      slider.addEventListener('pointerenter', onEnter);
+      slider.addEventListener('pointerleave', onLeave);
+      slider.addEventListener('pointerdown', pause);
+      slider.addEventListener('wheel', pause, { passive: true });
+      slider.addEventListener('touchstart', pause, { passive: true });
+      frame = requestAnimationFrame(tick);
+    }
+
     return () => {
       slider.removeEventListener('scroll', onScroll);
       clearTimeout(settleTimer);
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      slider.removeEventListener('pointerenter', onEnter);
+      slider.removeEventListener('pointerleave', onLeave);
+      slider.removeEventListener('pointerdown', pause);
+      slider.removeEventListener('wheel', pause);
+      slider.removeEventListener('touchstart', pause);
     };
   }, []);
 
+  const pauseDrift = () => {
+    driftPausedUntil.current = performance.now() + DRIFT_RESUME_DELAY;
+  };
+
   const scrollPrev = useCallback(() => {
+    pauseDrift();
     sliderRef.current?.scrollBy({ left: -SCROLL_STEP, behavior: 'smooth' });
   }, []);
 
   const scrollNext = useCallback(() => {
+    pauseDrift();
     sliderRef.current?.scrollBy({ left: SCROLL_STEP, behavior: 'smooth' });
   }, []);
 
   const cloneGroup = (side: string, group: number) =>
-    TEMPLATE_CARDS.map((card) => (
-      <Card key={`${side}-${group}-${card.title}`} card={card} clone />
-    ));
+    TEMPLATE_CARDS.map((card) => <Card key={`${side}-${group}-${card.title}`} card={card} clone />);
 
   return (
-    <section className="templates-section">
-      <div className="templates-container">
-        <div className="templates-header">
-          <div className="templates-title-col">
-            <p className="templates-subtitle">Resources</p>
-            <h2 className="templates-title">
-              High-quality templates for designers.
-              <br />
-              <span className="templates-author">
-                Made by
-                <a href="#">@siren.uix</a>
-                on Motvin
-              </span>
-            </h2>
-          </div>
-          <div className="templates-nav-col">
-            <a href="#" className="demo-explore-btn btn-templates-explore">
-              <span>Browse all templates</span>
-              <svg
-                className="demo-explore-icon"
-                width="14"
-                height="14"
-                viewBox="0 0 14 14"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M5.25 2.33334L9.91667 7.00001L5.25 11.6667"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </a>
-            <div className="templates-slider-nav">
-              <span className="templates-slide-count">1 of 6</span>
-              <div className="templates-nav-buttons">
-                <button className="nav-btn prev" onClick={scrollPrev} aria-label="Previous templates">
-                  <img src="/ASSET/Icons/nav-btn next.svg" alt="Prev" />
-                </button>
-                <button className="nav-btn next" onClick={scrollNext} aria-label="Next templates">
-                  <img
-                    src="/ASSET/Icons/nav-btn next.svg"
-                    style={{ transform: 'rotate(180deg)' }}
-                    alt="Next"
-                  />
-                </button>
-              </div>
-            </div>
-          </div>
+    <section className="lpi-templates">
+      <div className="lpi-templates-head" ref={headRef}>
+        <div>
+          <p className="lpi-eyebrow">Resources</p>
+          <h2 className="lpi-title">High-quality templates for designers</h2>
+          <p className="lpi-templates-author">
+            Made by{' '}
+            <a href={AUTHOR_URL} target="_blank" rel="noopener noreferrer">
+              @siren.uix
+            </a>{' '}
+            on Motvin
+          </p>
         </div>
-        <div className="templates-slider-container" ref={sliderRef}>
-          <div className="templates-track" ref={trackRef}>
-            {Array.from({ length: CLONE_GROUPS }, (_, g) => cloneGroup('lead', g))}
-            {TEMPLATE_CARDS.map((card) => (
-              <Card key={card.title} card={card} />
-            ))}
-            {Array.from({ length: CLONE_GROUPS }, (_, g) => cloneGroup('trail', g))}
-          </div>
+        <div className="lpi-templates-actions">
+          <a href="#" className="lpi-templates-all">
+            Browse all templates
+          </a>
+          <button type="button" className="lpi-templates-nav" onClick={scrollPrev} aria-label="Previous templates">
+            {chevron('m15 6-6 6 6 6')}
+          </button>
+          <button type="button" className="lpi-templates-nav" onClick={scrollNext} aria-label="Next templates">
+            {chevron('m9 6 6 6-6 6')}
+          </button>
+        </div>
+      </div>
+
+      <div className="lpi-templates-slider" ref={sliderRef}>
+        <div className="lpi-templates-track" ref={trackRef}>
+          {Array.from({ length: CLONE_GROUPS }, (_, g) => cloneGroup('lead', g))}
+          {TEMPLATE_CARDS.map((card) => (
+            <Card key={card.title} card={card} />
+          ))}
+          {Array.from({ length: CLONE_GROUPS }, (_, g) => cloneGroup('trail', g))}
         </div>
       </div>
     </section>
