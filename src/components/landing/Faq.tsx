@@ -9,34 +9,33 @@ import { useId, useState } from 'react';
 
 const FAQ_ITEMS = [
   {
-    question: 'What exactly is Motvin?',
+    question: 'What is Motvin Inspirations?',
     answer:
-      'Motvin is an advanced design tool that allows you to easily capture and customize live websites directly into your canvas.',
+      'A library of real product design. Browse screens, flows and patterns from real apps and websites, and save the ones that inspire you.',
   },
   {
-    question: 'Why do I need to sign in with Google?',
-    answer:
-      'Signing in with Google ensures your projects are safely stored and synced across your devices effortlessly.',
+    question: 'Which platforms does it cover?',
+    answer: 'iOS apps, web apps and websites, all in one place.',
   },
   {
-    question: 'Can I use Motvin without signing in?',
+    question: 'What is the difference between screens, flows and patterns?',
     answer:
-      "Currently, an account is required to use Motvin's core features so we can securely save your work.",
+      'A screen is a single page from an app. A flow is the steps of one task in order, like onboarding or checkout. Patterns group screens that solve the same design problem, such as empty states or paywalls.',
   },
   {
-    question: 'Is Motvin free to use?',
+    question: 'How do I find something specific?',
     answer:
-      'We offer a free tier with core functionalities. Premium features are available through our subscription plans.',
+      'Search by app, screen type or UI element. You can also search for words that appear inside the screenshots themselves.',
   },
   {
-    question: 'What can the AI Color Palette Generator do?',
+    question: 'Can I save designs for later?',
     answer:
-      'It automatically extracts and generates stunning, accessible color palettes from any website or image you import.',
+      'Yes. Save screens and flows into collections to keep your references organised. Sign in with Google or email and your collections sync across your devices.',
   },
   {
-    question: 'How does website-to-design conversion work?',
+    question: 'Is Motvin Inspirations free?',
     answer:
-      'With just a single click, our engine parses the live HTML and CSS of a webpage and converts it into fully editable design layers.',
+      'Yes, it is free to explore. If an app you want is missing, send a request from your settings.',
   },
 ];
 
@@ -50,7 +49,6 @@ export function Faq() {
     <section className="lpi-faq" id="faq-section">
       <div className="lpi-faq-inner">
         <div className="lpi-faq-intro">
-          <p className="lpi-eyebrow">FAQ</p>
           <h2 className="lpi-title">Need help? Find what you need.</h2>
           <p className="lpi-faq-help">
             Still have a question?{' '}

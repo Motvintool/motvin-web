@@ -1,15 +1,17 @@
 'use client';
 
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 
-const LOGO_MS = 2600;
 const SLOTS = 4;
 
-/** Logos of the apps in the library, and a counter that moves every slot on to its next logo. */
-export function useAppLogoCycle(): { logos: string[]; step: number } {
+/**
+ * Logos of the apps in the library, which logo each slot shows, and a way to
+ * move one slot on to its next logo. Slot n starts on logo n.
+ */
+export function useAppLogoPicks(): { logos: string[]; picks: number[]; next: (slot: number) => void } {
   const [logos, setLogos] = useState<string[]>([]);
-  const [step, setStep] = useState(0);
+  const [picks, setPicks] = useState<number[]>(() => Array.from({ length: SLOTS }, (_, i) => i));
 
   useEffect(() => {
     let cancelled = false;
@@ -28,41 +30,49 @@ export function useAppLogoCycle(): { logos: string[]; step: number } {
     };
   }, []);
 
-  useEffect(() => {
-    if (logos.length < SLOTS || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const timer = setInterval(() => setStep((s) => s + 1), LOGO_MS);
-    return () => clearInterval(timer);
-  }, [logos.length]);
+  const next = useCallback(
+    (slot: number) => {
+      setPicks((prev) => {
+        const count = logos.length;
+        // Without a spare logo there is nothing new to show.
+        if (count <= SLOTS) return prev;
+        let pick = prev[slot];
+        // Skip whatever the other slots are showing, so no app appears twice.
+        do pick = (pick + 1) % count;
+        while (prev.some((p, i) => i !== slot && p === pick));
+        return prev.map((p, i) => (i === slot ? pick : p));
+      });
+    },
+    [logos.length],
+  );
 
-  return { logos, step };
+  return { logos, picks, next };
 }
 
 /**
  * One app-icon spot beside the hero headline. Shows the design's icon until the
- * library logos arrive, then cross-fades through them. Every slot advances on
- * the same tick, offset by its own index, so no two slots ever show one app;
- * the per-slot delay only staggers the visible swap.
+ * library logos arrive, then the slot's picked logo; clicking it pops in the
+ * next one.
  */
 export function HeroLogoSlot({
   className,
   fallback,
   slot,
   logos,
-  step,
+  picks,
+  onNext,
 }: {
   className: string;
   fallback: string;
   slot: number;
   logos: string[];
-  step: number;
+  picks: number[];
+  onNext: (slot: number) => void;
 }) {
-  const current = logos.length ? (step + slot) % logos.length : -1;
+  const current = logos.length ? picks[slot] : -1;
 
   return (
-    <div
-      className={`hero-float hero-float-app ${className}`}
-      style={{ '--hero-logo-delay': `${slot * 140}ms` } as CSSProperties}
-    >
+    <div className={`hero-float hero-float-app ${className}`} onClick={() => onNext(slot)}>
       <img alt="" className={`hero-logo${current < 0 ? ' is-active' : ''}`} src={fallback} draggable={false} />
       {logos.map((src, i) => (
         <img
@@ -76,4 +86,3 @@ export function HeroLogoSlot({
     </div>
   );
 }
-

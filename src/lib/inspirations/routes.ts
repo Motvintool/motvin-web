@@ -23,6 +23,8 @@ export const INSPIRATIONS_ROUTES = {
   app: (app: Pick<App, 'slug'>) => `/inspirations/app/${app.slug}`,
   pattern: (pattern: Pick<Pattern, 'slug'>) => `/inspirations/pattern/${pattern.slug}`,
   searchFor: (query: string, mode?: 'text') => `/inspirations/search?q=${encodeURIComponent(query)}${mode === 'text' ? '&mode=text' : ''}`,
+  /** Opens Inspirations with Motvin Buddy already answering `question`. */
+  askBuddy: (question: string) => `/inspirations?buddy=${encodeURIComponent(question)}`,
   /** Hand-off into the existing Motvin icon library. */
   iconLibrary: (query: string) => `/icons?q=${encodeURIComponent(query)}`,
 } as const;

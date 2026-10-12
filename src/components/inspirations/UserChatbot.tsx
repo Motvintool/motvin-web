@@ -33,6 +33,9 @@ type Line = { id: number; role: 'user' | 'assistant'; text: string; targets?: Na
 /** Where the guide files what a visitor asks to keep. */
 const GUIDE_COLLECTION = 'Saved from the guide';
 
+/** The query parameter that opens the guide with a question (see INSPIRATIONS_ROUTES.askBuddy). */
+const BUDDY_PARAM = 'buddy';
+
 const NUDGE_DELAY = 2500;
 const NUDGE_LIFETIME = 6500;
 const NUDGE_GAP = 12000;
@@ -251,6 +254,24 @@ export function UserChatbot() {
       if (alive.current) setBusy(false);
     }
   };
+
+  // A link can open the guide with a question already asked:
+  // /inspirations?buddy=<question>, as the landing page's Buddy section does.
+  // The question is taken off the address once read, so a reload doesn't ask it again.
+  const askedFromLink = useRef(false);
+  useEffect(() => {
+    if (askedFromLink.current) return;
+    const url = new URL(window.location.href);
+    const asked = url.searchParams.get(BUDDY_PARAM)?.trim();
+    if (!asked) return;
+    askedFromLink.current = true;
+    url.searchParams.delete(BUDDY_PARAM);
+    window.history.replaceState(window.history.state, '', url);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reads the address on mount
+    openGuide();
+    void send(asked);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only
+  }, []);
 
   const choose = (target: NavTarget) => {
     if (target.ask === '__confirm__' && latest) return void confirmAction(latest);

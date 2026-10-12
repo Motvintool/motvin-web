@@ -43,7 +43,34 @@ const LIBRARY_REWRITES = [
   { short: '/illustrations', folder: '/motvin-library/illustrations' },
 ];
 
+/**
+ * Library pictures (screenshots, app logos) come from the Inspirations API.
+ * Next's image optimizer resizes them to the size they're shown at, so the
+ * landing page doesn't download full-resolution screenshots.
+ */
+const API_IMAGE_PATTERNS: NonNullable<NonNullable<NextConfig['images']>['remotePatterns']> = [
+  { protocol: 'https', hostname: 'api.motvin.com', pathname: '/api/inspirations/**' },
+  { protocol: 'http', hostname: 'localhost', port: '3000', pathname: '/api/inspirations/**' },
+];
+const configuredApi = process.env.NEXT_PUBLIC_API_BASE_URL;
+if (configuredApi) {
+  const url = new URL(configuredApi);
+  API_IMAGE_PATTERNS.push({
+    protocol: url.protocol.replace(':', '') as 'http' | 'https',
+    hostname: url.hostname,
+    port: url.port,
+    pathname: '/api/inspirations/**',
+  });
+}
+
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: API_IMAGE_PATTERNS,
+    // The local API runs on localhost, which Next blocks by default (to stop
+    // the optimizer reaching into private networks). Allowed in development
+    // only; in production the API is a public host.
+    dangerouslyAllowLocalIP: process.env.NODE_ENV !== 'production',
+  },
   async redirects() {
     return [
       // Canonicalise every folder-path URL back to the short form so the

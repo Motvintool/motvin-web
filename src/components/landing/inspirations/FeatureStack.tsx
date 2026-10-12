@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
+import { IMAGE_SIZE, optimizedImage } from '@/lib/inspirations/optimizedImage';
 import type { LibraryCounts } from '@/lib/inspirations/types';
 import type { LandingApp } from './useLandingLibrary';
 
@@ -105,7 +106,6 @@ export function FeatureStack({ apps, counts }: { apps: LandingApp[]; counts: Lib
   return (
     <section className="lpi-stack-section">
       <div className="lpi-heading">
-        <p className="lpi-eyebrow">Inspiration, organised</p>
         <h2 className="lpi-title">From blank canvas to proven pattern in seconds</h2>
         <p className="lpi-lead">Four ways into the same library, so you always start from something that already works.</p>
       </div>
@@ -149,7 +149,7 @@ export function FeatureStack({ apps, counts }: { apps: LandingApp[]; counts: Lib
                 {fan.map((app, k) =>
                   app.cover ? (
                     <div className={`lpi-stack-phone is-${['left', 'front', 'right'][k]}`} key={`${app.id}-${k}`}>
-                      <img src={app.cover} alt="" loading="lazy" draggable={false} />
+                      <img {...optimizedImage(app.cover, IMAGE_SIZE.card)} alt="" loading="lazy" draggable={false} />
                     </div>
                   ) : null,
                 )}

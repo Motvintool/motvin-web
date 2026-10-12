@@ -26,6 +26,9 @@ const COMPACT_AFTER = 160;
 const REOPEN_SCROLL_SLACK = 120;
 // How far the page has to move before it counts as scrolling up or down.
 const SCROLL_DIRECTION_THRESHOLD = 6;
+// Vertical middle of the compact buttons (desktop), for telling when the
+// dark footer has slid under them.
+const COMPACT_MIDDLE = 59;
 const INSTAGRAM_URL = 'https://www.instagram.com/siren.uix';
 // TODO: Motvin's X profile URL — none exists in the codebase yet.
 const X_URL = '#';
@@ -56,6 +59,9 @@ export function Navbar() {
   // back. The round menu button also brings it back, until the next scroll
   // down of some length.
   const [scrolled, setScrolled] = useState(false);
+  // True while the dark footer is behind the compact buttons, so they can
+  // switch to their light version and stay visible.
+  const [overDark, setOverDark] = useState(false);
   const [pillReopened, setPillReopened] = useState(false);
   const reopenedAtRef = useRef(0);
   const lastYRef = useRef(0);
@@ -76,6 +82,16 @@ export function Navbar() {
           lastYRef.current = y;
         }
         if (y - reopenedAtRef.current > REOPEN_SCROLL_SLACK) setPillReopened(false);
+        // With the curtain footer, the footer always sits behind the page; it
+        // only shows once the white sheet's bottom edge has passed above.
+        const footer = document.querySelector('.lpi-footer');
+        const sheet = document.querySelector('.landing-sheet');
+        const footerEdge = footer
+          ? footer.classList.contains('is-reveal') && sheet
+            ? sheet.getBoundingClientRect().bottom
+            : footer.getBoundingClientRect().top
+          : Infinity;
+        setOverDark(footerEdge < COMPACT_MIDDLE);
       });
     };
     onScroll();
@@ -297,9 +313,9 @@ export function Navbar() {
       <header className="navbar" ref={navRef}>
         <div className={`navbar-container${collapsed ? ' is-collapsed' : ''}`} inert={collapsed || undefined}>
           <div className="navbar-left">
-            <a href="#" className="logo">
+            <Link href="/" className="logo" aria-label="Motvin home">
               <img src="/ASSET/Icons/motvin-logo.svg" alt="" className="mi-logo-mark" />
-            </a>
+            </Link>
             {!isMobile && navLinks}
           </div>
           {!isMobile && navActions}
@@ -329,7 +345,10 @@ export function Navbar() {
 
       {/* Desktop, once scrolled: the pill gives way to these, Mobbin style. */}
       {!isMobile && (
-        <div className={`nav-compact${collapsed ? ' is-visible' : ''}`} inert={!collapsed || undefined}>
+        <div
+          className={`nav-compact${collapsed ? ' is-visible' : ''}${overDark ? ' is-over-dark' : ''}`}
+          inert={!collapsed || undefined}
+        >
           {user ? (
             <Link href="/inspirations" className="nav-compact-btn is-dark">
               Go to Library
@@ -373,9 +392,9 @@ export function Navbar() {
       >
         <div className="mi-nav-mobile-panel-main">
           <div className="mi-nav-mobile-panel-header">
-            <a href="#" className="mi-nav-mobile-panel-logo" aria-label="Motvin home">
+            <Link href="/" className="mi-nav-mobile-panel-logo" aria-label="Motvin home" onClick={closePanel}>
               <img src="/ASSET/Icons/motvin-logo.svg" alt="" />
-            </a>
+            </Link>
             <button
               className="mi-nav-mobile-panel-close"
               id="nav-mobile-panel-close"

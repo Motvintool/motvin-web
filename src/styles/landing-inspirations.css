@@ -24,13 +24,6 @@
   text-align: center;
 }
 
-.lpi-eyebrow {
-  margin: 0 0 14px;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--lpi-muted);
-}
-
 .lpi-title {
   margin: 0;
   font-size: 56px;
@@ -51,7 +44,7 @@
 .lpi-strip {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 40px 24px 64px;
+  padding: 88px 24px 64px;
   border-bottom: 1px solid #f0f0f2;
   text-align: center;
 }
@@ -861,7 +854,6 @@
 /* Shared phone-screen look: a dark bezel with the capture inside. */
 .lpi-vis-search-shots img,
 .lpi-vis-board-shots img,
-.lpi-vis-buddy-shots img,
 .lpi-vis-download-shots img {
   object-fit: cover;
   object-position: top;
@@ -1070,133 +1062,10 @@
 
 .lpi-bento-card:hover .lpi-vis-toast { opacity: 1; translate: -50% 0; transition-delay: 0.15s; }
 
-/* Buddy: a short chat; the reply types out and brings screens with it. */
-.lpi-vis-buddy {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px 16px;
-  background: radial-gradient(110% 90% at 0% 100%, #e8f6ff 0%, #fff 65%);
-}
-
-.lpi-vis-buddy-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #3f3f46;
-}
-
-.lpi-vis-buddy-avatar {
-  display: inline-grid;
-  grid-template-columns: repeat(2, 5px);
-  gap: 2px;
-  padding: 5px;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 0 0 1px rgba(11, 13, 24, 0.06);
-}
-
-.lpi-vis-buddy-avatar i { width: 5px; height: 5px; border-radius: 50%; }
-.lpi-vis-buddy-avatar i:nth-child(1) { background: #ff3737; }
-.lpi-vis-buddy-avatar i:nth-child(2) { background: #874fff; }
-.lpi-vis-buddy-avatar i:nth-child(3) { background: #00b6ff; }
-.lpi-vis-buddy-avatar i:nth-child(4) { background: #24cb71; }
-
-.lpi-vis-online {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #24cb71;
-}
-
-.lpi-vis-bubble {
-  max-width: 88%;
-  margin: 0;
-  padding: 9px 13px;
-  border-radius: 16px;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.lpi-vis-bubble.is-user {
-  align-self: flex-end;
-  border-bottom-right-radius: 6px;
-  background: #5c4ae1;
-  color: #fff;
-}
-
-.lpi-vis-bubble.is-buddy {
-  display: flex;
-  align-items: center;
-  align-self: flex-start;
-  min-height: 36px;
-  border-bottom-left-radius: 6px;
-  background: #fff;
-  box-shadow: 0 0 0 1px rgba(11, 13, 24, 0.06), 0 2px 8px rgba(11, 13, 24, 0.04);
-  color: var(--lpi-ink);
-}
-
-/* Only the typing dots show at first; on hover they give way to the reply,
-   and the bubble grows to fit it. */
-.lpi-vis-reply {
-  display: inline-block;
-  max-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  opacity: 0;
-  transition: max-width 0.6s var(--ease), opacity 0.3s ease;
-}
-
-.lpi-vis-typing {
-  display: inline-flex;
-  gap: 4px;
-  max-width: 40px;
-  overflow: hidden;
-  transition: max-width 0.3s ease, opacity 0.2s ease;
-}
-
-.lpi-vis-typing i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #a1a1aa;
-  animation: lpi-typing 1.2s ease-in-out infinite;
-}
-
-.lpi-vis-typing i:nth-child(2) { animation-delay: 0.15s; }
-.lpi-vis-typing i:nth-child(3) { animation-delay: 0.3s; }
-
+/* Typing dots, shared by Buddy's chat section. */
 @keyframes lpi-typing {
   0%, 60%, 100% { translate: 0 0; opacity: 0.5; }
   30% { translate: 0 -3px; opacity: 1; }
-}
-
-.lpi-bento-card:hover .lpi-vis-typing { max-width: 0; opacity: 0; transition-delay: 0.4s; }
-.lpi-bento-card:hover .lpi-vis-reply { max-width: 280px; opacity: 1; transition-delay: 0.5s; }
-
-.lpi-vis-buddy-shots {
-  display: flex;
-  gap: 8px;
-  margin-top: auto;
-  margin-bottom: -14px;
-}
-
-.lpi-vis-buddy-shots img {
-  width: 64px;
-  height: 64px;
-  border-radius: 14px 14px 0 0;
-  opacity: 0.55;
-  translate: 0 28px;
-  transition: opacity 0.35s ease, translate 0.5s var(--ease);
-}
-
-/* The suggestions peek in from the bottom, then rise once the reply lands. */
-.lpi-bento-card:hover .lpi-vis-buddy-shots img {
-  opacity: 1;
-  translate: 0 0;
-  transition-delay: calc(0.9s + var(--i) * 80ms);
 }
 
 /* iOS and web: a real phone screen and a real web screen; the switch picks
@@ -1443,6 +1312,360 @@
 
 .lpi-bento-card.is-full:hover .lpi-vis-request img { translate: calc(var(--i) * -4px) 0; }
 .lpi-bento-card.is-full:hover .lpi-vis-request-add { border-color: #5c4ae1; }
+
+/* ---- 5. Meet Motvin Buddy: a chat you can try ---- */
+.lpi-buddy {
+  padding: 40px 24px 120px;
+}
+
+/* The tile the window sits on, washed with the brand's blue and purple. */
+.lpi-buddy-stage {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 48px 40px;
+  border-radius: 36px;
+  background:
+    radial-gradient(55% 70% at 0% 100%, #e3f3ff 0%, rgba(227, 243, 255, 0) 70%),
+    radial-gradient(55% 70% at 100% 0%, #ece8ff 0%, rgba(236, 232, 255, 0) 70%),
+    var(--lpi-tile);
+}
+
+.lpi-buddy-window {
+  display: flex;
+  flex-direction: column;
+  max-width: 960px;
+  margin: 0 auto;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 30px 80px rgba(11, 13, 24, 0.08);
+}
+
+/* Buddy's illustration on the same dark circle as its button in Inspirations. */
+.lpi-buddy-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #0b0c0e;
+}
+
+.lpi-buddy-avatar img {
+  width: 19px;
+  height: 19px;
+}
+
+/* Tall enough for a full answer, so the window never jumps as one plays. */
+.lpi-buddy-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 480px;
+  padding: 28px 28px 20px;
+}
+
+.lpi-buddy-bubble {
+  max-width: 80%;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 20px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.lpi-buddy-bubble.is-user {
+  align-self: flex-end;
+  border-bottom-right-radius: 6px;
+  background: #5c4ae1;
+  color: #fff;
+  animation: lpi-buddy-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transform-origin: 100% 100%;
+}
+
+.lpi-buddy-reply {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  animation: lpi-buddy-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transform-origin: 0 100%;
+}
+
+.lpi-buddy-bubble.is-buddy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 4px;
+  min-height: 46px;
+  border-bottom-left-radius: 6px;
+  background: var(--lpi-tile);
+  color: var(--lpi-ink);
+}
+
+@keyframes lpi-buddy-pop {
+  from { opacity: 0; scale: 0.9; translate: 0 8px; }
+}
+
+.lpi-buddy-typing {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.lpi-buddy-typing i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a1a1aa;
+  animation: lpi-typing 1.2s ease-in-out infinite;
+}
+
+.lpi-buddy-typing i:nth-child(2) { animation-delay: 0.15s; }
+.lpi-buddy-typing i:nth-child(3) { animation-delay: 0.3s; }
+
+/* The screens the answer brings, rising in one after another. */
+.lpi-buddy-shots {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
+  margin-top: 4px;
+  padding-left: 42px;
+}
+
+.lpi-buddy-shot {
+  display: block;
+  min-width: 0;
+  color: var(--lpi-ink);
+  text-decoration: none;
+  animation: lpi-buddy-shot-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+.lpi-buddy-shot-frame {
+  position: relative;
+  display: block;
+  aspect-ratio: 9 / 14;
+  border-radius: 18px;
+  background: var(--lpi-tile);
+  overflow: hidden;
+}
+
+.lpi-buddy-shot-frame > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  transition: scale 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* A slow, slight zoom on hover. */
+.lpi-buddy-shot:hover .lpi-buddy-shot-frame > img { scale: 1.02; }
+
+/* A soft fade at the foot, so the crop reads as intended and the app tag
+   sits on it; plus a hairline edge, so white screens stand apart from the
+   white window. */
+.lpi-buddy-shot-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(to top, rgba(10, 10, 14, 0.38) 0%, rgba(10, 10, 14, 0) 34%);
+  box-shadow: inset 0 0 0 1px rgba(11, 13, 24, 0.07);
+  pointer-events: none;
+}
+
+/* An open arrow that comes in on hover, so the screens read as links. */
+.lpi-buddy-shot-open {
+  position: absolute;
+  z-index: 1;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--lpi-ink);
+  box-shadow: 0 4px 14px rgba(11, 13, 24, 0.16);
+  opacity: 0;
+  scale: 0.8;
+  transition: opacity 0.25s ease, scale 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.lpi-buddy-shot:hover .lpi-buddy-shot-open,
+.lpi-buddy-shot:focus-visible .lpi-buddy-shot-open {
+  opacity: 1;
+  scale: 1;
+}
+
+@keyframes lpi-buddy-shot-in {
+  from { opacity: 0; translate: 0 18px; scale: 0.96; }
+}
+
+/* The app, on a small dark glass tag inside the bottom of its screen. It
+   reads the same over light and dark screens. */
+.lpi-buddy-shot-app {
+  position: absolute;
+  z-index: 1;
+  left: 10px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 20px);
+  padding: 6px 12px 6px 6px;
+  border-radius: 14px;
+  background: rgba(18, 18, 22, 0.72);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lpi-buddy-shot-app img {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+/* "See all" at the end of the reply, into the full results. */
+.lpi-buddy-see-all {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: 12px;
+  color: #5c4ae1;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  animation: lpi-buddy-pop 0.4s ease both;
+}
+
+.lpi-buddy-see-all svg { transition: translate 0.2s ease; }
+.lpi-buddy-see-all:hover svg { translate: 2px 0; }
+
+.lpi-buddy-foot {
+  padding: 4px 20px 20px;
+}
+
+.lpi-buddy-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lpi-buddy-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 18px 0 16px;
+  border: 1px solid #e6e6ea;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--lpi-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, scale 0.2s ease;
+}
+
+.lpi-buddy-chip:hover { border-color: #cfcfd6; }
+.lpi-buddy-chip:active { scale: 0.97; }
+
+.lpi-buddy-chip.is-active {
+  border-color: #c9c0ff;
+  background: #faf9ff;
+  color: #5c4ae1;
+}
+
+/* A small spark, Buddy's mark on each suggestion. */
+.lpi-buddy-chip-spark {
+  flex: none;
+  color: #874fff;
+}
+
+.lpi-buddy-chip.is-active .lpi-buddy-chip-spark { color: #5c4ae1; }
+
+.lpi-buddy-ask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 54px;
+  margin-top: 12px;
+  padding: 0 7px 0 20px;
+  border-radius: 999px;
+  background: var(--lpi-tile);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.lpi-buddy-ask:focus-within {
+  background: #fff;
+  box-shadow: 0 0 0 1.5px #5c4ae1, 0 6px 24px rgba(92, 74, 225, 0.12);
+}
+
+.lpi-buddy-ask input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--lpi-ink);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+
+.lpi-buddy-ask input::placeholder { color: #8a8a8f; }
+
+.lpi-buddy-ask button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: #000;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s ease, scale 0.2s ease;
+}
+
+.lpi-buddy-ask button:hover { background: #2a2a2e; }
+.lpi-buddy-ask button:active { scale: 0.94; }
+
+@media (max-width: 760px) {
+  .lpi-buddy { padding: 24px 16px 80px; }
+  .lpi-buddy-stage { padding: 12px; border-radius: 28px; }
+  .lpi-buddy-window { border-radius: 22px; }
+  .lpi-buddy-chat { min-height: 400px; padding: 18px 16px 14px; }
+  .lpi-buddy-bubble { max-width: 88%; font-size: 14px; }
+  .lpi-buddy-shots { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding-left: 0; }
+  .lpi-buddy-shot:nth-child(n + 3) { display: none; }
+  .lpi-buddy-foot { padding: 2px 12px 14px; }
+  .lpi-buddy-chips { flex-wrap: nowrap; margin: 0 -12px; padding: 0 12px; overflow-x: auto; scrollbar-width: none; }
+  .lpi-buddy-chips::-webkit-scrollbar { display: none; }
+  .lpi-buddy-chip { flex: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lpi-buddy-bubble.is-user,
+  .lpi-buddy-reply,
+  .lpi-buddy-shot,
+  .lpi-buddy-see-all,
+  .lpi-buddy-typing i { animation: none; }
+}
 
 /* ---- Closing call to action, right above the footer ---- */
 /* Light and calm, with plenty of room, so the page ends on one clear
@@ -2297,8 +2520,7 @@
   .lpi-story-dots,
   .lpi-story-dots i,
   .lpi-stack-live i,
-  .lpi-vis-caret,
-  .lpi-vis-typing i {
+  .lpi-vis-caret {
     animation: none;
   }
 
@@ -2496,7 +2718,7 @@
      over the dark feature cards as well as the white page. */
   .landing-root .navbar-container {
     /* Slim, with the Log in button tucked into the right end. */
-    padding: 8px 8px 8px 22px;
+    padding: 10px 10px 10px 24px;
     /* Same glass as the compact Log in button: the tile grey on white,
        frosted glass over colour and pictures. */
     background: rgba(232, 232, 236, 0.6);
@@ -2513,7 +2735,7 @@
   }
 
   .landing-root .navbar .nav-item span {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 500;
     color: #141414;
   }
@@ -2530,13 +2752,13 @@
 
   /* Log in / Go to Library: the page's dark pill button. */
   .landing-root .nav-login {
-    height: 42px;
+    height: 46px;
     margin-left: 4px;
-    padding: 0 20px;
+    padding: 0 22px;
     border-radius: 999px;
     background: #141414;
     color: #fff;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     letter-spacing: 0;
     transition: background 0.2s ease;
@@ -2680,7 +2902,7 @@
     border-radius: 999px;
     background: #f3f3f5;
     color: #141414;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     text-decoration: none;
     opacity: 0;
@@ -2788,6 +3010,24 @@
 
   .nav-compact-menu:hover { background: #2a2a2e; }
   .nav-compact.is-visible .nav-compact-menu:active { animation: none; scale: 0.94; }
+
+  /* Over the dark footer, the buttons flip to their light version so they
+     don't disappear into it. */
+  .nav-compact.is-over-dark .nav-compact-btn.is-dark,
+  .nav-compact.is-over-dark .nav-compact-menu {
+    background: #fff;
+    color: #141414;
+  }
+
+  .nav-compact.is-over-dark .nav-compact-btn.is-dark:hover,
+  .nav-compact.is-over-dark .nav-compact-menu:hover { background: #e9e9ec; }
+
+  .nav-compact.is-over-dark .nav-compact-btn:not(.is-dark) {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+  }
+
+  .nav-compact.is-over-dark .nav-compact-btn:not(.is-dark):hover { background: rgba(255, 255, 255, 0.2); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2878,4 +3118,144 @@
     align-self: stretch;
     width: 100%;
   }
+}
+
+/* ---- Promo pill (bottom of the screen) ---- */
+.lpi-promo {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  padding: 8px;
+  border-radius: 999px;
+  /* Same frosted glass as the "Saved to collection" toast in the library. */
+  background: rgba(255, 255, 255, 0.75);
+  color: #0b0c0e;
+  box-shadow: 0 12px 80px rgba(0, 0, 0, 0.12);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  translate: -50% 0;
+  animation: lpi-promo-in 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.4s both;
+}
+
+@keyframes lpi-promo-in {
+  from { opacity: 0; translate: -50% 24px; scale: 0.96; }
+}
+
+.lpi-promo-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #ececec;
+}
+
+/* The bouquet in its own colours on the light grey circle. */
+.lpi-promo-icon img {
+  width: 24px;
+  height: 24px;
+  transition: rotate 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.lpi-promo:hover .lpi-promo-icon img { rotate: -12deg; }
+
+.lpi-promo-text {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.lpi-promo-text b { font-weight: 600; }
+
+.lpi-promo-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #6b6b70;
+}
+
+.lpi-promo-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 46px;
+  margin-left: 8px;
+  padding: 0 20px 0 22px;
+  border-radius: 999px;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.2s ease, scale 0.2s ease;
+}
+
+/* A soft shine that sweeps across the button on hover. */
+.lpi-promo-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.22) 50%, transparent 70%);
+  translate: -120% 0;
+  pointer-events: none;
+}
+
+.lpi-promo-btn:hover { background: #1c1c20; }
+.lpi-promo-btn:hover::after { translate: 120% 0; transition: translate 0.7s ease; }
+.lpi-promo-btn:active { scale: 0.97; }
+
+.lpi-promo-btn svg { transition: translate 0.2s ease; }
+.lpi-promo-btn:hover svg { translate: 2px 0; }
+
+.lpi-promo-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-right: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #6b6b70;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.lpi-promo-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #0b0c0e;
+}
+
+@media (max-width: 600px) {
+  .lpi-promo { bottom: 12px; gap: 10px; }
+  .lpi-promo-icon { width: 40px; height: 40px; }
+  .lpi-promo-icon img { width: 20px; height: 20px; }
+  .lpi-promo { padding: 8px; border-radius: 24px; }
+  .lpi-promo-text { flex-direction: column; gap: 0; font-size: 13px; white-space: normal; }
+  .lpi-promo-text span { font-size: 12px; line-height: 1.35; }
+  .lpi-promo-btn { height: 36px; padding: 0 12px 0 14px; font-size: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lpi-promo { animation: none; }
+  .lpi-promo-icon img,
+  .lpi-promo-btn::after { transition: none; }
+  .lpi-promo:hover .lpi-promo-icon img { rotate: none; }
 }

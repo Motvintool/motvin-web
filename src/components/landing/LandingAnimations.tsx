@@ -12,20 +12,31 @@ import { useEffect } from 'react';
  * after mount, once the sections it animates are in the DOM.
  *
  * Four groups:
- *  1. Hero scroll timeline (>1300px only) — pins the hero, crops its bottom
- *     edge and shrinks the demo window.
+ *  1. Hero scroll timeline (>1300px, and only when motion is allowed) —
+ *     pins the hero, drifts its text up as it fades, crops the hero's bottom
+ *     edge, and lifts the demo window while it grows slightly. Set up
+ *     through gsap.matchMedia, so it turns on and off as the window is
+ *     resized across the breakpoint, without a reload.
  *  2. Hero entrance — a one-off rise-and-settle on load.
  *  3. Word animation — per-word colour pop on `.animated-word` groups, played
  *     on first scroll into view and replayed on hover.
  *  4. Section reveals — fade/rise each section's contents once, on approach.
  *
- * Groups 2-4 are skipped under prefers-reduced-motion, matching the original.
+ * All four are skipped under prefers-reduced-motion.
  *
  * Not ported from JS/index.js: the `.trusted-partners-scroll` marquee, whose
  * target elements no longer exist in the markup.
  */
 
 const HERO_SCROLL_MIN_WIDTH = 1300;
+// How far the page scrolls while the hero is pinned. The demo window rises
+// by the same amount, so the section below arrives right under it, with no
+// gap opening up.
+const HERO_SCROLL_DISTANCE = 330;
+// The hero's bottom is cropped by a little less than that, so the window's
+// lower edge and its soft shadow are never sliced off. The extra only
+// overlaps the empty top padding of the section below.
+const HERO_CROP_ROOM = 16;
 
 // Headings whose words animate on hover. None on the page right now: the
 // sections that used it were removed or restyled, but the effect is kept.
@@ -35,6 +46,7 @@ const REVEAL_SECTIONS = [
   { selector: '.lpi-story', items: '.lpi-story-inner > *' },
   { selector: '.lpi-stack-section', items: '.lpi-stack-section > .lpi-heading' },
   { selector: '.lpi-grid-section', items: '.lpi-heading, .lpi-bento-card' },
+  { selector: '.lpi-buddy', items: '.lpi-heading, .lpi-buddy-stage' },
   { selector: '.lpi-templates', items: '.lpi-templates-head, .lpi-templates-slider' },
   { selector: '.lpi-faq', items: '.lpi-faq-intro, .lpi-faq-list' },
   { selector: '.lpi-explore', items: '.lpi-heading, .lpi-explore-grid' },
@@ -47,28 +59,33 @@ export function LandingAnimations() {
 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    // gsap.context scopes every tween and ScrollTrigger created inside it, so
-    // revert() on unmount cleans all of them up — important under React's dev
-    // double-mount, which would otherwise stack duplicate ScrollTriggers.
-    const ctx = gsap.context(() => {
-      // 1. Hero scroll timeline — desktop only, as in the original.
-      if (window.innerWidth > HERO_SCROLL_MIN_WIDTH) {
+    // 1. Hero scroll timeline. matchMedia builds it while the query matches
+    // and reverts it (unpinning, clearing styles) when it stops matching.
+    const mm = gsap.matchMedia();
+    mm.add(
+      `(min-width: ${HERO_SCROLL_MIN_WIDTH + 1}px) and (prefers-reduced-motion: no-preference)`,
+      () => {
         const tl = gsap.timeline({
           scrollTrigger: {
             trigger: '.hero-section',
             start: 'top top',
-            end: '+=250px', // Exactly matches the clip-path shrink below.
+            end: `+=${HERO_SCROLL_DISTANCE}px`,
             pin: true,
             // Without this GSAP pads the page with the pinned height, which
             // would leave a gap under the shrinking hero.
             pinSpacing: false,
-            scrub: 3,
+            // How long the animation trails the scroll, in seconds.
+            scrub: 1.5,
           },
         });
 
-        tl.to(
+        // The text drifts up as it fades, so the space it leaves reads as part
+        // of the motion rather than a blank gap. fromTo with immediateRender
+        // off, so it doesn't fight the entrance animation on load.
+        tl.fromTo(
           '.hero-badge, .hero-title-interactive, .hero-subtitle, .hero-cta',
-          { opacity: 0, duration: 0.5, ease: 'sine.inOut' },
+          { opacity: 1, y: 0 },
+          { opacity: 0, y: -50, duration: 0.5, ease: 'sine.inOut', immediateRender: false },
           0,
         )
           // clipPath rather than height: animating height would recalculate the
@@ -76,17 +93,35 @@ export function LandingAnimations() {
           .fromTo(
             '.hero-section',
             { clipPath: 'inset(0px 0px 0px 0px)' },
-            { clipPath: 'inset(0px 0px 250px 0px)', duration: 0.5, ease: 'sine.inOut' },
+            {
+              clipPath: `inset(0px 0px ${HERO_SCROLL_DISTANCE - HERO_CROP_ROOM}px 0px)`,
+              duration: 0.5,
+              ease: 'sine.inOut',
+            },
             0.1,
           )
+          // The window rises with the page and grows a touch, coming forward
+          // as it becomes the focus. It grows from its bottom edge, so the
+          // growth goes up and out, never down past the hero's crop.
           .fromTo(
             '.demo-window',
-            { scale: 1, y: 0 },
-            { scale: 0.9, y: -250, duration: 0.5, ease: 'sine.inOut' },
+            { scale: 1, y: 0, transformOrigin: '50% 100%' },
+            {
+              scale: 1.03,
+              y: -HERO_SCROLL_DISTANCE,
+              transformOrigin: '50% 100%',
+              duration: 0.5,
+              ease: 'sine.inOut',
+            },
             0.1,
           );
-      }
+      },
+    );
 
+    // gsap.context scopes every tween and ScrollTrigger created inside it, so
+    // revert() on unmount cleans all of them up — important under React's dev
+    // double-mount, which would otherwise stack duplicate ScrollTriggers.
+    const ctx = gsap.context(() => {
       if (prefersReducedMotion) return;
 
       // 2. Hero entrance.
@@ -184,7 +219,10 @@ export function LandingAnimations() {
       };
     });
 
-    return () => ctx.revert();
+    return () => {
+      mm.revert();
+      ctx.revert();
+    };
   }, []);
 
   return null;

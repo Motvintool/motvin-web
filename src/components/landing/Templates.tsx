@@ -193,7 +193,6 @@ export function Templates() {
     <section className="lpi-templates">
       <div className="lpi-templates-head" ref={headRef}>
         <div>
-          <p className="lpi-eyebrow">Resources</p>
           <h2 className="lpi-title">High-quality templates for designers</h2>
           <p className="lpi-templates-author">
             Made by{' '}

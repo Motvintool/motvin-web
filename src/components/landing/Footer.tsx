@@ -23,8 +23,11 @@ import { MotvinWordmark } from './MotvinWordmark';
 
 const LANGUAGE_STORAGE_KEY = 'motvin_language';
 const DEFAULT_LANGUAGE: Language = 'English';
-// Room left for the navbar when deciding whether the footer fits on screen.
-const REVEAL_CLEARANCE = 100;
+// Room kept clear at the top when deciding whether the footer fits on
+// screen. None needed: by the time the footer shows, the page has been
+// scrolled down, so the navbar has already tucked away into its compact
+// buttons, which sit over the footer's empty top padding.
+const REVEAL_CLEARANCE = 0;
 
 // Text nodes inside these are left alone — the switcher's own labels must stay
 // in their native spelling.
@@ -73,7 +76,7 @@ export function Footer() {
   const menuRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLElement>(null);
   // The page slides up to uncover the footer, but only while the whole footer
-  // fits on screen below the navbar; a taller one would hide its top for good.
+  // fits on screen; a taller one would hide its top for good.
   const [reveal, setReveal] = useState(false);
 
   useEffect(() => {

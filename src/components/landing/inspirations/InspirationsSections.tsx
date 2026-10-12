@@ -1,6 +1,7 @@
 'use client';
 
 import { AppLogoStrip } from './AppLogoStrip';
+import { BuddySection } from './BuddySection';
 import { FeatureGrid } from './FeatureGrid';
 import { FeatureStack } from './FeatureStack';
 import { ScrollStatement } from './ScrollStatement';
@@ -18,6 +19,7 @@ export function InspirationsSections() {
       <ScrollStatement />
       <FeatureStack apps={apps} counts={counts} />
       <FeatureGrid apps={apps} />
+      <BuddySection apps={apps} />
     </div>
   );
 }

@@ -119,31 +119,41 @@ export function ConsentBanners() {
 
   return (
     <>
+      {/* Promo: a small floating pill at the bottom, in the page's own style,
+          rising in with a soft spring once cookie consent is settled. */}
       <div
-        className="promo-banner"
+        className="lpi-promo"
         id="promoBanner"
+        role="region"
+        aria-label="Motvin Icons"
         style={{ display: showPromo ? 'flex' : 'none' }}
       >
-        <div className="promo-banner-left">
-          <img src="/ASSET/svg/banner-intro.svg" alt="Banner Intro" className="promo-banner-img" />
-          <p className="promo-banner-text">
-            Discover the World&rsquo;s Largest Library of 1,000,000+ Icons and Bring Every Creative
-            Idea to Life
-          </p>
-        </div>
-        <div className="promo-banner-right">
-          <Link href="/icons" className="promo-banner-btn">
-            Explore Icons
-          </Link>
-          <button
-            className="promo-banner-close"
-            aria-label="Close"
-            id="promoBannerCloseBtn"
-            onClick={dismissPromo}
-          >
-            <img src="/ASSET/svg/banner-close.svg" alt="Close" />
-          </button>
-        </div>
+        <span className="lpi-promo-icon" aria-hidden="true">
+          <img src="/ASSET/Icons/Motvin/bouquet.svg" alt="" width={24} height={24} />
+        </span>
+        <p className="lpi-promo-text">
+          <b>Motvin Icons</b>
+          <span>350k+ editable icons for your next design</span>
+        </p>
+        <Link href="/icons" className="lpi-promo-btn">
+          Explore icons
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M5 12h14" />
+            <path d="m13 6 6 6-6 6" />
+          </svg>
+        </Link>
+        <button
+          type="button"
+          className="lpi-promo-close"
+          aria-label="Close"
+          id="promoBannerCloseBtn"
+          onClick={dismissPromo}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+            <path d="M6 6l12 12" />
+            <path d="M18 6 6 18" />
+          </svg>
+        </button>
       </div>
 
       <div
@@ -177,7 +187,7 @@ export function ConsentBanners() {
             <p className="cookies-desc">
               Essential cookies keep Motvin secure and working. Optional analytics help us improve
               your experience.
-              <a href="#" target="_blank" className="cookies-link">
+              <a href="/privacy" target="_blank" rel="noopener" className="cookies-link">
                 Learn more about cookies
               </a>
             </p>

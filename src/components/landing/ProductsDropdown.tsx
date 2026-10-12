@@ -54,7 +54,7 @@ export function ProductsDropdown({ open }: { open: boolean }) {
         </div>
         {/* Right Column: Product Links */}
         <div className="products-dropdown-right">
-          <p className="dropdown-heading">Explore all products</p>
+          <p className="dropdown-heading">More tools</p>
           <div className="dropdown-products-grid">
             {/* Motvin Inspirations */}
             <a href="/inspirations" className="product-link">

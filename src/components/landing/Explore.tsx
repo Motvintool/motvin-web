@@ -29,7 +29,6 @@ export function Explore() {
   return (
     <section className="lpi-explore" aria-labelledby="explore-section-title">
       <div className="lpi-heading">
-        <p className="lpi-eyebrow">More from Motvin</p>
         <h2 className="lpi-title" id="explore-section-title">
           Explore everything you can do with Motvin
         </h2>

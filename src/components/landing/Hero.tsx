@@ -4,7 +4,7 @@ import { gsap } from 'gsap';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import { HeroLogoSlot, useAppLogoCycle } from './HeroAppLogos';
+import { HeroLogoSlot, useAppLogoPicks } from './HeroAppLogos';
 
 /**
  * Hero — Figma "Design-Post-Site" node 1360:14057.
@@ -30,7 +30,7 @@ export function Hero() {
   const hoveredRef = useRef(false);
   const indexRef = useRef(INITIAL_INDEX);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { logos, step } = useAppLogoCycle();
+  const { logos, picks, next } = useAppLogoPicks();
 
   const startCycle = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -109,15 +109,10 @@ export function Hero() {
             </div>
             <span>New</span>
           </div>
-          <p>Website capture with one click</p>
+          <p>Motvin Icons: 350k+ editable icons</p>
           <div className="badge-dot"></div>
-          <a
-            href="https://drive.google.com/drive/folders/1XV9TMKR0Q0Eg1A_mIybUAxLGcDQxP2I8?usp=sharing"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="badge-link"
-          >
-            <span>Get Now</span>
+          <a href="/icons" target="_blank" rel="noopener" className="badge-link">
+            <span>Explore</span>
             <img alt="" src="/ASSET/svg/arrow-icon.svg" />
           </a>
         </div>
@@ -134,13 +129,13 @@ export function Hero() {
             <div className="container-left">
               <img alt="" className="hero-float hf-l-sparkle" src="/ASSET/Icons/imgI2.svg" width={35} height={35} />
               <img alt="" className="hero-float hf-l-at" src="/ASSET/Icons/imgI4.svg" width={40} height={40} />
-              <HeroLogoSlot className="hf-l-app1" fallback="/ASSET/landing/hero-app-icon-1.png" slot={0} logos={logos} step={step} />
-              <HeroLogoSlot className="hf-l-app2" fallback="/ASSET/landing/hero-app-icon-2.png" slot={1} logos={logos} step={step} />
+              <HeroLogoSlot className="hf-l-app1" fallback="/ASSET/landing/hero-app-icon-1.png" slot={0} logos={logos} picks={picks} onNext={next} />
+              <HeroLogoSlot className="hf-l-app2" fallback="/ASSET/landing/hero-app-icon-2.png" slot={1} logos={logos} picks={picks} onNext={next} />
             </div>
             <div className="container-right">
               <img alt="" className="hero-float hf-r-gear" src="/ASSET/Icons/imgI7.svg" width={40} height={40} />
-              <HeroLogoSlot className="hf-r-app3" fallback="/ASSET/landing/hero-app-icon-3.png" slot={2} logos={logos} step={step} />
-              <HeroLogoSlot className="hf-r-app4" fallback="/ASSET/landing/hero-app-icon-4.png" slot={3} logos={logos} step={step} />
+              <HeroLogoSlot className="hf-r-app3" fallback="/ASSET/landing/hero-app-icon-3.png" slot={2} logos={logos} picks={picks} onNext={next} />
+              <HeroLogoSlot className="hf-r-app4" fallback="/ASSET/landing/hero-app-icon-4.png" slot={3} logos={logos} picks={picks} onNext={next} />
               <img alt="" className="hero-float hf-r-sparkle" src="/ASSET/landing/hero-sparkle-green.svg" width={35} height={35} />
             </div>
           </div>

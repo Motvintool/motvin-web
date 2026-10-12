@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { CSSProperties, ReactNode } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
+import { IMAGE_SIZE, optimizedImage } from '@/lib/inspirations/optimizedImage';
 import type { LandingApp } from './useLandingLibrary';
 
 const icon = (path: ReactNode) => (
@@ -57,7 +58,7 @@ function SearchPreview({ phones }: Visual) {
       {phones.length ? (
         <div className="lpi-vis-search-shots">
           {[0, 1, 2].map((i) => (
-            <img src={at(phones, i)!.cover!} alt="" key={i} style={{ '--i': i } as CSSProperties} />
+            <img {...optimizedImage(at(phones, i)!.cover!, IMAGE_SIZE.small)} alt="" key={i} style={{ '--i': i } as CSSProperties} />
           ))}
         </div>
       ) : null}
@@ -78,7 +79,9 @@ function SavePreview({ phones }: Visual) {
         </div>
         <div className="lpi-vis-board-shots">
           {shots.map((app, i) =>
-            app?.cover ? <img src={app.cover} alt="" key={i} style={{ '--i': i } as CSSProperties} /> : null,
+            app?.cover ? (
+              <img {...optimizedImage(app.cover, IMAGE_SIZE.small)} alt="" key={i} style={{ '--i': i } as CSSProperties} />
+            ) : null,
           )}
         </div>
       </div>
@@ -86,38 +89,6 @@ function SavePreview({ phones }: Visual) {
         {icon(BOOKMARK)}
         Saved to Onboarding ideas
       </span>
-    </div>
-  );
-}
-
-function BuddyPreview({ phones }: Visual) {
-  return (
-    <div className="lpi-vis lpi-vis-buddy">
-      <div className="lpi-vis-buddy-head">
-        <span className="lpi-vis-buddy-avatar" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-          <i />
-        </span>
-        Motvin Buddy
-        <span className="lpi-vis-online" />
-      </div>
-      <p className="lpi-vis-bubble is-user">Show me checkout flows</p>
-      <div className="lpi-vis-bubble is-buddy">
-        <span className="lpi-vis-typing" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        <span className="lpi-vis-reply">Here are checkout flows from real apps</span>
-      </div>
-      <div className="lpi-vis-buddy-shots">
-        {[1, 2, 3].map((n, i) => {
-          const app = at(phones, n);
-          return app?.cover ? <img src={app.cover} alt="" key={n} style={{ '--i': i } as CSSProperties} /> : null;
-        })}
-      </div>
     </div>
   );
 }
@@ -138,9 +109,9 @@ function PlatformPreview({ phones, web }: Visual) {
             <i />
             <i />
           </span>
-          {web?.cover ? <img src={web.cover} alt="" /> : <span className="lpi-vis-browser-blank" />}
+          {web?.cover ? <img {...optimizedImage(web.cover, IMAGE_SIZE.card)} alt="" /> : <span className="lpi-vis-browser-blank" />}
         </div>
-        <div className="lpi-vis-phone">{phone?.cover ? <img src={phone.cover} alt="" /> : null}</div>
+        <div className="lpi-vis-phone">{phone?.cover ? <img {...optimizedImage(phone.cover, IMAGE_SIZE.small)} alt="" /> : null}</div>
       </div>
     </div>
   );
@@ -153,7 +124,9 @@ function DownloadPreview({ phones }: Visual) {
       <div className="lpi-vis-download-shots">
         {[1, 4, 6].map((n, i) => {
           const shot = at(phones, n);
-          return shot?.cover ? <img src={shot.cover} alt="" key={n} style={{ '--i': i } as CSSProperties} /> : null;
+          return shot?.cover ? (
+            <img {...optimizedImage(shot.cover, IMAGE_SIZE.small)} alt="" key={n} style={{ '--i': i } as CSSProperties} />
+          ) : null;
         })}
       </div>
       <div className="lpi-vis-file">
@@ -196,13 +169,6 @@ const FEATURES: {
     Preview: SavePreview,
   },
   {
-    title: 'Ask Motvin Buddy',
-    text: 'Tell the guide what you are looking for in plain words and it takes you there.',
-    href: INSPIRATIONS_ROUTES.explore,
-    size: 'small',
-    Preview: BuddyPreview,
-  },
-  {
     title: 'iOS and web apps',
     text: 'Switch between phone apps and web apps without leaving the library.',
     href: INSPIRATIONS_ROUTES.apps,
@@ -213,7 +179,7 @@ const FEATURES: {
     title: 'Download screens',
     text: 'Grab a single screen or every screen in an app, ready for your moodboard.',
     href: INSPIRATIONS_ROUTES.apps,
-    size: 'small',
+    size: 'wide',
     Preview: DownloadPreview,
   },
 ];
@@ -230,7 +196,6 @@ export function FeatureGrid({ apps }: { apps: LandingApp[] }) {
   return (
     <section className="lpi-grid-section">
       <div className="lpi-heading">
-        <p className="lpi-eyebrow">Built for designers</p>
         <h2 className="lpi-title">Everything you need to find the right reference</h2>
       </div>
       <div className="lpi-bento">
