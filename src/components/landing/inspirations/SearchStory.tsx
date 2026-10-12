@@ -22,6 +22,11 @@ const RESULTS = 8;
 const TYPE_MS = 55;
 const DELETE_MS = 24;
 const HOLD_MS = 2800;
+// The demo starts once the story's top has scrolled this far up the screen,
+// so it begins when someone reaches it, not while it peeks in under the hero.
+const START_MARGIN = '0px 0px -30% 0px';
+// And a moment after that, so the section's fade-in has played first.
+const START_DELAY = 600;
 
 type Shot = { id: string; src: string; appId: string };
 
@@ -80,11 +85,14 @@ function coverItems(apps: LandingApp[]): GalleryItem[] {
 export function SearchStory({ apps }: { apps: LandingApp[] }) {
   const shots = useQueryShots();
   const rootRef = useRef<HTMLDivElement>(null);
+  const storyRef = useRef<HTMLElement>(null);
   const indexRef = useRef(0);
+  const typedOnce = useRef(false);
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState('');
   const [visible, setVisible] = useState(false);
-  // Becomes true the first time the story is on screen, so the underline draws once.
+  // Becomes true the first time someone scrolls to the story; the typing and
+  // the underline both wait for it.
   const [seen, setSeen] = useState(false);
   // The query whose results the gallery is showing; null until the first one lands.
   const [shownQuery, setShownQuery] = useState<string | null>(null);
@@ -93,23 +101,41 @@ export function SearchStory({ apps }: { apps: LandingApp[] }) {
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      setVisible(entry.isIntersecting);
-      if (entry.isIntersecting) setSeen(true);
-    });
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Starts the demo the first time the story itself is scrolled into view.
+  useEffect(() => {
+    const el = storyRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        observer.disconnect();
+        setSeen(true);
+      },
+      { rootMargin: START_MARGIN },
+    );
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
 
   // Type a query, show what it finds, delete it, move on to the next one.
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || !seen) return;
     let cancelled = false;
     const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    // Only the very first run waits for the fade-in; resuming after the
+    // section was scrolled away carries straight on.
+    const firstRun = indexRef.current === 0 && !typedOnce.current;
+    typedOnce.current = true;
+
     void (async () => {
-      await sleep(0);
+      await sleep(firstRun && !reduce ? START_DELAY : 0);
       if (reduce) {
         if (cancelled) return;
         setIndex(0);
@@ -144,7 +170,7 @@ export function SearchStory({ apps }: { apps: LandingApp[] }) {
     return () => {
       cancelled = true;
     };
-  }, [visible]);
+  }, [visible, seen]);
 
   const query = QUERIES[index];
   const byId = new Map(apps.map((app) => [app.id, app]));
@@ -166,7 +192,7 @@ export function SearchStory({ apps }: { apps: LandingApp[] }) {
 
   return (
     <div ref={rootRef}>
-      <section className={`lpi-story${seen ? ' is-seen' : ''}`}>
+      <section className={`lpi-story${seen ? ' is-seen' : ''}`} ref={storyRef}>
         <div className="lpi-story-inner">
           <span className="lpi-story-chip">
             <span className="lpi-story-dots" aria-hidden="true">
