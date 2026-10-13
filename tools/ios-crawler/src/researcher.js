@@ -22,7 +22,7 @@
 /** The brief, as written for the researcher. Sent verbatim as the system prompt. */
 export const BRIEF = `Analyze the uploaded app screenshots as a UX/UI researcher and product designer.
 Do not simply extract or copy the visible text from the screenshots.
-Instead, understand the UI, screen purpose, available actions, navigation patterns, visual hierarchy, and relationships between screens and generate a realistic user-flow structure similar to Mobbin.
+Instead, understand the UI, screen purpose, available actions, navigation patterns, visual hierarchy, and relationships between screens and generate a realistic user-flow structure, the way a professional design-reference library organises one.
 The goal is to create human-like UX flow content from the screenshots.
 For every screen:
 
@@ -50,7 +50,7 @@ Return exactly this shape — a flat map from each journey key given (J0, J1, �
 { "journeys": { "J0": "Onboarding", "J1": "Food", "J2": "Searching dishes & restaurants", "J3": "Adding a dish to cart" } }
 Do not repeat the steps or the machine guesses from the input; the guess is there only to show which journey is meant, and it is usually wrong. Do not add keys that were not given. Every value is a name of two to six words.
 
-Journey names read like Mobbin's: the task in the person's own terms, starting with a verb ending in -ing whenever the person is doing something — "Searching dishes & restaurants", "Adding a dish to cart", "Turning on veg mode filter", "Booking a table", "Subscribing to Swiggy One", "Editing profile". A journey that opens a feature is named for the feature as the app names it — "Offer Zone", "Eatlist", "Restaurant detail". A journey inside a section is never named after the section it is in: a journey inside "Food" is the task done there, not "Food". A top-level section keeps its tab name — "Food", "Instamart", "Profile" — and "Onboarding" stays "Onboarding".`;
+Journey names read like a professional design-reference library's: the task in the person's own terms, starting with a verb ending in -ing whenever the person is doing something — "Searching dishes & restaurants", "Adding a dish to cart", "Turning on veg mode filter", "Booking a table", "Subscribing to Swiggy One", "Editing profile". A journey that opens a feature is named for the feature as the app names it — "Offer Zone", "Eatlist", "Restaurant detail". A journey inside a section is never named after the section it is in: a journey inside "Food" is the task done there, not "Food". A top-level section keeps its tab name — "Food", "Instamart", "Profile" — and "Onboarding" stays "Onboarding".`;
 
 /** Pass two: the screens of one batch, with their images. */
 const SCREEN_RULES = `${SHARED_RULES}

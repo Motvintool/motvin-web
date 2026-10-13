@@ -11,7 +11,7 @@ import { useEffect } from 'react';
  * across section boundaries, so it renders nothing itself. Everything runs
  * after mount, once the sections it animates are in the DOM.
  *
- * Four groups:
+ * Five groups:
  *  1. Hero scroll timeline (>1300px, and only when motion is allowed) —
  *     pins the hero, drifts its text up as it fades, crops the hero's bottom
  *     edge, and lifts the demo window while it grows slightly. Set up
@@ -21,8 +21,9 @@ import { useEffect } from 'react';
  *  3. Word animation — per-word colour pop on `.animated-word` groups, played
  *     on first scroll into view and replayed on hover.
  *  4. Section reveals — fade/rise each section's contents once, on approach.
+ *  5. Feature card stack — covered cards shrink like cards in a wallet.
  *
- * All four are skipped under prefers-reduced-motion.
+ * All five are skipped under prefers-reduced-motion.
  *
  * Not ported from JS/index.js: the `.trusted-partners-scroll` marquee, whose
  * target elements no longer exist in the markup.
@@ -37,6 +38,11 @@ const HERO_SCROLL_DISTANCE = 330;
 // lower edge and its soft shadow are never sliced off. The extra only
 // overlaps the empty top padding of the section below.
 const HERO_CROP_ROOM = 16;
+
+// How much smaller a stacked feature card gets for each card piled on top of it.
+const STACK_SHRINK = 0.06;
+// The cards stack above this width; below it they are a plain list (landing-inspirations.css).
+const STACK_MIN_WIDTH = 601;
 
 // Headings whose words animate on hover. None on the page right now: the
 // sections that used it were removed or restyled, but the effect is kept.
@@ -117,6 +123,38 @@ export function LandingAnimations() {
           );
       },
     );
+
+    // 5. Stacked feature cards, like cards in a wallet: as the cards after
+    // it slide up over it, each card shrinks a little from its top edge,
+    // more the deeper it ends up in the pile, so the tops peek out as a
+    // tidy, narrowing stack. Tied to the scroll, so it plays both ways.
+    // Only where the cards stack: on phones they scroll as a plain list.
+    mm.add(`(min-width: ${STACK_MIN_WIDTH}px) and (prefers-reduced-motion: no-preference)`, () => {
+      const stackCards = gsap.utils.toArray<HTMLElement>('.lpi-stack-card');
+      const lastCard = stackCards[stackCards.length - 1];
+      if (!lastCard) return;
+      const lastTop = parseFloat(getComputedStyle(lastCard).top) || 0;
+      stackCards.slice(0, -1).forEach((card, i) => {
+        const depth = stackCards.length - 1 - i;
+        gsap.fromTo(
+          card,
+          { scale: 1 },
+          {
+            scale: 1 - depth * STACK_SHRINK,
+            transformOrigin: '50% 0%',
+            ease: 'none',
+            immediateRender: false,
+            scrollTrigger: {
+              trigger: stackCards[i + 1],
+              start: 'top bottom',
+              endTrigger: lastCard,
+              end: `top ${lastTop}px`,
+              scrub: 0.4,
+            },
+          },
+        );
+      });
+    });
 
     // gsap.context scopes every tween and ScrollTrigger created inside it, so
     // revert() on unmount cleans all of them up — important under React's dev

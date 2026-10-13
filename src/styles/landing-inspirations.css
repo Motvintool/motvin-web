@@ -1,5 +1,5 @@
 /* Motvin Inspirations sections under the landing hero — Jitter-style layout,
-   Mobbin-style content. Fonts come from the landing-wide rule in landing.css. */
+   library-style content. Fonts come from the landing-wide rule in landing.css. */
 
 /* The Templates, FAQ, Explore and footer sections sit outside .lpi, so they
    get the same colours here. */
@@ -310,7 +310,8 @@
 
 .lpi-searchbar-icon {
   flex: none;
-  color: #5c4ae1;
+  width: 22px;
+  height: 22px;
 }
 
 .lpi-searchbar-text {
@@ -342,17 +343,6 @@
 
 @keyframes lpi-caret {
   50% { opacity: 0; }
-}
-
-.lpi-searchbar-kbd {
-  flex: none;
-  padding: 4px 8px;
-  border: 1px solid #e4e4e8;
-  border-radius: 8px;
-  background: #f7f7f8;
-  font: inherit;
-  font-size: 13px;
-  color: #6b6b70;
 }
 
 .lpi-searchbar-go {
@@ -431,7 +421,8 @@
   height: auto;
   border-radius: 26px 26px 0 0;
   box-shadow: 0 0 0 1px rgba(11, 13, 24, 0.05), 0 12px 32px rgba(11, 13, 24, 0.1);
-  animation: lpi-result-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* --d: the card's place in the left-to-right sweep (AppGallery.tsx). */
+  animation: lpi-result-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0ms) both;
   transition: transform 0.35s ease;
 }
 
@@ -443,9 +434,10 @@
   transform: translateY(-6px);
 }
 
-/* A new search result fades in where the previous one was. */
+/* A new search result rises into place where the previous one was. */
 @keyframes lpi-result-in {
-  from { opacity: 0; translate: 0 14px; scale: 0.97; }
+  from { opacity: 0; translate: 0 34px; scale: 0.95; }
+  40% { opacity: 1; }
 }
 
 .lpi-gallery-logo {
@@ -458,23 +450,45 @@
   border-radius: 20px;
   object-fit: cover;
   box-shadow: 0 8px 20px rgba(11, 13, 24, 0.2);
+  /* Pops in just after its screen, with a little spring. */
+  animation: lpi-logo-in 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) calc(var(--d, 0ms) + 160ms) both;
 }
 
+@keyframes lpi-logo-in {
+  from { opacity: 0; scale: 0.5; rotate: -14deg; }
+}
+
+/* Figma "Design-Post-Site" node 1386:19052: a frosted pill with the app's
+   name and an open arrow. */
 .lpi-gallery-open {
   position: absolute;
   top: 20px;
   right: 20px;
   z-index: 1;
-  padding: 7px 12px;
-  border-radius: 999px;
-  background: #fff;
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 17px 22px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.75);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 12px 80px rgba(0, 0, 0, 0.12);
+  color: #0b0c0e;
+  font-size: 16px;
   font-weight: 500;
-  color: var(--lpi-ink);
-  box-shadow: 0 2px 8px rgba(11, 13, 24, 0.12);
+  line-height: normal;
+  white-space: nowrap;
   opacity: 0;
   transform: translateY(-4px);
   transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.lpi-gallery-open img {
+  flex: none;
+  width: 16px;
+  height: 16px;
 }
 
 .lpi-gallery-card:hover .lpi-gallery-open,
@@ -521,9 +535,21 @@
   padding: 40px 24px 120px;
 }
 
+/* flow-root keeps the last card's bottom margin inside the box, so every card
+   (FeatureStack.tsx steps their margins) is let go at its own sticky height. */
 .lpi-stack {
+  display: flow-root;
   max-width: 1120px;
   margin: 0 auto;
+}
+
+/* Room for the full stack to rest a moment before it scrolls away together.
+   Content rather than padding, since a sticky card may only use content; the
+   cards slide down into it, so it adds no gap below the section. */
+.lpi-stack::after {
+  content: '';
+  display: block;
+  height: 120px;
 }
 
 .lpi-stack-card {
@@ -829,13 +855,14 @@
   position: absolute;
   right: 22px;
   bottom: 28px;
-  color: #5c4ae1;
+  width: 20px;
+  height: 20px;
   opacity: 0;
   translate: -4px 4px;
   transition: opacity 0.25s ease, translate 0.25s ease;
 }
 
-.lpi-bento-card.is-full .lpi-bento-arrow { bottom: auto; top: 50%; margin-top: -9px; }
+.lpi-bento-card.is-full .lpi-bento-arrow { bottom: auto; top: 50%; margin-top: -10px; }
 
 .lpi-bento-card:hover .lpi-bento-arrow { opacity: 1; translate: 0 0; }
 
@@ -1602,9 +1629,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 54px;
+  height: 64px;
   margin-top: 12px;
-  padding: 0 7px 0 20px;
+  padding: 0 8px 0 24px;
   border-radius: 999px;
   background: var(--lpi-tile);
   transition: background 0.2s ease, box-shadow 0.2s ease;
@@ -1622,7 +1649,7 @@
   background: transparent;
   color: var(--lpi-ink);
   font: inherit;
-  font-size: 15px;
+  font-size: 16px;
   outline: none;
 }
 
@@ -1632,8 +1659,8 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border: 0;
   border-radius: 50%;
   background: #000;
@@ -1876,12 +1903,14 @@
   letter-spacing: -0.01em;
 }
 
-.lpi-template-name svg {
-  color: #5c4ae1;
+.lpi-template-name img {
+  flex: none;
+  width: 20px;
+  height: 20px;
   transition: translate 0.25s ease;
 }
 
-.lpi-template-card:hover .lpi-template-name svg { translate: 2px -2px; }
+.lpi-template-card:hover .lpi-template-name img { translate: 2px -2px; }
 
 /* ---- FAQ ---- */
 .lpi-faq {
@@ -2063,15 +2092,23 @@
   color: var(--lpi-muted);
 }
 
+/* Shown on hover, the same way as on the feature cards. */
 .lpi-explore-arrow {
   position: absolute;
   top: 26px;
   right: 24px;
-  color: #5c4ae1;
-  transition: translate 0.25s ease;
+  width: 20px;
+  height: 20px;
+  opacity: 0;
+  translate: -4px 4px;
+  transition: opacity 0.25s ease, translate 0.25s ease;
 }
 
-.lpi-explore-card:hover .lpi-explore-arrow { translate: 2px -2px; }
+.lpi-explore-card:hover .lpi-explore-arrow,
+.lpi-explore-card:focus-visible .lpi-explore-arrow {
+  opacity: 1;
+  translate: 0 0;
+}
 
 /* The sign-up tile: dark, with a soft Motvin-purple glow in the corner. */
 .lpi-explore-card.is-dark {
@@ -2083,7 +2120,8 @@
 }
 
 .lpi-explore-card.is-dark .lpi-explore-copy span { color: rgba(255, 255, 255, 0.7); }
-.lpi-explore-card.is-dark .lpi-explore-arrow { color: #fff; }
+/* The dark icon drawn white on the dark tile. */
+.lpi-explore-card.is-dark .lpi-explore-arrow { filter: brightness(0) invert(1); }
 
 /* ---- Footer ---- */
 /* Curtain reveal: the page above is a white sheet with rounded bottom
@@ -2136,6 +2174,13 @@
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
   gap: 96px;
+  align-items: start;
+}
+
+/* Side by side, the column headings sit level with the middle of the logo:
+   (44px logo - the heading's 18px line) / 2. */
+@media (min-width: 901px) {
+  .lpi-footer-links { padding-top: 13px; }
 }
 
 .lpi-footer-mark {
@@ -2226,7 +2271,7 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 16px 24px;
-  margin-top: 72px;
+  margin-top: 64px;
   padding: 22px 0;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -2260,6 +2305,24 @@
   align-items: center;
   gap: 12px;
 }
+
+/* The ownership note: smaller and quieter than the line above it. */
+.lpi-footer-brand .lpi-footer-note {
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* The removal link in the ownership note beside the logo. */
+.lpi-footer-brand p a {
+  color: #fff;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.35);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.2s ease;
+}
+
+.lpi-footer-brand p a:hover { text-decoration-color: #fff; }
 
 .lpi-footer-socials {
   display: flex;
@@ -2456,7 +2519,6 @@
   .lpi-searchbar { height: 60px; margin-top: 28px; padding: 0 8px 0 18px; gap: 10px; }
   .lpi-searchbar-text { font-size: 17px; }
   .lpi-searchbar-caret { height: 20px; }
-  .lpi-searchbar-kbd { display: none; }
   .lpi-searchbar-go { width: 44px; height: 44px; }
   .lpi-heading { margin-bottom: 36px; }
   .lpi-title { font-size: 32px; }
@@ -2474,7 +2536,9 @@
   .lpi-vis-request { margin: 0 0 0 10px; }
   .lpi-vis-request img,
   .lpi-vis-request-add { width: 42px; height: 42px; border-radius: 12px; }
-  .lpi-stack-card { position: relative; top: auto !important; border-radius: 28px; }
+  /* A plain list here: no stacking, so no stepped margins or rest space. */
+  .lpi-stack-card { position: relative; top: auto !important; margin-bottom: 48px !important; border-radius: 28px; }
+  .lpi-stack::after { display: none; }
   .lpi-stack-title { font-size: 30px; }
   .lpi-stack-text { font-size: 16px; }
   .lpi-stack-number { font-size: 56px; }
@@ -2511,8 +2575,17 @@
   .lpi-footer-wordmark { padding: 16px 16px 0; }
 }
 
+/* Short laptop screens (1366 x 768 and the like): a little less air in the
+   footer, so it still fits the screen and keeps its curtain reveal. */
+@media (min-width: 901px) and (max-height: 820px) {
+  .lpi-footer-inner { padding-top: 48px; }
+  .lpi-footer-bar { margin-top: 40px; }
+  .lpi-footer-wordmark { padding-top: 8px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lpi-gallery-shot,
+  .lpi-gallery-logo,
   .lpi-searchbar::before,
   .lpi-searchbar-caret,
   .lpi-gallery-track,
@@ -2819,7 +2892,9 @@
     width: min(1120px, calc(100vw - 48px));
     padding: 10px;
     border: 0;
-    border-radius: 36px;
+    /* The white card's 38px plus the 10px frame, so the grey ring stays
+       the same thickness round the corners. */
+    border-radius: 48px;
     background: rgba(238, 238, 241, 0.92);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 0 0 1px rgba(11, 13, 24, 0.04), 0 24px 60px rgba(11, 13, 24, 0.12);
     -webkit-backdrop-filter: blur(16px);
@@ -2831,7 +2906,7 @@
   .landing-root .community-dropdown-container {
     width: 100%;
     padding: 24px;
-    border-radius: 28px;
+    border-radius: 38px;
     background: #fff;
     box-shadow: 0 1px 2px rgba(11, 13, 24, 0.04);
   }

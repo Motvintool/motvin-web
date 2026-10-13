@@ -26,7 +26,7 @@
  * here, on the way into permanent storage: a screenshot is mostly flat colour
  * and sharp text, the content WebP compresses hardest, and at this quality
  * the two are indistinguishable side by side while the file is roughly a
- * tenth the size — the same trade a captured-screen library like Mobbin's
+ * tenth the size — the same trade any captured-screen library
  * makes for its own published screens.
  *
  * sources.json still records where each capture came from — its permission,

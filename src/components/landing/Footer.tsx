@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStoredValue, writeStoredValue } from '@/hooks/useStoredValue';
 import { LANDING_TRANSLATIONS, LANGUAGE_CODES, type Language } from '@/lib/i18n/translations';
@@ -131,6 +132,13 @@ export function Footer() {
             <p>
               AI-powered UI design platform. Convert websites, generate design systems, and build
               modern interfaces faster.
+            </p>
+            {/* Who owns the screens and logos shown on Motvin, and where owners
+                can ask for them to be removed (the Copyrights page's removal section). */}
+            <p className="lpi-footer-note">
+              All app names, logos and screenshots belong to their respective owners and are shown for design reference. Motvin is not
+              affiliated with them. Own something shown here?{' '}
+              <Link href="/copyrights#ask-for-a-change-or-removal">Request a removal</Link>
             </p>
             <a
               className="lpi-footer-community"

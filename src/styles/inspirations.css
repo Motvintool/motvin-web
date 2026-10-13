@@ -1447,7 +1447,7 @@ body {
   pointer-events: none;
 }
 
-/* Docked (Mobbin's header swap): the row leaves the flow and takes over the
+/* Docked (the header swap): the row leaves the flow and takes over the
    header bar — same height, same 80px side padding as .ins-header-inner — one
    z step above the header so it paints over the (faded) header content while
    the header's own glass keeps providing the background. The anchor below
@@ -6516,7 +6516,7 @@ select.ins-input {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* Screens stay two-up on a phone (Mobbin-style) instead of one giant
+  /* Screens stay two-up on a phone instead of one giant
      device frame per row; the frame's mat scales with the card via a
      percentage inset (36/346 of the desktop card). */
   .ins-grid,
@@ -6748,7 +6748,7 @@ select.ins-input {
 }
 
 @media (max-width: 459px) {
-  /* App/screen cards stay two-up (Mobbin-style) — only the wide pattern and
+  /* App/screen cards stay two-up — only the wide pattern and
      collection cards drop to a single column this narrow. */
   .ins-pattern-grid-wrap,
   .ins-collection-grid {

@@ -12,7 +12,7 @@ import '@/styles/legal.css';
  *
  * Where people write to us. Change it here and every page follows.
  */
-export const CONTACT_EMAIL = 'hello@motvin.com';
+export const CONTACT_EMAIL = 'motvintool@gmail.com';
 
 /** When these pages were last revised. */
 export const LEGAL_UPDATED = '9 October 2026';

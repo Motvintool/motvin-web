@@ -17,7 +17,7 @@ import { useExploreFilters } from './useExploreFilters';
 import { useMeta } from './useMeta';
 
 /**
- * Explore browses apps, not raw screens — like Mobbin's own home feed. These
+ * Explore browses apps, not raw screens, as an app feed. These
  * are the ways to order that app feed; "curated" sends no `sort` param at
  * all, which is the manifest's own build-time order (most screens first).
  * Apps do carry a real `rating`/`ratingCount` (see App in types.ts), unlike

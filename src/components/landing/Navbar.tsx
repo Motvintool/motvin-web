@@ -343,7 +343,7 @@ export function Navbar() {
         </div>
       </header>
 
-      {/* Desktop, once scrolled: the pill gives way to these, Mobbin style. */}
+      {/* Desktop, once scrolled: the pill gives way to these. */}
       {!isMobile && (
         <div
           className={`nav-compact${collapsed ? ' is-visible' : ''}${overDark ? ' is-over-dark' : ''}`}

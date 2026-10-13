@@ -61,6 +61,12 @@ const CARDS: {
 
 const COUNT_MS = 1400;
 
+// Where the first card sticks, how far below it each next card sticks, and
+// the gap between cards while they scroll.
+const STACK_TOP = 104;
+const STACK_STEP = 28;
+const STACK_GAP = 48;
+
 /** The library's real count, counted up from zero the first time it scrolls into view. */
 function CountUp({ value }: { value: number | undefined }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -115,7 +121,18 @@ export function FeatureStack({ apps, counts }: { apps: LandingApp[]; counts: Lib
           // Three different apps per card, fanned out like phones on a desk.
           const fan = covers.length ? [0, 1, 2].map((k) => covers[(i * 3 + k) % covers.length]) : [];
           return (
-            <article className={`lpi-stack-card is-${card.tone}`} key={card.key} style={{ top: `${104 + i * 28}px` }}>
+            <article
+              className={`lpi-stack-card is-${card.tone}`}
+              key={card.key}
+              style={{
+                top: `${STACK_TOP + i * STACK_STEP}px`,
+                // Every card sticks inside the same box, so when its end comes
+                // they would all stop at one height and hide behind each other.
+                // Each earlier card keeps one step more room below it, so the
+                // pile leaves together with its offsets intact.
+                marginBottom: `${STACK_GAP + (CARDS.length - 1 - i) * STACK_STEP}px`,
+              }}
+            >
               <div className="lpi-stack-copy">
                 <span className="lpi-stack-label">
                   <span className="lpi-stack-index">{String(i + 1).padStart(2, '0')}</span>

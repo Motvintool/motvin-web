@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { IMAGE_SIZE, optimizedImage } from '@/lib/inspirations/optimizedImage';
 
 export type GalleryItem = {
@@ -16,6 +16,10 @@ export type GalleryItem = {
 };
 
 const PLACEHOLDERS = 6;
+
+// New results sweep in from left to right: a card's entrance waits up to this
+// long, by how far across the screen it is.
+const SWEEP_MS = 420;
 
 /** Width of the screenshot inside a card, in CSS pixels. */
 const SHOT_WIDTH = { phone: IMAGE_SIZE.card, wide: 568 };
@@ -39,6 +43,16 @@ function Card({ item, hidden, index }: { item: GalleryItem; hidden?: boolean; in
   // What the card is showing. A new item only takes over once its picture
   // has loaded, so the card never flashes empty or half-drawn in between.
   const [shown, setShown] = useState<GalleryItem>(item);
+  const cardRef = useRef<HTMLAnchorElement>(null);
+
+  // The track is always drifting, so a card's place in the list says nothing
+  // about where it is on screen; measure it as each new picture arrives.
+  useLayoutEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const across = el.getBoundingClientRect().left / window.innerWidth;
+    el.style.setProperty('--d', `${Math.round(Math.min(Math.max(across, 0), 1) * SWEEP_MS)}ms`);
+  }, [shown]);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +73,7 @@ function Card({ item, hidden, index }: { item: GalleryItem; hidden?: boolean; in
 
   return (
     <Link
+      ref={cardRef}
       href={current.href}
       className={`lpi-gallery-card${current.wide ? ' is-wide' : ''}`}
       style={{ '--i': index } as CSSProperties}
@@ -70,9 +85,13 @@ function Card({ item, hidden, index }: { item: GalleryItem; hidden?: boolean; in
       {shot && current.src ? (
         <img key={current.src} className="lpi-gallery-shot" {...shot} alt="" draggable={false} />
       ) : null}
-      {current.logo ? <img className="lpi-gallery-logo" src={current.logo} alt="" width={72} height={72} /> : null}
+      {/* Keyed by picture too, so the logo pops in again with each new result. */}
+      {current.logo ? (
+        <img key={`${current.src}-logo`} className="lpi-gallery-logo" src={current.logo} alt="" width={72} height={72} />
+      ) : null}
       <span className="lpi-gallery-open" aria-hidden="true">
-        {current.title} <span>↗</span>
+        {current.title}
+        <img src="/ASSET/Icons/Motvin/view-apps.svg" alt="" width={16} height={16} />
       </span>
     </Link>
   );

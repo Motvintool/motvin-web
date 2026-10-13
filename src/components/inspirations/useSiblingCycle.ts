@@ -5,7 +5,7 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { EMPTY_FILTERS } from '@/lib/inspirations/filters';
 import type { Screen } from '@/lib/inspirations/types';
 
-/** Dots get unreadable past a handful — Mobbin's own cards cap similarly. */
+/** Dots get unreadable past a handful, so the preview stops at four. */
 const MAX_PREVIEW_SCREENS = 4;
 /** Short delay before fetching siblings, so a cursor passing over the grid
  * on its way elsewhere doesn't fire a request for every card it crosses. */

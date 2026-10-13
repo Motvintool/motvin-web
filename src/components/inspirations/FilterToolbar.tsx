@@ -19,7 +19,7 @@ import { useMeta } from './useMeta';
 import { AppleIcon, CheckIcon, CloseIcon, WebAppIcon, WebIcon } from './Icons';
 
 /**
- * The Screens-page filter row, in Mobbin's shape: one dropdown pill per
+ * The Screens-page filter row: one dropdown pill per
  * dimension on the left, "Showing N screens" and the sort dropdown on the
  * right. A pill with nothing selected reads as its dimension ("Categories ⌄");
  * once a value is picked the pill becomes that value with an ⊗ that clears
@@ -367,7 +367,7 @@ export function SortPill<S extends string>({
 }
 
 /**
- * Mobbin's dock: once a row scrolls up to meet the header, it moves INTO the
+ * The dock: once a row scrolls up to meet the header, it moves INTO the
  * header bar — the header's own content (logo, search, nav) fades out and
  * the toolbar fades in where it was; scrolling back restores both. The
  * anchor stays in flow holding the row's height so the page never jumps, and
