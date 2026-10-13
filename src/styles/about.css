@@ -25,16 +25,12 @@
 .abt-title {
   max-width: 1040px;
   margin: 0 auto;
-  font-size: 72px;
+  font-size: 84px;
   font-weight: 600;
   line-height: 1.02;
   letter-spacing: -0.045em;
 }
 
-
-.abt-title span {
-  color: #5c4ae1;
-}
 
 .abt-lead {
   max-width: 640px;
@@ -1143,9 +1139,9 @@ a.abt-product:hover .abt-vis-hero { scale: 1.08; }
   .abt-pill.is-d { left: 20% !important; top: 73% !important; }
   .abt-story { padding: 96px 24px; }
   .abt-story-copy p { font-size: 28px; }
-  /* Two columns: Icons and Convert keep the full row, the rest pair up. */
+  /* Two columns: the tiles pair up, two by two. */
   .abt-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .abt-product-grid > li.is-wide:nth-child(5) { grid-column: auto; }
+  .abt-product-grid > li.is-wide { grid-column: auto; }
   .abt-featured-copy { max-width: 360px; padding: 36px 32px; }
   .abt-featured-fan { right: -40px; scale: 0.85; transform-origin: bottom right; }
   /* Two phones here, so the fan stays clear of the words. */

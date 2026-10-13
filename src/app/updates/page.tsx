@@ -1,28 +1,48 @@
-'use client';
-
+import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import { PublicFooter } from '@/components/updates/public/PublicFooter';
-import { PublicHeader } from '@/components/updates/public/PublicHeader';
-import { PublicNav } from '@/components/updates/public/PublicNav';
+import { ButtonEffects } from '@/components/landing/ButtonEffects';
+import { ConsentBanners } from '@/components/landing/ConsentBanners';
+import { Footer } from '@/components/landing/Footer';
+import { Navbar } from '@/components/landing/Navbar';
+import { PublicAuthBanner } from '@/components/updates/public/PublicAuthBanner';
 import { ReleaseFeed } from '@/components/updates/public/ReleaseFeed';
-import { UpdatesChrome } from '@/components/updates/UpdatesChrome';
-import '@/styles/updates.css';
+import '@/styles/landing.css';
+import '@/styles/landing-inspirations.css';
+import '@/styles/updates-feed.css';
+
+export const metadata: Metadata = {
+  title: 'Updates — Motvin',
+  description: 'New features, improvements and fixes in Motvin, release by release.',
+};
 
 /**
- * Updates / release notes feed — port of motvin-ui/updates/index.html.
+ * Updates: Motvin's release notes, newest first, in the same chrome as the
+ * landing and About pages (navbar, white sheet, curtain footer).
  *
- * Composed of standalone sections from `src/components/updates/`. Wrapped
- * in Suspense because ReleaseFeed calls `useSearchParams` (Next 16 requires the
- * boundary during static generation).
+ * ReleaseFeed reads `?release=<slug>` to scroll a shared release into view,
+ * so it sits in a Suspense boundary (Next 16 requires one around
+ * useSearchParams during static generation). The publisher at
+ * /updates/admin keeps its own layout and styles.
  */
 export default function UpdatesPage() {
   return (
-    <Suspense fallback={null}>
-      <UpdatesChrome title="Motvin - Updates" />
-      <PublicNav />
-      <PublicHeader />
-      <ReleaseFeed />
-      <PublicFooter />
-    </Suspense>
+    <div className="landing-root">
+      <Navbar />
+      <div className="landing-sheet">
+        <main id="main-content" className="lpi upd">
+          <section className="upd-hero">
+            <PublicAuthBanner />
+            <h1 className="upd-title">What&apos;s new in Motvin</h1>
+            <p className="upd-lead">New features, improvements and fixes, release by release.</p>
+          </section>
+          <Suspense fallback={null}>
+            <ReleaseFeed />
+          </Suspense>
+        </main>
+      </div>
+      <Footer />
+      <ConsentBanners />
+      <ButtonEffects />
+    </div>
   );
 }

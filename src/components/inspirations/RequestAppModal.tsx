@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
+import Link from 'next/link';
 import { createPortal } from 'react-dom';
+import { useAuth } from '@/components/shared/AuthProvider';
 import { submitAppRequest, updateMyRequest, type MyRequest } from '@/lib/firebase/appRequests';
+import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { Platform } from '@/lib/inspirations/types';
 import { AppleIcon, CheckIcon, CloseIcon, WebAppIcon, WebIcon } from './Icons';
@@ -44,14 +47,20 @@ export function RequestAppModal({
   initialName,
   initialPlatform,
   existing,
+  onRequestsPage = false,
   onClose,
 }: {
   initialName: string;
   initialPlatform: Platform;
   /** Editing one of the person's own requests instead of sending a new one. */
   existing?: MyRequest;
+  /** Opened from the Requests page itself, so the "See my requests" link would lead nowhere new. */
+  onRequestsPage?: boolean;
   onClose: () => void;
 }) {
+  // Signed in: their account email is the one we write to, so the form doesn't ask for it.
+  const { user } = useAuth();
+  const accountEmail = user && !user.isAnonymous ? user.email : '';
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(existing?.appName ?? initialName);
@@ -115,7 +124,7 @@ export function RequestAppModal({
         platform,
         link: link.trim() || undefined,
         note: note.trim() || undefined,
-        email: email.trim() || undefined,
+        email: accountEmail || email.trim() || undefined,
       };
       if (existing) await updateMyRequest(existing.id, fields);
       else await submitAppRequest({ ...fields, website: trap });
@@ -129,7 +138,7 @@ export function RequestAppModal({
   if (!mounted) return null;
 
   return createPortal(
-    <div className="ins-search-overlay" onClick={onClose}>
+    <div className="ins-portal ins-search-overlay" onClick={onClose}>
       <div className="ins-search-modal ins-request" role="dialog" aria-modal="true" aria-label="Request an app" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="ins-request-close" aria-label="Close" onClick={onClose}>
           <CloseIcon size={18} />
@@ -145,9 +154,17 @@ export function RequestAppModal({
               <strong>{name.trim()}</strong> ({PLATFORM_LABEL[platform]}){' '}
               {existing ? 'has been updated.' : 'is on our list. The most-requested apps are added first.'}
             </p>
-            <button type="button" className="ins-request-send" onClick={onClose}>
-              Done
-            </button>
+            <div className="ins-request-buttons">
+              {/* Where to find it again; the same page "Request apps" opens from now on. */}
+              {!onRequestsPage && (
+                <Link href={INSPIRATIONS_ROUTES.settingsRequests} className="ins-request-cancel" onClick={onClose}>
+                  See my requests
+                </Link>
+              )}
+              <button type="button" className="ins-request-send" onClick={onClose}>
+                Done
+              </button>
+            </div>
           </div>
         ) : (
           <form className="ins-request-form" onSubmit={step === 0 ? next : submit} noValidate>
@@ -206,12 +223,18 @@ export function RequestAppModal({
                     <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={3} placeholder="A flow, a screen, or why you’d like it here" />
                   </label>
 
-                  <label className="ins-request-field">
-                    <span>
-                      Email <em>optional — we’ll tell you when it’s added</em>
-                    </span>
-                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={120} placeholder="you@example.com" autoComplete="email" />
-                  </label>
+                  {accountEmail ? (
+                    <p className="ins-request-account-email">
+                      We’ll email <strong>{accountEmail}</strong> when it’s added.
+                    </p>
+                  ) : (
+                    <label className="ins-request-field">
+                      <span>
+                        Email <em>optional — we’ll tell you when it’s added</em>
+                      </span>
+                      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={120} placeholder="you@example.com" autoComplete="email" />
+                    </label>
+                  )}
                 </>
               )}
 

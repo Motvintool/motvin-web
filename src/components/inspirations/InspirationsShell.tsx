@@ -2,6 +2,7 @@
 
 import { Suspense, type ReactNode } from 'react';
 import { FlowPreview } from './FlowPreview';
+import { GuestRequestsNotice } from './GuestRequestsNotice';
 import { Header } from './Header';
 import { LibrarySync } from './LibrarySync';
 import { ScreenPreviewOverlay } from './ScreenPreviewModal';
@@ -47,6 +48,8 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
         {/* Renders nothing — keeps Save/Collections synced to the signed-in
             account. Reads useAuth(), which needs no Suspense boundary here. */}
         <LibrarySync />
+        {/* After a guest signs in: says their requests moved (or some didn't fit). Renders nothing. */}
+        <GuestRequestsNotice />
         <main className={`ins-main ${wide ? 'ins-main--wide' : ''}`}>{children}</main>
         {/* Reads ?flow= and renders over whatever page is showing. */}
         <Suspense fallback={null}>

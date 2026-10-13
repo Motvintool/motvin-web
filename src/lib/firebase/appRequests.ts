@@ -172,6 +172,117 @@ export async function deleteMyRequest(id: string): Promise<void> {
   await deleteDoc(doc(firestore(), COLLECTION, id));
 }
 
+// ---------------------------------------------------------------------------
+// A guest's requests follow them into the account they sign in to.
+//
+// Linking a guest session to a new account keeps its uid, so its requests stay
+// put and only need the account's email stamped on (stampRequestsWithEmail).
+// Signing in to an account that already exists swaps the uid, so the requests
+// are lifted out while still the guest (takeGuestRequests), then written into
+// the account's free slots (placeRequests), or put back if the sign-in fails.
+// ---------------------------------------------------------------------------
+
+/** Signed in as the guest: reads and removes their requests, returning what was taken. */
+export async function takeGuestRequests(guestUid: string): Promise<RequestFields[]> {
+  const mine = await listMyRequests(guestUid);
+  for (const request of mine) await deleteMyRequest(request.id);
+  return mine.map(({ appName, platform, link, note, email }) => ({ appName, platform, link, note, email }));
+}
+
+export type PlaceResult = { placed: number; alreadyAsked: number; overLimit: number };
+
+/**
+ * Writes requests into the current user's free slots, skipping any app they have already asked for.
+ * Ones that don't fit (all five slots used) are dropped, and counted as overLimit.
+ */
+export async function placeRequests(items: RequestFields[]): Promise<PlaceResult> {
+  const result: PlaceResult = { placed: 0, alreadyAsked: 0, overLimit: 0 };
+  if (!items.length) return result;
+  const auth = await ensureReady().catch(() => null);
+  const user = auth?.currentUser;
+  if (!user) return result;
+  const store = firestore();
+  const asked = new Set((await listMyRequests(user.uid)).map((r) => `${r.platform}__${requestKey(r.appName)}`));
+
+  for (const [index, item] of items.entries()) {
+    let fields;
+    try {
+      fields = validate(item);
+    } catch {
+      continue;
+    }
+    if (asked.has(`${fields.platform}__${fields.key}`)) {
+      result.alreadyAsked += 1;
+      continue;
+    }
+    // The rules only take a request dated within ten minutes of now, so a moved one starts afresh.
+    const record = {
+      ...fields,
+      createdAtMs: Date.now(),
+      uid: user.uid,
+      ...(user.email && !user.isAnonymous ? { userEmail: user.email } : {}),
+    };
+    const ok = await runTransaction(store, async (tx) => {
+      for (let slot = 0; slot < MAX_REQUESTS_PER_USER; slot += 1) {
+        const ref = doc(store, COLLECTION, `${user.uid}_${slot}`);
+        if (!(await tx.get(ref)).exists()) {
+          tx.set(ref, record);
+          return true;
+        }
+      }
+      return false;
+    });
+    if (!ok) {
+      result.overLimit = items.length - index;
+      break;
+    }
+    asked.add(`${fields.platform}__${fields.key}`);
+    result.placed += 1;
+  }
+  return result;
+}
+
+// What happened to a guest's requests when they signed in, kept for a day so the library can say
+// so on the next page (GuestRequestsNotice) — sign-in itself happens on a page without one.
+const HANDOFF_NOTICE_KEY = 'motvin:guest-requests-handoff';
+const HANDOFF_NOTICE_TTL = 86_400_000;
+/** Raised when a note is saved, for a library page that is already open (sign-in returns to it before the move ends). */
+export const HANDOFF_NOTICE_EVENT = 'motvin:guest-requests-handoff';
+
+export type HandoffNotice = { kept: number; overLimit: number; at: number };
+
+export function saveHandoffNotice(kept: number, overLimit: number): void {
+  if (!kept && !overLimit) return;
+  try {
+    localStorage.setItem(HANDOFF_NOTICE_KEY, JSON.stringify({ kept, overLimit, at: Date.now() } satisfies HandoffNotice));
+    window.dispatchEvent(new Event(HANDOFF_NOTICE_EVENT));
+  } catch {
+    // No storage (private mode): the requests still moved, there's just no note.
+  }
+}
+
+/** Reads the note once and clears it. */
+export function takeHandoffNotice(): HandoffNotice | null {
+  try {
+    const raw = localStorage.getItem(HANDOFF_NOTICE_KEY);
+    if (!raw) return null;
+    localStorage.removeItem(HANDOFF_NOTICE_KEY);
+    const notice = JSON.parse(raw) as HandoffNotice;
+    return Date.now() - notice.at < HANDOFF_NOTICE_TTL ? notice : null;
+  } catch {
+    return null;
+  }
+}
+
+/** After a guest session is linked to an account (same uid): puts the account's email on its requests. Returns how many. */
+export async function stampRequestsWithEmail(uid: string, email: string): Promise<number> {
+  const mine = await listMyRequests(uid);
+  for (const request of mine) {
+    await updateDoc(doc(firestore(), COLLECTION, request.id), { userEmail: email, updatedAtMs: Date.now() });
+  }
+  return mine.length;
+}
+
 export type AppRequestGroup = {
   /** Ids of every document folded into this row, so deleting the row removes them all. */
   ids: string[];

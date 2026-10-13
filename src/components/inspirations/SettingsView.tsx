@@ -5,11 +5,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { deleteUser, updateProfile } from 'firebase/auth';
 import { useGoToLogin } from './useGoToLogin';
 import { useAuth } from '@/components/shared/AuthProvider';
-import { ensureReady } from '@/lib/firebase/auth';
-import { deleteMyRequest, listMyRequests, MAX_REQUESTS_PER_USER, type MyRequest } from '@/lib/firebase/appRequests';
+import { ensureReady, getGuestUid } from '@/lib/firebase/auth';
+import { deleteMyRequest, HANDOFF_NOTICE_EVENT, listMyRequests, MAX_REQUESTS_PER_USER, type MyRequest } from '@/lib/firebase/appRequests';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
-import { EmptyState } from './EmptyState';
 import { PlusIcon, TrashIcon } from './Icons';
 import { RequestAppModal } from './RequestAppModal';
 
@@ -53,6 +52,45 @@ function since(ms: number): string {
   return months < 12 ? `${months} month${months === 1 ? '' : 's'} ago` : `${Math.floor(months / 12)}y ago`;
 }
 
+/**
+ * What a visitor who isn't signed in sees on the account page: the same empty
+ * state as an empty collections page (a fan of cards with the account icon on
+ * top), with one way in.
+ */
+function SignedOutAccount({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <div className="ins-collempty">
+      <div className="ins-collempty-stack" aria-hidden>
+        <span className="ins-collempty-tile ins-collempty-tile--a" />
+        <span className="ins-collempty-tile ins-collempty-tile--b" />
+        <span className="ins-collempty-tile ins-collempty-tile--c">
+          <SetIcon name="user-account" size={26} />
+        </span>
+      </div>
+      <h2>Sign in to your account</h2>
+      <p>Your profile, your saved screens and the apps you’ve asked for, all in one place.</p>
+      <div className="ins-collempty-actions">
+        <button type="button" className="ins-collempty-primary" onClick={onSignIn}>
+          Sign in
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The requests page for a visitor who isn't signed in: no page at all. Asking for an app needs no
+ * account (a guest session holds the request, and it moves to the account on sign-in), so they
+ * go to the landing page with the request form open over it (Navbar reads ?request=app).
+ */
+function SignedOutRequest() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace('/?request=app');
+  }, [router]);
+  return null;
+}
+
 export function SettingsView() {
   const { user, ready } = useAuth();
   const goToLogin = useGoToLogin();
@@ -61,33 +99,50 @@ export function SettingsView() {
   const section: Section = params.get('section') === 'requests' ? 'requests' : 'account';
   const signedIn = Boolean(user && !user.isAnonymous);
   const [requestCount, setRequestCount] = useState<number | null>(null);
-  const uid = user?.uid;
+  // A visitor who sent a request without an account has a guest session; on the requests page
+  // they see and manage those requests too. undefined = still checking.
+  const [guestUid, setGuestUid] = useState<string | null | undefined>(undefined);
+  const ownerUid = signedIn ? user?.uid : guestUid || undefined;
+
+  useEffect(() => {
+    if (!ready || signedIn) return;
+    let cancelled = false;
+    getGuestUid()
+      .then((id) => !cancelled && setGuestUid(id))
+      .catch(() => !cancelled && setGuestUid(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, signedIn]);
 
   // The side list shows how many of the five spots are used, whichever page you are on.
   useEffect(() => {
-    if (!uid || !signedIn) return;
+    if (!ownerUid) return;
     let cancelled = false;
-    listMyRequests(uid)
+    listMyRequests(ownerUid)
       .then((all) => !cancelled && setRequestCount(all.filter((r) => usesSpot(r.id)).length))
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [uid, signedIn]);
+  }, [ownerUid]);
 
-  if (!ready) return <><PageScope /><p className="ins-muted ins-admin-status">Loading your account…</p></>;
-  if (!signedIn || !user) {
-    return (
-      <>
-        <PageScope />
-        <EmptyState
-        title="Sign in to see your settings"
-        description="Your profile and the apps you’ve requested live here."
-        action={{ label: 'Sign in', onClick: goToLogin }}
-      />
-      </>
-    );
+  const loading = <><PageScope /><p className="ins-muted ins-admin-status">Loading your account…</p></>;
+  if (!ready) return loading;
+  if (!signedIn) {
+    if (section === 'account') {
+      return (
+        <>
+          <PageScope />
+          <SignedOutAccount onSignIn={goToLogin} />
+        </>
+      );
+    }
+    if (guestUid === undefined) return loading;
+    // No requests yet, so nothing to show: straight to the request form instead.
+    if (!guestUid) return <><PageScope /><SignedOutRequest /></>;
   }
+  if (!ownerUid) return loading;
 
   const go = (next: Section) => router.replace(next === 'account' ? INSPIRATIONS_ROUTES.settings : INSPIRATIONS_ROUTES.settingsRequests, { scroll: false });
 
@@ -114,7 +169,26 @@ export function SettingsView() {
         </button>
       </div>
 
-      <div className="ins-set-main">{section === 'account' ? <AccountSection /> : <RequestsSection uid={user.uid} onCount={setRequestCount} />}</div>
+      <div className="ins-set-main">
+        {section === 'account' ? (
+          <AccountSection />
+        ) : (
+          <>
+            {!signedIn && (
+              // Guests keep their requests in this browser only; signing in carries them over.
+              <div className="ins-set-guest" role="note">
+                <p>
+                  <b>You’re using Motvin as a guest.</b> Sign in to keep these requests with your account, on any device.
+                </p>
+                <button type="button" className="ins-set-guest-signin" onClick={goToLogin}>
+                  Sign in
+                </button>
+              </div>
+            )}
+            <RequestsSection uid={ownerUid} onCount={setRequestCount} />
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -329,6 +403,14 @@ function RequestsSection({ uid, onCount }: { uid: string; onCount: (count: numbe
     void load();
   }, [load]);
 
+  // Sign-in returns here before a guest's requests have finished moving in;
+  // reload once they have (saveHandoffNotice raises this event).
+  useEffect(() => {
+    const reload = () => void load();
+    window.addEventListener(HANDOFF_NOTICE_EVENT, reload);
+    return () => window.removeEventListener(HANDOFF_NOTICE_EVENT, reload);
+  }, [load]);
+
   const remove = async (id: string) => {
     try {
       await deleteMyRequest(id);
@@ -417,6 +499,7 @@ function RequestsSection({ uid, onCount }: { uid: string; onCount: (count: numbe
           initialName=""
           initialPlatform="ios"
           existing={editing ?? undefined}
+          onRequestsPage
           onClose={() => {
             setEditing(null);
             setAdding(false);

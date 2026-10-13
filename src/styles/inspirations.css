@@ -10414,6 +10414,9 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 .ins-request-done h3 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #111; }
 .ins-request-done p { margin: 0 0 14px; max-width: 380px; font-size: 14px; line-height: 1.55; color: #7d7d7d; }
 .ins-request-done strong { color: #111; }
+/* Signed in, the email field gives way to a line naming the account email we'll write to. */
+.ins-request-account-email { margin: 2px 0 0; font-size: 13px; line-height: 1.5; color: #7d7d7d; }
+.ins-request-account-email strong { font-weight: 600; color: #111; }
 
 /* Little "sparkle" ticks above the badge's top-right corner. */
 .ins-request-badge { position: relative; }
@@ -10487,6 +10490,9 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 
 /* Admin → Requests */
 .ins-reqlist { display: flex; flex-direction: column; gap: 4px; }
+/* Above the requests: the sort switch, and how many apps and requests there are. */
+.ins-reqlist-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-bottom: 8px; }
+.ins-reqlist-total { font-size: 13px; color: #8a8a88; }
 .ins-reqrow { display: grid; grid-template-columns: 44px 1fr auto auto; gap: 14px; align-items: start; padding: 14px 8px; border-bottom: 1px solid rgba(0, 0, 0, 0.07); }
 .ins-reqrow-count { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 12px; background: #111; color: #fff; font-size: 14px; font-weight: 700; }
 .ins-reqrow-main h3 { margin: 0; font-size: 16px; font-weight: 650; color: #111; }
@@ -10645,6 +10651,48 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 /* Settings page only: 32px on the left and right, for the page and for the logo bar above it. */
 .ins-root:has(.ins-set-scope) .ins-main { padding-left: 32px; padding-right: 32px; }
 .ins-root:has(.ins-set-scope) .ins-header-content { padding-left: 32px; padding-right: 32px; }
+
+/* Settings, guest: a note above the requests list inviting the visitor to sign in. */
+.ins-set-guest {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 14px 14px 14px 20px;
+  border: 1px solid var(--ins-border);
+  border-radius: 18px;
+  background: var(--ins-card-alt);
+}
+
+.ins-set-guest p {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ins-sub);
+}
+
+.ins-set-guest b { font-weight: 600; color: var(--ins-text); }
+
+.ins-set-guest-signin {
+  flex: none;
+  height: 38px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ins-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  cursor: var(--ins-cursor-hand, pointer);
+}
+
+.ins-set-guest-signin:hover { opacity: 0.9; }
+
+@media (max-width: 600px) {
+  .ins-set-guest { flex-direction: column; align-items: stretch; padding: 16px; }
+}
 
 /* Settings: visible keyboard focus on every control. */
 .ins-set :is(button, a):focus-visible { outline: 2px solid var(--ins-text); outline-offset: 3px; border-radius: 10px; }

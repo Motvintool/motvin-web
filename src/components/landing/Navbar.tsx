@@ -1,11 +1,21 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
+import { getGuestUid } from '@/lib/firebase/auth';
+import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { CommunityDropdown } from './CommunityDropdown';
 import { CompanyDropdown } from './CompanyDropdown';
 import { ProductsDropdown } from './ProductsDropdown';
+import { REQUEST_APP_EVENT } from './RequestAppLink';
+
+// The library's request form, loaded (with its styles) only when it opens.
+const LandingRequestModal = dynamic(() => import('./LandingRequestModal'), { ssr: false });
+
+/** `?request=app` on a landing-style page opens the request form on arrival (the Requests page sends signed-out visitors here). */
+const REQUEST_PARAM = 'request';
 
 /**
  * Sticky header — port of the navbar in motvin-ui/index.html plus the nav half
@@ -53,6 +63,11 @@ export function Navbar() {
   const { user } = useAuth();
   // Desktop mega-menu (>1300px) — only one open at a time.
   const [openMenu, setOpenMenu] = useState<Menu>(null);
+  const [requestOpen, setRequestOpen] = useState(false);
+
+  // "Request apps" in the Resources menu goes through the same handler as
+  // every other "Request an app" link (below).
+  const requestApp = () => window.dispatchEvent(new Event(REQUEST_APP_EVENT));
   // Accordion inside the hamburger panel (<=1300px) — same triggers, different affordance.
   const [openAccordion, setOpenAccordion] = useState<Menu>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -136,6 +151,37 @@ export function Navbar() {
     sync();
     window.addEventListener('resize', sync);
     return () => window.removeEventListener('resize', sync);
+  }, []);
+
+  // Every "Request an app" link (RequestAppLink, the Resources menu): someone
+  // who already has requests (an account, or a guest session from an earlier
+  // request) goes to the Requests page to see and add to them; a first-time
+  // visitor gets the request form right here, over the page.
+  useEffect(() => {
+    const onRequest = async () => {
+      if (user || (await getGuestUid().catch(() => null))) {
+        window.location.assign(INSPIRATIONS_ROUTES.settingsRequests);
+        return;
+      }
+      setRequestOpen(true);
+    };
+    window.addEventListener(REQUEST_APP_EVENT, onRequest);
+    return () => window.removeEventListener(REQUEST_APP_EVENT, onRequest);
+  }, [user]);
+
+  // Arriving with ?request=app opens the request form, and the parameter is
+  // taken off the address so a refresh doesn't open it again.
+  useEffect(() => {
+    if (new URL(window.location.href).searchParams.get(REQUEST_PARAM) !== 'app') return;
+    // Taken off only when the form actually opens, so a re-run of this effect
+    // (React's dev double-invoke) still finds it.
+    const timer = setTimeout(() => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete(REQUEST_PARAM);
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+      setRequestOpen(true);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   // Body class drives the scroll lock while the hamburger panel is open.
@@ -337,7 +383,7 @@ export function Navbar() {
         className={`mi-nav-company-accordion${companyAccordionOpen ? ' is-open' : ''}`}
         id="mi-nav-company-accordion"
       >
-        {isMobile && <CompanyDropdown open={companyAccordionOpen} onNavigate={closeMenus} />}
+        {isMobile && <CompanyDropdown open={companyAccordionOpen} onNavigate={closeMenus} onRequestApp={requestApp} />}
       </div>
     </nav>
   );
@@ -484,7 +530,8 @@ export function Navbar() {
           nav accordions above. */}
       {!isMobile && <ProductsDropdown open={productsOpen} />}
       {!isMobile && <CommunityDropdown open={communityOpen} />}
-      {!isMobile && <CompanyDropdown open={companyOpen} onNavigate={closeMenus} />}
+      {!isMobile && <CompanyDropdown open={companyOpen} onNavigate={closeMenus} onRequestApp={requestApp} />}
+      {requestOpen && <LandingRequestModal onClose={() => setRequestOpen(false)} />}
 
       <div
         className={`mi-nav-mobile-panel${panelOpen ? ' is-open' : ''}`}

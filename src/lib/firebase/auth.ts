@@ -11,16 +11,21 @@ import {
   getIdToken as firebaseGetIdToken,
   getRedirectResult,
   indexedDBLocalPersistence,
+  linkWithCredential,
+  linkWithPopup,
+  linkWithRedirect,
   onAuthStateChanged,
   sendPasswordResetEmail,
   setPersistence,
   signInAnonymously,
+  signInWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
   signOut,
   type Auth,
   type User,
+  type UserCredential,
 } from 'firebase/auth';
 import { firebaseConfig, isFirebaseConfigured } from './config';
 
@@ -248,8 +253,21 @@ export function ensureReady(): Promise<Auth | null> {
 
     await configureBestPersistence(auth);
 
-    // Completes a signInWithRedirect started before this page load.
-    getRedirectResult(auth).catch(() => null);
+    // Completes a signInWithRedirect / linkWithRedirect started before this
+    // page load. A guest who picked an account that already exists comes back
+    // with credential-already-in-use; their requests move across to it.
+    const redirectAuth = auth;
+    getRedirectResult(redirectAuth)
+      .then((result) => (result?.operationType === 'link' ? afterGuestLinked(result.user) : undefined))
+      .catch((error) => {
+        const guest = redirectAuth.currentUser;
+        const credential = GoogleAuthProvider.credentialFromError(error);
+        if (guest?.isAnonymous && credential && isAccountTaken(error)) {
+          return moveGuestInto(guest, () => signInWithCredential(redirectAuth, credential));
+        }
+        return null;
+      })
+      .catch(() => null);
 
     onAuthStateChanged(auth, (user) => {
       if (user && !user.isAnonymous) {
@@ -307,6 +325,60 @@ export function buildAuthErrorMessage(error: unknown): string {
   return 'Authentication failed. Please try again.';
 }
 
+// ---------------------------------------------------------------------------
+// A guest (anonymous session) who signs in keeps what they did as a guest —
+// today, their app requests. Signing in to a new account links the guest to it
+// (same uid, nothing to move). Signing in to an account that already exists
+// moves the requests across (appRequests.ts); the request code is loaded only
+// when that happens.
+// ---------------------------------------------------------------------------
+
+/** Firebase's "that sign-in already belongs to another account" errors. */
+function isAccountTaken(error: unknown): boolean {
+  const code = String((error as { code?: string })?.code ?? '');
+  return code === 'auth/credential-already-in-use' || code === 'auth/email-already-in-use';
+}
+
+/** Linking doesn't fire onAuthStateChanged (the uid is unchanged), so announce the new account here. */
+async function afterGuestLinked(user: User): Promise<void> {
+  emit(user);
+  publishSyncEvent('auth-state-changed', toAuthUser(user));
+  if (!user.email) return;
+  try {
+    // A fresh token, so the rules see the account's email on the update.
+    await firebaseGetIdToken(user, true);
+    const { stampRequestsWithEmail, saveHandoffNotice } = await import('./appRequests');
+    const kept = await stampRequestsWithEmail(user.uid, user.email);
+    saveHandoffNotice(kept, 0);
+  } catch (error) {
+    console.error('Could not attach the account email to guest requests', error);
+  }
+}
+
+/** Signs in to an existing account, taking the guest's requests along; puts them back if the sign-in fails. */
+async function moveGuestInto(guest: User, signIn: () => Promise<UserCredential>): Promise<User> {
+  const requests = await import('./appRequests');
+  const taken = await requests.takeGuestRequests(guest.uid).catch((error) => {
+    console.error('Could not lift guest requests before sign-in', error);
+    return [];
+  });
+  let result: UserCredential;
+  try {
+    result = await signIn();
+  } catch (error) {
+    if (taken.length) await requests.placeRequests(taken).catch(() => null);
+    throw error;
+  }
+  const placed = await requests.placeRequests(taken).catch((error) => {
+    console.error('Could not move guest requests to the account', error);
+    return null;
+  });
+  // Ones the account had already asked for count as kept: the account has them.
+  if (placed) requests.saveHandoffNotice(placed.placed + placed.alreadyAsked, placed.overLimit);
+  emit(result.user);
+  return result.user;
+}
+
 export async function loginWithGoogle(
   options: { method?: 'popup' | 'redirect' } = {},
 ): Promise<AuthUser | null> {
@@ -317,30 +389,43 @@ export async function loginWithGoogle(
   await configureBestPersistence(instance);
   provider.setCustomParameters({ prompt: 'select_account' });
 
-  // A guest session would otherwise be linked to, not replaced by, the sign-in.
-  if (instance.currentUser?.isAnonymous) {
-    try {
-      await signOut(instance);
-    } catch {
-      // Proceed with sign-in regardless.
-    }
-  }
+  // A guest is linked to the account rather than replaced by it, so what they
+  // did as a guest (their app requests) stays theirs.
+  const guest = instance.currentUser?.isAnonymous ? instance.currentUser : null;
+  const googleProvider = provider;
 
   try {
     if (method === 'redirect') {
-      await signInWithRedirect(instance, provider);
+      if (guest) await linkWithRedirect(guest, googleProvider);
+      else await signInWithRedirect(instance, googleProvider);
       return null;
     }
-    const result = await signInWithPopup(instance, provider);
+    if (guest) {
+      const linked = await linkWithPopup(guest, googleProvider);
+      await afterGuestLinked(linked.user);
+      return toAuthUser(linked.user);
+    }
+    const result = await signInWithPopup(instance, googleProvider);
     const user = result?.user ?? instance.currentUser ?? null;
     emit(user);
     return toAuthUser(user);
   } catch (error) {
+    // The Google account already has a Motvin account: sign in to that one
+    // and bring the guest's requests along.
+    const credential = GoogleAuthProvider.credentialFromError(error as never);
+    if (guest && credential && isAccountTaken(error)) {
+      try {
+        return toAuthUser(await moveGuestInto(guest, () => signInWithCredential(instance, credential)));
+      } catch (moveError) {
+        throw new Error(buildAuthErrorMessage(moveError));
+      }
+    }
     const code = String((error as { code?: string })?.code ?? '');
     // Popup blockers and accidental dismissals are common enough that the
     // original silently retried as a full-page redirect.
     if (method === 'popup' && shouldFallbackToRedirect(code)) {
-      await signInWithRedirect(instance, provider);
+      if (guest) await linkWithRedirect(guest, googleProvider);
+      else await signInWithRedirect(instance, googleProvider);
       return null;
     }
     throw new Error(buildAuthErrorMessage(error));
@@ -356,6 +441,11 @@ export async function loginWithEmail(
   await configureBestPersistence(instance);
 
   try {
+    // An existing account: a guest's requests come along with them.
+    const guest = instance.currentUser?.isAnonymous ? instance.currentUser : null;
+    if (guest) {
+      return toAuthUser(await moveGuestInto(guest, () => signInWithEmailAndPassword(instance, email, password)));
+    }
     const result = await signInWithEmailAndPassword(instance, email, password);
     const user = result?.user ?? instance.currentUser ?? null;
     emit(user);
@@ -374,11 +464,15 @@ export async function registerWithEmail(
   await configureBestPersistence(instance);
 
   try {
+    // A new account made from a guest session is linked to it, so the guest's
+    // requests stay theirs (same uid).
+    const guest = instance.currentUser?.isAnonymous ? instance.currentUser : null;
+    if (guest) {
+      const linked = await linkWithCredential(guest, EmailAuthProvider.credential(email, password));
+      await afterGuestLinked(linked.user);
+      return toAuthUser(linked.user);
+    }
     const result = await createUserWithEmailAndPassword(instance, email, password);
-    // Referenced so the import is used the way the original did — the compat
-    // credential mirroring it fed is gone, but the provider stays available
-    // for anything that needs to re-authenticate.
-    void EmailAuthProvider;
     const user = result?.user ?? instance.currentUser ?? null;
     emit(user);
     return toAuthUser(user);
@@ -407,6 +501,17 @@ export async function ensureGuestSession(): Promise<AuthUser | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * The uid of this browser's guest session, if it already has one (it is made
+ * the first time a visitor sends an app request). Never starts one.
+ */
+export async function getGuestUid(): Promise<string | null> {
+  const instance = await ensureReady();
+  if (!instance) return null;
+  await initializedPromise;
+  return instance.currentUser?.isAnonymous ? instance.currentUser.uid : null;
 }
 
 export async function logout(): Promise<void> {

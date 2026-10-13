@@ -30,11 +30,14 @@ export const metadata: Metadata = {
 const PRODUCTS = [
   { name: 'Motvin Icons', text: 'Explore 350k+ editable icons, in every style, ready to drop into your designs.', href: '/icons', icon: '/ASSET/svg/motvin-icons.svg', tone: 'green', visual: 'icons', wide: true },
   { name: 'Motvin Logos', text: 'Explore 10k+ editable logos', href: '/logos', icon: '/ASSET/svg/motvin-logos.svg', tone: 'orange', visual: 'logos', wide: false },
-  { name: 'Motvin Illustrations', text: 'Explore 20k+ editable illustrations', href: '/illustrations', icon: '/ASSET/svg/motvin-illustrations.svg', tone: 'pink', visual: 'illustrations', wide: false },
-  { name: 'Motvin Convert', text: 'Turn any website into an editable design, layer by layer.', href: null, icon: '/ASSET/svg/motvin-convert.svg', tone: 'violet', visual: 'convert', wide: true },
+  { name: 'Motvin Illustrations', text: 'Explore 20k+ editable illustrations', href: '/illustrations', icon: '/ASSET/svg/motvin-illustrations.svg', tone: 'pink', visual: 'illustrations', wide: false, hidden: true },
+  { name: 'Motvin Convert', text: 'Turn any website into an editable design, layer by layer.', href: null, icon: '/ASSET/svg/motvin-convert.svg', tone: 'violet', visual: 'convert', wide: true, hidden: true },
   { name: 'Motvin Extension', text: 'Convert websites directly from your browser, in one click.', href: null, icon: '/ASSET/svg/motvin-extension.svg', tone: 'blue', visual: 'extension', wide: true },
   { name: 'Motvin Typescales', text: 'Generate and customise typeface variants', href: null, icon: '/ASSET/svg/motvin-typescales.svg', tone: 'red', visual: 'typescales', wide: false },
 ] as const;
+
+// Kept in the list but not shown for now; drop `hidden` to bring a tile back.
+const SHOWN_PRODUCTS = PRODUCTS.filter((product) => !('hidden' in product && product.hidden));
 
 type ProductVisual = (typeof PRODUCTS)[number]['visual'];
 
@@ -160,7 +163,7 @@ export default function AboutPage() {
           <section className="abt-hero">
             <h1 className="abt-title">
               We&apos;re here to help <br className="abt-title-break" />
-              <span>ideas shine</span>
+              ideas shine
             </h1>
             <p className="abt-lead">We&apos;re on a mission to make designing from real products easier.</p>
             <AboutStage />
@@ -235,7 +238,7 @@ export default function AboutPage() {
             </div>
             <AboutFeatured />
             <ul className="abt-product-grid">
-              {PRODUCTS.map((product) => {
+              {SHOWN_PRODUCTS.map((product) => {
                 const body = (
                   <>
                     <ProductVisual visual={product.visual} icon={product.icon} />

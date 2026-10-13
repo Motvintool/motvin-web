@@ -9,7 +9,7 @@ const icon = (paths: ReactNode) => (
   </svg>
 );
 
-type Entry = { title: string; text: string; href: string; icon: ReactNode; newTab?: boolean };
+type Entry = { title: string; text: string; href: string; icon: ReactNode; newTab?: boolean; opensRequest?: boolean };
 
 const ENTRIES: Entry[] = [
   {
@@ -26,11 +26,12 @@ const ENTRIES: Entry[] = [
     icon: icon(<><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" /></>),
   },
   {
-    // The same Requests page the feature grid's "Request an app" card and the
-    // profile menu's "Request apps" item open.
+    // Opens the library's request form right over the page (onRequestApp);
+    // the Requests page link is kept for anyone opening it in a new tab.
     title: 'Request apps',
     text: 'Ask for an app to be added',
     href: INSPIRATIONS_ROUTES.settingsRequests,
+    opensRequest: true,
     icon: <img src="/ASSET/Icons/Motvin/app-request.svg" alt="" width={20} height={20} />,
   },
   {
@@ -46,7 +47,16 @@ const ENTRIES: Entry[] = [
  * card as the Products and Community menus on desktop, and an accordion in
  * the hamburger panel. `onNavigate` closes the menu (and the panel) on a pick.
  */
-export function CompanyDropdown({ open, onNavigate }: { open: boolean; onNavigate?: () => void }) {
+export function CompanyDropdown({
+  open,
+  onNavigate,
+  onRequestApp,
+}: {
+  open: boolean;
+  onNavigate?: () => void;
+  /** Opens the request form over the page; without it, the entry links to the Requests page. */
+  onRequestApp?: () => void;
+}) {
   return (
     <div className={`company-dropdown${open ? ' active' : ''}`} id="company-dropdown">
       <div className="company-dropdown-container">
@@ -62,6 +72,24 @@ export function CompanyDropdown({ open, onNavigate }: { open: boolean; onNavigat
                 </span>
               </>
             );
+            if (entry.opensRequest && onRequestApp) {
+              return (
+                <a
+                  key={entry.title}
+                  href={entry.href}
+                  className="company-link"
+                  onClick={(e) => {
+                    // A plain click opens the form here; a modified click still opens the page in a new tab.
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+                    e.preventDefault();
+                    onNavigate?.();
+                    onRequestApp();
+                  }}
+                >
+                  {body}
+                </a>
+              );
+            }
             return entry.href.startsWith('/') && !entry.newTab ? (
               <Link key={entry.title} href={entry.href} className="company-link" onClick={onNavigate}>
                 {body}

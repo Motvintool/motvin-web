@@ -4,10 +4,10 @@ import { useCallback } from 'react';
 import type { ReleaseNote } from '@/lib/firebase/updates';
 
 /**
- * One release-note article — public feed layout ported from
- * motvin-ui/updates/script.110f497c05.js renderUpdate(). Sidebar carries a
- * sticky title + date; main column carries the image, description, changes
- * list and a share button that uses the Web Share API with a clipboard
+ * One release in the feed (first ported from motvin-ui/updates renderUpdate()).
+ * The side column pins the date and title while the release scrolls past;
+ * the main column holds the screenshot, the description, the list of
+ * changes and a share button that uses the Web Share API with a clipboard
  * fallback.
  */
 
@@ -39,12 +39,9 @@ function formatDate(date: Date | null): string {
   });
 }
 
+/** Every change in the release, in one list: features, then improvements, then fixes. */
 function collectChangeItems(changes: NonNullable<ReleaseNote['changes']> = {}): string[] {
-  return [
-    ...(changes.features ?? []),
-    ...(changes.improvements ?? []),
-    ...(changes.fixes ?? []),
-  ];
+  return [...(changes.features ?? []), ...(changes.improvements ?? []), ...(changes.fixes ?? [])];
 }
 
 export function ReleaseCard({ note, index }: Props) {
@@ -70,63 +67,59 @@ export function ReleaseCard({ note, index }: Props) {
             text: `${shareTitle} — ${shareSummary}`,
             url: shareUrl,
           });
-          button.textContent = 'Shared';
+          button.dataset.label = 'Shared';
         } else {
           await navigator.clipboard.writeText(shareUrl);
-          button.textContent = 'Link copied';
+          button.dataset.label = 'Link copied';
         }
       } catch (err) {
         if ((err as { name?: string }).name === 'AbortError') return;
         console.error('Share failed:', err);
       }
       window.setTimeout(() => {
-        button.textContent = 'Share';
+        delete button.dataset.label;
       }, 1800);
     },
     [shareTitle, shareSummary, shareUrl],
   );
 
   return (
-    <article
-      className="update"
-      data-release-id={releaseId(note)}
-      style={{ animationDelay: `${index * 0.07}s` }}
-    >
-      <div className="update-grid">
-        <div className="update-sidebar">
-          <div className="update-sidebar-sticky">
-            <a className="update-title-link" href={shareUrl}>
-              <h2 className="update-title">{note.title}</h2>
-            </a>
-            <time className="update-date">{formatDate(note.date)}</time>
-          </div>
+    <article className="upd-entry" data-release-id={releaseId(note)} style={{ animationDelay: `${index * 0.07}s` }}>
+      {/* Date and title, pinned while the release scrolls past. */}
+      <div className="upd-entry-side">
+        <div className="upd-entry-sticky">
+          <span className="upd-entry-date">
+            {index === 0 ? <span className="upd-latest">Latest</span> : null}
+            <time>{formatDate(note.date)}</time>
+          </span>
+          <a className="upd-entry-title" href={shareUrl}>
+            <h2>{note.title}</h2>
+          </a>
         </div>
-        <div className="update-main">
-          {note.image && (
-            <div className="update-image">
-              <img src={note.image} alt={note.title} loading="lazy" />
-            </div>
-          )}
-          {note.description && <p className="update-desc">{note.description}</p>}
-          {changeItems.length > 0 && (
-            <div className="changes">
-              <h3 className="changes-title">Changes</h3>
-              <ul className="change-list change-list-flat">
-                {changeItems.map((item, i) => (
-                  <li key={i}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <div className="update-meta-row">
-            <button
-              className="update-share update-share-minimal"
-              type="button"
-              onClick={(e) => share(e.currentTarget)}
-            >
-              Share
-            </button>
+      </div>
+
+      <div className="upd-card">
+        {note.image && (
+          <div className="upd-card-image">
+            <img src={note.image} alt={note.title} loading="lazy" decoding="async" />
           </div>
+        )}
+        {note.description && <p className="upd-card-desc">{note.description}</p>}
+        {changeItems.length > 0 && (
+          <div className="upd-changes">
+            <h3>Changes</h3>
+            <ul>
+              {changeItems.map((item, i) => (
+                <li key={i}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div className="upd-card-foot">
+          {/* The label swaps to "Shared" / "Link copied" for a moment (data-label). */}
+          <button className="upd-share" type="button" onClick={(e) => share(e.currentTarget)}>
+            <span>Share</span>
+          </button>
         </div>
       </div>
     </article>

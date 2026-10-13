@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { CSSProperties, ReactNode } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { IMAGE_SIZE, optimizedImage } from '@/lib/inspirations/optimizedImage';
+import { RequestAppLink } from '../RequestAppLink';
 import type { LandingApp } from './useLandingLibrary';
 
 const icon = (path: ReactNode) => (
@@ -206,7 +207,8 @@ export function FeatureGrid({ apps }: { apps: LandingApp[] }) {
         ))}
 
         {/* Full-width last row: the library is growing, and it takes requests. */}
-        <Link href={INSPIRATIONS_ROUTES.settingsRequests} className="lpi-bento-card is-full">
+        {/* Opens the request form over the page (or the Requests page for someone who has requests). */}
+        <RequestAppLink className="lpi-bento-card is-full">
           <div className="lpi-bento-copy">
             <h3>Request an app</h3>
             <p>Missing something? Ask for an app and we will add it to the library.</p>
@@ -220,7 +222,7 @@ export function FeatureGrid({ apps }: { apps: LandingApp[] }) {
             </span>
           </div>
           {ARROW}
-        </Link>
+        </RequestAppLink>
       </div>
     </section>
   );

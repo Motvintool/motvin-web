@@ -2240,17 +2240,19 @@
 .lpi-footer-community {
   display: inline-flex;
   margin-top: 28px;
-  padding: 10px 18px;
+  /* 1px less than before on each side, so the border keeps the size the same. */
+  padding: 12px 23px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
   color: #fff;
   font-size: 14px;
   font-weight: 500;
   text-decoration: none;
-  transition: background 0.2s ease;
+  transition: border-color 0.2s ease;
 }
 
-.lpi-footer-community:hover { background: rgba(255, 255, 255, 0.06); }
+/* Hover brightens the outline; no fill. */
+.lpi-footer-community:hover { border-color: rgba(255, 255, 255, 0.28); }
 
 /* Columns sized to their links, side by side with an equal gap, pushed to
    the right edge so they line up with the language picker below. */
@@ -2284,7 +2286,8 @@
 
 .lpi-footer-links a:hover { color: #fff; }
 
-/* Not live yet: dimmed, with a small tag. */
+/* Not live yet: the same white as the live links, with a small "Soon"
+   tag after the name and a "not allowed" cursor. */
 .lpi-footer-links .is-soon {
   cursor: not-allowed;
   display: inline-flex;
@@ -2292,7 +2295,7 @@
   gap: 6px;
   font-size: 15px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .lpi-footer-links .is-soon::after {
@@ -2347,10 +2350,9 @@
 }
 
 /* The ownership note: smaller and quieter than the line above it. */
+/* The ownership note: the same type as the line above it, a little apart. */
 .lpi-footer-brand .lpi-footer-note {
   margin-top: 14px;
-  font-size: 13px;
-  line-height: 1.55;
 }
 
 /* The removal link in the ownership note beside the logo, kept whole on one line. */
@@ -2494,21 +2496,15 @@
   scale: 1.03 0.97;
 }
 
+/* The dots rest full-size, filling their rings, and spin when their
+   letter is hovered. */
 .lpi-wm-dot {
   transform-box: fill-box;
   transform-origin: 50% 50%;
-  animation: lpi-wm-bob 3.2s ease-in-out infinite;
-  animation-delay: calc(var(--i) * -0.45s + var(--k) * -0.8s);
 }
 
 .lpi-wm-letter:hover .lpi-wm-dot {
   animation: lpi-wm-spin 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* A soft pulse in place, so the dots never leave their rings. */
-@keyframes lpi-wm-bob {
-  0%, 100% { scale: 1; }
-  50% { scale: 0.88; }
 }
 
 @keyframes lpi-wm-spin {
@@ -2618,9 +2614,12 @@
 /* Short laptop screens (1366 x 768 and the like): a little less air in the
    footer, so it still fits the screen and keeps its curtain reveal. */
 @media (min-width: 901px) and (max-height: 820px) {
-  .lpi-footer-inner { padding-top: 48px; }
-  .lpi-footer-bar { margin-top: 40px; }
+  .lpi-footer-inner { padding-top: 36px; }
+  .lpi-footer-bar { margin-top: 28px; }
   .lpi-footer-wordmark { padding-top: 8px; }
+  .lpi-footer-brand p { margin-top: 14px; }
+  .lpi-footer-brand .lpi-footer-note { margin-top: 10px; }
+  .lpi-footer-community { margin-top: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

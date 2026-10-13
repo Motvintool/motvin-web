@@ -1,0 +1,315 @@
+/* Updates feed (src/app/updates/page.tsx). Built on the landing page's own
+   styles (.lpi tokens, the navbar, the white sheet and the curtain footer),
+   like the About page. Everything here is prefixed upd-. The publisher at
+   /updates/admin keeps its own updates.css. */
+
+/* See-through, so the white sheet behind shows its rounded bottom corners
+   over the footer (.lpi gives every section white). */
+.lpi.upd {
+  background: transparent;
+}
+
+/* ---- Intro ---- */
+.upd-hero {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 220px 24px 96px;
+  text-align: center;
+  animation: upd-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.upd-title {
+  margin: 0;
+  font-size: 84px;
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.upd-lead {
+  margin: 20px auto 0;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--lpi-muted);
+}
+
+@keyframes upd-rise {
+  from { opacity: 0; translate: 0 28px; }
+}
+
+/* Shown to signed-in admins only, with the way into the publisher. */
+.upd-admin-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid #e6e6ea;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--lpi-muted);
+}
+
+.upd-admin-banner i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #24cb71;
+  box-shadow: 0 0 0 4px rgba(36, 203, 113, 0.16);
+}
+
+.upd-admin-banner a {
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #141414;
+  font-weight: 600;
+  color: #fff;
+  text-decoration: none;
+}
+
+/* ---- The feed: one release per row, the date and title pinned on the
+   left, the card on the right, a hairline between releases ---- */
+.upd-feed {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px 160px;
+}
+
+.upd-entry {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 56px;
+  padding: 56px 0;
+  border-top: 1px solid #f0f0f2;
+  /* Pinned dates stop short of the sticky navbar. */
+  scroll-margin-top: 110px;
+  animation: upd-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.upd-entry:first-child { border-top: 0; padding-top: 0; }
+
+.upd-entry-sticky {
+  position: sticky;
+  top: 120px;
+  display: grid;
+  gap: 12px;
+}
+
+.upd-entry-date {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--lpi-muted);
+}
+
+.upd-latest {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #efecff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5c4ae1;
+}
+
+.upd-entry-title {
+  color: inherit;
+  text-decoration: none;
+}
+
+.upd-entry-title h2 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.upd-entry-title:hover h2 { color: #5c4ae1; }
+
+/* The release itself: the original feed's layout (screenshot, description,
+   one list of changes, share) in the site's current style: a rounded frame
+   with a light outline, the landing page's type, ticks and a pill button. */
+.upd-card {
+  min-width: 0;
+}
+
+.upd-card-image {
+  --frame-radius: 24px;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid #e6e6ea;
+  border-radius: var(--frame-radius);
+  background: #fff;
+  /* Its own layer, so the clip to the rounded corners holds while the
+     picture zooms on hover (Chrome otherwise squares them off). */
+  transform: translateZ(0);
+}
+
+/* Rounded to the frame's inner curve (its radius less the 1px outline), so
+   the corners match even before the clip applies. */
+.upd-card-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  border-radius: calc(var(--frame-radius) - 1px);
+  backface-visibility: hidden;
+  /* Zoomed in a hair, so a thin transparent or white margin baked into an
+     uploaded screenshot is cropped off instead of showing as a gap inside
+     the frame. */
+  scale: 1.016;
+  transition: scale 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.upd-card:hover .upd-card-image img { scale: 1.03; }
+
+.upd-card-desc {
+  margin: 28px 0 0;
+  font-size: 17px;
+  line-height: 1.7;
+  color: #3f3f46;
+  text-wrap: pretty;
+}
+
+.upd-changes {
+  margin-top: 36px;
+  padding-top: 28px;
+  border-top: 1px solid #f0f0f2;
+}
+
+.upd-changes h3 {
+  margin: 0 0 18px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--lpi-ink);
+}
+
+.upd-changes ul {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.upd-changes li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #3f3f46;
+}
+
+/* A small dot before each change. */
+.upd-changes li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.68em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #b9b9c0;
+}
+
+.upd-card-foot {
+  display: flex;
+  align-items: center;
+  margin-top: 32px;
+}
+
+/* The same outlined pill as the site's secondary buttons. */
+.upd-share {
+  display: inline-flex;
+  align-items: center;
+  height: 42px;
+  padding: 0 18px;
+  border: 1px solid #e0e0e5;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--lpi-ink);
+  cursor: pointer;
+  transition: border-color 0.2s ease, scale 0.2s ease;
+}
+
+.upd-share:hover { border-color: #c9c9ce; }
+.upd-share:active { scale: 0.97; }
+
+/* For a moment after sharing, the label reads "Shared" or "Link copied". */
+.upd-share[data-label] span { font-size: 0; }
+.upd-share[data-label] span::before { content: attr(data-label); font-size: 14px; }
+
+.upd-share:focus-visible,
+.upd-entry-title:focus-visible {
+  outline: 2px solid #5c4ae1;
+  outline-offset: 3px;
+}
+
+/* A release opened from a shared link gets a soft violet ring round its picture. */
+.upd-entry.is-target .upd-card-image {
+  box-shadow: 0 0 0 3px #c9c0ff;
+}
+
+/* ---- Loading, empty and error states ---- */
+.upd-skel {
+  display: block;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #ececef 0%, #f6f6f8 50%, #ececef 100%);
+  background-size: 200% 100%;
+  animation: upd-shimmer 1.4s ease-in-out infinite;
+}
+
+.upd-skel.is-date { width: 120px; height: 14px; }
+.upd-skel.is-title { width: 220px; height: 28px; }
+.upd-skel.is-image { height: 360px; border-radius: 24px; }
+.upd-skel.is-line { height: 14px; margin-top: 28px; }
+.upd-skel.is-line.is-short { width: 55%; margin-top: 12px; }
+
+@keyframes upd-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.upd-state {
+  margin: 0;
+  padding: 48px 24px;
+  border-radius: 28px;
+  background: var(--lpi-tile);
+  font-size: 16px;
+  text-align: center;
+  color: var(--lpi-muted);
+}
+
+.upd-state.is-error { color: #b42318; }
+
+/* ---- Smaller screens: the date and title sit above each card ---- */
+@media (max-width: 900px) {
+  .upd-hero { padding: 160px 24px 72px; }
+  .upd-title { font-size: 52px; }
+  .upd-entry { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 44px 0; }
+  .upd-entry-sticky { position: static; }
+}
+
+@media (max-width: 600px) {
+  .upd-hero { padding: 132px 16px 56px; }
+  .upd-title { font-size: 38px; letter-spacing: -0.035em; }
+  .upd-feed { padding: 0 16px 112px; }
+  .upd-entry-title h2 { font-size: 24px; }
+  .upd-skel.is-image { height: 200px; border-radius: 18px; }
+  .upd-card-image { --frame-radius: 18px; }
+  .upd-card-desc { font-size: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upd-hero,
+  .upd-entry,
+  .upd-skel { animation: none; }
+  .upd-card-image img { transition: none; }
+}
