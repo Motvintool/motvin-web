@@ -170,6 +170,7 @@ export function Footer() {
               >
                 Community
               </a>
+              <Link href="/about">About us</Link>
             </div>
             <div>
               <h2>Library</h2>

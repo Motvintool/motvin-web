@@ -57,6 +57,7 @@ export const LANDING_TRANSLATIONS: Record<string, Record<string, string>> = {
     "Tutorials": "Tutoriales",
     "Logos": "Logotipos",
     "About": "Acerca de",
+    "About us": "Sobre nosotros",
     "Careers": "Empleo",
     "Contacts": "Contacto",
     "Cookie settings": "Configuración de cookies"
@@ -98,6 +99,7 @@ export const LANDING_TRANSLATIONS: Record<string, Record<string, string>> = {
     "Tutorials": "ट्यूटोरियल",
     "Logos": "लोगो",
     "About": "हमारे बारे में",
+    "About us": "हमारे बारे में",
     "Careers": "करियर",
     "Contacts": "संपर्क",
     "Cookie settings": "कुकी सेटिंग्स"
@@ -139,6 +141,7 @@ export const LANDING_TRANSLATIONS: Record<string, Record<string, string>> = {
     "Tutorials": "Tutorials",
     "Logos": "Logos",
     "About": "Über uns",
+    "About us": "Über uns",
     "Careers": "Karriere",
     "Contacts": "Kontakt",
     "Cookie settings": "Cookie-Einstellungen"
@@ -178,6 +181,7 @@ export const LANDING_TRANSLATIONS: Record<string, Record<string, string>> = {
     "Tutorials": "பயிற்சிகள்",
     "Logos": "லோகோக்கள்",
     "About": "எங்களைப் பற்றி",
+    "About us": "எங்களைப் பற்றி",
     "Careers": "வேலைவாய்ப்புகள்",
     "Contacts": "தொடர்பு",
     "Cookie settings": "குக்கீ அமைப்புகள்",
