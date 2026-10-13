@@ -771,6 +771,12 @@
   filter: saturate(0.9);
 }
 
+/* Scroll parallax: the card's --lpi-rise goes 1 → 0 as it slides up
+   (LandingAnimations), lifting the phones into place, the side ones from
+   further down. On `transform`, so the hover moves on `translate` still work. */
+.lpi-stack-phone { transform: translateY(calc(var(--lpi-rise, 0) * 130px)); }
+.lpi-stack-phone.is-front { transform: translateY(calc(var(--lpi-rise, 0) * 70px)); }
+
 .lpi-stack-phone.is-left {
   translate: calc(-50% - 150px) 90px;
   rotate: -9deg;
@@ -1702,20 +1708,36 @@
   text-align: center;
 }
 
+/* Magnifies like the macOS Dock: ClosingCta eases each logo's --dock (0–1)
+   towards how near the pointer is, and the logo grows by up to --dock-grow,
+   pushing its neighbours aside. The row keeps the base height and the logos
+   sit on its bottom edge, so they grow upwards and the headline never moves. */
 .lpi-closing-logos {
+  --dock-base: 52px;
+  --dock-grow: 30px;
   display: flex;
   justify-content: center;
+  align-items: flex-end;
   gap: 12px;
+  height: var(--dock-base);
   margin-bottom: 40px;
 }
 
 .lpi-closing-logos img {
-  width: 52px;
-  height: 52px;
-  border-radius: 15px;
+  --size: calc(var(--dock-base) + var(--dock-grow) * var(--dock, 0));
+  flex: none;
+  width: var(--size);
+  height: var(--size);
+  border-radius: calc(var(--size) * 0.29);
   object-fit: cover;
   box-shadow: 0 6px 18px rgba(11, 13, 24, 0.1);
   rotate: calc((var(--i, 0) - 3) * 3deg);
+  /* Scroll parallax: --lpi-rise goes 1 → 0 as the section comes up
+     (LandingAnimations, AboutAnimations), settling each logo down into the
+     row from above, the outer ones from higher up. From above, not below,
+     so on their way they never cross the headline under them.
+     max(x, -x) is the distance from the middle logo. */
+  transform: translateY(calc(var(--lpi-rise, 0) * -1 * (36px + max(var(--i, 0) - 3, 3 - var(--i, 0)) * 22px)));
   animation: lpi-bob 5s ease-in-out infinite;
   animation-delay: calc(var(--i, 0) * -0.7s);
 }
@@ -2573,8 +2595,7 @@
   .lpi-closing { padding: 88px 16px 120px; }
   .lpi-closing-title { font-size: 40px; }
   .lpi-closing-text { font-size: 16px; }
-  .lpi-closing-logos { gap: 8px; margin-bottom: 28px; }
-  .lpi-closing-logos img { width: 38px; height: 38px; border-radius: 11px; }
+  .lpi-closing-logos { --dock-base: 38px; gap: 8px; margin-bottom: 28px; }
   .lpi-templates { padding-bottom: 88px; }
   .lpi-templates-head { padding: 0 16px; margin-bottom: 28px; }
   .lpi-templates-all { margin-right: auto; }

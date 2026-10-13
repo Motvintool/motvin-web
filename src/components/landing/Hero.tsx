@@ -129,13 +129,13 @@ export function Hero() {
             <div className="container-left">
               <img alt="" className="hero-float hf-l-sparkle" src="/ASSET/Icons/imgI2.svg" width={35} height={35} />
               <img alt="" className="hero-float hf-l-at" src="/ASSET/Icons/imgI4.svg" width={40} height={40} />
-              <HeroLogoSlot className="hf-l-app1" fallback="/ASSET/landing/hero-app-icon-1.png" slot={0} logos={logos} picks={picks} onNext={next} />
-              <HeroLogoSlot className="hf-l-app2" fallback="/ASSET/landing/hero-app-icon-2.png" slot={1} logos={logos} picks={picks} onNext={next} />
+              <HeroLogoSlot className="hf-l-app1" fallback="/ASSET/landing/hero-app-icon-1.webp" slot={0} logos={logos} picks={picks} onNext={next} />
+              <HeroLogoSlot className="hf-l-app2" fallback="/ASSET/landing/hero-app-icon-2.webp" slot={1} logos={logos} picks={picks} onNext={next} />
             </div>
             <div className="container-right">
               <img alt="" className="hero-float hf-r-gear" src="/ASSET/Icons/imgI7.svg" width={40} height={40} />
-              <HeroLogoSlot className="hf-r-app3" fallback="/ASSET/landing/hero-app-icon-3.png" slot={2} logos={logos} picks={picks} onNext={next} />
-              <HeroLogoSlot className="hf-r-app4" fallback="/ASSET/landing/hero-app-icon-4.png" slot={3} logos={logos} picks={picks} onNext={next} />
+              <HeroLogoSlot className="hf-r-app3" fallback="/ASSET/landing/hero-app-icon-3.webp" slot={2} logos={logos} picks={picks} onNext={next} />
+              <HeroLogoSlot className="hf-r-app4" fallback="/ASSET/landing/hero-app-icon-4.webp" slot={3} logos={logos} picks={picks} onNext={next} />
               <img alt="" className="hero-float hf-r-sparkle" src="/ASSET/landing/hero-sparkle-green.svg" width={35} height={35} />
             </div>
           </div>
@@ -180,7 +180,7 @@ export function Hero() {
                 loop
                 muted
                 playsInline
-                poster="/ASSET/landing/hero-demo-typescale.png"
+                poster="/ASSET/landing/hero-demo-typescale.webp"
               ></video>
             </div>
           </div>

@@ -30,12 +30,24 @@ const SCROLL_DIRECTION_THRESHOLD = 6;
 // Vertical middle of the compact buttons (desktop), for telling when the
 // dark footer has slid under them.
 const COMPACT_MIDDLE = 59;
-// "Join us" opens on hover (desktop, mouse); this grace period lets the
-// pointer travel from the label down into the menu without it closing.
-const JOIN_HOVER_CLOSE_DELAY = 180;
+// The menus open on hover (desktop, mouse); this grace period lets the
+// pointer travel from a label down into its menu without it closing.
+const HOVER_CLOSE_DELAY = 180;
 const INSTAGRAM_URL = 'https://www.instagram.com/siren.uix';
 
 type Menu = 'products' | 'community' | 'company' | null;
+
+// Each desktop menu panel, by id. They render outside the nav, so they get
+// their own hover listeners.
+const MENU_PANELS: [id: string, menu: Exclude<Menu, null>][] = [
+  ['products-dropdown', 'products'],
+  ['company-dropdown', 'company'],
+  ['community-dropdown', 'community'],
+];
+
+/** Which menu a trigger opens, from its data-menu attribute. */
+const menuOf = (el: EventTarget | null) =>
+  (el instanceof HTMLElement ? el.dataset.menu : undefined) as Exclude<Menu, null> | undefined;
 
 export function Navbar() {
   const { user } = useAuth();
@@ -53,7 +65,7 @@ export function Navbar() {
   const panelRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
   const signupRef = useRef<HTMLAnchorElement>(null);
-  const joinHoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const closePanel = useCallback(() => setPanelOpen(false), []);
 
@@ -170,52 +182,59 @@ export function Navbar() {
     };
   }, [panelOpen]);
 
-  const toggleMenu = (menu: Exclude<Menu, null>) => (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (isMobile) {
-      setOpenAccordion((prev) => (prev === menu ? null : menu));
-    } else {
-      setOpenMenu((prev) => (prev === menu ? null : menu));
-    }
+  // On desktop the menus open on hover: entering a label (or its menu)
+  // opens it, moving to another label swaps straight over, and leaving
+  // closes it after a short grace period. A click only opens, so a click
+  // right after hovering doesn't shut it. On mobile they're accordions.
+  const openOnHover = (menu: Exclude<Menu, null>) => {
+    clearTimeout(hoverTimer.current);
+    setOpenMenu(menu);
+  };
+  const closeAfterHover = (menu: Exclude<Menu, null>) => {
+    clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => setOpenMenu((open) => (open === menu ? null : open)), HOVER_CLOSE_DELAY);
   };
 
-  // "Join us": on desktop it opens on hover, and a click only opens it (so a
-  // click right after hovering doesn't shut it); on mobile it's an accordion.
-  const onJoinClick = (e: React.MouseEvent) => {
+  const onMenuClick = (e: React.MouseEvent<HTMLElement>) => {
     e.preventDefault();
-    if (isMobile) {
-      setOpenAccordion((prev) => (prev === 'community' ? null : 'community'));
-      return;
-    }
-    clearTimeout(joinHoverTimer.current);
-    setOpenMenu('community');
+    const menu = menuOf(e.currentTarget);
+    if (!menu) return;
+    if (isMobile) setOpenAccordion((prev) => (prev === menu ? null : menu));
+    else openOnHover(menu);
   };
-  const onJoinEnter = (e: { pointerType: string }) => {
-    if (isMobile || e.pointerType !== 'mouse') return;
-    clearTimeout(joinHoverTimer.current);
-    setOpenMenu('community');
+  const onMenuEnter = (e: React.PointerEvent<HTMLElement>) => {
+    const menu = menuOf(e.currentTarget);
+    if (!isMobile && e.pointerType === 'mouse' && menu) openOnHover(menu);
   };
-  const onJoinLeave = (e: { pointerType: string }) => {
-    if (isMobile || e.pointerType !== 'mouse') return;
-    clearTimeout(joinHoverTimer.current);
-    joinHoverTimer.current = setTimeout(
-      () => setOpenMenu((open) => (open === 'community' ? null : open)),
-      JOIN_HOVER_CLOSE_DELAY,
-    );
+  const onMenuLeave = (e: React.PointerEvent<HTMLElement>) => {
+    const menu = menuOf(e.currentTarget);
+    if (!isMobile && e.pointerType === 'mouse' && menu) closeAfterHover(menu);
   };
 
-  // The Join us menu renders outside the nav, so it gets its own hover listeners.
+  // The menu panels render outside the nav, so they get their own listeners:
+  // staying over an open menu keeps it open, leaving it closes it.
   useEffect(() => {
-    const menu = document.getElementById('community-dropdown');
-    if (isMobile || !menu) return;
-    menu.addEventListener('pointerenter', onJoinEnter);
-    menu.addEventListener('pointerleave', onJoinLeave);
+    if (isMobile) return;
+    const cleanups = MENU_PANELS.map(([id, menu]) => {
+      const panel = document.getElementById(id);
+      if (!panel) return () => {};
+      const onEnter = (e: PointerEvent) => {
+        if (e.pointerType === 'mouse') openOnHover(menu);
+      };
+      const onLeave = (e: PointerEvent) => {
+        if (e.pointerType === 'mouse') closeAfterHover(menu);
+      };
+      panel.addEventListener('pointerenter', onEnter);
+      panel.addEventListener('pointerleave', onLeave);
+      return () => {
+        panel.removeEventListener('pointerenter', onEnter);
+        panel.removeEventListener('pointerleave', onLeave);
+      };
+    });
     return () => {
-      clearTimeout(joinHoverTimer.current);
-      menu.removeEventListener('pointerenter', onJoinEnter);
-      menu.removeEventListener('pointerleave', onJoinLeave);
+      clearTimeout(hoverTimer.current);
+      cleanups.forEach((cleanup) => cleanup());
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the handlers only read isMobile
   }, [isMobile]);
 
   // Never collapse while a mega-menu is open.
@@ -240,7 +259,10 @@ export function Navbar() {
         href="#"
         className={`nav-item${productsOpen ? ' active' : ''}${productsAccordionOpen ? ' is-accordion-open' : ''}`}
         id="products-dropdown-trigger"
-        onClick={toggleMenu('products')}
+        data-menu="products"
+        onClick={onMenuClick}
+        onPointerEnter={onMenuEnter}
+        onPointerLeave={onMenuLeave}
       >
         <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Explore tools</span>
         <img
@@ -275,7 +297,10 @@ export function Navbar() {
         href="#"
         className={`nav-item${companyOpen ? ' active' : ''}${companyAccordionOpen ? ' is-accordion-open' : ''}`}
         id="company-dropdown-trigger"
-        onClick={toggleMenu('company')}
+        data-menu="company"
+        onClick={onMenuClick}
+        onPointerEnter={onMenuEnter}
+        onPointerLeave={onMenuLeave}
       >
         <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Resources</span>
         <img
@@ -295,9 +320,10 @@ export function Navbar() {
         href="#"
         className={`nav-item${communityOpen ? ' active' : ''}${communityAccordionOpen ? ' is-accordion-open' : ''}`}
         id="community-dropdown-trigger"
-        onClick={onJoinClick}
-        onPointerEnter={onJoinEnter}
-        onPointerLeave={onJoinLeave}
+        data-menu="community"
+        onClick={onMenuClick}
+        onPointerEnter={onMenuEnter}
+        onPointerLeave={onMenuLeave}
       >
         <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Join us</span>
         <img

@@ -1,3 +1,10 @@
+import { optimizedImage } from '@/lib/inspirations/optimizedImage';
+
+// The feature cards show their pictures about 235px wide; the originals are
+// 1296px, so they are resized on the way.
+const CONVERT_IMAGE = optimizedImage('/ASSET/Images/convert-websites.webp', 240);
+const TOOLS_IMAGE = optimizedImage('/ASSET/Images/explore-creative-tools.webp', 240);
+
 /**
  * Products mega-menu. Markup ported verbatim from motvin-ui/index.html
  * (#products-dropdown); open/close state is owned by Navbar.
@@ -22,10 +29,7 @@ export function ProductsDropdown({ open }: { open: boolean }) {
               </div>
               <div className="feature-card-body">
                 <div className="feature-card-img-wrapper">
-                  <img
-                    src="/ASSET/Images/convert-websites.webp"
-                    alt="Convert websites graphic"
-                  />
+                  <img {...CONVERT_IMAGE} alt="Convert websites graphic" decoding="async" />
                 </div>
                 <p>Capture any website and turn it into editable design layers.</p>
               </div>
@@ -42,10 +46,7 @@ export function ProductsDropdown({ open }: { open: boolean }) {
               </div>
               <div className="feature-card-body">
                 <div className="feature-card-img-wrapper">
-                  <img
-                    src="/ASSET/Images/explore-creative-tools.webp"
-                    alt="Explore creative tools graphic"
-                  />
+                  <img {...TOOLS_IMAGE} alt="Explore creative tools graphic" decoding="async" />
                 </div>
                 <p>Colors, icons, templates, and resources all in one place.</p>
               </div>

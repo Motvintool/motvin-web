@@ -1272,6 +1272,14 @@ body {
   pointer-events: none !important;
 }
 
+/* A little narrower on desktop, so the window keeps clear margins once it
+   rises and grows under the navbar. */
+@media (min-width: 1025px) {
+  .hero-demo {
+    max-width: min(1360px, calc(100vw - 144px));
+  }
+}
+
 .demo-window {
   background-color: rgba(243, 244, 246, 0.8);
   border-radius: 16px 16px 28px 28px;

@@ -11,7 +11,7 @@ import { useEffect } from 'react';
  * across section boundaries, so it renders nothing itself. Everything runs
  * after mount, once the sections it animates are in the DOM.
  *
- * Five groups:
+ * Six groups:
  *  1. Hero scroll timeline (>1300px, and only when motion is allowed) —
  *     pins the hero, drifts its text up as it fades, crops the hero's bottom
  *     edge, and lifts the demo window while it grows slightly. Set up
@@ -22,8 +22,10 @@ import { useEffect } from 'react';
  *     on first scroll into view and replayed on hover.
  *  4. Section reveals — fade/rise each section's contents once, on approach.
  *  5. Feature card stack — covered cards shrink like cards in a wallet.
+ *  6. Scroll parallax (>900px) — hero icons, stack phones, the Buddy window
+ *     and the closing logos move at their own speeds, for depth.
  *
- * All five are skipped under prefers-reduced-motion.
+ * All six are skipped under prefers-reduced-motion.
  *
  * Not ported from JS/index.js: the `.trusted-partners-scroll` marquee, whose
  * target elements no longer exist in the markup.
@@ -43,6 +45,22 @@ const HERO_CROP_ROOM = 16;
 const STACK_SHRINK = 0.06;
 // The cards stack above this width; below it they are a plain list (landing-inspirations.css).
 const STACK_MIN_WIDTH = 601;
+
+// Scroll parallax runs above this width, where there is room for the layers
+// to drift without crowding the content.
+const PARALLAX_MIN_WIDTH = 901;
+// How far each hero decoration travels up as the hero scrolls away, in px,
+// and how much it turns. Unequal, so they read as layers at different depths.
+const HERO_FLOAT_DEPTH: [selector: string, y: number, rotate: number][] = [
+  ['.hf-l-sparkle', -150, -18],
+  ['.hf-l-at', -70, 10],
+  ['.hf-l-app1', -120, -8],
+  ['.hf-l-app2', -55, 6],
+  ['.hf-r-gear', -95, 24],
+  ['.hf-r-app3', -135, 8],
+  ['.hf-r-app4', -60, -6],
+  ['.hf-r-sparkle', -110, 16],
+];
 
 // Headings whose words animate on hover. None on the page right now: the
 // sections that used it were removed or restyled, but the effect is kept.
@@ -154,6 +172,68 @@ export function LandingAnimations() {
           },
         );
       });
+    });
+
+    // 6. Scroll parallax. Layers move at different speeds to the page, for a
+    // sense of depth. Each one moves on `transform`, which nothing else on
+    // these elements uses: their tilts, bobs and hover moves are on the
+    // separate `rotate`, `translate` and `scale` properties, so they all stack.
+    mm.add(`(min-width: ${PARALLAX_MIN_WIDTH}px) and (prefers-reduced-motion: no-preference)`, () => {
+      // The hero's floating icons drift up and turn as you scroll away,
+      // the nearer ones faster, as if they sat in front of the headline.
+      // Hero's entrance tween owns their `y` and `scale`, so this moves them
+      // with `yPercent` (the px depth over the icon's height) and a relative
+      // rotation; GSAP adds both into the same transform without a clash.
+      for (const [selector, y, rotate] of HERO_FLOAT_DEPTH) {
+        gsap.to(selector, {
+          yPercent: (_: number, el: HTMLElement) => (y / (el.offsetHeight || 1)) * 100,
+          rotation: `+=${rotate}`,
+          ease: 'none',
+          scrollTrigger: { start: 0, end: () => window.innerHeight, scrub: 0.8 },
+        });
+      }
+
+      // Each stacked feature card's phones rise into place as the card
+      // slides up, the tilted side phones from further down than the front
+      // one. The phones load after this runs, so the scroll drives a variable
+      // on the card and CSS turns it into their offsets (landing-inspirations.css).
+      gsap.utils.toArray<HTMLElement>('.lpi-stack-card').forEach((card) => {
+        gsap.fromTo(
+          card,
+          { '--lpi-rise': 1 },
+          {
+            '--lpi-rise': 0,
+            ease: 'none',
+            scrollTrigger: { trigger: card, start: 'top bottom', end: 'top 25%', scrub: 0.6 },
+          },
+        );
+      });
+
+      // The Buddy window settles forward as its section comes up.
+      gsap.fromTo(
+        '.lpi-buddy-window',
+        { y: 60, scale: 0.94 },
+        {
+          y: 0,
+          scale: 1,
+          ease: 'none',
+          scrollTrigger: { trigger: '.lpi-buddy', start: 'top bottom', end: 'top 20%', scrub: 0.6 },
+        },
+      );
+
+      // The closing logos settle down into their row, the outer ones from
+      // higher up, so the row arrives as an arc that flattens out. The logos load
+      // after this runs, so the scroll drives a variable on the section and
+      // CSS turns it into each logo's offset (landing-inspirations.css).
+      gsap.fromTo(
+        '.lpi-closing',
+        { '--lpi-rise': 1 },
+        {
+          '--lpi-rise': 0,
+          ease: 'none',
+          scrollTrigger: { trigger: '.lpi-closing', start: 'top bottom', end: 'top 35%', scrub: 0.6 },
+        },
+      );
     });
 
     // gsap.context scopes every tween and ScrollTrigger created inside it, so

@@ -1,5 +1,9 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import type { CSSProperties } from 'react';
+import { AboutAnimations } from '@/components/landing/AboutAnimations';
+import { AboutFeatured } from '@/components/landing/AboutFeatured';
+import { AboutStage } from '@/components/landing/AboutStage';
+import { AboutStatement } from '@/components/landing/AboutStatement';
 import { ButtonEffects } from '@/components/landing/ButtonEffects';
 import { ConsentBanners } from '@/components/landing/ConsentBanners';
 import { ClosingCta } from '@/components/landing/inspirations/ClosingCta';
@@ -17,18 +21,103 @@ export const metadata: Metadata = {
     'Motvin is a set of tools for designers: real app screens to learn from, a website-to-design converter, and libraries of icons, logos and illustrations.',
 };
 
-const COMMUNITY_URL = 'https://chat.whatsapp.com/JxLUrQpNpaXJ4ido6muIW6?s=cl&p=i&ilr=4';
-
-/** Every Motvin product, with the same names and lines as the Products menu. */
+/**
+ * Motvin's other tools, with the same names and lines as the Products menu,
+ * laid out as a bento: wide and narrow tiles alternating row by row, the
+ * live ones first. Each tile shows a small picture of what the tool does.
+ * Inspirations, the flagship, has its own banner above them (AboutFeatured).
+ */
 const PRODUCTS = [
-  { name: 'Motvin Inspirations', text: 'Browse screens, flows and patterns from real apps', href: '/inspirations', icon: '/ASSET/Icons/motvin-logo.svg', tone: 'violet' },
-  { name: 'Motvin Convert', text: 'Turn any website into an editable design', href: null, icon: '/ASSET/svg/motvin-convert.svg', tone: 'violet' },
-  { name: 'Motvin Extension', text: 'Convert websites directly from your browser', href: null, icon: '/ASSET/svg/motvin-extension.svg', tone: 'blue' },
-  { name: 'Motvin Icons', text: 'Explore 350k+ editable icons', href: '/icons', icon: '/ASSET/svg/motvin-icons.svg', tone: 'green', external: true },
-  { name: 'Motvin Logos', text: 'Explore 10k+ editable logos', href: '/logos', icon: '/ASSET/svg/motvin-logos.svg', tone: 'orange', external: true },
-  { name: 'Motvin Illustrations', text: 'Explore 20k+ editable illustrations', href: '/illustrations', icon: '/ASSET/svg/motvin-illustrations.svg', tone: 'pink', external: true },
-  { name: 'Motvin Typescales', text: 'Generate and customise typeface variants', href: null, icon: '/ASSET/svg/motvin-typescales.svg', tone: 'red' },
+  { name: 'Motvin Icons', text: 'Explore 350k+ editable icons, in every style, ready to drop into your designs.', href: '/icons', icon: '/ASSET/svg/motvin-icons.svg', tone: 'green', visual: 'icons', wide: true },
+  { name: 'Motvin Logos', text: 'Explore 10k+ editable logos', href: '/logos', icon: '/ASSET/svg/motvin-logos.svg', tone: 'orange', visual: 'logos', wide: false },
+  { name: 'Motvin Illustrations', text: 'Explore 20k+ editable illustrations', href: '/illustrations', icon: '/ASSET/svg/motvin-illustrations.svg', tone: 'pink', visual: 'illustrations', wide: false },
+  { name: 'Motvin Convert', text: 'Turn any website into an editable design, layer by layer.', href: null, icon: '/ASSET/svg/motvin-convert.svg', tone: 'violet', visual: 'convert', wide: true },
+  { name: 'Motvin Extension', text: 'Convert websites directly from your browser, in one click.', href: null, icon: '/ASSET/svg/motvin-extension.svg', tone: 'blue', visual: 'extension', wide: true },
+  { name: 'Motvin Typescales', text: 'Generate and customise typeface variants', href: null, icon: '/ASSET/svg/motvin-typescales.svg', tone: 'red', visual: 'typescales', wide: false },
 ] as const;
+
+type ProductVisual = (typeof PRODUCTS)[number]['visual'];
+
+// The icons shown on the Icons tile, the same set the hero floats.
+const ICON_SAMPLES = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `/ASSET/Icons/imgI${n}.svg`);
+const LOGO_SAMPLES = [1, 2, 3, 4].map((n) => `/ASSET/landing/hero-app-icon-${n}.webp`);
+
+/** The small picture at the top of each tool's tile. Decorative. */
+function ProductVisual({ visual, icon }: { visual: ProductVisual; icon: string }) {
+  switch (visual) {
+    case 'icons':
+      return (
+        <span className="abt-vis abt-vis-icons">
+          {[...ICON_SAMPLES, ...ICON_SAMPLES.slice(0, 4)].map((src, i) => (
+            <span key={i} style={{ '--i': i } as CSSProperties}>
+              <img src={src} alt="" width={28} height={28} />
+            </span>
+          ))}
+        </span>
+      );
+    case 'logos':
+      return (
+        <span className="abt-vis abt-vis-logos">
+          {LOGO_SAMPLES.map((src, i) => (
+            <img key={src} src={src} alt="" width={64} height={64} style={{ '--i': i } as CSSProperties} />
+          ))}
+        </span>
+      );
+    case 'illustrations':
+      return (
+        <span className="abt-vis abt-vis-illustrations">
+          <span className="abt-vis-blob" />
+          <img className="abt-vis-hero" src={icon} alt="" width={84} height={84} />
+          <img className="abt-vis-spark is-a" src="/ASSET/Icons/imgI2.svg" alt="" width={26} height={26} />
+          <img className="abt-vis-spark is-b" src="/ASSET/landing/hero-sparkle-green.svg" alt="" width={22} height={22} />
+        </span>
+      );
+    case 'convert':
+      return (
+        <span className="abt-vis abt-vis-convert">
+          <span className="abt-vis-url">
+            <i />
+            motvin.com
+          </span>
+          <span className="abt-vis-arrow">→</span>
+          <span className="abt-vis-layers">
+            <i />
+            <i />
+            <i />
+          </span>
+        </span>
+      );
+    case 'extension':
+      return (
+        <span className="abt-vis abt-vis-extension">
+          <span className="abt-vis-browser">
+            <span className="abt-vis-browser-bar">
+              <i />
+              <i />
+              <i />
+              <span className="abt-vis-browser-url" />
+              <img src={icon} alt="" width={18} height={18} />
+            </span>
+            <span className="abt-vis-popup">
+              <img src={icon} alt="" width={20} height={20} />
+              Capture this page
+            </span>
+          </span>
+        </span>
+      );
+    case 'typescales':
+      return (
+        <span className="abt-vis abt-vis-type">
+          <b>Aa</b>
+          <span className="abt-vis-scale">
+            <i style={{ width: '88%' }} />
+            <i style={{ width: '64%' }} />
+            <i style={{ width: '44%' }} />
+          </span>
+        </span>
+      );
+  }
+}
 
 /** The founder's public profiles, the same ones the footer links to. */
 const FOUNDER_LINKS = [
@@ -55,13 +144,6 @@ const BELIEFS = [
   },
 ];
 
-const ARROW = (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M5 12h14" />
-    <path d="m13 6 6 6-6 6" />
-  </svg>
-);
-
 /**
  * About Motvin: what it is, what it makes, what it stands for, and how to
  * reach the people behind it. Uses the landing page's own navbar, footer and
@@ -73,39 +155,18 @@ export default function AboutPage() {
       <Navbar />
       <div className="landing-sheet">
         <main id="main-content" className="lpi abt">
+          {/* A short headline and one line, then the picture: the sky stage
+              with the phone and Motvin's tools floating round it. */}
           <section className="abt-hero">
             <h1 className="abt-title">
-              Tools that help designers start from <span>something real</span>
+              We&apos;re here to help <br className="abt-title-break" />
+              <span>ideas shine</span>
             </h1>
-            <p className="abt-lead">
-              Motvin brings together real app screens to learn from, a converter that turns any website into editable design
-              layers, and libraries of icons, logos and illustrations ready to drop into your work.
-            </p>
-            <div className="abt-actions">
-              <Link href="/inspirations" className="abt-primary">
-                Explore Inspirations {ARROW}
-              </Link>
-              <a href={COMMUNITY_URL} target="_blank" rel="noopener noreferrer" className="abt-secondary">
-                Join the community
-              </a>
-            </div>
+            <p className="abt-lead">We&apos;re on a mission to make designing from real products easier.</p>
+            <AboutStage />
           </section>
 
-          <section className="abt-story" aria-labelledby="abt-story-title">
-            <h2 className="lpi-title" id="abt-story-title">
-              Why Motvin
-            </h2>
-            <div className="abt-story-copy">
-              <p>
-                Designers spend a surprising share of their time looking for things: a reference for a checkout flow, the right icon,
-                a logo in a usable format, a type scale that holds together.
-              </p>
-              <p>
-                Motvin puts those things in one place. Look at how real products handle a moment, take a website apart into layers,
-                and pick up the building blocks you need, so more of your time goes into the design itself.
-              </p>
-            </div>
-          </section>
+          <AboutStatement />
 
           <section className="abt-founder" aria-labelledby="abt-founder-title">
             <div className="abt-founder-card">
@@ -172,36 +233,34 @@ export default function AboutPage() {
               </h2>
               <p className="lpi-lead">One family of tools, each built for a different part of the job.</p>
             </div>
+            <AboutFeatured />
             <ul className="abt-product-grid">
               {PRODUCTS.map((product) => {
                 const body = (
                   <>
-                    <span className={`abt-product-icon is-${product.tone}`} aria-hidden="true">
-                      <img src={product.icon} alt="" width={26} height={26} />
-                    </span>
+                    <ProductVisual visual={product.visual} icon={product.icon} />
+                    {product.href ? null : <span className="abt-product-soon">Soon</span>}
                     <span className="abt-product-copy">
-                      <b>{product.name}</b>
+                      <b>
+                        <span className={`abt-product-icon is-${product.tone}`} aria-hidden="true">
+                          <img src={product.icon} alt="" width={18} height={18} />
+                        </span>
+                        {product.name}
+                      </b>
                       <span>{product.text}</span>
                     </span>
                     {product.href ? (
                       <img className="abt-product-arrow" src="/ASSET/Icons/Motvin/view-apps.svg" alt="" width={20} height={20} aria-hidden="true" />
-                    ) : (
-                      <span className="abt-product-soon">Soon</span>
-                    )}
+                    ) : null}
                   </>
                 );
                 return (
-                  <li key={product.name}>
+                  <li key={product.name} className={product.wide ? 'is-wide' : undefined}>
                     {product.href ? (
-                      'external' in product && product.external ? (
-                        <a href={product.href} target="_blank" rel="noopener" className="abt-product">
-                          {body}
-                        </a>
-                      ) : (
-                        <Link href={product.href} className="abt-product">
-                          {body}
-                        </Link>
-                      )
+                      // The libraries live on their own sites, so they open in a new tab.
+                      <a href={product.href} target="_blank" rel="noopener" className="abt-product">
+                        {body}
+                      </a>
                     ) : (
                       <div className="abt-product is-soon" aria-disabled="true">
                         {body}
@@ -241,6 +300,7 @@ export default function AboutPage() {
       </div>
       <Footer />
       <ConsentBanners />
+      <AboutAnimations />
       <ButtonEffects />
     </div>
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
+import { optimizedImage } from '@/lib/inspirations/optimizedImage';
 
 /**
  * Templates carousel, styled like the Inspirations sections above it.
@@ -25,6 +26,12 @@ const TEMPLATE_CARDS: TemplateCard[] = [
   { title: 'Medical App', img: '/ASSET/Images/motvin-template5.webp', href: '#' },
   { title: 'LinkedIn App', img: '/ASSET/Images/motvin-template6.webp', href: '#' },
 ];
+
+// The tiles show the pictures about 304px wide (280px on phones); the
+// originals are far larger, so they are resized on the way, once per card
+// (the loop's clones reuse the same files).
+const TILE_IMAGE_WIDTH = 320;
+const TILE_IMAGES = new Map(TEMPLATE_CARDS.map((card) => [card.img, optimizedImage(card.img, TILE_IMAGE_WIDTH)]));
 
 const AUTHOR_URL = 'https://www.instagram.com/siren.uix';
 
@@ -55,7 +62,8 @@ function Card({ card, clone }: { card: TemplateCard; clone?: boolean }) {
       inert={clone || undefined}
     >
       <span className="lpi-template-tile">
-        <img src={card.img} alt={clone ? '' : card.title} draggable={false} />
+        {/* Lazy: the carousel is far down the page, so its pictures wait until it nears the screen. */}
+        <img {...TILE_IMAGES.get(card.img)} alt={clone ? '' : card.title} loading="lazy" decoding="async" draggable={false} />
       </span>
       <span className="lpi-template-name">
         {card.title}

@@ -12,23 +12,25 @@
   background: transparent;
 }
 
-/* ---- Intro ---- */
+/* ---- Intro: a short headline and one line, then the sky stage ---- */
 .abt-hero {
-  max-width: 980px;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 220px 24px 120px;
+  padding: 280px 24px 0;
   text-align: center;
   animation: abt-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Two lines, the second the shorter: "We're here to help / ideas shine". */
 .abt-title {
-  margin: 0;
+  max-width: 1040px;
+  margin: 0 auto;
   font-size: 72px;
   font-weight: 600;
   line-height: 1.02;
   letter-spacing: -0.045em;
-  text-wrap: balance;
 }
+
 
 .abt-title span {
   color: #5c4ae1;
@@ -36,8 +38,8 @@
 
 .abt-lead {
   max-width: 640px;
-  margin: 28px auto 0;
-  font-size: 19px;
+  margin: 20px auto 0;
+  font-size: 16px;
   line-height: 1.55;
   color: var(--lpi-muted);
   text-wrap: pretty;
@@ -47,71 +49,340 @@
   from { opacity: 0; translate: 0 28px; }
 }
 
-/* ---- Buttons (same pair as the closing call to action) ---- */
-.abt-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 40px;
+/* ---- The stage: a white-rimmed card holding a soft sky, a phone playing
+   real screens, two banks of cloud in front of it, and Motvin's tools
+   floating round as tilted pills (AboutStage) ---- */
+.abt-stage {
+  margin-top: 64px;
+  padding: 8px;
+  border-radius: 44px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(11, 13, 24, 0.04), 0 24px 60px -12px rgba(40, 70, 120, 0.18);
 }
 
-.abt-primary,
-.abt-secondary {
-  display: inline-flex;
+.abt-stage-sky {
+  position: relative;
+  height: 680px;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 36px;
+  background:
+    radial-gradient(60% 50% at 78% 18%, rgba(255, 255, 255, 0.55), transparent 70%),
+    linear-gradient(180deg, #9db8e2 0%, #b4ccef 45%, #cfe0f7 78%, #e3eefb 100%);
+}
+
+/* A soft light behind the phone. */
+.abt-stage-glow {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 560px;
+  height: 560px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.7), transparent);
+  translate: -50% -50%;
+}
+
+/* The phone: a frosted rim round a white screen, its bottom tucked away
+   behind the clouds and the stage's lower edge. */
+.abt-phone {
+  position: absolute;
+  left: 50%;
+  top: 136px;
+  z-index: 1;
+  width: 300px;
+  height: 620px;
+  padding: 9px;
+  box-sizing: border-box;
+  border-radius: 40px;
+  background: rgba(255, 255, 255, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.75), 0 30px 60px -24px rgba(30, 60, 110, 0.3);
+  backdrop-filter: blur(10px);
+  translate: -50% 0;
+  /* Dissolves downwards, so its lower half melts into the clouds. */
+  -webkit-mask-image: linear-gradient(180deg, #000 52%, transparent 88%);
+  mask-image: linear-gradient(180deg, #000 52%, transparent 88%);
+}
+
+/* Frosted glass over the lower part of the screen: clear at the top, then
+   blurring and whitening towards the bottom, like fog on the glass. */
+.abt-phone-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, transparent 30%, rgba(255, 255, 255, 0.55) 62%, rgba(255, 255, 255, 0.9) 100%);
+  backdrop-filter: blur(8px);
+  -webkit-mask-image: linear-gradient(180deg, transparent 28%, #000 70%);
+  mask-image: linear-gradient(180deg, transparent 28%, #000 70%);
+  pointer-events: none;
+}
+
+.abt-phone-screen {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 32px;
+  background: linear-gradient(180deg, #ffffff, #f2f6fc);
+}
+
+.abt-phone-status {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  height: 52px;
-  padding: 0 26px;
-  border-radius: 999px;
+  justify-content: space-between;
+  height: 50px;
+  padding: 0 26px 0 32px;
   font-size: 15px;
   font-weight: 600;
-  text-decoration: none;
-  transition: background 0.2s ease, border-color 0.2s ease, scale 0.2s ease;
+  color: #111;
 }
 
-.abt-primary {
-  background: #141414;
+/* The Dynamic Island: centred over the status bar, and opening like a live
+   activity (AboutStage), springing wider and taller to show the app on
+   screen, its name and a small live waveform, then closing back. */
+.abt-phone-island {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  width: 92px;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 10px 0 6px;
+  border-radius: 999px;
+  background: #0b0b0d;
+  translate: -50% 0;
+  transition:
+    width 0.55s cubic-bezier(0.34, 1.36, 0.64, 1),
+    height 0.55s cubic-bezier(0.34, 1.36, 0.64, 1),
+    top 0.55s cubic-bezier(0.34, 1.36, 0.64, 1);
+}
+
+.abt-phone-island.is-open {
+  top: 8px;
+  width: 184px;
+  height: 36px;
+}
+
+.abt-island-app {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  opacity: 0;
+  scale: 0.85;
+  transition: opacity 0.2s ease, scale 0.3s ease;
+}
+
+.abt-phone-island.is-open .abt-island-app {
+  opacity: 1;
+  scale: 1;
+  transition-delay: 0.18s;
+}
+
+.abt-island-app img {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  object-fit: cover;
+}
+
+.abt-island-app b {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  font-style: normal;
   color: #fff;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.abt-primary:hover { background: #2a2a2e; }
-.abt-primary svg { transition: translate 0.2s ease; }
-.abt-primary:hover svg { translate: 2px 0; }
-
-.abt-secondary {
-  border: 1px solid #e4e4e8;
-  background: #fff;
-  color: var(--lpi-ink);
+/* Four bars that rise and fall out of step, in the brand green. */
+.abt-island-wave {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  height: 14px;
+  margin-left: auto;
 }
 
-.abt-secondary:hover { border-color: #c9c9ce; }
+.abt-island-wave i {
+  display: block;
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: #24cb71;
+  scale: 1 0.35;
+  animation: abt-island-wave 0.9s ease-in-out infinite;
+}
 
-.abt-primary:active,
-.abt-secondary:active { scale: 0.97; }
+.abt-island-wave i:nth-child(2) { animation-delay: -0.3s; }
+.abt-island-wave i:nth-child(3) { animation-delay: -0.6s; }
+.abt-island-wave i:nth-child(4) { animation-delay: -0.15s; }
 
-/* ---- Why Motvin: a title on the left, the story on the right ---- */
+@keyframes abt-island-wave {
+  0%, 100% { scale: 1 0.35; }
+  50% { scale: 1 1; }
+}
+
+/* Signal, wifi and battery, drawn as three small bars. */
+.abt-phone-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.abt-phone-icons i {
+  display: block;
+  width: 15px;
+  height: 9px;
+  border-radius: 3px;
+  background: #111;
+}
+
+.abt-phone-icons i:first-child { width: 14px; clip-path: polygon(0 100%, 100% 0, 100% 100%); border-radius: 1px; }
+.abt-phone-icons i:nth-child(2) { width: 13px; border-radius: 13px 13px 2px 2px; clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.abt-phone-icons i:last-child { width: 22px; height: 11px; }
+
+/* The screenshots carry their own time and icons, so once they are in only
+   the island stays, over theirs. */
+.abt-phone-screen.has-shots .abt-phone-status > span { visibility: hidden; }
+
+/* The screens, stacked; each cross-fades in its turn. */
+.abt-phone-shot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  opacity: 0;
+  scale: 1.04;
+  transition: opacity 0.9s ease, scale 1.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.abt-phone-shot.is-shown {
+  opacity: 1;
+  scale: 1;
+}
+
+/* Clouds: big soft puffs, a wide base and three domes, lit from above and
+   shaded underneath, with a light blur so their edges melt into the sky. */
+.abt-cloud {
+  position: absolute;
+  bottom: -70px;
+  z-index: 3;
+  width: 760px;
+  height: 360px;
+  filter: blur(5px);
+  pointer-events: none;
+}
+
+.abt-cloud::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 210px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #e9f2fd 0%, #d8e7f9 100%);
+}
+
+.abt-cloud i {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 30%, #f8fbff 0%, #eaf2fd 45%, #d9e7f9 80%, #d3e3f7 100%);
+}
+
+/* Wider than tall, so they read as cloud banks rather than balls. */
+.abt-cloud i:nth-child(1) { left: 20px; width: 300px; height: 250px; bottom: 50px; }
+.abt-cloud i:nth-child(2) { left: 230px; width: 380px; height: 320px; bottom: 20px; }
+.abt-cloud i:nth-child(3) { left: 520px; width: 250px; height: 200px; bottom: 70px; }
+
+/* Out at the sides, leaving the middle open for the phone to fade into the mist. */
+.abt-cloud.is-left { left: -340px; }
+.abt-cloud.is-right { right: -330px; bottom: -40px; scale: -1 1; }
+
+/* A soft mist across the bottom of the sky, over the phone and clouds. */
+.abt-stage-sky::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 4;
+  height: 42%;
+  background: linear-gradient(180deg, rgba(228, 238, 251, 0) 0%, rgba(228, 238, 251, 0.55) 55%, rgba(236, 243, 253, 0.92) 100%);
+  pointer-events: none;
+}
+
+/* The tools: white pills, tilted, each bobbing gently on its own clock.
+   The pill's place and tilt are on the outer span (AboutAnimations moves it
+   with the scroll); the bob is on the inner one, so they never clash.
+   They float in front of the clouds and the mist, except the low left one,
+   which sits half behind a cloud, fading into it. */
+.abt-pill {
+  position: absolute;
+  z-index: 5;
+  translate: -50% -50%;
+}
+
+.abt-pill.is-d { z-index: 2; }
+
+.abt-pill-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 18px 10px 12px;
+  border-radius: 999px;
+  /* Mostly white, with a frosted blur of whatever passes behind. */
+  background: rgba(255, 255, 255, 0.86);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.9), 0 1px 2px rgba(20, 40, 80, 0.06), 0 10px 26px -8px rgba(30, 60, 110, 0.28);
+  font-size: 14px;
+  font-weight: 600;
+  color: #1c1c1e;
+  white-space: nowrap;
+  animation: abt-bob 5.4s ease-in-out infinite;
+}
+
+.abt-pill-inner img { flex: none; }
+
+.abt-pill.is-b .abt-pill-inner { animation-duration: 6.2s; animation-delay: -1.8s; }
+.abt-pill.is-c .abt-pill-inner { animation-duration: 5s; animation-delay: -3.1s; }
+.abt-pill.is-d .abt-pill-inner { animation-duration: 6.6s; animation-delay: -0.9s; }
+.abt-pill.is-e .abt-pill-inner { animation-duration: 5.8s; animation-delay: -2.4s; }
+.abt-pill.is-f .abt-pill-inner { animation-duration: 5.2s; animation-delay: -4s; }
+
+/* ---- Why Motvin: the story, large and centred, darkening word by word as
+   it scrolls up (AboutStatement) ---- */
 .abt-story {
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 64px;
-  max-width: 1120px;
+  max-width: 860px;
   margin: 0 auto;
-  padding: 72px 24px 120px;
-  border-top: 1px solid #f0f0f2;
+  padding: 140px 24px 140px;
+  text-align: center;
 }
 
 .abt-story-copy p {
   margin: 0;
-  font-size: 20px;
-  line-height: 1.6;
-  color: #3f3f46;
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.025em;
+  color: #c4c4cc;
+  text-wrap: pretty;
 }
 
-.abt-story-copy p + p {
-  margin-top: 20px;
-  color: var(--lpi-muted);
-}
+.abt-story-copy p + p { margin-top: 28px; }
+
+.abt-story-copy span { transition: color 0.35s ease; }
+.abt-story-copy span.is-lit { color: var(--lpi-ink); }
 
 /* ---- Meet the founder: a card with the portrait on a pastel panel on the
    left, and the note, signature and links on the right ---- */
@@ -128,8 +399,10 @@
   margin: 0 auto;
   padding: 20px 64px 20px 20px;
   box-sizing: border-box;
+  border: 1px solid #e6e6ea;
   border-radius: 36px;
-  background: var(--lpi-tile);
+  /* An outline on white rather than a grey fill. */
+  background: #fff;
 }
 
 /* The portrait's panel: white, washed with the brand purple and blue, with a
@@ -368,9 +641,132 @@
   padding: 0 24px 120px;
 }
 
+/* Inspirations leads as a wide card; the other six sit in two rows of three,
+   each a small tile: icon at the top, name and line at the bottom. */
+/* ---- The flagship banner: Inspirations, with its pitch on the left and a
+   fan of real screens rising out of its lower-right corner (AboutFeatured) ---- */
+.abt-featured {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 1120px;
+  min-height: 340px;
+  margin: 0 auto 12px;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 32px;
+  background:
+    radial-gradient(80% 120% at 100% 100%, #e4ddff 0%, transparent 60%),
+    linear-gradient(120deg, #f6f4ff 0%, #f1eeff 55%, #ebe6ff 100%);
+  color: inherit;
+  text-decoration: none;
+}
+
+.abt-featured-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 470px;
+  padding: 44px 48px;
+}
+
+.abt-featured-icon {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(92, 74, 225, 0.14);
+}
+
+.abt-featured-copy b {
+  margin-top: 28px;
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.abt-featured-text {
+  margin-top: 12px;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--lpi-muted);
+}
+
+.abt-featured-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  margin-top: 28px;
+  padding: 0 22px;
+  border-radius: 999px;
+  background: #141414;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  transition: background 0.2s ease;
+}
+
+.abt-featured-cta svg { transition: translate 0.2s ease; }
+.abt-featured:hover .abt-featured-cta { background: #2a2a2e; }
+.abt-featured:hover .abt-featured-cta svg { translate: 2px 0; }
+
+.abt-featured:focus-visible {
+  outline: 2px solid #5c4ae1;
+  outline-offset: 3px;
+}
+
+/* Three phones, fanned and cut off by the card's lower edge; on hover they
+   rise a little and spread. */
+.abt-featured-fan {
+  position: absolute;
+  right: 56px;
+  bottom: 0;
+  width: 470px;
+  height: 100%;
+  pointer-events: none;
+}
+
+.abt-featured-shot {
+  position: absolute;
+  bottom: -150px;
+  left: 50%;
+  width: 186px;
+  padding: 5px;
+  border-radius: 30px;
+  background: #0d0d12;
+  box-shadow: 0 24px 48px -16px rgba(40, 30, 110, 0.4);
+  transition: translate 0.6s cubic-bezier(0.22, 1, 0.36, 1), rotate 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.abt-featured-shot img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 9 / 19.5;
+  border-radius: 25px;
+  object-fit: cover;
+  object-position: top;
+}
+
+.abt-featured-shot.is-1 { z-index: 1; translate: calc(-50% - 150px) 46px; rotate: -10deg; }
+.abt-featured-shot.is-2 { z-index: 2; translate: -50% 0; }
+.abt-featured-shot.is-3 { z-index: 1; translate: calc(-50% + 150px) 46px; rotate: 10deg; }
+
+.abt-featured:hover .abt-featured-shot.is-1 { translate: calc(-50% - 170px) 30px; rotate: -12deg; }
+.abt-featured:hover .abt-featured-shot.is-2 { translate: -50% -14px; }
+.abt-featured:hover .abt-featured-shot.is-3 { translate: calc(-50% + 170px) 30px; rotate: 12deg; }
+
+/* ---- The other six: a bento in the landing page's card style, a white
+   picture panel on top and the name and line below, wide and narrow tiles
+   alternating row by row ---- */
 .abt-product-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   max-width: 1120px;
   margin: 0 auto;
@@ -378,15 +774,17 @@
   list-style: none;
 }
 
+.abt-product-grid > li.is-wide { grid-column: span 2; }
+
 .abt-product {
   position: relative;
   display: flex;
-  align-items: center;
-  gap: 18px;
+  flex-direction: column;
+  gap: 22px;
   height: 100%;
-  padding: 22px 24px;
+  padding: 12px 12px 26px;
   box-sizing: border-box;
-  border-radius: 24px;
+  border-radius: 28px;
   background: var(--lpi-tile);
   color: inherit;
   text-decoration: none;
@@ -395,20 +793,40 @@
 
 a.abt-product:hover { background: #ececef; }
 
-/* Not live yet: a "not allowed" cursor, since the card isn't a link. */
+/* Not live yet: a "not allowed" cursor, since it isn't a link. */
 .abt-product.is-soon { cursor: not-allowed; }
 
-/* Inspirations, the flagship, gets a row of its own, so the other six sit in
-   three even rows. */
-.abt-product-grid > li:first-child { grid-column: 1 / -1; }
+.abt-product-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 14px;
+}
 
+.abt-product-copy b {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.abt-product-copy > span {
+  max-width: 420px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--lpi-muted);
+}
+
+/* The tool's own mark, small, beside its name. */
 .abt-product-icon {
   display: grid;
   flex: none;
   place-items: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   background: #fff;
 }
 
@@ -419,36 +837,13 @@ a.abt-product:hover { background: #ececef; }
 .abt-product-icon.is-pink { background: #f7e9ff; }
 .abt-product-icon.is-red { background: #ffeaea; }
 
-.abt-product-icon img {
-  transition: rotate 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-a.abt-product:hover .abt-product-icon img { rotate: -10deg; }
-
-.abt-product-copy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.abt-product-copy b {
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.abt-product-copy span {
-  font-size: 15px;
-  line-height: 1.45;
-  color: var(--lpi-muted);
-}
-
-/* The same open arrow as the other cards on the site, shown on hover. */
+/* The same open arrow as the landing page's bento, shown on hover. */
 .abt-product-arrow {
-  flex: none;
+  position: absolute;
+  right: 24px;
+  bottom: 28px;
   width: 20px;
   height: 20px;
-  margin-left: auto;
   opacity: 0;
   translate: -4px 4px;
   transition: opacity 0.25s ease, translate 0.25s ease;
@@ -460,12 +855,15 @@ a.abt-product:focus-visible .abt-product-arrow {
   translate: 0 0;
 }
 
+/* "Soon", in the picture panel's top-right corner. */
 .abt-product-soon {
-  flex: none;
-  margin-left: auto;
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 1;
   padding: 4px 10px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--lpi-tile);
   font-size: 12px;
   font-weight: 600;
   color: var(--lpi-muted);
@@ -475,6 +873,198 @@ a.abt-product:focus-visible {
   outline: 2px solid #5c4ae1;
   outline-offset: 3px;
 }
+
+/* ---- The tile pictures: a white panel, each with a small scene ---- */
+.abt-vis {
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #fff;
+}
+
+/* Icons: two rows of icon tiles that lift one after another on hover. */
+.abt-vis-icons {
+  display: grid;
+  grid-template-columns: repeat(6, 56px);
+  gap: 12px;
+  align-content: center;
+  justify-content: center;
+}
+
+.abt-vis-icons span {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: #f5f5f7;
+  transition: translate 0.5s var(--ease), background 0.3s ease;
+  transition-delay: calc(var(--i) * 25ms);
+}
+
+a.abt-product:hover .abt-vis-icons span { translate: 0 -6px; background: #e9f8ef; }
+
+/* Logos: four app icons overlapping in a row, spreading apart on hover. */
+.abt-vis-logos img {
+  width: 64px;
+  height: 64px;
+  margin: 0 -8px;
+  border-radius: 18px;
+  box-shadow: 0 0 0 4px #fff, 0 10px 22px -8px rgba(11, 13, 24, 0.3);
+  rotate: calc((var(--i) - 1.5) * 6deg);
+  transition: margin 0.5s var(--ease), rotate 0.5s var(--ease);
+}
+
+a.abt-product:hover .abt-vis-logos img { margin: 0 4px; rotate: 0deg; }
+
+/* Illustrations: the mark, large, on a soft pink blob with two sparkles. */
+.abt-vis-blob {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border-radius: 46% 54% 52% 48% / 55% 45% 55% 45%;
+  background: radial-gradient(circle at 35% 30%, #fbefff, #f2dcff);
+  transition: rotate 1.2s var(--ease), scale 0.6s var(--ease);
+}
+
+.abt-vis-hero { position: relative; transition: scale 0.5s var(--ease); }
+.abt-vis-spark { position: absolute; }
+.abt-vis-spark.is-a { top: 34px; left: calc(50% - 96px); }
+.abt-vis-spark.is-b { bottom: 36px; right: calc(50% - 92px); }
+
+a.abt-product:hover .abt-vis-blob { rotate: 25deg; scale: 1.06; }
+a.abt-product:hover .abt-vis-hero { scale: 1.08; }
+
+/* Convert: a site address turning into stacked design layers. */
+.abt-vis-convert { gap: 22px; }
+
+.abt-vis-url {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px 0 12px;
+  border-radius: 999px;
+  background: #f5f5f7;
+  font-size: 14px;
+  font-weight: 600;
+  color: #3f3f46;
+}
+
+.abt-vis-url i {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #8b7cf6;
+}
+
+.abt-vis-arrow {
+  font-size: 22px;
+  color: #b8b0f5;
+}
+
+.abt-vis-layers {
+  position: relative;
+  width: 150px;
+  height: 104px;
+}
+
+.abt-vis-layers i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 64px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #ece9fe, 0 10px 20px -10px rgba(92, 74, 225, 0.35);
+  transition: translate 0.5s var(--ease);
+}
+
+.abt-vis-layers i:nth-child(1) { top: 0; background: #efecff; }
+.abt-vis-layers i:nth-child(2) { top: 20px; left: 10px; right: -10px; background: #f6f4ff; }
+.abt-vis-layers i:nth-child(3) { top: 40px; left: 20px; right: -20px; }
+
+/* Extension: a browser window with the extension's popup open. */
+.abt-vis-extension { align-items: flex-end; }
+
+.abt-vis-browser {
+  position: relative;
+  width: 78%;
+  height: 160px;
+  border-radius: 16px 16px 0 0;
+  background: #f5f5f7;
+}
+
+.abt-vis-browser-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px;
+}
+
+.abt-vis-browser-bar > i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #d9d9de;
+}
+
+.abt-vis-browser-url {
+  flex: 1;
+  height: 20px;
+  margin: 0 10px;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.abt-vis-popup {
+  position: absolute;
+  top: 50px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 14px 30px -12px rgba(23, 105, 255, 0.35);
+  font-size: 14px;
+  font-weight: 600;
+  color: #1c1c1e;
+  transition: translate 0.5s var(--ease);
+}
+
+/* Typescales: a big "Aa" and the steps of a type scale. */
+.abt-vis-type { gap: 26px; }
+
+.abt-vis-type b {
+  font-size: 84px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: #1c1c1e;
+}
+
+.abt-vis-scale {
+  display: grid;
+  gap: 10px;
+  width: 70px;
+}
+
+.abt-vis-scale i {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: #ffd6d6;
+}
+
+.abt-vis-scale i:first-child { height: 14px; background: #ffb3b3; }
 
 /* ---- What we believe ---- */
 .abt-beliefs {
@@ -492,28 +1082,30 @@ a.abt-product:focus-visible {
   list-style: none;
 }
 
+/* Each belief: a big soft numeral at the top, the point and its reason at
+   the bottom, all three cards the same height. */
 .abt-belief {
-  padding: 32px 28px 36px;
+  display: flex;
+  flex-direction: column;
+  min-height: 300px;
+  padding: 32px 32px 36px;
+  box-sizing: border-box;
   border-radius: 28px;
   background: var(--lpi-tile);
 }
 
 .abt-belief-index {
-  display: inline-grid;
-  place-items: center;
-  min-width: 40px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  color: #5c4ae1;
+  font-size: 56px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: #d2d2d8;
 }
 
 .abt-belief h3 {
-  margin: 28px 0 10px;
-  font-size: 22px;
+  margin: auto 0 12px;
+  padding-top: 40px;
+  font-size: 24px;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
@@ -534,18 +1126,62 @@ a.abt-product:focus-visible {
   .abt-founder-card { grid-template-columns: 300px minmax(0, 1fr); gap: 36px; padding: 14px 32px 14px 14px; }
   .abt-founder-portrait { scale: 0.85; }
   .abt-founder-copy .lpi-title { font-size: 36px; }
-  .abt-hero { padding: 160px 24px 88px; }
+  .abt-hero { padding: 160px 24px 0; }
   .abt-title { font-size: 52px; }
-  .abt-story { grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 56px 24px 88px; }
+  .abt-stage { margin-top: 48px; border-radius: 36px; }
+  .abt-stage-sky { height: 580px; border-radius: 28px; }
+  .abt-phone { top: 96px; width: 260px; height: 540px; }
+  .abt-cloud { scale: 0.8; transform-origin: bottom left; }
+  /* Mirrored round its own middle, and placed to match the left one. */
+  .abt-cloud.is-right { right: -416px; scale: -0.8 0.8; transform-origin: 50% 100%; }
+  /* Fewer pills, so the rest keep clear of the phone. */
+  .abt-pill.is-e,
+  .abt-pill.is-f { display: none; }
+  .abt-pill.is-a { left: 66% !important; }
+  .abt-pill.is-b { left: 22% !important; }
+  .abt-pill.is-c { left: 74% !important; }
+  .abt-pill.is-d { left: 20% !important; top: 73% !important; }
+  .abt-story { padding: 96px 24px; }
+  .abt-story-copy p { font-size: 28px; }
+  /* Two columns: Icons and Convert keep the full row, the rest pair up. */
+  .abt-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .abt-product-grid > li.is-wide:nth-child(5) { grid-column: auto; }
+  .abt-featured-copy { max-width: 360px; padding: 36px 32px; }
+  .abt-featured-fan { right: -40px; scale: 0.85; transform-origin: bottom right; }
+  /* Two phones here, so the fan stays clear of the words. */
+  .abt-featured-shot.is-1 { display: none; }
   .abt-belief-grid { grid-template-columns: minmax(0, 1fr); }
+  .abt-belief { min-height: 0; }
 }
 
 @media (max-width: 600px) {
-  .abt-hero { padding: 132px 16px 72px; }
+  .abt-hero { padding: 132px 16px 0; }
   .abt-title { font-size: 38px; letter-spacing: -0.035em; }
   .abt-lead { font-size: 16px; }
-  .abt-story { padding: 48px 16px 72px; }
-  .abt-story-copy p { font-size: 17px; }
+  .abt-stage { margin-top: 36px; padding: 6px; border-radius: 30px; }
+  .abt-stage-sky { height: 480px; border-radius: 24px; }
+  .abt-phone { top: 104px; width: 210px; height: 440px; padding: 7px; border-radius: 30px; }
+  .abt-phone-screen { border-radius: 24px; }
+  .abt-phone-status { height: 40px; padding: 0 18px 0 24px; font-size: 12px; }
+  .abt-phone-island { top: 9px; width: 64px; height: 20px; padding: 0 7px 0 4px; }
+  .abt-phone-island.is-open { top: 6px; width: 132px; height: 28px; }
+  .abt-island-app { gap: 6px; }
+  .abt-island-app img { width: 18px; height: 18px; border-radius: 6px; }
+  .abt-island-app b { font-size: 10px; }
+  .abt-island-wave { height: 11px; }
+  .abt-cloud { scale: 0.6; transform-origin: bottom left; }
+  .abt-cloud.is-left { left: -200px; }
+  .abt-cloud.is-right { right: -352px; scale: -0.6 0.6; transform-origin: 50% 100%; }
+  /* Two pills above the phone, one each side below. */
+  .abt-pill-inner { padding: 8px 14px 8px 10px; gap: 7px; font-size: 12px; }
+  .abt-pill-inner img { width: 16px; height: 16px; }
+  .abt-pill.is-a { left: 62% !important; top: 9% !important; }
+  .abt-pill.is-b { left: 36% !important; top: 25% !important; }
+  .abt-pill.is-c { left: 70% !important; top: 60% !important; }
+  .abt-pill.is-d { left: 25% !important; top: 73.5% !important; }
+  .abt-story { padding: 80px 16px; }
+  .abt-story-copy p { font-size: 24px; }
+  .abt-story-copy p + p { margin-top: 20px; }
   .abt-products,
   .abt-founder { padding: 0 16px 72px; }
   .abt-founder-card { grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 12px 12px 28px; border-radius: 28px; }
@@ -559,10 +1195,28 @@ a.abt-product:focus-visible {
   .abt-beliefs { padding: 0 16px; }
   .abt .lpi-closing { padding-top: 112px; }
   .abt-product-grid { grid-template-columns: minmax(0, 1fr); }
-  .abt-product { padding: 18px; gap: 14px; }
-  .abt-product-icon { width: 48px; height: 48px; border-radius: 14px; }
-  .abt-primary,
-  .abt-secondary { height: 48px; padding: 0 22px; }
+  .abt-product-grid > li.is-wide { grid-column: auto; }
+  .abt-product { padding: 10px 10px 22px; gap: 18px; border-radius: 24px; }
+  .abt-product-copy { padding: 0 12px; }
+  .abt-vis { height: 170px; border-radius: 16px; }
+  .abt-vis-icons { grid-template-columns: repeat(4, 52px); gap: 10px; }
+  .abt-vis-icons span { width: 52px; height: 52px; }
+  .abt-vis-icons span:nth-child(n + 9) { display: none; }
+  .abt-vis-convert { gap: 14px; }
+  .abt-vis-layers { width: 84px; }
+  /* The banner stacks: words and a full-width button on top, the fan
+     peeking up below them. */
+  .abt-featured { flex-direction: column; align-items: stretch; min-height: 0; border-radius: 26px; }
+  .abt-featured-copy { max-width: none; padding: 28px 22px 0; }
+  .abt-featured-copy b { font-size: 28px; }
+  .abt-featured-cta { align-self: stretch; justify-content: center; }
+  .abt-featured-fan { position: relative; right: auto; width: 100%; height: 210px; margin-top: 8px; scale: 1; }
+  .abt-featured-shot { width: 132px; bottom: -150px; padding: 4px; border-radius: 22px; }
+  .abt-featured-shot img { border-radius: 18px; }
+  .abt-featured-shot.is-1 { display: block; translate: calc(-50% - 100px) 34px; }
+  .abt-featured-shot.is-3 { translate: calc(-50% + 100px) 34px; }
+  .abt-belief { padding: 28px 24px 30px; }
+  .abt-belief-index { font-size: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -571,8 +1225,19 @@ a.abt-product:focus-visible {
   .abt-founder-wave,
   .abt-founder-deco,
   .abt-founder-dot,
+  .abt-pill-inner,
+  .abt-island-wave i,
   .abt-founder-swoosh path { animation: none; }
+  .abt-phone-shot,
+  .abt-story-copy span { transition: none; }
   .abt-founder-ring { transition: none; }
   .abt-product-icon img,
-  .abt-product-arrow { transition: none; }
+  .abt-product-arrow,
+  .abt-featured-cta,
+  .abt-featured-cta svg,
+  .abt-featured-shot,
+  .abt-vis-icons span,
+  .abt-vis-logos img,
+  .abt-vis-blob,
+  .abt-vis-hero { transition: none; }
 }
