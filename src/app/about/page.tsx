@@ -22,12 +22,12 @@ const COMMUNITY_URL = 'https://chat.whatsapp.com/JxLUrQpNpaXJ4ido6muIW6?s=cl&p=i
 /** Every Motvin product, with the same names and lines as the Products menu. */
 const PRODUCTS = [
   { name: 'Motvin Inspirations', text: 'Browse screens, flows and patterns from real apps', href: '/inspirations', icon: '/ASSET/Icons/motvin-logo.svg', tone: 'violet' },
-  { name: 'Motvin Convert', text: 'Turn any website into an editable design', href: '/MOTVIN', icon: '/ASSET/svg/motvin-convert.svg', tone: 'violet', external: true },
+  { name: 'Motvin Convert', text: 'Turn any website into an editable design', href: null, icon: '/ASSET/svg/motvin-convert.svg', tone: 'violet' },
   { name: 'Motvin Extension', text: 'Convert websites directly from your browser', href: null, icon: '/ASSET/svg/motvin-extension.svg', tone: 'blue' },
   { name: 'Motvin Icons', text: 'Explore 350k+ editable icons', href: '/icons', icon: '/ASSET/svg/motvin-icons.svg', tone: 'green', external: true },
   { name: 'Motvin Logos', text: 'Explore 10k+ editable logos', href: '/logos', icon: '/ASSET/svg/motvin-logos.svg', tone: 'orange', external: true },
   { name: 'Motvin Illustrations', text: 'Explore 20k+ editable illustrations', href: '/illustrations', icon: '/ASSET/svg/motvin-illustrations.svg', tone: 'pink', external: true },
-  { name: 'Motvin Typescales', text: 'Generate and customise typeface variants', href: '/MOTVIN/typeface', icon: '/ASSET/svg/motvin-typescales.svg', tone: 'red', external: true },
+  { name: 'Motvin Typescales', text: 'Generate and customise typeface variants', href: null, icon: '/ASSET/svg/motvin-typescales.svg', tone: 'red' },
 ] as const;
 
 /** The founder's public profiles, the same ones the footer links to. */

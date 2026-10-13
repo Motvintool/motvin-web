@@ -2053,6 +2053,24 @@
 
 .lpi-explore-card:hover { transform: translateY(-3px); }
 
+/* Not live yet: stays put on hover, with a "Soon" tag where the arrow goes. */
+.lpi-explore-card.is-soon { cursor: not-allowed; }
+.lpi-explore-card.is-soon:hover { transform: none; }
+.lpi-explore-card.is-soon:hover .lpi-explore-icon img { rotate: none; }
+
+.lpi-explore-soon {
+  position: absolute;
+  top: 24px;
+  right: 22px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #fff;
+  color: #6b6b70;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .lpi-explore-icon {
   display: grid;
   place-items: center;
@@ -2246,13 +2264,13 @@
 
 /* Not live yet: dimmed, with a small tag. */
 .lpi-footer-links .is-soon {
+  cursor: not-allowed;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 15px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.35);
-  cursor: default;
 }
 
 .lpi-footer-links .is-soon::after {
@@ -2313,8 +2331,9 @@
   line-height: 1.55;
 }
 
-/* The removal link in the ownership note beside the logo. */
+/* The removal link in the ownership note beside the logo, kept whole on one line. */
 .lpi-footer-brand p a {
+  white-space: nowrap;
   color: #fff;
   text-decoration: underline;
   text-decoration-color: rgba(255, 255, 255, 0.35);
@@ -2652,9 +2671,17 @@
 .landing-root .feature-card-img-wrapper {
   border-radius: 16px;
   background: #f3f3f5;
+  /* Its own layer, so the rounded corners keep clipping the picture while it
+     zooms; without it the corners flashed square and the picture shimmered. */
+  isolation: isolate;
+  transform: translateZ(0);
 }
 
-.landing-root .feature-card-img-wrapper img { transition: scale 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.landing-root .feature-card-img-wrapper img {
+  transition: scale 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: scale;
+  backface-visibility: hidden;
+}
 .landing-root .feature-card:hover .feature-card-img-wrapper img { scale: 1.04; }
 
 .landing-root .feature-card-body p {
@@ -2666,14 +2693,34 @@
   opacity: 1;
 }
 
-/* Product list: rounded-square icons, rows that light up grey on hover. */
+/* Product list: rounded-square icons, rows that light up grey on hover, at
+   once rather than fading (a fade under the icon tile flickered). */
 .landing-root .product-link {
-  padding: 10px;
+  gap: 16px;
+  padding: 12px;
   border-radius: 16px;
-  transition: background 0.2s ease;
 }
 
 .landing-root .product-link:hover { background: #f3f3f5; }
+
+/* Not live yet: no hover, and a small "Soon" tag after the name. */
+.landing-root .product-link.is-soon { cursor: not-allowed; }
+/* Keep the tag beside the name instead of dropping onto its own line. */
+.landing-root .product-link.is-soon h4 { white-space: nowrap; }
+.landing-root .product-link.is-soon:hover { background: none; }
+
+.landing-root .product-link-text h4 .product-soon {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #ececef;
+  color: #6b6b70;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  vertical-align: 2px;
+}
 .landing-root .product-link:hover .product-link-text h4 { text-decoration: none; }
 
 .landing-root .product-link-icon {
@@ -2687,7 +2734,7 @@
   height: 22px;
 }
 
-.landing-root .product-link-text { gap: 2px; }
+.landing-root .product-link-text { gap: 6px; }
 
 .landing-root .product-link-text h4 {
   font-size: 15px;
@@ -2700,7 +2747,7 @@
   max-width: 220px;
   font-size: 13px;
   font-weight: 400;
-  line-height: 1.45;
+  line-height: 1.6;
   color: #6b6b70;
 }
 
@@ -2876,11 +2923,11 @@
   }
 
   /* Menus open as a floating rounded card under the pill, not a full-width
-     sheet, over a soft frosted backdrop. */
+     sheet, over a soft white veil. No blur: a page-wide blur sat right over
+     the playing hero video and the bobbing icons, and had to be redrawn all
+     the time, which made the open menus flicker on hover. */
   .landing-root .dropdown-backdrop {
-    background: rgba(255, 255, 255, 0.55);
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
+    background: rgba(255, 255, 255, 0.72);
   }
 
   /* Layered card: a soft grey frame, a white card inside it, and the
@@ -2895,10 +2942,10 @@
     /* The white card's 38px plus the 10px frame, so the grey ring stays
        the same thickness round the corners. */
     border-radius: 48px;
-    background: rgba(238, 238, 241, 0.92);
+    /* Solid, not frosted: only a 10px ring of the frame shows, and a blur
+       behind it flickered (see the backdrop above). */
+    background: #eeeef1;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 0 0 1px rgba(11, 13, 24, 0.04), 0 24px 60px rgba(11, 13, 24, 0.12);
-    -webkit-backdrop-filter: blur(16px);
-    backdrop-filter: blur(16px);
     translate: -50% 0;
   }
 
@@ -2925,8 +2972,10 @@
   .landing-root .dropdown-products-grid { gap: 4px; }
   .landing-root .products-dropdown-right .dropdown-heading { padding: 0 10px; }
 
-  /* On the grey panel, rows light up white instead of grey. */
+  /* On the grey panel, rows light up white instead of grey; "Soon" rows
+     aren't links, so they stay put. */
   .landing-root .products-dropdown-right .product-link:hover { background: #fff; }
+  .landing-root .products-dropdown-right .product-link.is-soon:hover { background: none; }
 }
 
 /* Scrolled (desktop), animated the way Jitter does it: the pill flies up out
@@ -3192,6 +3241,157 @@
   .landing-root #nav-mobile-links-slot .community-dropdown-container {
     align-self: stretch;
     width: 100%;
+  }
+}
+
+/* ---- Company menu (CompanyDropdown.tsx): Updates, About us, Request apps,
+   Copyrights. Opens like the Products and Community menus. ---- */
+.company-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 999;
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
+}
+
+.company-dropdown.active {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.mi-nav-company-accordion,
+.company-mobile-arrow { display: none; }
+
+#company-dropdown-trigger img { transition: transform 0.3s ease; }
+#company-dropdown-trigger.active img { transform: rotate(180deg); }
+
+.company-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+/* The row turns grey and its tile white on hover, both at once with no
+   fade: fading them together passed through a moment where the tile and the
+   row were the same grey, so the tile seemed to blink out and back. */
+.company-link {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border-radius: 16px;
+  color: #141414;
+  text-decoration: none;
+}
+
+.company-link:hover { background: #f3f3f5; }
+
+.company-link-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #f3f3f5;
+  color: #141414;
+}
+
+.company-link:hover .company-link-icon { background: #fff; }
+
+.company-link-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.company-link-text b {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.company-link-text span {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #6b6b70;
+}
+
+/* Desktop: the same layered card as the other menus, sized for four links. */
+@media (min-width: 1301px) {
+  .landing-root .company-dropdown {
+    top: calc(100% - 10px);
+    left: 50%;
+    width: min(560px, calc(100vw - 48px));
+    padding: 10px;
+    border-radius: 48px;
+    background: #eeeef1;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 0 0 1px rgba(11, 13, 24, 0.04), 0 24px 60px rgba(11, 13, 24, 0.12);
+    translate: -50% 0;
+  }
+
+  .landing-root .company-dropdown-container {
+    padding: 22px 16px 16px;
+    border-radius: 38px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(11, 13, 24, 0.04);
+  }
+
+  .landing-root .company-dropdown .dropdown-heading {
+    margin: 0 0 10px;
+    padding: 0 12px;
+  }
+
+  .landing-root .navbar .company-desktop-arrow {
+    width: 16px !important;
+    height: 16px !important;
+    opacity: 0.5;
+  }
+
+  .landing-root .navbar .nav-item.active .company-desktop-arrow { opacity: 1; }
+}
+
+/* In the hamburger panel: an accordion where the Updates link used to be. */
+@media (max-width: 1300px) {
+  .landing-root #nav-mobile-links-slot .company-desktop-arrow { display: none; }
+  .landing-root #nav-mobile-links-slot .company-mobile-arrow { display: block; }
+  /* Menu order in the panel, as on desktop: Explore tools, Resources, Join us. */
+  .landing-root #nav-mobile-links-slot #company-dropdown-trigger { order: 3; }
+  .landing-root #nav-mobile-links-slot #community-dropdown-trigger { order: 6; }
+  .landing-root #nav-mobile-links-slot .mi-nav-community-accordion { order: 7; }
+
+  .landing-root #nav-mobile-links-slot .mi-nav-company-accordion {
+    display: none;
+    order: 4;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .landing-root #nav-mobile-links-slot .mi-nav-company-accordion.is-open {
+    display: block;
+    padding: 4px 0 16px;
+  }
+
+  .landing-root #nav-mobile-links-slot #company-dropdown {
+    position: static;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    visibility: visible;
+  }
+
+  .landing-root #nav-mobile-links-slot .company-dropdown .dropdown-heading { display: none; }
+  .landing-root #nav-mobile-links-slot .company-links { grid-template-columns: minmax(0, 1fr); }
+  .landing-root #nav-mobile-links-slot .company-link { padding: 10px 0; }
+
+  .landing-root #nav-mobile-links-slot #company-dropdown-trigger.is-accordion-open > img {
+    transform: rotate(180deg) !important;
   }
 }
 

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { CommunityDropdown } from './CommunityDropdown';
+import { CompanyDropdown } from './CompanyDropdown';
 import { ProductsDropdown } from './ProductsDropdown';
 
 /**
@@ -29,11 +30,12 @@ const SCROLL_DIRECTION_THRESHOLD = 6;
 // Vertical middle of the compact buttons (desktop), for telling when the
 // dark footer has slid under them.
 const COMPACT_MIDDLE = 59;
+// "Join us" opens on hover (desktop, mouse); this grace period lets the
+// pointer travel from the label down into the menu without it closing.
+const JOIN_HOVER_CLOSE_DELAY = 180;
 const INSTAGRAM_URL = 'https://www.instagram.com/siren.uix';
-// TODO: Motvin's X profile URL — none exists in the codebase yet.
-const X_URL = '#';
 
-type Menu = 'products' | 'community' | null;
+type Menu = 'products' | 'community' | 'company' | null;
 
 export function Navbar() {
   const { user } = useAuth();
@@ -51,6 +53,7 @@ export function Navbar() {
   const panelRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
   const signupRef = useRef<HTMLAnchorElement>(null);
+  const joinHoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const closePanel = useCallback(() => setPanelOpen(false), []);
 
@@ -141,7 +144,7 @@ export function Navbar() {
       const insideNav =
         navRef.current?.contains(target) ||
         (target instanceof Element &&
-          target.closest('.products-dropdown, .community-dropdown'));
+          target.closest('.products-dropdown, .community-dropdown, .company-dropdown'));
       if (!insideNav) {
         setOpenMenu(null);
       }
@@ -176,6 +179,45 @@ export function Navbar() {
     }
   };
 
+  // "Join us": on desktop it opens on hover, and a click only opens it (so a
+  // click right after hovering doesn't shut it); on mobile it's an accordion.
+  const onJoinClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isMobile) {
+      setOpenAccordion((prev) => (prev === 'community' ? null : 'community'));
+      return;
+    }
+    clearTimeout(joinHoverTimer.current);
+    setOpenMenu('community');
+  };
+  const onJoinEnter = (e: { pointerType: string }) => {
+    if (isMobile || e.pointerType !== 'mouse') return;
+    clearTimeout(joinHoverTimer.current);
+    setOpenMenu('community');
+  };
+  const onJoinLeave = (e: { pointerType: string }) => {
+    if (isMobile || e.pointerType !== 'mouse') return;
+    clearTimeout(joinHoverTimer.current);
+    joinHoverTimer.current = setTimeout(
+      () => setOpenMenu((open) => (open === 'community' ? null : open)),
+      JOIN_HOVER_CLOSE_DELAY,
+    );
+  };
+
+  // The Join us menu renders outside the nav, so it gets its own hover listeners.
+  useEffect(() => {
+    const menu = document.getElementById('community-dropdown');
+    if (isMobile || !menu) return;
+    menu.addEventListener('pointerenter', onJoinEnter);
+    menu.addEventListener('pointerleave', onJoinLeave);
+    return () => {
+      clearTimeout(joinHoverTimer.current);
+      menu.removeEventListener('pointerenter', onJoinEnter);
+      menu.removeEventListener('pointerleave', onJoinLeave);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the handlers only read isMobile
+  }, [isMobile]);
+
   // Never collapse while a mega-menu is open.
   const collapsed = !isMobile && scrolled && !pillReopened && !openMenu;
 
@@ -183,6 +225,14 @@ export function Navbar() {
   const communityOpen = openMenu === 'community';
   const productsAccordionOpen = openAccordion === 'products';
   const communityAccordionOpen = openAccordion === 'community';
+  const companyOpen = openMenu === 'company';
+  const companyAccordionOpen = openAccordion === 'company';
+  // Picking a Resources link closes the menu, and the hamburger panel on mobile.
+  const closeMenus = () => {
+    setOpenMenu(null);
+    setOpenAccordion(null);
+    setPanelOpen(false);
+  };
 
   const navLinks = (
     <nav className="nav-links">
@@ -192,7 +242,7 @@ export function Navbar() {
         id="products-dropdown-trigger"
         onClick={toggleMenu('products')}
       >
-        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Products</span>
+        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Explore tools</span>
         <img
           src="/ASSET/Icons/desktop-arrow.svg"
           alt=""
@@ -203,26 +253,6 @@ export function Navbar() {
           src="/ASSET/Icons/nav-drop-arrow.svg"
           alt=""
           className="products-mobile-arrow"
-          style={{ width: '14px', height: '14px', opacity: '0.5' }}
-        />
-      </a>
-      <a
-        href="#"
-        className={`nav-item${communityOpen ? ' active' : ''}${communityAccordionOpen ? ' is-accordion-open' : ''}`}
-        id="community-dropdown-trigger"
-        onClick={toggleMenu('community')}
-      >
-        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Community</span>
-        <img
-          src="/ASSET/Icons/desktop-arrow.svg"
-          alt=""
-          className="community-desktop-arrow"
-          style={{ width: '18px', height: '18px' }}
-        />
-        <img
-          src="/ASSET/Icons/nav-drop-arrow.svg"
-          alt=""
-          className="community-mobile-arrow"
           style={{ width: '14px', height: '14px', opacity: '0.5' }}
         />
       </a>
@@ -240,9 +270,49 @@ export function Navbar() {
       >
         {isMobile && <CommunityDropdown open={communityAccordionOpen} />}
       </div>
-      <a href="/updates/" target="_blank" className="nav-item" onClick={closePanel}>
-        <span>Updates</span>
+      {/* Resources: Updates, About us, Request apps and Copyrights. */}
+      <a
+        href="#"
+        className={`nav-item${companyOpen ? ' active' : ''}${companyAccordionOpen ? ' is-accordion-open' : ''}`}
+        id="company-dropdown-trigger"
+        onClick={toggleMenu('company')}
+      >
+        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Resources</span>
+        <img
+          src="/ASSET/Icons/desktop-arrow.svg"
+          alt=""
+          className="company-desktop-arrow"
+          style={{ width: '18px', height: '18px' }}
+        />
+        <img
+          src="/ASSET/Icons/nav-drop-arrow.svg"
+          alt=""
+          className="company-mobile-arrow"
+          style={{ width: '14px', height: '14px', opacity: '0.5' }}
+        />
       </a>
+      <a
+        href="#"
+        className={`nav-item${communityOpen ? ' active' : ''}${communityAccordionOpen ? ' is-accordion-open' : ''}`}
+        id="community-dropdown-trigger"
+        onClick={onJoinClick}
+        onPointerEnter={onJoinEnter}
+        onPointerLeave={onJoinLeave}
+      >
+        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Join us</span>
+        <img
+          src="/ASSET/Icons/nav-drop-arrow.svg"
+          alt=""
+          className="community-mobile-arrow"
+          style={{ width: '14px', height: '14px', opacity: '0.5' }}
+        />
+      </a>
+      <div
+        className={`mi-nav-company-accordion${companyAccordionOpen ? ' is-open' : ''}`}
+        id="mi-nav-company-accordion"
+      >
+        {isMobile && <CompanyDropdown open={companyAccordionOpen} onNavigate={closeMenus} />}
+      </div>
     </nav>
   );
 
@@ -287,9 +357,13 @@ export function Navbar() {
       <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="nav-social-link" aria-label="Motvin on Instagram">
         <img src="/ASSET/landing/nav-instagram-filled.svg" alt="" width={20} height={20} />
       </a>
-      <a href={X_URL} target="_blank" rel="noopener noreferrer" className="nav-social-link" aria-label="Motvin on X">
+      {/* No X profile yet: not a link, just a "Coming soon" tip on hover. */}
+      <span className="nav-social-link is-soon" tabIndex={0} aria-label="Motvin on X, coming soon">
         <img src="/ASSET/landing/nav-x.svg" alt="" width={20} height={20} />
-      </a>
+        <span className="nav-social-tip" aria-hidden="true">
+          Coming soon
+        </span>
+      </span>
     </div>
   );
 
@@ -384,6 +458,7 @@ export function Navbar() {
           nav accordions above. */}
       {!isMobile && <ProductsDropdown open={productsOpen} />}
       {!isMobile && <CommunityDropdown open={communityOpen} />}
+      {!isMobile && <CompanyDropdown open={companyOpen} onNavigate={closeMenus} />}
 
       <div
         className={`mi-nav-mobile-panel${panelOpen ? ' is-open' : ''}`}

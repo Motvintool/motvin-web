@@ -55,6 +55,7 @@ export function ProductsDropdown({ open }: { open: boolean }) {
         {/* Right Column: Product Links */}
         <div className="products-dropdown-right">
           <p className="dropdown-heading">More tools</p>
+          {/* Tools that aren't live yet are plain rows with a "Soon" tag, not links. */}
           <div className="dropdown-products-grid">
             {/* Motvin Inspirations */}
             <a href="/inspirations" className="product-link">
@@ -70,7 +71,7 @@ export function ProductsDropdown({ open }: { open: boolean }) {
               </div>
             </a>
             {/* Motvin Convert */}
-            <a href="/MOTVIN" target="_blank" className="product-link">
+            <div className="product-link is-soon" aria-disabled="true">
               <div
                 className="product-link-icon"
                 style={{ backgroundColor: "rgba(135,79,255,0.08)" }}
@@ -78,12 +79,15 @@ export function ProductsDropdown({ open }: { open: boolean }) {
                 <img src="/ASSET/svg/motvin-convert.svg" alt="" />
               </div>
               <div className="product-link-text">
-                <h4>Motvin Convert</h4>
+                <h4>
+                  Motvin Convert
+                  <span className="product-soon">Soon</span>
+                </h4>
                 <p>Turn any website into an editable design</p>
               </div>
-            </a>
+            </div>
             {/* Motvin Extension */}
-            <a href="#" className="product-link">
+            <div className="product-link is-soon" aria-disabled="true">
               <div
                 className="product-link-icon"
                 style={{ backgroundColor: "rgba(0,182,255,0.08)" }}
@@ -91,10 +95,13 @@ export function ProductsDropdown({ open }: { open: boolean }) {
                 <img src="/ASSET/svg/motvin-extension.svg" alt="" />
               </div>
               <div className="product-link-text">
-                <h4>Motvin Extension</h4>
+                <h4>
+                  Motvin Extension
+                  <span className="product-soon">Soon</span>
+                </h4>
                 <p>Convert websites directly from your browser</p>
               </div>
-            </a>
+            </div>
             {/* Motvin Icons */}
             <a href="/icons" target="_blank" className="product-link">
               <div
@@ -135,7 +142,7 @@ export function ProductsDropdown({ open }: { open: boolean }) {
               </div>
             </a>
             {/* Motvin Typescales */}
-            <a href="/MOTVIN/typeface" target="_blank" className="product-link">
+            <div className="product-link is-soon" aria-disabled="true">
               <div
                 className="product-link-icon"
                 style={{ backgroundColor: "rgba(255,55,55,0.08)" }}
@@ -143,10 +150,13 @@ export function ProductsDropdown({ open }: { open: boolean }) {
                 <img src="/ASSET/svg/motvin-typescales.svg" alt="" />
               </div>
               <div className="product-link-text">
-                <h4>Motvin Typescales</h4>
+                <h4>
+                  Motvin Typescales
+                  <span className="product-soon">Soon</span>
+                </h4>
                 <p>Generate and customize typeface variants</p>
               </div>
-            </a>
+            </div>
           </div>
         </div>
       </div>

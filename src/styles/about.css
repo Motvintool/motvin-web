@@ -395,6 +395,9 @@
 
 a.abt-product:hover { background: #ececef; }
 
+/* Not live yet: a "not allowed" cursor, since the card isn't a link. */
+.abt-product.is-soon { cursor: not-allowed; }
+
 /* Inspirations, the flagship, gets a row of its own, so the other six sit in
    three even rows. */
 .abt-product-grid > li:first-child { grid-column: 1 / -1; }

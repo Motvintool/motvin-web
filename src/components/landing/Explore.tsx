@@ -11,7 +11,8 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
  */
 
 const TOOLS = [
-  { title: 'Explore Colors', text: 'Palettes and colour styles for your next design.', href: '/MOTVIN/styles', img: '/ASSET/Images/decor1.webp', tone: 'purple' },
+  // Not live yet: shown with a "Soon" tag and no link.
+  { title: 'Explore Colors', text: 'Palettes and colour styles for your next design.', href: null, img: '/ASSET/Images/decor1.webp', tone: 'purple' },
   { title: 'Icons Library', text: 'Icons ready to drop into your designs.', href: '/icons', img: '/ASSET/Images/decor2.webp', tone: 'green' },
   { title: 'Logos Library', text: 'Brand logos from the apps and companies you know.', href: '/logos', img: '/ASSET/Images/decor3.webp', tone: 'orange' },
 ];
@@ -30,18 +31,30 @@ export function Explore() {
       </div>
 
       <div className="lpi-explore-grid">
-        {TOOLS.map((tool) => (
-          <a className={`lpi-explore-card is-${tool.tone}`} href={tool.href} target="_blank" rel="noopener" key={tool.title}>
-            <span className="lpi-explore-icon">
-              <img src={tool.img} alt="" />
-            </span>
-            <span className="lpi-explore-copy">
-              <b>{tool.title}</b>
-              <span>{tool.text}</span>
-            </span>
-            {ARROW}
-          </a>
-        ))}
+        {TOOLS.map((tool) => {
+          const body = (
+            <>
+              <span className="lpi-explore-icon">
+                <img src={tool.img} alt="" />
+              </span>
+              <span className="lpi-explore-copy">
+                <b>{tool.title}</b>
+                <span>{tool.text}</span>
+              </span>
+            </>
+          );
+          return tool.href ? (
+            <a className={`lpi-explore-card is-${tool.tone}`} href={tool.href} target="_blank" rel="noopener" key={tool.title}>
+              {body}
+              {ARROW}
+            </a>
+          ) : (
+            <div className={`lpi-explore-card is-${tool.tone} is-soon`} aria-disabled="true" key={tool.title}>
+              {body}
+              <span className="lpi-explore-soon">Soon</span>
+            </div>
+          );
+        })}
 
         {user ? (
           <Link className="lpi-explore-card is-dark" href={INSPIRATIONS_ROUTES.explore}>

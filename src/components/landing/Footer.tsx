@@ -136,8 +136,7 @@ export function Footer() {
             {/* Who owns the screens and logos shown on Motvin, and where owners
                 can ask for them to be removed (the Copyrights page's removal section). */}
             <p className="lpi-footer-note">
-              All app names, logos and screenshots belong to their respective owners and are shown for design reference. Motvin is not
-              affiliated with them. Own something shown here?{' '}
+              App names, logos and screenshots belong to their owners. Motvin isn&apos;t affiliated with them.{' '}
               <Link href="/copyrights#ask-for-a-change-or-removal">Request a removal</Link>
             </p>
             <a
@@ -153,9 +152,10 @@ export function Footer() {
           <nav className="lpi-footer-links" aria-label="Footer">
             <div>
               <h2>Tools</h2>
-              <a href="/MOTVIN/styles" target="_blank">Color Generator</a>
-              <a href="/MOTVIN/typeface" target="_blank">Typescale</a>
-              <a href="/MOTVIN" target="_blank">Live Convert</a>
+              {/* Not live yet: plain text with a "Soon" tag, like the Resources column. */}
+              <span className="is-soon" title="Coming Soon" aria-disabled="true">Color Generator</span>
+              <span className="is-soon" title="Coming Soon" aria-disabled="true">Typescale</span>
+              <span className="is-soon" title="Coming Soon" aria-disabled="true">Live Convert</span>
             </div>
             <div>
               <h2>Resources</h2>
