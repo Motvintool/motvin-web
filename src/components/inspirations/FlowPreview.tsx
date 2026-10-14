@@ -2,12 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
-import { flowCategoryLabel, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
+import { flowCategoryLabel, PLATFORM_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { ExternalIcon } from './Icons';
@@ -19,6 +19,14 @@ import { useAsync } from './useAsync';
 
 /** Search-param name that opens the overlay — see SCREEN_PARAM in ScreenPreviewModal.tsx. */
 export const FLOW_PARAM = 'flow';
+
+/** How long each step shows while the flow plays. */
+const STEP_MS = 2600;
+
+/** "Login" for a step's label; a screen with no real type falls back to its own name. */
+function stepLabel(screen: Screen): string {
+  return screen.screenType && screen.screenType !== 'other' ? screenTypeLabel(screen.screenType) : screen.name;
+}
 
 /** The mounted flag never changes after hydration, so nothing to subscribe to. */
 function subscribeNever() {
@@ -62,7 +70,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   const { data, loading } = useAsync(() => inspirationsApi.getFlow(flowId), `flow-preview:${flowId}`);
   const flow = data?.flow ?? null;
   const app = data?.app ?? null;
-  const screens = data?.screens ?? [];
+  const screens = useMemo(() => data?.screens ?? [], [data]);
 
   const [atStart, setAtStart] = useState(true);
   const [atEnd, setAtEnd] = useState(true);
@@ -74,6 +82,8 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   const [multiScreen, setMultiScreen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [zoomScreen, setZoomScreen] = useState<Screen | null>(null);
+  // The player: steps through the flow on its own, one step every STEP_MS.
+  const [playing, setPlaying] = useState(false);
 
   // A different `?flow=` (a fresh open, or a shared link) starts over rather
   // than carrying across the last flow's filmstrip mode, step, or zoom state.
@@ -84,6 +94,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     setMultiScreen(false);
     setMoreOpen(false);
     setZoomScreen(null);
+    setPlaying(false);
   }
 
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
@@ -97,6 +108,37 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     if (window.history.length > 1) router.back();
     else router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [params, pathname, router]);
+
+  const lastIndex = screens.length - 1;
+  // Play from the top again once the flow has reached its last step.
+  const togglePlay = useCallback(() => {
+    if (playing) {
+      setPlaying(false);
+      return;
+    }
+    setActiveIndex((i) => (i >= lastIndex ? 0 : i));
+    setPlaying(true);
+  }, [playing, lastIndex]);
+
+  // While playing: move on after STEP_MS, and stop once the last step has had
+  // its turn. Stepping by hand restarts the wait for the new step. The filmstrip
+  // view and the zoomed lightbox pause it.
+  const playerPaused = !playing || multiScreen || Boolean(zoomScreen) || screens.length < 2;
+  useEffect(() => {
+    if (playerPaused) return;
+    const timer = window.setTimeout(() => {
+      if (activeIndex >= lastIndex) setPlaying(false);
+      else setActiveIndex(activeIndex + 1);
+    }, STEP_MS);
+    return () => window.clearTimeout(timer);
+  }, [playerPaused, activeIndex, lastIndex]);
+
+  // Fetch the next step's screenshot ahead of time so playing never flashes blank.
+  useEffect(() => {
+    const next = screens[activeIndex + 1];
+    const src = next ? inspirationsApi.mediaUrl(next.url) : null;
+    if (src) new Image().src = src;
+  }, [screens, activeIndex]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -124,6 +166,19 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
         else setActiveIndex((i) => Math.min(i + 1, screens.length - 1));
         return;
       }
+      if (!multiScreen && screens.length > 1) {
+        if (e.key === ' ') {
+          // Also keeps Space from pressing whichever button has focus.
+          e.preventDefault();
+          togglePlay();
+          return;
+        }
+        if (e.key === 'Home' || e.key === 'End') {
+          e.preventDefault();
+          setActiveIndex(e.key === 'Home' ? 0 : screens.length - 1);
+          return;
+        }
+      }
       if ((e.key === 's' || e.key === 'S') && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         saveBtnRef.current?.click();
@@ -131,7 +186,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [close, screens.length, multiScreen, zoomScreen]);
+  }, [close, screens.length, multiScreen, zoomScreen, togglePlay]);
 
   useEffect(() => {
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
@@ -273,6 +328,55 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                 </>
               )}
             </div>
+
+            {!multiScreen && screens.length > 1 && (
+              <div className="ins-flow-player">
+                <button
+                  type="button"
+                  className="ins-flow-player-play"
+                  aria-label={playing ? 'Pause flow' : 'Play flow'}
+                  aria-pressed={playing}
+                  onClick={togglePlay}
+                >
+                  {playing ? (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
+                      <rect x="2.5" y="2" width="3.2" height="10" rx="1" />
+                      <rect x="8.3" y="2" width="3.2" height="10" rx="1" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
+                      <path d="M4 2.6c0-.8.86-1.28 1.53-.86l6.1 3.9a1 1 0 010 1.7l-6.1 3.9A1 1 0 014 10.4V2.6z" />
+                    </svg>
+                  )}
+                </button>
+                <div
+                  className={`ins-flow-player-steps ${playerPaused ? '' : 'is-playing'} ${screens.length > 16 ? 'is-dense' : ''}`}
+                  role="group"
+                  aria-label="Flow steps"
+                  style={{ '--ins-flow-step-ms': `${STEP_MS}ms` } as CSSProperties}
+                >
+                  {screens.map((s, i) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`ins-flow-player-step ${i < activeIndex ? 'is-done' : ''} ${i === activeIndex ? 'is-current' : ''}`}
+                      aria-label={`Step ${i + 1}: ${stepLabel(s)}`}
+                      aria-current={i === activeIndex ? 'step' : undefined}
+                      onClick={() => setActiveIndex(i)}
+                    >
+                      {/* Keyed on the step so its fill restarts each time it becomes current. */}
+                      <span key={i === activeIndex ? `on-${activeIndex}-${playerPaused}` : 'off'} />
+                    </button>
+                  ))}
+                </div>
+                <p className="ins-flow-player-label" aria-live="polite">
+                  <b>
+                    {activeIndex + 1} of {screens.length}
+                  </b>
+                  {active && <> · {stepLabel(active)}</>}
+                </p>
+              </div>
+            )}
 
             <div className="ins-screen-preview-foot">
               <div className="ins-screen-preview-foot-tags">

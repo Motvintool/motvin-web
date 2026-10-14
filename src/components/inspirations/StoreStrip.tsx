@@ -1,6 +1,5 @@
 'use client';
 
-import type { ReactNode } from 'react';
 import type { Platform } from '@/lib/inspirations/types';
 import type { StoreStats } from '@/lib/inspirations/storeStats';
 import { useStoreStats } from './useStoreStats';
@@ -10,9 +9,7 @@ import { useStoreStats } from './useStoreStats';
  * pill, then one line of text. iOS gets rank, rating, price, size and last
  * update (see storeStats.ts for what the store publishes). Shows a
  * skeleton while loading and nothing for Web Apps, Webs or when the store has no numbers.
- *
- * `trailing` (the Palette pill) sits at the strip's right end; with it, the
- * strip still shows for an app without store numbers, holding just that.
+
  */
 
 type Stat = { key: string; prefix?: string; star?: boolean; value: string; suffix?: string };
@@ -31,27 +28,18 @@ function statsFor(s: StoreStats): Stat[] {
   return out;
 }
 
-export function StoreStrip({
-  name,
-  platform,
-  trailing,
-}: {
-  name: string;
-  platform: Platform;
-  trailing?: ReactNode;
-}) {
+export function StoreStrip({ name, platform }: { name: string; platform: Platform }) {
   const { store, stats } = useStoreStats(name, platform);
   const loading = Boolean(store) && stats === undefined;
   const items = store && stats ? statsFor(stats) : [];
   const hasStore = Boolean(store) && (loading || items.length > 0);
-  if (!hasStore && !trailing) return null;
+  if (!hasStore) return null;
 
   const storeName = 'App Store';
 
   return (
-    <section className="ins-storebar" aria-label={hasStore ? `${storeName} stats` : undefined} aria-busy={loading}>
+    <section className="ins-storebar" aria-label={`${storeName} stats`} aria-busy={loading}>
       <div className="ins-storebar-row">
-      {hasStore && (
       <div className="ins-storebar-left">
         <span className="ins-storebar-pill">
           <img src="/ASSET/Icons/Motvin/store-appstore.svg" alt="" width={24} height={24} />
@@ -72,8 +60,6 @@ export function StoreStrip({
           </ul>
         )}
       </div>
-      )}
-      {trailing && <div className="ins-storebar-trailing">{trailing}</div>}
       </div>
     </section>
   );

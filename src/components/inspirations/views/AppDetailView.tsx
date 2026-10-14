@@ -12,7 +12,6 @@ import { AppMenu } from '../AppMenu';
 import { AppPaletteMenu, useAppPalette } from '../AppPalette';
 import { AppRating } from '../AppRating';
 import { StoreStrip } from '../StoreStrip';
-import { StoreButton } from '../StoreButton';
 import { StoreRankBadge } from '../StoreRankBadge';
 import { useDownloadAllScreens } from '../useDownloadAllScreens';
 import { useLibrary } from '../useLibrary';
@@ -523,7 +522,7 @@ export function AppDetailView({
   const versionPatternCount = patterns.filter((p) => p.screenIds.some((id) => versionScreenIds.has(id))).length;
 
   // The app's colours (from the shown version's screens), behind the
-  // Palette pill at the end of the store strip.
+  // Palette button next to Save.
   const palette = useAppPalette(app, versionScreens, version);
 
   // Docks into the header on scroll, same as the browse pages' own filter
@@ -760,10 +759,17 @@ export function AppDetailView({
             <img src={`/ASSET/Icons/Motvin/${saved ? 'saved.svg' : 'unsaved.svg'}`} alt="" width={16} height={16} />
             <span>{saved ? 'Saved' : 'Save'}</span>
           </button>
-          {store && <StoreButton name={app.name} platform={appPlatform(app)} action={store} />}
+          <AppPaletteMenu
+            app={app}
+            colors={palette}
+            screens={versionScreens}
+            flowCount={versionFlows.length}
+            patternCount={versionPatternCount}
+          />
           <AppMenu
             busy={dl.busy}
             versions={app.versions ?? []}
+            store={store ? { name: app.name, platform: appPlatform(app), action: store } : undefined}
             onDownloadAll={() => void dl.downloadAll()}
             onDownloadVersion={(id) => void dl.downloadVersion(id)}
           />
@@ -773,15 +779,6 @@ export function AppDetailView({
       <StoreStrip
         name={app.name}
         platform={appPlatform(app)}
-        trailing={
-          <AppPaletteMenu
-            app={app}
-            colors={palette}
-            screens={versionScreens}
-            flowCount={versionFlows.length}
-            patternCount={versionPatternCount}
-          />
-        }
       />
 
       {floatOpen && (

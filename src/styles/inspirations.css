@@ -3205,6 +3205,47 @@ select.ins-input {
    justify-content — the tag group and the show-all/more pair are
    independently pinned via absolute positioning at the same left:24px /
    right:32px offsets Figma uses, not derived from flex distribution. */
+/* The flow player (FlowPreview.tsx), between the screenshot and the footer:
+   play/pause, one segment per step (done ones filled, the current one
+   filling while it plays; click one to jump), then "3 of 8 · Login". */
+.ins-flow-player { display: flex; align-items: center; gap: 14px; width: min(560px, calc(100% - 48px)); margin: 20px auto 0; flex: none; }
+.ins-flow-player-play { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 1px solid #ccc; border-radius: 100px; background: transparent; color: #141414; cursor: var(--ins-cursor-hand, pointer); transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease); }
+.ins-flow-player-play:hover { border-color: #141414; }
+.ins-flow-player-play[aria-pressed="true"] { background: #141414; border-color: #141414; color: #fff; }
+.ins-flow-player-play:focus-visible { outline: 2px solid #141414; outline-offset: 2px; }
+.ins-flow-player-steps { display: flex; flex: 1 1 0; min-width: 0; gap: 4px; }
+/* Long flows (Spotify's onboarding has 31 steps): tighter gaps so each segment keeps some length. */
+.ins-flow-player-steps.is-dense { gap: 2px; }
+.ins-flow-player-step { position: relative; flex: 1 1 0; min-width: 0; height: 16px; padding: 0; border: 0; background: none; cursor: var(--ins-cursor-hand, pointer); }
+.ins-flow-player-step::before,
+.ins-flow-player-step span { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: 999px; }
+.ins-flow-player-step::before { background: #e4e4e2; transition: background var(--ins-fast) var(--ins-ease); }
+.ins-flow-player-step:hover::before { background: #d2d2d0; }
+.ins-flow-player-step span { right: auto; width: 0; background: #141414; }
+.ins-flow-player-step.is-done span,
+.ins-flow-player-step.is-current span { width: 100%; }
+.ins-flow-player-steps.is-playing .ins-flow-player-step.is-current span { width: 0; animation: insFlowStepFill var(--ins-flow-step-ms, 2600ms) linear forwards; }
+@keyframes insFlowStepFill { to { width: 100%; } }
+.ins-flow-player-step:focus-visible { outline: 2px solid #141414; outline-offset: 1px; border-radius: 4px; }
+.ins-flow-player-label { flex: none; min-width: 120px; margin: 0; font: 400 14px/1.2 var(--font-manrope), Inter, sans-serif; color: #696969; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ins-flow-player-label b { font-weight: 700; color: #141414; }
+@media (max-width: 640px) {
+  .ins-flow-player { gap: 10px; margin-top: 14px; }
+  .ins-flow-player-label { min-width: 0; font-size: 13px; }
+  /* Too narrow for a segment per step in a long flow: one continuous bar
+     (still one tap target per step) that fills step by step. */
+  .ins-flow-player-steps.is-dense { gap: 0; }
+  .ins-flow-player-steps.is-dense .ins-flow-player-step::before,
+  .ins-flow-player-steps.is-dense .ins-flow-player-step span { border-radius: 0; }
+  .ins-flow-player-steps.is-dense .ins-flow-player-step:first-child::before,
+  .ins-flow-player-steps.is-dense .ins-flow-player-step:first-child span { border-radius: 999px 0 0 999px; }
+  .ins-flow-player-steps.is-dense .ins-flow-player-step:last-child::before,
+  .ins-flow-player-steps.is-dense .ins-flow-player-step:last-child span { border-radius: 0 999px 999px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-flow-player-steps.is-playing .ins-flow-player-step.is-current span { width: 100%; animation: none; }
+}
+
 .ins-screen-preview-foot {
   position: relative;
   display: flex;
@@ -10338,6 +10379,9 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   width: 100%;
 }
 
+/* A menu item that's a link (View in App Store): no underline, menu colours. */
+.ins-context-menu-link { color: inherit; text-decoration: none; }
+
 .ins-context-menu-btn {
   background: transparent;
   border: none;
@@ -10990,42 +11034,55 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 .ins-storebar-muted { color: #696969; }
 .ins-storebar-star { margin-right: 1px; }
 .ins-storebar-skel { width: 360px; height: 14px; border-radius: 6px; }
-.ins-storebar-trailing { margin-left: auto; display: flex; align-items: center; }
 
 /* ---- Brand palette (AppPalette.tsx) ----
    A "Palette" pill at the end of the store strip with the app's five colours
    as overlapping dots; it opens a white card just below the strip: one band
    of the colours, each as wide as its share of the app (hover widens it,
    click copies the hex), then one line of counts. */
-.ins-palette-pill { display: inline-flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px 0 16px; border: 1px solid #dcdcda; border-radius: 999px; background: transparent; color: #111; font: 600 13px/1 var(--font-manrope), Inter, sans-serif; cursor: var(--ins-cursor-hand, pointer); transition: background .2s ease, color .2s ease, border-color .2s ease, scale .2s ease; }
-.ins-palette-pill:hover:not(:disabled) { border-color: #bdbdbb; }
-.ins-palette-pill:active:not(:disabled) { scale: .97; }
+/* The Palette button sits in the masthead with the App Store button's look
+   (.ins-btn--masthead-store); open, it keeps the hover border. */
+.ins-palette-pill { cursor: var(--ins-cursor-hand, pointer); }
 .ins-palette-pill:disabled { cursor: default; }
-.ins-palette-pill.is-open { background: #111; color: #fff; border-color: #111; }
-.ins-palette-pill.is-open .ins-palette-dots span { box-shadow: 0 0 0 2px #111, inset 0 0 0 1px rgba(255, 255, 255, .2); }
+.ins-palette-pill.is-open { border-color: var(--ins-border-strong) !important; }
 .ins-palette-pill:focus-visible { outline: 2px solid #111; outline-offset: 2px; }
-/* The colours as overlapping circles. Each has a ring in the colour behind
-   it (the strip's grey, black once open) so the overlaps read as separate
-   circles, and a faint inner edge so white doesn't vanish. */
-.ins-palette-dots { display: inline-flex; padding-left: 5px; }
-.ins-palette-dots span { width: 20px; height: 20px; margin-left: -6px; border-radius: 50%; background: #ececea; box-shadow: 0 0 0 2px #f3f3f2, inset 0 0 0 1px rgba(0, 0, 0, .12); transition: box-shadow .2s ease, translate .25s cubic-bezier(.22, 1, .36, 1); }
-.ins-palette-pill:hover:not(:disabled) .ins-palette-dots span { translate: 0 0; }
-.ins-palette-pill:hover:not(:disabled) .ins-palette-dots span + span { translate: 2px 0; }
+/* Two of the colours (see pillColors) as overlapping 20px circles. Each is ringed in the button's
+   white so the overlaps read as separate circles, has a crisp inner edge so
+   white and light colours don't vanish into the button, and a soft shadow
+   so neighbouring dark colours stay apart. On hover (and while open) they
+   fan out evenly; translate doesn't move the button's layout. */
+.ins-palette-dots { display: inline-flex; align-items: center; padding-left: 4px; }
+.ins-palette-dots span { position: relative; flex: none; width: 20px; height: 20px; margin-left: -4px; border-radius: 50%; background: #ececea; box-shadow: 0 0 0 2px #fff, 0 1px 3px 2px rgba(0, 0, 0, .1), inset 0 0 0 1px rgba(0, 0, 0, .16); transition: translate .3s cubic-bezier(.22, 1, .36, 1); }
+.ins-palette-pill:hover:not(:disabled) .ins-palette-dots span:nth-child(2),
+.ins-palette-pill.is-open .ins-palette-dots span:nth-child(2) { translate: 2px 0; }
+.ins-palette-pill:hover:not(:disabled) .ins-palette-dots span:nth-child(3),
+.ins-palette-pill.is-open .ins-palette-dots span:nth-child(3) { translate: 4px 0; }
+.ins-palette-pill:hover:not(:disabled) .ins-palette-dots span:nth-child(4),
+.ins-palette-pill.is-open .ins-palette-dots span:nth-child(4) { translate: 6px 0; }
+/* "+3": a circle like the colours, in light grey with the count. The label
+   is trimmed to the digits' cap height, so the circle centres the ink itself
+   rather than Manrope's line box (which sits it low, by a different amount
+   per browser); browsers without text-box get a 1px lift instead. The "+"
+   is smaller so the count leads, lifted 0.65px so its middle lines up with
+   the 11px digit's (both measured from Manrope's glyphs). */
+.ins-palette-dots .ins-palette-more { display: flex; align-items: center; justify-content: center; box-sizing: border-box; background: #eeeeec; color: #3a3a3a; font: 800 11px/1 var(--font-manrope), Inter, sans-serif; letter-spacing: -.03em; font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px #fff, inset 0 0 0 1px rgba(0, 0, 0, .08); border-radius: 999px; }
+.ins-palette-dots .ins-palette-more-label { display: inline-block; width: auto; height: auto; margin: 0; background: none; box-shadow: none; border-radius: 0; text-box: trim-both cap alphabetic; }
+.ins-palette-more-label small { font-size: 9px; vertical-align: .65px; }
+@supports not (text-box: trim-both cap alphabetic) {
+  .ins-palette-dots .ins-palette-more { padding-bottom: 1px; }
+}
 .ins-palette-dots.is-loading span { animation: insPaletteShimmer 1.2s ease-in-out infinite; }
 .ins-palette-dots.is-loading span:nth-child(2) { animation-delay: .1s; }
 .ins-palette-dots.is-loading span:nth-child(3) { animation-delay: .2s; }
-.ins-palette-dots.is-loading span:nth-child(4) { animation-delay: .3s; }
-.ins-palette-dots.is-loading span:nth-child(5) { animation-delay: .4s; }
 @keyframes insPaletteShimmer { 50% { background: #f6f6f4; } }
-.ins-palette-chevron { flex: none; transition: transform .25s cubic-bezier(.22, 1, .36, 1); }
-.ins-palette-pill.is-open .ins-palette-chevron { transform: rotate(180deg); }
 
-/* Drops down from the pill's right edge, clear of the strip (whose 12px
-   padding sits under the pill), and floats over the page, like the
+/* Drops down below the masthead buttons and floats over the page, like the
    app's menus (.ins-context-menu): a white face in a thick light-grey frame
-   with the same soft shadow. */
-.ins-palette-menu { position: relative; }
-.ins-palette-pop { position: absolute; top: calc(100% + 24px); right: 0; z-index: 60; width: min(880px, calc(100vw - 64px)); visibility: hidden; opacity: 0; translate: 0 -6px; scale: .98; transform-origin: top right; pointer-events: none; transition: opacity .2s ease, translate .3s cubic-bezier(.22, 1, .36, 1), scale .3s cubic-bezier(.22, 1, .36, 1), visibility 0s linear .3s; }
+   with the same soft shadow. It hangs from the buttons' right edge (not the
+   Palette button's, which sits mid-row) so it never runs off the page. */
+.ins-masthead-actions:has(.ins-palette-menu) { position: relative; }
+.ins-palette-menu { display: inline-flex; }
+.ins-palette-pop { position: absolute; top: calc(100% + 12px); right: 0; z-index: 60; width: min(880px, calc(100vw - 64px)); visibility: hidden; opacity: 0; translate: 0 -6px; scale: .98; transform-origin: top right; pointer-events: none; transition: opacity .2s ease, translate .3s cubic-bezier(.22, 1, .36, 1), scale .3s cubic-bezier(.22, 1, .36, 1), visibility 0s linear .3s; }
 .ins-palette-pop.is-open { visibility: visible; opacity: 1; translate: 0 0; scale: 1; pointer-events: auto; transition-delay: 0s; }
 .ins-palette-card { padding: 16px 18px 18px; border: 7px solid #f0f0f0; border-radius: 24px; background: #fff; box-shadow: 0 12px 80px rgba(0, 0, 0, .08); }
 .ins-palette-head { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -11063,9 +11120,6 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 .ins-palette-brand { position: absolute; top: 10px; left: 10px; padding: 4px 8px; border-radius: 999px; background: rgba(255, 255, 255, .22); font: 700 10px/1 var(--font-manrope), Inter, sans-serif; letter-spacing: .04em; text-transform: uppercase; }
 .ins-palette-seg.is-light .ins-palette-brand { background: rgba(0, 0, 0, .08); }
 @media (max-width: 640px) {
-  .ins-storebar-trailing { margin-left: 0; }
-  .ins-palette-menu { position: static; }
-  .ins-storebar-row { position: relative; }
   .ins-palette-pop { left: 0; right: 0; width: auto; transform-origin: top center; }
   .ins-palette-card { padding: 12px; border-width: 5px; border-radius: 20px; }
   /* Too narrow for five tiles side by side: the colours stack as rows,
@@ -11079,7 +11133,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   .ins-palette-seg-icon, .ins-palette-brand { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ins-palette-pop, .ins-palette-seg, .ins-palette-chevron { transition: none; }
+  .ins-palette-pop, .ins-palette-seg, .ins-palette-dots span { transition: none; }
   .ins-palette-dots.is-loading span, .ins-palette-band--loading { animation: none; }
 }
 

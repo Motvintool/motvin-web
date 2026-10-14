@@ -52,9 +52,9 @@ export function useAppPalette(app: App, screens: Screen[], version: string): Pal
 }
 
 /**
- * The Palette pill and the panel it drops down, like the app's menus: it
- * floats over the page from the pill's right edge and closes on a click
- * outside it or Escape.
+ * The Palette button and the panel it drops down, like the app's menus: it
+ * floats over the page from the masthead buttons' right edge and closes on a
+ * click outside it or Escape.
  */
 export function AppPaletteMenu({
   app,
@@ -104,7 +104,21 @@ export function AppPaletteMenu({
   );
 }
 
-/** "Palette ●●●●● ⌄" at the end of the store strip; opens the card below it. */
+/** How many colours the pill shows; the panel shows them all. */
+const PILL_COLORS = 2;
+
+/**
+ * The pill's colours: the brand colour always, then the biggest of the rest,
+ * kept in the palette's own order (biggest share first).
+ */
+function pillColors(colors: PaletteColor[]): PaletteColor[] {
+  const primary = colors.find((c) => c.role === 'Primary');
+  const rest = colors.filter((c) => c !== primary).slice(0, primary ? PILL_COLORS - 1 : PILL_COLORS);
+  const keep = new Set(primary ? [...rest, primary] : rest);
+  return colors.filter((c) => keep.has(c));
+}
+
+/** "Palette ●●●●●" in the masthead next to Save, styled like the App Store button; opens the panel below it. */
 function PalettePill({
   colors,
   open,
@@ -118,22 +132,28 @@ function PalettePill({
   return (
     <button
       type="button"
-      className={`ins-palette-pill ${open ? 'is-open' : ''}`}
+      className={`ins-btn ins-btn--masthead-store ins-palette-pill ${open ? 'is-open' : ''}`}
       aria-expanded={open}
       aria-controls="ins-app-palette"
       onClick={onToggle}
       disabled={!colors}
     >
-      Palette
-      {/* The colours as overlapping circles, each ringed so a white one still shows. */}
+      {/* In a span like the App Store button's label, so it takes the same font. */}
+      <span>Palette</span>
+      {/* Two colours as overlapping circles, then "+3" for the ones the panel adds. */}
       <span className={`ins-palette-dots ${colors ? '' : 'is-loading'}`} aria-hidden>
-        {(colors ?? Array.from({ length: 5 }, () => null)).map((c, i) => (
+        {(colors ? pillColors(colors) : Array.from({ length: PILL_COLORS }, () => null)).map((c, i) => (
           <span key={c?.hex ?? i} style={c ? { background: c.hex } : undefined} />
         ))}
+        {colors && colors.length > PILL_COLORS && (
+          <span className="ins-palette-more">
+            <span className="ins-palette-more-label">
+              <small>+</small>
+              {colors.length - PILL_COLORS}
+            </span>
+          </span>
+        )}
       </span>
-      <svg className="ins-palette-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
-        <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
     </button>
   );
 }

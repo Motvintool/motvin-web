@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
-import type { AppVersion } from '@/lib/inspirations/types';
+import type { AppVersion, Platform } from '@/lib/inspirations/types';
+import type { StoreAction } from '@/lib/inspirations/storeAction';
+import { StoreMenuItem } from './StoreMenuItem';
 import { useToast } from './Toast';
 
 /**
  * The "…" menu on an app's masthead: the same menu, look and items as an app
  * card's right-click menu (AppCard) — Download all screens (with a submenu of
- * the app's dated versions) and Copy app link. Saving lives on the masthead's
+ * the app's dated versions) and Copy app link — then, below a divider, View
+ * in App Store (or Google Play / Visit website) when the app has one. Saving lives on the masthead's
  * own Save button, so it isn't repeated here.
  *
  * The downloads are supplied by the parent (useDownloadAllScreens), so they
@@ -24,11 +27,14 @@ const SUBMENU_CLOSE_MS = 150;
 export function AppMenu({
   busy,
   versions,
+  store,
   onDownloadAll,
   onDownloadVersion,
 }: {
   busy: boolean;
   versions: AppVersion[];
+  /** Where "View in App Store" goes; left out when the app has nowhere to send people. */
+  store?: { name: string; platform: Platform; action: StoreAction };
   onDownloadAll: () => void;
   onDownloadVersion: (versionId: string) => void;
 }) {
@@ -144,6 +150,13 @@ export function AppMenu({
                 </div>
               </button>
             </div>
+            {/* Set apart at the bottom, like Save collection in the card's menu. */}
+            {store && (
+              <>
+                <div className="ins-context-menu-divider" />
+                <StoreMenuItem {...store} onSelect={close} />
+              </>
+            )}
           </div>
 
           {showVersions && (
