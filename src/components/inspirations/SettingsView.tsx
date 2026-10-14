@@ -479,12 +479,14 @@ function RequestsSection({ uid, onCount }: { uid: string; onCount: (count: numbe
               <time className="ins-set-when">Requested {since(request.createdAtMs)}</time>
             </article>
           ))}
-          {Array.from({ length: empty }, (_, i) => (
-            <button key={`empty-${i}`} type="button" className="ins-set-slot ins-set-slot--empty" onClick={() => setAdding(true)}>
+          {/* One way to add, not a dashed box per free spot (the meter above
+              already says how many are left). */}
+          {empty > 0 && (
+            <button type="button" className="ins-set-slot ins-set-slot--empty" onClick={() => setAdding(true)}>
               <PlusIcon size={18} />
-              <span>{i === 0 ? 'Request an app' : 'Open spot'}</span>
+              <span>Request an app</span>
             </button>
-          ))}
+          )}
         </div>
       ) : (
         <div className="ins-set-slots" aria-busy="true">

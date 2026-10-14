@@ -5,6 +5,11 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 
 const SLOTS = 4;
 
+/** How often one slot moves on to its next logo by itself. */
+const AUTO_SWAP_MS = 2500;
+/** The order slots take turns in: left, right, left, right, so changes alternate sides. */
+const AUTO_SWAP_ORDER = [0, 2, 1, 3];
+
 /**
  * Logos of the apps in the library, which logo each slot shows, and a way to
  * move one slot on to its next logo. Slot n starts on logo n.
@@ -46,13 +51,27 @@ export function useAppLogoPicks(): { logos: string[]; picks: number[]; next: (sl
     [logos.length],
   );
 
+  // One slot at a time changes on its own, so the logos keep moving without
+  // all swapping at once. Waits while the tab is hidden; off with reduced motion.
+  useEffect(() => {
+    if (logos.length <= SLOTS) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let turn = 0;
+    const timer = window.setInterval(() => {
+      if (document.hidden) return;
+      next(AUTO_SWAP_ORDER[turn % AUTO_SWAP_ORDER.length]);
+      turn += 1;
+    }, AUTO_SWAP_MS);
+    return () => window.clearInterval(timer);
+  }, [logos.length, next]);
+
   return { logos, picks, next };
 }
 
 /**
  * One app-icon spot beside the hero headline. Shows the design's icon until the
- * library logos arrive, then the slot's picked logo; clicking it pops in the
- * next one.
+ * library logos arrive, then the slot's picked logo; it moves on by itself
+ * every so often (see useAppLogoPicks), and clicking it pops in the next one.
  */
 export function HeroLogoSlot({
   className,

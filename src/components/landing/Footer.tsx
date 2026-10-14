@@ -22,6 +22,9 @@ import { MotvinWordmark } from './MotvinWordmark';
  * rendered through it instead.
  */
 
+/** How much of the footer has to be showing before the wordmark starts to rise (0–1). */
+const WORDMARK_RISE_START = 0;
+
 const LANGUAGE_STORAGE_KEY = 'motvin_language';
 const DEFAULT_LANGUAGE: Language = 'English';
 // Room kept clear at the top when deciding whether the footer fits on
@@ -79,6 +82,7 @@ export function Footer() {
   // The page slides up to uncover the footer, but only while the whole footer
   // fits on screen; a taller one would hide its top for good.
   const [reveal, setReveal] = useState(false);
+  const wordmarkRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const footer = footerRef.current;
@@ -97,6 +101,50 @@ export function Footer() {
       window.clearTimeout(timer);
       observer.disconnect();
       window.removeEventListener('resize', check);
+    };
+  }, []);
+
+  // The wordmark rises up from below the footer's bottom edge as the footer
+  // comes into view, tied to the scroll (as on mobbin.com): it starts as
+  // soon as a sliver of the footer shows and lands when all of it does.
+  // Scrolling back sinks it again.
+  //
+  // The same reading also sets the page's own background: dark once the
+  // footer is mostly in view, white above it. That is what shows when a
+  // trackpad bounces past either end of the page, so a hard scroll to the
+  // bottom no longer flashes white under the dark footer.
+  useEffect(() => {
+    const footer = footerRef.current;
+    const wordmark = wordmarkRef.current;
+    if (!footer || !wordmark) return;
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const root = document.documentElement;
+    const sheet = document.querySelector<HTMLElement>('.landing-sheet');
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      // The footer either scrolls in, or sits stuck under the page sheet that
+      // slides up off it; whichever edge is lower is where it starts to show.
+      const top = Math.max(footer.getBoundingClientRect().top, sheet ? sheet.getBoundingClientRect().bottom : -Infinity);
+      const shown = Math.min(1, Math.max(0, (window.innerHeight - top) / footer.offsetHeight));
+      root.classList.toggle('lpi-at-footer', shown > 0.5);
+      if (still) return;
+      const rise = Math.min(1, Math.max(0, (shown - WORDMARK_RISE_START) / (1 - WORDMARK_RISE_START)));
+      // Ease out: quick at first, settling gently into place.
+      const eased = 1 - Math.pow(1 - rise, 3);
+      wordmark.style.setProperty('--lpi-wm-rise', String(1 - eased));
+    };
+    const schedule = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      root.classList.remove('lpi-at-footer');
     };
   }, []);
 
@@ -252,7 +300,7 @@ export function Footer() {
 
       {/* The outlined wordmark, edge to edge and running off the bottom.
           Each letter hops when hovered, and its dots spin. */}
-      <div className="lpi-footer-wordmark">
+      <div className="lpi-footer-wordmark" ref={wordmarkRef}>
         <MotvinWordmark />
       </div>
     </footer>

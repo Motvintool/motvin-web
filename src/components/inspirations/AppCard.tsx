@@ -11,6 +11,7 @@ import { AppLogo } from './AppLogo';
 import { Screenshot } from './Screenshot';
 import { useSiblingCycle } from './useSiblingCycle';
 import { useToast } from './Toast';
+import { useDownloadGate } from './useDownloadGate';
 import { inspirationsApi } from '@/lib/inspirations/api';
 
 const imgSaveRight = "/ASSET/Icons/Motvin/save-right.svg";
@@ -61,6 +62,7 @@ export function AppCard({
   );
 
   const { show: showToast } = useToast();
+  const { allow: allowDownload } = useDownloadGate();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showVersions, setShowVersions] = useState(false);
   const hideTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -111,6 +113,8 @@ export function AppCard({
     e.preventDefault();
     e.stopPropagation();
     setContextMenu(null);
+    // Guests get the sign-in notice instead.
+    if (!allowDownload()) return;
     try {
       const screensToDownload = previewScreens && previewScreens.length > 0 ? previewScreens : (activeScreen ? [activeScreen] : []);
       
@@ -170,6 +174,7 @@ export function AppCard({
     e.stopPropagation();
     setContextMenu(null);
     setShowVersions(false);
+    if (!allowDownload()) return;
     try {
       const data = await inspirationsApi.getApp(app.slug);
       if (!data) return;

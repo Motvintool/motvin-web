@@ -3,6 +3,7 @@
 import { Suspense, type ReactNode } from 'react';
 import { FlowPreview } from './FlowPreview';
 import { GuestRequestsNotice } from './GuestRequestsNotice';
+import { GuestDownloadNotice } from './GuestDownloadNotice';
 import { Header } from './Header';
 import { LibrarySync } from './LibrarySync';
 import { ScreenPreviewOverlay } from './ScreenPreviewModal';
@@ -50,6 +51,8 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
         <LibrarySync />
         {/* After a guest signs in: says their requests moved (or some didn't fit). Renders nothing. */}
         <GuestRequestsNotice />
+        {/* Tells a guest downloads need an account (see useDownloadGate). */}
+        <GuestDownloadNotice />
         <main className={`ins-main ${wide ? 'ins-main--wide' : ''}`}>{children}</main>
         {/* Reads ?flow= and renders over whatever page is showing. */}
         <Suspense fallback={null}>

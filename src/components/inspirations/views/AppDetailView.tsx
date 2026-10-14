@@ -756,7 +756,12 @@ export function AppDetailView({
             <span>{saved ? 'Saved' : 'Save'}</span>
           </button>
           {store && <StoreButton name={app.name} platform={appPlatform(app)} action={store} />}
-          <AppMenu count={dl.count} busy={dl.busy} onDownloadAll={() => void dl.downloadAll()} />
+          <AppMenu
+            busy={dl.busy}
+            versions={app.versions ?? []}
+            onDownloadAll={() => void dl.downloadAll()}
+            onDownloadVersion={(id) => void dl.downloadVersion(id)}
+          />
         </div>
       </header>
 

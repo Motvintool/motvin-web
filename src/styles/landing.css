@@ -2,16 +2,20 @@ html {
   scroll-behavior: smooth;
 }
 
-/* The landing page uses Manrope throughout, except its two big headlines, which stay in Outfit.
-   global.css already forces Manrope with !important; this makes it explicit for the landing page, and
-   the headline selectors carry an extra class so they win over the `.landing-root *` rule. */
+/* The landing page uses Manrope throughout, except its two big headlines: the hero's is in Plus Jakarta Sans,
+   the story title stays in Outfit. global.css already
+   forces Manrope with !important; this makes it explicit for the landing page, and the headline
+   selectors carry an extra class so they win over the `.landing-root *` rule. */
 .landing-root,
 .landing-root * {
   font-family: var(--font-manrope), sans-serif !important;
 }
 
 .landing-root .hero-title-rows,
-.landing-root .hero-title-rows *,
+.landing-root .hero-title-rows * {
+  font-family: var(--font-hero), var(--font-outfit), sans-serif !important;
+}
+
 .landing-root .lpi-story-title,
 .landing-root .lpi-story-title * {
   font-family: var(--font-outfit), sans-serif !important;
@@ -3341,11 +3345,11 @@ body {
 
 .hero-title-text-main,
 .interactive-word-wrapper {
-  font-family: var(--font-outfit), sans-serif;
-  font-weight: 500;
-  font-size: 55px;
+  font-family: var(--font-hero), var(--font-outfit), sans-serif;
+  font-weight: 600;
+  font-size: 68px;
   line-height: 1.1;
-  letter-spacing: -0.034em;
+  letter-spacing: -0.045em;
   color: #1c1c1e;
 }
 
@@ -3363,19 +3367,19 @@ body {
 }
 
 .interactive-word {
-  color: #767676;
+  color: #1c1c1e;
   white-space: nowrap;
 }
 
 /* The highlight sweeps through the word like ink: purple fills it from the
    left when it becomes active, and drains out to the left when the next
    word takes over, so the colour seems to travel along the line. Painted
-   with a two-tone background clipped to the text: purple half, grey half,
+   with a two-tone background clipped to the text: purple half, black half,
    and a soft edge between. */
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
   .interactive-word {
     color: transparent;
-    background-image: linear-gradient(90deg, #5c4ae1 0%, #5c4ae1 44%, #767676 56%, #767676 100%);
+    background-image: linear-gradient(90deg, #5c4ae1 0%, #5c4ae1 44%, #1c1c1e 56%, #1c1c1e 100%);
     background-size: 230% 100%;
     background-position: 100% 0;
     -webkit-background-clip: text;

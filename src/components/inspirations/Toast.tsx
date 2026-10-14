@@ -44,7 +44,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="ins-float-collection" role="status" aria-live="polite" style={{ zIndex: 10000, flexDirection: 'column', alignItems: 'center' }}>
+      <div className="ins-float-collection ins-toast-host" role="status" aria-live="polite" style={{ zIndex: 10000, flexDirection: 'column', alignItems: 'center' }}>
         {toasts.map((t) => (
           <div key={t.id} className="ins-float-collection-success" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span className="ins-float-collection-success-check" aria-hidden>

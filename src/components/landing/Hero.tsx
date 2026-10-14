@@ -18,7 +18,7 @@ const WORDS = [
   { label: 'Screens', href: INSPIRATIONS_ROUTES.screens },
   { label: 'Flows', href: INSPIRATIONS_ROUTES.flows },
   { label: 'Patterns', href: INSPIRATIONS_ROUTES.patterns },
-  { label: 'UI Designs', href: INSPIRATIONS_ROUTES.uiElements },
+  { label: 'UI', href: INSPIRATIONS_ROUTES.uiElements },
 ];
 const INITIAL_INDEX = 1;
 const CYCLE_MS = 3000;
@@ -120,7 +120,7 @@ export function Hero() {
         <div className="hero-title-interactive">
           <h1 className="hero-title-rows">
             <span className="hero-title-row">
-              <span className="hero-title-text-main">Get Inspired By Real App</span>
+              <span className="hero-title-text-main">Inspired By Real App</span>
             </span>
             <span className="hero-title-row">{WORDS.map((_, i) => word(i))}</span>
           </h1>

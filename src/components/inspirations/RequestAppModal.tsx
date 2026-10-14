@@ -58,7 +58,8 @@ export function RequestAppModal({
   onRequestsPage?: boolean;
   onClose: () => void;
 }) {
-  // Signed in: their account email is the one we write to, so the form doesn't ask for it.
+  // Signed in: the email field starts filled with their account email (they
+  // can still change or clear it).
   const { user } = useAuth();
   const accountEmail = user && !user.isAnonymous ? user.email : '';
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
@@ -67,7 +68,10 @@ export function RequestAppModal({
   const [platform, setPlatform] = useState<Platform>(PLATFORMS.some((p) => p.value === existing?.platform) ? (existing!.platform as Platform) : initialPlatform);
   const [link, setLink] = useState(existing?.link ?? '');
   const [note, setNote] = useState(existing?.note ?? '');
-  const [email, setEmail] = useState(existing?.email ?? '');
+  // null until they type: shows the account email, which may arrive a moment
+  // after the form opens.
+  const [email, setEmail] = useState<string | null>(existing?.email ?? null);
+  const emailValue = email ?? accountEmail ?? '';
   const [trap, setTrap] = useState('');
   const [state, setState] = useState<'editing' | 'sending' | 'sent'>('editing');
   const [error, setError] = useState('');
@@ -124,7 +128,7 @@ export function RequestAppModal({
         platform,
         link: link.trim() || undefined,
         note: note.trim() || undefined,
-        email: accountEmail || email.trim() || undefined,
+        email: emailValue.trim() || undefined,
       };
       if (existing) await updateMyRequest(existing.id, fields);
       else await submitAppRequest({ ...fields, website: trap });
@@ -184,12 +188,16 @@ export function RequestAppModal({
               {step === 0 ? (
                 <>
                   <label className="ins-request-field">
-                    <span>App name</span>
-                    <input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="e.g. Notion" autoComplete="off" />
+                    <span>
+                      <i className="ins-request-req" aria-hidden>*</i>App name
+                    </span>
+                    <input ref={nameRef} aria-required="true" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="e.g. Notion" autoComplete="off" />
                   </label>
 
                   <div className="ins-request-field">
-                    <span id="ins-request-platform">Platform</span>
+                    <span id="ins-request-platform">
+                      <i className="ins-request-req" aria-hidden>*</i>Platform
+                    </span>
                     <div className="ins-request-platforms" role="radiogroup" aria-labelledby="ins-request-platform">
                       {PLATFORMS.map(({ value, Icon }) => (
                         <button
@@ -210,31 +218,40 @@ export function RequestAppModal({
               ) : (
                 <>
                   <label className="ins-request-field">
-                    <span>
-                      Link <em>optional</em>
-                    </span>
+                    <span>Link</span>
                     <input ref={linkRef} value={link} onChange={(e) => setLink(e.target.value)} maxLength={300} placeholder="App Store, Google Play or website link" inputMode="url" autoComplete="off" />
                   </label>
 
                   <label className="ins-request-field">
-                    <span>
-                      What should we look at? <em>optional</em>
-                    </span>
+                    <span>What should we look at?</span>
                     <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={3} placeholder="A flow, a screen, or why you’d like it here" />
                   </label>
 
-                  {accountEmail ? (
-                    <p className="ins-request-account-email">
-                      We’ll email <strong>{accountEmail}</strong> when it’s added.
-                    </p>
-                  ) : (
-                    <label className="ins-request-field">
-                      <span>
-                        Email <em>optional — we’ll tell you when it’s added</em>
+                  <label className="ins-request-field">
+                    <span>
+                      Email
+                      <span className="ins-request-help">
+                        {/* Shown on hover (or keyboard focus). Inside the label, so a click
+                            is kept from moving the cursor into the input. */}
+                        <button
+                          type="button"
+                          aria-label="Why we ask for your email"
+                          aria-describedby="ins-request-email-help"
+                          onClick={(e) => e.preventDefault()}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                            <circle cx="8" cy="8" r="6.75" stroke="currentColor" strokeWidth="1.5" />
+                            <path d="M6.3 6.2a1.75 1.75 0 1 1 2.45 1.6c-.5.22-.75.6-.75 1.1v.35" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                            <circle cx="8" cy="11.35" r=".85" fill="currentColor" />
+                          </svg>
+                        </button>
+                        <span id="ins-request-email-help" role="tooltip" className="ins-request-help-tip">
+                          We’ll tell you when it’s added.
+                        </span>
                       </span>
-                      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={120} placeholder="you@example.com" autoComplete="email" />
-                    </label>
-                  )}
+                    </span>
+                    <input type="email" value={emailValue} onChange={(e) => setEmail(e.target.value)} maxLength={120} placeholder="you@example.com" autoComplete="email" />
+                  </label>
                 </>
               )}
 

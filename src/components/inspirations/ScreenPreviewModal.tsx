@@ -15,6 +15,8 @@ import { SaveButton } from './SaveButton';
 import { Screenshot } from './Screenshot';
 import { ScreenLightbox } from './ScreenLightbox';
 import { useToast } from './Toast';
+import { useDownloadGate } from './useDownloadGate';
+import { useScreenContextMenu } from './useScreenContextMenu';
 import { useAsync } from './useAsync';
 
 /** Search-param name that opens the overlay — see FLOW_PARAM in FlowPreview.tsx. */
@@ -63,6 +65,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const filmRef = useRef<HTMLDivElement>(null);
   const { show } = useToast();
+  const { allow: allowDownload } = useDownloadGate();
 
   const { data, loading } = useAsync(() => inspirationsApi.getScreen(screenId), `screen-preview:${screenId}`);
   const screen = data?.screen ?? null;
@@ -80,6 +83,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const [multiScreen, setMultiScreen] = useState(false);
   const [activeId, setActiveId] = useState(screenId);
   const [zoomScreen, setZoomScreen] = useState<Screen | null>(null);
+  const [contextScreenId, setContextScreenId] = useState<string | null>(null);
 
   // A different `?screen=` (a fresh open, or a shared link) starts over
   // rather than carrying across the last screen's filmstrip mode, scroll
@@ -212,6 +216,19 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     if (next) setActiveId(next.id);
   };
 
+  // Right-click on a screenshot: the grid card's menu (Copy png, Download png,
+  // Copy link) for whichever screenshot was clicked, in place of the
+  // browser's own "Save image as…". Guests get the sign-in notice. Set up
+  // before the early returns below, so the hooks run in the same order.
+  const menuScreen = (contextScreenId && screens.find((s) => s.id === contextScreenId)) || screen;
+  const shotMenu = useScreenContextMenu(menuScreen, app, () =>
+    `${window.location.origin}${pathname}?${SCREEN_PARAM}=${menuScreen?.id ?? screenId}`,
+  );
+  const onShotContextMenu = (target: Screen) => (e: React.MouseEvent) => {
+    setContextScreenId(target.id);
+    shotMenu.onContextMenu(e);
+  };
+
   if (!mounted) return null;
 
   if (loading || !screen) {
@@ -247,6 +264,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   };
 
   const store = storeAction(screen.platform, app?.website);
+
 
   const recording =
     screen.capture && screen.capture.atSeconds !== null ? (
@@ -295,6 +313,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                       className={`ins-screen-preview-shot ${isDesktopPlatform(s.platform) ? 'ins-screen-preview-shot--web' : ''}`}
                       data-screen-id={s.id}
                       onClick={() => setZoomScreen(s)}
+                      onContextMenu={onShotContextMenu(s)}
                     >
                       <Screenshot screen={s} priority={s.id === screen.id} />
                     </div>
@@ -306,6 +325,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                     className={`ins-screen-preview-shot ${isDesktopPlatform((screens[activeIndex] ?? screen).platform) ? 'ins-screen-preview-shot--web' : ''}`}
                     data-screen-id={screens[activeIndex]?.id ?? screen.id}
                     onClick={() => setZoomScreen(screens[activeIndex] ?? screen)}
+                    onContextMenu={onShotContextMenu(screens[activeIndex] ?? screen)}
                   >
                     <Screenshot screen={screens[activeIndex] ?? screen} priority />
                   </div>
@@ -389,7 +409,19 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                         <ExternalIcon size={14} /> <span>Copy link</span>
                       </button>
                       {screen.downloadable && (
-                        <a className="ins-popover-item" role="menuitem" href={inspirationsApi.downloadUrl(screen)} download>
+                        <a
+                          className="ins-popover-item"
+                          role="menuitem"
+                          href={inspirationsApi.downloadUrl(screen)}
+                          download
+                          // Guests get the sign-in notice instead of the file.
+                          onClick={(e) => {
+                            if (!allowDownload()) {
+                              e.preventDefault();
+                              setMoreOpen(false);
+                            }
+                          }}
+                        >
                           <DownloadIcon size={14} /> <span>Download</span>
                         </a>
                       )}
@@ -495,6 +527,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
         </div>
       </div>
       {zoomScreen && <ScreenLightbox screen={zoomScreen} onClose={() => setZoomScreen(null)} />}
+      {shotMenu.menu}
     </>,
     document.body,
   );

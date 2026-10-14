@@ -123,7 +123,11 @@ export function AdminView() {
               role="tab"
               aria-selected={tab === t.id}
               className={`ins-tab ${tab === t.id ? 'is-active' : ''}`}
-              onClick={() => setTab(t.id)}
+              onClick={(e) => {
+                setTab(t.id);
+                // On a phone the tab row scrolls sideways; keep the picked tab in view.
+                e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+              }}
             >
               <Icon size={15} />
               {t.label}

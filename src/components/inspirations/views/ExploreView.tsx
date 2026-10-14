@@ -1,6 +1,6 @@
 'use client';
 
-import { isDesktopPlatform, type Platform, type Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type App, type Platform, type Screen, type ScreenType } from '@/lib/inspirations/types';
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -18,6 +18,84 @@ import { useAsync } from '../useAsync';
 import { AppLogo } from '../AppLogo';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { EMPTY_FILTERS, browsedPlatforms } from '@/lib/inspirations/filters';
+import { taxonomyEmoji } from '@/lib/inspirations/emoji';
+
+type PreviewItem = { type: 'screen' | 'app'; id: string; name: string; url: string | null; app: App | null };
+
+const PREVIEW_LIMIT = 5;
+/** Longest the card waits on its pictures before showing anyway. */
+const PREVIEW_IMAGE_WAIT_MS = 1500;
+
+/**
+ * Preview content per link, kept for the visit: hovering a link a second
+ * time shows its card at once instead of fetching it again, and the
+ * pictures are loaded and decoded before the card first appears, so it never
+ * opens on an empty tile that fills in a moment later.
+ */
+const previewCache = new Map<string, Promise<PreviewItem[]>>();
+/** The same, once loaded: read straight away when the pointer moves to a
+ * link, so the card switches to that link's own items in the same frame. */
+const previewReady = new Map<string, PreviewItem[]>();
+
+function previewKey(category: { id: string; title: string }, platforms: Platform[]) {
+  return `${category.title}|${category.id}|${platforms.join(',')}`;
+}
+
+function previewImage(item: PreviewItem): string | null {
+  if (item.type === 'screen' && item.url) return inspirationsApi.mediaUrl(item.url) ?? item.url;
+  if (item.app) return inspirationsApi.mediaUrl(item.app.logo);
+  return null;
+}
+
+async function fetchPreview(category: { id: string; title: string }, platforms: Platform[]): Promise<PreviewItem[]> {
+  const scoped = { ...EMPTY_FILTERS, platforms };
+  const fromScreens = (screens: Screen[]): PreviewItem[] =>
+    screens.slice(0, PREVIEW_LIMIT).map((s) => ({ type: 'screen', id: s.id, name: s.name, url: s.url, app: null }));
+
+  if (category.title === 'Categories') {
+    const apps = (await inspirationsApi.listApps(category.id)).filter((a) => a.platforms.some((p) => platforms.includes(p)));
+    return apps.slice(0, PREVIEW_LIMIT).map((a) => ({ type: 'app', id: a.id, name: a.name, url: null, app: a }));
+  }
+  if (category.title === 'Screens') {
+    return fromScreens((await inspirationsApi.listScreens({ ...scoped, screenTypes: [category.id as ScreenType] }, 0, 'curated')).items);
+  }
+  if (category.title === 'UI Elements') {
+    return fromScreens((await inspirationsApi.listScreens(scoped, 0, 'curated', { element: category.id })).items);
+  }
+  if (category.title === 'Flows') {
+    const flows = (await inspirationsApi.listFlows(category.id)).filter((f) => platforms.includes(f.platform));
+    if (!flows.length) return [];
+    // The top flow in this category, previewed as its actual sequence of screens.
+    return fromScreens(await inspirationsApi.getScreens(flows[0].screenIds.slice(0, PREVIEW_LIMIT).filter(Boolean)));
+  }
+  return [];
+}
+
+function decodeImage(src: string): Promise<void> {
+  const img = new Image();
+  img.src = src;
+  return img.decode().catch(() => undefined);
+}
+
+function loadPreview(category: { id: string; title: string }, platforms: Platform[]): Promise<PreviewItem[]> {
+  const key = previewKey(category, platforms);
+  let pending = previewCache.get(key);
+  if (!pending) {
+    pending = fetchPreview(category, platforms).then(async (items) => {
+      const images = items.map(previewImage).filter((src): src is string => Boolean(src));
+      await Promise.race([
+        Promise.all(images.map(decodeImage)),
+        new Promise((resolve) => setTimeout(resolve, PREVIEW_IMAGE_WAIT_MS)),
+      ]);
+      previewReady.set(key, items);
+      return items;
+    });
+    // A failed load is dropped, so the next hover tries again.
+    pending.catch(() => previewCache.delete(key));
+    previewCache.set(key, pending);
+  }
+  return pending;
+}
 
 /**
  * The cursor card beside a taxonomy link. Everything it previews is scoped to
@@ -34,52 +112,29 @@ function HoverPreview({
   mousePos: { x: number; y: number };
   platforms: Platform[];
 }) {
-  const platformKey = platforms.join(',');
   const isWeb = platforms.length === 1 && isDesktopPlatform(platforms[0]);
   const isScreens = category.title === 'Screens' || category.title === 'Flows' || category.title === 'UI Elements';
-  const isFlows = category.title === 'Flows';
-  const isCategories = category.title === 'Categories';
-  const isElements = category.title === 'UI Elements';
-  
-  const { data: appsData } = useAsync(async () => {
-    if (!isCategories) return [];
-    const apps = await inspirationsApi.listApps(category.id);
-    return apps.filter((a) => a.platforms.some((p) => platforms.includes(p)));
-  }, `preview-apps-${category.id}-${platformKey}`);
 
-  const { data: screensData } = useAsync(() => {
-    const scoped = { ...EMPTY_FILTERS, platforms };
-    if (category.title === 'Screens') {
-      return inspirationsApi.listScreens({ ...scoped, screenTypes: [category.id as any] }, 0, 'curated');
-    }
-    if (isElements) {
-      return inspirationsApi.listScreens(scoped, 0, 'curated', { element: category.id });
-    }
-    return Promise.resolve({ items: [] } as any);
-  }, `preview-screens-${category.id}-${category.title}-${platformKey}`);
-
-  const { data: flowsScreensData } = useAsync(async (): Promise<Screen[]> => {
-    if (!isFlows) return [];
-    const flows = (await inspirationsApi.listFlows(category.id)).filter((f) => platforms.includes(f.platform));
-    if (!flows.length) return [];
-    // Grab the top flow in this category and preview its actual sequence of screens!
-    const screenIds = flows[0].screenIds.slice(0, 5).filter(Boolean);
-    return inspirationsApi.getScreens(screenIds);
-  }, `preview-flows-${category.id}-${platformKey}`);
+  const key = previewKey(category, platforms);
+  const { data } = useAsync(() => loadPreview(category, platforms), `preview-${key}`);
 
   const [cycleIndex, setCycleIndex] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setCycleIndex(i => i + 1), 800);
     return () => clearInterval(timer);
   }, []);
+  // A different link starts its cycle from its first item.
+  const [cycleKey, setCycleKey] = useState(key);
+  if (cycleKey !== key) {
+    setCycleKey(key);
+    setCycleIndex(0);
+  }
 
-  const items = isFlows
-    ? (flowsScreensData || []).slice(0, 5).map((s: Screen) => ({ type: 'screen', id: s.id, name: s.name, url: s.url, app: null }))
-    : isScreens
-    ? (screensData?.items || []).slice(0, 5).map((s: Screen) => ({ type: 'screen', id: s.id, name: s.name, url: s.url, app: null }))
-    : (appsData || []).slice(0, 5).map(a => ({ type: 'app', id: a.id, name: a.name, url: null, app: a }));
+  // Only ever the hovered link's own items: until they are loaded the card
+  // stays hidden rather than showing the previous link's.
+  const shownItems = previewReady.get(key) ?? data ?? [];
 
-  if (items.length === 0) return null;
+  if (shownItems.length === 0) return null;
 
   const top = mousePos.y > window.innerHeight - (isScreens ? 400 : 200) 
     ? mousePos.y - (isScreens ? 380 : 160) 
@@ -89,23 +144,32 @@ function HoverPreview({
     ? mousePos.x - (isScreens ? 200 : 130) 
     : mousePos.x + 16;
 
-  const preview = items[cycleIndex % items.length];
+  const active = cycleIndex % shownItems.length;
+  const preview = shownItems[active];
 
   return createPortal(
     <div 
       className={`ins-explore-cursor-preview ${isScreens ? 'is-screen' : ''} ${isWeb ? 'is-web' : ''}`}
       style={{ position: 'fixed', top, left }}
     >
-      {preview.type === 'screen' && preview.url ? (
-        <img 
-          key={preview.id}
-          src={inspirationsApi.mediaUrl(preview.url) ?? preview.url} 
-          alt="" 
-          className={`ins-explore-cursor-logo is-screen ${isWeb ? 'is-web' : ''}`}
-        />
-      ) : preview.app ? (
-        <AppLogo key={preview.id} app={preview.app} size={84} className="ins-explore-cursor-logo" />
-      ) : null}
+      {/* Every item stays mounted, stacked in one cell, and the cycle only
+          switches which one shows. Swapping in a fresh <img> each turn showed
+          a blank tile until it loaded, which read as the card flickering. */}
+      <div className="ins-explore-cursor-stack">
+        {shownItems.map((item, i) => (
+          <div key={item.id} className={`ins-explore-cursor-slide ${i === active ? 'is-active' : ''}`} aria-hidden={i !== active}>
+            {item.type === 'screen' && item.url ? (
+              <img
+                src={inspirationsApi.mediaUrl(item.url) ?? item.url}
+                alt=""
+                className={`ins-explore-cursor-logo is-screen ${isWeb ? 'is-web' : ''}`}
+              />
+            ) : item.app ? (
+              <AppLogo app={item.app} size={84} className="ins-explore-cursor-logo" />
+            ) : null}
+          </div>
+        ))}
+      </div>
       
       {!isScreens && (
         <p className="ins-explore-cursor-title">{preview.name}</p>
@@ -139,6 +203,8 @@ export function ExploreView() {
     rawPlatform ? `${href}${href.includes('?') ? '&' : '?'}platform=${encodeURIComponent(rawPlatform)}` : href;
 
   const [hoveredCategory, setHoveredCategory] = useState<{ id: string, title: string } | null>(null);
+  // The link under the pointer (or keyboard focus): its name is typed into the heading.
+  const [hoveredLabel, setHoveredLabel] = useState<{ text: string; emoji: string } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [mounted, setMounted] = useState(false);
 
@@ -167,6 +233,7 @@ export function ExploreView() {
       items: mostUsed(meta.taxonomy.industries, usage?.industries).slice(0, MAX_TAXONOMY_ITEMS).map((industry) => ({
         key: industry,
         label: INDUSTRY_LABEL[industry] ?? industry,
+        emoji: taxonomyEmoji('industry', industry),
         count: usage?.industries[industry],
         href: withPlatform(`${INSPIRATIONS_ROUTES.screens}?industry=${industry}`),
       })),
@@ -177,6 +244,7 @@ export function ExploreView() {
       items: screenTypes.slice(0, MAX_TAXONOMY_ITEMS).map((type) => ({
         key: type,
         label: screenTypeLabel(type),
+        emoji: taxonomyEmoji('screen', type),
         count: usage?.screenTypes[type],
         href: withPlatform(`${INSPIRATIONS_ROUTES.screens}?type=${type}`),
       })),
@@ -187,6 +255,7 @@ export function ExploreView() {
       items: mostUsed(meta.taxonomy.elements, usage?.elements).slice(0, MAX_TAXONOMY_ITEMS).map((kind) => ({
         key: kind,
         label: elementLabel(kind),
+        emoji: taxonomyEmoji('element', kind),
         count: usage?.elements[kind],
         href: withPlatform(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(kind)}`),
       })),
@@ -197,6 +266,7 @@ export function ExploreView() {
       items: mostUsed(meta.taxonomy.flowCategories, usage?.flowCategories).slice(0, MAX_TAXONOMY_ITEMS).map((category) => ({
         key: category,
         label: flowCategoryLabel(category),
+        emoji: taxonomyEmoji('flow', category),
         count: usage?.flowCategories[category],
         href: withPlatform(`${INSPIRATIONS_ROUTES.flows}?category=${encodeURIComponent(category)}`),
       })),
@@ -209,9 +279,20 @@ export function ExploreView() {
 
   return (
     <div className="ins-explore-view">
-      <PageHeading title={<RotatingTitle />} />
+      <PageHeading title={<RotatingTitle override={hoveredLabel?.text} overrideEmoji={hoveredLabel?.emoji} />} />
       {taxonomyGroups.length > 0 && (
-        <section className="ins-explore-taxonomy" aria-label="Explore categories">
+        <section
+          className="ins-explore-taxonomy"
+          aria-label="Explore categories"
+          // Heading for a link: start every link's preview now, so the card
+          // is usually ready by the time the pointer reaches one (each loads
+          // once per visit; see loadPreview).
+          onPointerEnter={() => {
+            for (const group of taxonomyGroups) {
+              for (const item of group.items) void loadPreview({ id: item.key, title: group.title }, platforms).catch(() => undefined);
+            }
+          }}
+        >
           {taxonomyGroups.map((group) => (
             <div key={group.title} className="ins-explore-taxonomy-group">
               <h2 className="ins-explore-taxonomy-title">
@@ -227,10 +308,16 @@ export function ExploreView() {
                       className="ins-explore-taxonomy-link"
                       onMouseEnter={(e) => {
                         setHoveredCategory({ id: item.key, title: group.title });
+                        setHoveredLabel({ text: item.label, emoji: item.emoji });
                         setMousePos({ x: e.clientX, y: e.clientY });
                       }}
                       onMouseMove={(e) => setMousePos({ x: e.clientX, y: e.clientY })}
-                      onMouseLeave={() => setHoveredCategory(null)}
+                      onMouseLeave={() => {
+                        setHoveredCategory(null);
+                        setHoveredLabel(null);
+                      }}
+                      onFocus={() => setHoveredLabel({ text: item.label, emoji: item.emoji })}
+                      onBlur={() => setHoveredLabel(null)}
                     >
                       <span className="ins-explore-index-label">{item.label}</span>
                       <span className="ins-explore-index-leader" aria-hidden />

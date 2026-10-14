@@ -2469,6 +2469,18 @@
 
 /* The wordmark: white outlines, edge to edge, its bottom tucked under the
    page edge. Letters hop on hover; the dots idle and spin. */
+/* The page's own background while the footer is in view (Footer.tsx), so a
+   trackpad bounce past the bottom shows the footer's dark, not white. The
+   body stays white, so only what lies past the page turns dark, not any gap
+   above the footer. */
+html.lpi-at-footer {
+  background-color: #0e0e11;
+}
+
+html.lpi-at-footer body {
+  background-color: #fff;
+}
+
 .lpi-footer-wordmark {
   padding: 24px 24px 0;
   /* Tucks only the very bottom under the page edge, so the dots on the
@@ -2482,6 +2494,12 @@
   width: 100%;
   height: auto;
   overflow: visible;
+  /* Rises into place as the footer scrolls into view (Footer.tsx sets
+     --lpi-wm-rise: 1 at the start, 0 in place). It travels a little more
+     than its own height, so its strip of the footer is briefly dark before
+     it fills. The footer clips what's below. */
+  translate: 0 calc(var(--lpi-wm-rise, 0) * 120%);
+  will-change: translate;
 }
 
 .lpi-wm-letter {

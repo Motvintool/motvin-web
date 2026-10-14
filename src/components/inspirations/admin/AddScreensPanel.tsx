@@ -44,32 +44,39 @@ export function AddScreensPanel({
   return (
     <div className="ins-admin-panel">
       <div className="ins-admin-modeswitch">
-        <div className="ins-segmented" role="radiogroup" aria-label="How to add screens">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={mode === 'automatic'}
-            className={`ins-segmented-item ${mode === 'automatic' ? 'is-active' : ''}`}
-            onClick={() => setMode('automatic')}
-          >
-            Automatic
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={mode === 'manual'}
-            className={`ins-segmented-item ${mode === 'manual' ? 'is-active' : ''}`}
-            onClick={() => setMode('manual')}
-          >
-            Manual
-          </button>
+        <div className="ins-admin-modeswitch-main">
+          <div className="ins-segmented" role="radiogroup" aria-label="How to add screens">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={mode === 'automatic'}
+              className={`ins-segmented-item ${mode === 'automatic' ? 'is-active' : ''}`}
+              onClick={() => setMode('automatic')}
+            >
+              Automatic
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={mode === 'manual'}
+              className={`ins-segmented-item ${mode === 'manual' ? 'is-active' : ''}`}
+              onClick={() => setMode('manual')}
+            >
+              Manual
+            </button>
+          </div>
+          <p className="ins-field-hint">
+            {mode === 'automatic'
+              ? 'From a screen recording. Screens, names, types and flows are worked out for you.'
+              : 'From screenshots you already have. Pick the app, set each one’s type, and upload.'}
+          </p>
         </div>
-        <p className="ins-field-hint">
-          {mode === 'automatic'
-            ? 'Drop a screen recording — screens, names, types and flows are worked out for you.'
-            : 'Already have screenshots? Pick the app, set each one’s type, and upload.'}
-        </p>
-        {mode === 'automatic' && <AdminChatbotAiPicker admin={admin} align="right" />}
+        {mode === 'automatic' && (
+          <div className="ins-admin-modeswitch-ai">
+            <span className="ins-field-label">AI model</span>
+            <AdminChatbotAiPicker admin={admin} align="right" />
+          </div>
+        )}
       </div>
 
       {mode === 'automatic' ? (

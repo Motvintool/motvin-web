@@ -990,12 +990,13 @@ body {
 
 /* Rule 4: the page title is the one piece of display type, and it tightens
    its tracking to earn the extra size. */
+/* Page headings in Sora: a wide, modern geometric sans (loaded in app/layout.tsx). */
 .ins-title {
-  font-family: var(--font-pacifico), var(--font-outfit), var(--font-inter), sans-serif !important;
-  font-size: 42px;
-  font-weight: 400;
-  letter-spacing: -0.616px;
-  line-height: 1.2;
+  font-family: var(--font-heading), var(--font-manrope), sans-serif !important;
+  font-size: 52px;
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1.15;
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -1004,15 +1005,15 @@ body {
 
 /* Rotating heading: letters are typed in one after another, each easing out of a blur into
    focus, and the phrase simply stays until the next one replaces it. */
-/* A global rule sets the family on every element, so the handwriting is restated here
-   rather than trusted to inherit from the heading. */
+/* A global rule sets the family on every element, so the heading's face is restated here
+   rather than trusted to inherit from it. */
 .ins-rotor,
 .ins-rotor-word,
 .ins-rotor-char { font-family: inherit !important; }
 .ins-rotor { display: inline-block; white-space: nowrap; }
 .ins-rotor-word {
   display: inline-block;
-  padding-right: 0.15em; /* the script's last stroke overhangs its box */
+  padding-right: 0.04em;
 }
 .ins-rotor-char {
   display: inline-block;
@@ -1026,8 +1027,29 @@ body {
   to { opacity: 1; filter: blur(0); transform: none; }
 }
 
+/* The hovered link's emoji, after its name: pops in once the last letter has landed. */
+.ins-rotor-emoji {
+  display: inline-block;
+  margin-left: 0.38em;
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif !important;
+  font-size: 0.74em;
+  letter-spacing: 0;
+  line-height: 1;
+  /* An emoji's box reaches below the baseline like a descender; lift it so it
+     sits centred on the capitals, about their height, instead of hanging low. */
+  vertical-align: 0.12em;
+  animation: insEmojiPop 560ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation-delay: calc(var(--i) * 38ms + 120ms);
+}
+
+@keyframes insEmojiPop {
+  from { opacity: 0; transform: scale(0.3) rotate(-24deg); }
+  to { opacity: 1; transform: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .ins-rotor-char { animation: none; }
+  .ins-rotor-char,
+  .ins-rotor-emoji { animation: none; }
 }
 
 .ins-explore-taxonomy {
@@ -1067,6 +1089,21 @@ body {
   border-radius: 24px 24px 16px 16px;
   overflow: clip;
   animation: insPreviewPop 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.ins-explore-cursor-stack {
+  display: grid;
+}
+
+/* All of a link's items stay loaded in one cell; the cycle swaps which one
+   shows instantly, as before, just without reloading a picture each turn. */
+.ins-explore-cursor-slide {
+  grid-area: 1 / 1;
+  visibility: hidden;
+}
+
+.ins-explore-cursor-slide.is-active {
+  visibility: visible;
 }
 
 .ins-explore-cursor-logo {
@@ -1133,7 +1170,7 @@ body {
 .ins-explore-taxonomy-list {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 0.5px;
   margin: 0;
   font-weight: 700;
 }
@@ -1152,6 +1189,30 @@ body {
 }
 
 .ins-explore-taxonomy-list > li:first-child .ins-explore-taxonomy-link { height: 44px; padding-bottom: 0; }
+
+/* Hover follows the rows, not the text: a label's box reaches a few pixels
+   below its row (room for the tails of g, p, y) into the next one, so the
+   strip between two names flipped between them as the pointer wobbled. With
+   the pieces see-through to the pointer, each row is hovered only within its
+   own bounds. Clicks still land on the link itself. */
+.ins-explore-taxonomy-link > * {
+  pointer-events: none;
+}
+
+/* The 0.5px gap between rows still belongs to the row above, so there is no
+   strip between two names where nothing is hovered. */
+.ins-explore-taxonomy-link {
+  position: relative;
+}
+
+.ins-explore-taxonomy-link::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -0.5px;
+  left: 0;
+  height: 0.5px;
+}
 
 /* A table of contents: name, a dotted leader, then the count. The type steps down
    gently with the rank, so the size itself says which value the library holds most of. */
@@ -4724,8 +4785,35 @@ select.ins-input {
   display: inline-flex;
 }
 
-.ins-appmenu-panel {
-  left: 0;
+/* The "…" menu: the app card's right-click menu (.ins-context-menu), hung
+   from the button instead of the pointer. The button is the last thing on the
+   masthead's right edge, so the menu lines up with its right side and the
+   versions submenu opens to the menu's left, both staying on screen. */
+.ins-appmenu-layer {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.ins-appmenu-layer .ins-context-menu {
+  position: relative;
+  top: auto;
+  left: auto;
+  z-index: 1;
+}
+
+/* Fixed width (as on the card's menu), so the › sits at the far right. */
+.ins-appmenu-layer .ins-appmenu-panel {
+  width: 264px;
+}
+
+.ins-appmenu-row {
+  width: 100%;
 }
 
 /* Wraps the counted tabbar so the tab list's own overflow-x:auto (needed for
@@ -5546,6 +5634,56 @@ select.ins-input {
   background: #000;
 }
 
+/* Above everything, the screen preview included, so a guest who tries to
+   download from inside it still sees why nothing happened. */
+.ins-guest-download-host {
+  z-index: 10000;
+}
+
+/* While the screen preview is open, status messages (toasts and the guest
+   notice) sit just above its bottom row of buttons, centred on the main
+   panel, instead of on top of those buttons. The preview is 40px from the
+   viewport's bottom and its button row 84px above its own bottom edge; the
+   main panel is the viewport less the 320px details panel, its 16px gap and
+   the 40px margins. Below 901px the panels stack and the default spot is
+   kept. */
+@media (min-width: 901px) {
+  body:has(.ins-screen-preview-modal) .ins-toast-host {
+    left: calc(50% - 168px);
+    bottom: 136px;
+  }
+}
+
+/* The guest download notice (GuestDownloadNotice): the same pill, a lock in
+   the circle and a Sign in button at the end. */
+.ins-guest-download {
+  /* Room so the button isn't jammed against the pill's right edge. */
+  padding-right: 20px;
+}
+
+.ins-guest-download-signin {
+  height: 38px;
+  margin-left: 6px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #000;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: opacity 0.2s ease, scale 0.2s ease;
+}
+
+.ins-guest-download-signin:hover {
+  opacity: 0.88;
+}
+
+.ins-guest-download-signin:active {
+  scale: 0.97;
+}
+
 .ins-float-collection-success-check span {
   width: 8px;
   height: 15px;
@@ -5652,6 +5790,512 @@ select.ins-input {
 @media (max-width: 720px) {
   .ins-admin-drawer {
     width: 100vw;
+  }
+}
+
+/* ---- The drawer in the site's current style (landing, About, Updates,
+   Settings): Manrope, a floating panel with a big curve, soft grey tiles,
+   light 1px outlines, pill buttons and a pill tab switch. Scoped to the
+   drawer, so the shared controls elsewhere in Inspirations don't change. */
+.ins-admin-drawer-overlay {
+  padding: 12px;
+  background: rgba(10, 10, 12, 0.28);
+  backdrop-filter: blur(10px);
+}
+
+.ins-admin-drawer {
+  --adm-tile: #f2f2f4;
+  --adm-line: #e6e6ea;
+  --adm-line-strong: #d6d6dc;
+  width: min(960px, 100%);
+  height: 100%;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  font-family: var(--font-manrope), var(--font-outfit), sans-serif;
+  scrollbar-width: thin;
+  scrollbar-color: #d6d6dc transparent;
+  animation-name: insAdminDrawerFloatIn;
+}
+
+@keyframes insAdminDrawerFloatIn {
+  from {
+    transform: translateX(calc(100% + 24px));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-admin-drawer {
+    animation: none;
+  }
+}
+
+.ins-admin-drawer :is(button, input, select, textarea) {
+  font-family: inherit;
+}
+
+.ins-admin-drawer-close {
+  top: 32px;
+  right: 32px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--adm-line);
+  background: #fff;
+  transition: border-color 0.2s ease, scale 0.2s ease;
+}
+
+.ins-admin-drawer-close:hover {
+  border-color: var(--adm-line-strong);
+  background: #fff;
+}
+
+.ins-admin-drawer-close:active {
+  scale: 0.94;
+}
+
+.ins-admin-drawer-body {
+  padding: 40px 48px 56px;
+}
+
+/* Signed-in line above the title. */
+.ins-admin-drawer .ins-admin-signed-in {
+  display: inline-flex;
+  max-width: calc(100% - 56px);
+  margin: 0 0 22px;
+  padding: 7px 14px 7px 10px;
+  border: 1px solid var(--adm-line);
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ins-admin-drawer .ins-admin-signed-in .ins-link {
+  font-weight: 600;
+  color: var(--ins-text);
+}
+
+/* Title row, in the same face as the other page headings. Shown
+   at every width here (page headings elsewhere hide below 1100px), since
+   it carries the Rebuild manifest button. */
+.ins-admin-drawer .ins-admin-drawer-body .ins-pagehead {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0 0 24px;
+  padding: 0;
+}
+
+.ins-admin-drawer .ins-btn {
+  height: 42px;
+  padding: 0 18px;
+  border-color: var(--adm-line);
+  font-size: 14px;
+  transition: border-color 0.2s ease, opacity 0.2s ease, scale 0.2s ease;
+}
+
+.ins-admin-drawer .ins-btn:hover {
+  border-color: var(--adm-line-strong);
+}
+
+.ins-admin-drawer .ins-btn:active:not(:disabled) {
+  scale: 0.97;
+}
+
+.ins-admin-drawer .ins-btn--primary {
+  border-color: #141414;
+  background: #141414;
+  color: #fff;
+}
+
+.ins-admin-drawer .ins-btn--ghost {
+  border-color: transparent;
+}
+
+.ins-admin-drawer .ins-btn--sm {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* Library totals: soft grey tiles. */
+.ins-admin-drawer .ins-admin-summary {
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.ins-admin-drawer .ins-admin-stat {
+  gap: 4px;
+  min-width: 132px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: var(--adm-tile);
+}
+
+.ins-admin-drawer .ins-admin-stat-num {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.ins-admin-drawer .ins-admin-stat-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ins-admin-drawer .ins-admin-stat--held {
+  background: #fff4e5;
+}
+
+.ins-admin-drawer .ins-admin-stat--held:hover {
+  background: #ffe9cc;
+}
+
+.ins-admin-drawer .ins-admin-built {
+  align-self: flex-end;
+  font-size: 13px;
+}
+
+.ins-admin-drawer .ins-admin-banner {
+  padding: 14px 18px;
+  border-color: var(--adm-line);
+  border-radius: 18px;
+  font-size: 14px;
+}
+
+/* Sections: a pill switch, like the Settings tabs. */
+.ins-admin-drawer .ins-tabbar {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  gap: 4px;
+  margin-bottom: 28px;
+  padding: 5px;
+  border-radius: 999px;
+  background: var(--adm-tile);
+}
+
+.ins-admin-drawer .ins-tab {
+  flex: none;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ins-muted);
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ins-admin-drawer .ins-tab::after {
+  content: none;
+}
+
+.ins-admin-drawer .ins-tab:hover {
+  color: var(--ins-text);
+}
+
+.ins-admin-drawer .ins-tab.is-active {
+  background: #141414;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+}
+
+.ins-admin-drawer .ins-tab-count {
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1;
+  background: #fff;
+}
+
+.ins-admin-drawer .ins-tab.is-active .ins-tab-count {
+  padding: 3px 8px;
+  line-height: 1;
+  color: #141414;
+  background: #fff;
+}
+
+/* Pill switches inside the panels (Automatic / Manual, request sort). */
+.ins-admin-drawer .ins-segmented {
+  padding: 4px;
+  border: 0;
+  background: var(--adm-tile);
+}
+
+.ins-admin-drawer .ins-segmented-item {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+  color: var(--ins-muted);
+}
+
+.ins-admin-drawer .ins-segmented-item:hover:not(.is-active) {
+  color: var(--ins-text);
+}
+
+.ins-admin-drawer .ins-segmented-item.is-active {
+  background: #141414;
+  color: #fff;
+}
+
+/* Forms. */
+.ins-admin-drawer .ins-admin-panel {
+  gap: 20px;
+}
+
+.ins-admin-drawer .ins-field {
+  gap: 8px;
+}
+
+.ins-admin-drawer .ins-field-label {
+  font-size: 13px;
+  color: var(--ins-text);
+}
+
+.ins-admin-drawer .ins-field-hint {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.ins-admin-drawer .ins-input {
+  height: 44px;
+  padding: 0 14px;
+  border-color: var(--adm-line);
+  border-radius: 14px;
+  font-size: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ins-admin-drawer textarea.ins-input {
+  height: auto;
+  padding: 12px 14px;
+}
+
+.ins-admin-drawer .ins-input:hover {
+  border-color: var(--adm-line-strong);
+}
+
+.ins-admin-drawer .ins-input:focus {
+  border-color: #141414;
+  box-shadow: 0 0 0 3px rgba(20, 20, 20, 0.08);
+}
+
+.ins-admin-drawer .ins-admin-form {
+  padding: 24px;
+  border-radius: 24px;
+  background: var(--adm-tile);
+}
+
+.ins-admin-drawer .ins-dropzone {
+  gap: 16px;
+  padding: 44px 24px;
+  border: 1.5px dashed var(--adm-line-strong);
+  border-radius: 28px;
+  background: #fff;
+}
+
+.ins-admin-drawer .ins-dropzone.is-filled {
+  border: 1px solid var(--adm-line);
+}
+
+.ins-admin-drawer .ins-addflow-foot {
+  border-top-color: #f0f0f2;
+}
+
+.ins-admin-drawer .ins-addflow-block {
+  margin-top: 8px;
+}
+
+.ins-admin-drawer .ins-dropzone.is-dragging {
+  border-color: #141414;
+  background: #ebebee;
+}
+
+.ins-admin-drawer .ins-dropzone-icon {
+  box-shadow: 0 0 0 1px var(--adm-line), 0 6px 16px -8px rgba(0, 0, 0, 0.18);
+}
+
+/* Records: white cards with a light outline. */
+.ins-admin-drawer .ins-admin-list {
+  gap: 10px;
+}
+
+.ins-admin-drawer .ins-admin-item {
+  border-color: var(--adm-line);
+  border-radius: 22px;
+}
+
+.ins-admin-drawer .ins-admin-item:hover {
+  border-color: var(--adm-line-strong);
+  box-shadow: none;
+}
+
+/* A coloured side stripe fights the big curve; status is already spelled
+   out on each row, so held-back rows just get a warm outline. */
+.ins-admin-drawer .ins-admin-item.is-published {
+  border-left: 1px solid var(--adm-line);
+}
+
+.ins-admin-drawer .ins-admin-item.is-held {
+  border: 1px solid #f3d3a6;
+}
+
+/* Choice chips (status, platform, styles…) as outlined pills. */
+.ins-admin-drawer :is(.ins-filter-options, .ins-admin-chips) {
+  gap: 8px;
+}
+
+.ins-admin-drawer .ins-chip.ins-chip--sm {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--adm-line);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ins-text);
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.ins-admin-drawer .ins-chip.ins-chip--sm:hover {
+  border-color: var(--adm-line-strong);
+}
+
+.ins-admin-drawer .ins-chip.ins-chip--sm.is-active {
+  border-color: #141414;
+  background: #141414;
+  color: #fff;
+}
+
+.ins-admin-drawer .ins-admin-form .ins-chip.ins-chip--sm:not(.is-active) {
+  border-color: transparent;
+}
+
+.ins-admin-drawer .ins-admin-note {
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--adm-tile);
+  font-size: 14px;
+}
+
+/* Requests: one outlined card holding the rows. */
+.ins-admin-drawer .ins-reqlist-bar {
+  margin-bottom: 16px;
+}
+
+.ins-admin-drawer .ins-reqlist {
+  gap: 0;
+  padding: 4px 22px;
+  border: 1px solid var(--adm-line);
+  border-radius: 24px;
+}
+
+.ins-admin-drawer .ins-reqrow {
+  padding: 18px 0;
+  border-bottom-color: #f0f0f2;
+}
+
+.ins-admin-drawer .ins-reqrow:last-child {
+  border-bottom: 0;
+}
+
+.ins-admin-drawer .ins-reqrow-count {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: var(--adm-tile);
+  color: #141414;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+.ins-admin-drawer .ins-reqrow-main h3 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 720px) {
+  .ins-admin-drawer-overlay {
+    padding: 0;
+  }
+
+  .ins-admin-drawer {
+    border-radius: 0;
+  }
+
+  .ins-admin-drawer-close {
+    top: 16px;
+    right: 16px;
+  }
+
+  .ins-admin-drawer-body {
+    padding: 24px 16px 40px;
+  }
+
+  .ins-admin-drawer .ins-admin-signed-in {
+    display: block;
+    margin-bottom: 14px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .ins-admin-drawer .ins-admin-signed-in svg {
+    display: inline;
+    margin-right: 6px;
+    vertical-align: -1px;
+  }
+
+  .ins-admin-drawer .ins-admin-stat {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+  }
+
+  .ins-admin-drawer .ins-admin-built {
+    align-self: auto;
+    margin-left: 0;
+  }
+
+  .ins-admin-drawer .ins-tabbar {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .ins-admin-drawer .ins-reqlist {
+    padding: 2px 16px;
+  }
+
+  .ins-admin-drawer .ins-segmented {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .ins-admin-drawer .ins-segmented-item {
+    flex: none;
+    padding: 0 11px;
+    white-space: nowrap;
+  }
+
+  /* Count, name and delete on one line; the time drops under the name. */
+  .ins-admin-drawer .ins-reqrow {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: 4px 12px;
+  }
+
+  .ins-admin-drawer .ins-reqrow-when {
+    grid-column: 2;
+    grid-row: 2;
+    padding-top: 0;
+  }
+
+  .ins-admin-drawer .ins-reqrow > :last-child {
+    grid-column: 3;
+    grid-row: 1;
   }
 }
 
@@ -7165,16 +7809,95 @@ select.ins-input {
 /* The Automatic/Manual switch atop "Add screens" — the toggle stays a fixed
    size and the hint explaining the current mode fills the rest of the row,
    wrapping under it on narrow screens rather than squeezing the toggle. */
+/* Mode switch with its one-line explanation underneath, and the AI model on
+   the right, labelled, instead of all three squeezed into one row. */
 .ins-admin-modeswitch {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px 24px;
+}
+
+.ins-admin-modeswitch-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
 }
 
 .ins-admin-modeswitch .ins-field-hint {
-  flex: 1 1 260px;
   margin: 0;
+}
+
+.ins-admin-modeswitch-ai {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+/* Add screens → Automatic: Recording, then Details, then one footer with the
+   button and a line saying what it will do (or what it still needs). */
+.ins-addflow-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ins-addflow-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ins-text);
+}
+
+.ins-addflow-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.ins-addflow-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--ins-border);
+}
+
+.ins-addflow-foot .ins-btn {
+  margin-left: auto;
+}
+
+.ins-addflow-status {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ins-muted);
+}
+
+.ins-addflow-status.is-ready {
+  color: var(--ins-text);
+  font-weight: 600;
+}
+
+.ins-dropzone.is-filled {
+  border-style: solid;
+}
+
+@media (max-width: 720px) {
+  .ins-admin-modeswitch-ai {
+    align-items: flex-start;
+  }
+
+  .ins-addflow-foot .ins-btn {
+    width: 100%;
+  }
 }
 
 .ins-admin-actions--tight {
@@ -10383,6 +11106,8 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 .ins-request-intro { margin: 0; font-size: 14px; line-height: 1.5; color: #7d7d7d; }
 .ins-request-field { display: flex; flex-direction: column; gap: 7px; font-size: 13px; font-weight: 600; color: #333; }
 .ins-request-field em { font-style: normal; font-weight: 500; color: #9a9a98; margin-left: 4px; }
+/* Required fields get a star before the label; the rest are optional, which the step's intro says once. */
+.ins-request-req { margin-right: 3px; font-style: normal; font-weight: 600; color: #e5484d; }
 .ins-request-field input,
 .ins-request-field textarea {
   width: 100%; box-sizing: border-box; padding: 13px 16px; border: 1.8px solid transparent; border-radius: 16px;
@@ -10390,6 +11115,17 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   transition: background 160ms, border-color 160ms, box-shadow 160ms;
 }
 .ins-request-field textarea { resize: vertical; min-height: 84px; line-height: 1.45; }
+/* The "?" beside a label: hovering it (or tabbing to it) shows a short note above it. */
+.ins-request-help { position: relative; display: inline-flex; vertical-align: -3px; margin-left: 4px; }
+.ins-request-help button { display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: none; color: #9a9a98; cursor: var(--ins-cursor-hand, pointer); transition: color 160ms; }
+.ins-request-help button:hover,
+.ins-request-help button:focus-visible { color: #111; }
+.ins-request-help button:focus-visible { outline: 2px solid #111; outline-offset: 1px; }
+.ins-request-help-tip { position: absolute; bottom: calc(100% + 8px); left: 50%; z-index: 2; padding: 7px 11px; border-radius: 10px; background: #111; color: #fff; font-size: 12px; font-weight: 500; line-height: 1.3; white-space: nowrap; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16); transform: translateX(-50%); opacity: 0; visibility: hidden; pointer-events: none; translate: 0 4px; transition: opacity 160ms cubic-bezier(0.22, 1, 0.36, 1), translate 160ms cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 160ms; }
+.ins-request-help:hover .ins-request-help-tip,
+.ins-request-help button:focus-visible + .ins-request-help-tip { opacity: 1; visibility: visible; translate: 0 0; transition-delay: 0s; }
+.ins-request-help-tip::after { content: ''; position: absolute; top: 100%; left: 50%; border: 5px solid transparent; border-top-color: #111; transform: translateX(-50%); }
+@media (prefers-reduced-motion: reduce) { .ins-request-help-tip { transition: none; translate: none; } }
 .ins-request-field input::placeholder,
 .ins-request-field textarea::placeholder { color: #a3a3a1; font-weight: 400; }
 .ins-request-field input:focus,
@@ -10414,9 +11150,6 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 .ins-request-done h3 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #111; }
 .ins-request-done p { margin: 0 0 14px; max-width: 380px; font-size: 14px; line-height: 1.55; color: #7d7d7d; }
 .ins-request-done strong { color: #111; }
-/* Signed in, the email field gives way to a line naming the account email we'll write to. */
-.ins-request-account-email { margin: 2px 0 0; font-size: 13px; line-height: 1.5; color: #7d7d7d; }
-.ins-request-account-email strong { font-weight: 600; color: #111; }
 
 /* Little "sparkle" ticks above the badge's top-right corner. */
 .ins-request-badge { position: relative; }
@@ -10583,7 +11316,8 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 .ins-set-slot a { font-size: 13px; color: var(--ins-sub); text-decoration: underline; text-underline-offset: 3px; word-break: break-all; }
 .ins-set-slot p { margin: 2px 0 0; font-size: 14px; line-height: 1.5; color: var(--ins-muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .ins-set-slot--empty { align-items: center; justify-content: center; flex-direction: row; gap: 10px; border-style: dashed; background: transparent; color: var(--ins-muted); font-size: 15px; font-weight: 600; }
-.ins-set-slot--empty:hover { color: var(--ins-text); border-color: var(--ins-text); background: var(--ins-card-alt); }
+.ins-set-slot--empty:hover { color: var(--ins-text); border-color: var(--ins-text); }
+.ins-set-slot--empty span { white-space: nowrap; }
 @media (max-width: 820px) {
   .ins-set { gap: 16px; }
   .ins-set-hero { padding: 22px; gap: 16px; flex-wrap: wrap; border-radius: 24px; }

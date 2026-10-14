@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, Outfit, Pacifico, Manrope } from 'next/font/google';
+import { Inter, Outfit, Pacifico, Manrope, Sora, Plus_Jakarta_Sans } from 'next/font/google';
 import { AuthModalProvider } from '@/components/shared/AuthModal';
 import { AuthProvider } from '@/components/shared/AuthProvider';
 import { BANNER_RESERVE_SCRIPT } from '@/components/library/ProductBanner';
@@ -39,6 +39,22 @@ const manrope = Manrope({
   display: 'swap',
 });
 
+// Page headings (.ins-title): Sora, for the big titles only.
+const heading = Sora({
+  variable: '--font-heading',
+  subsets: ['latin'],
+  weight: ['600'],
+  display: 'swap',
+});
+
+// The landing hero's headline: Plus Jakarta Sans.
+const hero = Plus_Jakarta_Sans({
+  variable: '--font-hero',
+  subsets: ['latin'],
+  weight: ['600'],
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'Motvin: The creative toolkit for websites, colors, icons, AI, and more.',
   icons: {
@@ -48,7 +64,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="en" className={`${outfit.variable} ${inter.variable} ${pacifico.variable} ${manrope.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${outfit.variable} ${inter.variable} ${pacifico.variable} ${manrope.variable} ${heading.variable} ${hero.variable}`} suppressHydrationWarning>
       <head>
         {/* Sets data-theme on <html> before first paint to avoid a flash of the
             wrong theme. Must stay blocking and must run before any stylesheet. */}

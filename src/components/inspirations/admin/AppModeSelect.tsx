@@ -9,11 +9,13 @@ export function AppModeSelect({
   onChange,
   disabled,
   noApps,
+  hint,
 }: {
   mode: 'new' | 'old';
   onChange: (mode: 'new' | 'old') => void;
   disabled?: boolean;
   noApps?: boolean;
+  hint?: string;
 }) {
   return (
     <label className="ins-field">
@@ -32,6 +34,7 @@ export function AppModeSelect({
           Old app{noApps ? ' (none yet)' : ''}
         </option>
       </select>
+      {hint && <span className="ins-field-hint">{hint}</span>}
     </label>
   );
 }
