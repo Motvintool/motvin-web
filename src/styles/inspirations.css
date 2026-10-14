@@ -2997,17 +2997,24 @@ select.ins-input {
    opened from a screen card in the Explore grid in place of navigating to
    the full detail page. Renders inside .ins-search-overlay, the same
    backdrop GlobalSearch's own modal uses. */
+/* The overlay behind a preview: 20px of padding, exactly the modal's margin
+   (its usual 24px would push a larger modal off-centre, since an
+   overflowing child starts at the padding edge rather than spilling
+   evenly). */
+.ins-search-overlay:has(> .ins-screen-preview-modal) {
+  padding: 20px;
+}
+
 .ins-screen-preview-modal {
   display: flex;
   align-items: stretch;
   gap: 16px;
-  /* .ins-search-overlay already contributes its own 24px padding; this
-     accounts for that so the modal ends up 40px from the viewport edge in
-     total (24px overlay padding + 16px of centering slack from the extra
-     32px trimmed off each axis here), without changing the shared overlay
-     class other callers (GlobalSearch) also render behind. */
-  width: calc(100vw - 80px);
-  height: calc(100vh - 80px);
+  /* 20px from every viewport edge, at every size: exactly the room the
+     overlay leaves once its padding is 20px for a preview (above), without
+     changing the shared overlay class other callers (GlobalSearch) also
+     render behind. */
+  width: calc(100vw - 40px);
+  height: calc(100vh - 40px);
 }
 
 .ins-screen-preview-main,
@@ -3205,45 +3212,106 @@ select.ins-input {
    justify-content — the tag group and the show-all/more pair are
    independently pinned via absolute positioning at the same left:24px /
    right:32px offsets Figma uses, not derived from flex distribution. */
-/* The flow player (FlowPreview.tsx), between the screenshot and the footer:
-   play/pause, one segment per step (done ones filled, the current one
-   filling while it plays; click one to jump), then "3 of 8 · Login". */
-.ins-flow-player { display: flex; align-items: center; gap: 14px; width: min(560px, calc(100% - 48px)); margin: 20px auto 0; flex: none; }
-.ins-flow-player-play { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 1px solid #ccc; border-radius: 100px; background: transparent; color: #141414; cursor: var(--ins-cursor-hand, pointer); transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease); }
-.ins-flow-player-play:hover { border-color: #141414; }
-.ins-flow-player-play[aria-pressed="true"] { background: #141414; border-color: #141414; color: #fff; }
+/* The flow player (FlowPreview.tsx) in the footer, and the current step's
+   name in the title. In flow mode the footer is a grid: the flow's tags on
+   the left, the player centred, an icon-only Save floating just after it
+   without taking any room, Nearby screens / … on the right. View in App
+   Store is in the "…" menu. */
+.ins-flow-head-actions { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.ins-flow-head-step { display: inline-flex; gap: 5px; color: #8a8a88; }
+
+/* The player is up to 560px, but always leaves each side room for the
+   right-hand buttons plus the floating Save (~346px), so they never meet. */
+.ins-screen-preview-foot.ins-flow-foot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, min(560px, calc(100% - 692px))) minmax(0, 1fr); align-items: center; column-gap: 12px; padding: 32px; }
+/* Padding and button sizes are the footer's own (as in the all-screens
+   view): 32px around (even, so the player centres exactly), with the tags
+   pulled back to 24px from the left like its absolute tags. */
+.ins-flow-foot .ins-screen-preview-foot-tags { grid-column: 1; grid-row: 1; position: static; transform: none; justify-self: start; margin-left: -8px; }
+.ins-flow-foot .ins-flow-player { grid-column: 2; grid-row: 1; }
+/* Shares the player's cell, pinned to its right edge, then shifted out past
+   it (its own 50px + a 12px gap): it never takes room, so the player stays
+   centred, and it follows the player's edge at any width. */
+.ins-flow-foot .ins-screen-preview-foot-primary { grid-column: 2; grid-row: 1; justify-self: end; position: relative; left: 62px; }
+/* The bookmark icons are drawn white (for the black Save button); turned
+   dark here on the round outlined button. Saved: filled, in a dark ring. */
+.ins-flow-save img { width: 18px; height: 18px; filter: brightness(0); }
+.ins-flow-foot .ins-flow-save.is-active { border-color: #141414; color: #141414; }
+.ins-flow-foot .ins-screen-preview-foot-secondary { grid-column: 3; grid-row: 1; position: static; transform: none; justify-self: end; }
+/* A light grey pill (the store strip's grey), flat with no edge, as tall as
+   the Save button beside it, with the play and speed buttons inset evenly
+   from its edge. */
+.ins-flow-player { display: flex; align-items: center; gap: 12px; min-width: 0; height: 52px; padding: 0 9px 0 5px; box-sizing: border-box; border: 0; border-radius: 999px; background: #f3f3f2; }
+.ins-flow-player-play { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 100px; background: #141414; color: #fff; cursor: var(--ins-cursor-hand, pointer); transition: background var(--ins-fast) var(--ins-ease), scale .15s ease; }
+.ins-flow-player-play:hover { background: #333; }
+/* "Prototype" / "Playback speed" on hover: the landing navbar's tip
+   (.nav-social-tip in landing.css, which this page doesn't load), flipped
+   to sit above the button since it's at the foot of the dialog. */
+.ins-flow-player-play,
+.ins-flow-player-speed { position: relative; }
+.ins-flow-tip { position: absolute; bottom: calc(100% + 10px); left: 50%; padding: 6px 10px; border-radius: 8px; background: #111; color: #fff; font: 600 12px/1.2 var(--font-manrope), Inter, sans-serif; white-space: nowrap; pointer-events: none; opacity: 0; transform: translate(-50%, 4px); transition: opacity .15s ease, transform .15s ease; z-index: 10; }
+.ins-flow-tip::before { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #111; }
+.ins-flow-player-play:hover .ins-flow-tip,
+.ins-flow-player-play:focus-visible .ins-flow-tip,
+.ins-flow-player-speed:hover .ins-flow-tip,
+.ins-flow-player-speed:focus-visible .ins-flow-tip { opacity: 1; transform: translate(-50%, 0); }
+/* The tip keeps its own type, not the speed button's. */
+.ins-flow-player-speed .ins-flow-tip { letter-spacing: normal; font-variant-numeric: normal; }
+.ins-flow-player-play:active { scale: .95; }
 .ins-flow-player-play:focus-visible { outline: 2px solid #141414; outline-offset: 2px; }
-.ins-flow-player-steps { display: flex; flex: 1 1 0; min-width: 0; gap: 4px; }
-/* Long flows (Spotify's onboarding has 31 steps): tighter gaps so each segment keeps some length. */
-.ins-flow-player-steps.is-dense { gap: 2px; }
-.ins-flow-player-step { position: relative; flex: 1 1 0; min-width: 0; height: 16px; padding: 0; border: 0; background: none; cursor: var(--ins-cursor-hand, pointer); }
-.ins-flow-player-step::before,
-.ins-flow-player-step span { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: 999px; }
-.ins-flow-player-step::before { background: #e4e4e2; transition: background var(--ins-fast) var(--ins-ease); }
-.ins-flow-player-step:hover::before { background: #d2d2d0; }
-.ins-flow-player-step span { right: auto; width: 0; background: #141414; }
-.ins-flow-player-step.is-done span,
-.ins-flow-player-step.is-current span { width: 100%; }
-.ins-flow-player-steps.is-playing .ins-flow-player-step.is-current span { width: 0; animation: insFlowStepFill var(--ins-flow-step-ms, 2600ms) linear forwards; }
+.ins-flow-player-count { flex: none; min-width: 44px; margin: 0; font: 500 14px/1 var(--font-manrope), Inter, sans-serif; color: #8a8a88; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ins-flow-player-count b { font-weight: 700; color: #141414; }
+.ins-flow-player-speed { flex: none; min-width: 44px; height: 34px; padding: 0 10px; border: 0; border-radius: 100px; background: #fff; color: #141414; font: 700 13px/1 var(--font-manrope), Inter, sans-serif; font-variant-numeric: tabular-nums; cursor: var(--ins-cursor-hand, pointer); transition: border-color var(--ins-fast) var(--ins-ease), scale .15s ease; }
+.ins-flow-player-speed:hover { background: #fafaf9; box-shadow: inset 0 0 0 1px #dcdcda; }
+.ins-flow-player-speed:active { scale: .95; }
+.ins-flow-player-speed:focus-visible { outline: 2px solid #141414; outline-offset: 2px; }
+
+/* One segment per step: done ones filled, the current one filling while it
+   plays; click one to jump, hover for its name. */
+.ins-flow-steps { display: flex; flex: 1 1 0; min-width: 64px; gap: 3px; }
+/* Long flows (Spotify's onboarding has 31 steps): no gaps, one continuous bar. */
+.ins-flow-steps.is-dense { gap: 0; }
+.ins-flow-step { position: relative; flex: 1 1 0; min-width: 0; height: 24px; padding: 0; border: 0; background: none; cursor: var(--ins-cursor-hand, pointer); }
+.ins-flow-step::before,
+.ins-flow-step span { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: 999px; transition: height .15s ease, margin-top .15s ease, background var(--ins-fast) var(--ins-ease); }
+.ins-flow-steps.is-dense .ins-flow-step::before,
+.ins-flow-steps.is-dense .ins-flow-step span { border-radius: 0; }
+.ins-flow-steps.is-dense .ins-flow-step:first-child::before,
+.ins-flow-steps.is-dense .ins-flow-step:first-child span { border-radius: 999px 0 0 999px; }
+.ins-flow-steps.is-dense .ins-flow-step:last-child::before,
+.ins-flow-steps.is-dense .ins-flow-step:last-child span { border-radius: 0 999px 999px 0; }
+.ins-flow-step::before { background: #dcdcda; }
+.ins-flow-step:hover::before,
+.ins-flow-step:hover span { height: 6px; margin-top: -3px; }
+.ins-flow-step:hover::before { background: #c6c6c4; }
+.ins-flow-step span { right: auto; width: 0; background: #141414; }
+.ins-flow-step.is-done span,
+.ins-flow-step.is-current span { width: 100%; }
+.ins-flow-steps.is-playing .ins-flow-step.is-current span { width: 0; animation: insFlowStepFill var(--ins-flow-step-ms, 2600ms) linear forwards; }
 @keyframes insFlowStepFill { to { width: 100%; } }
-.ins-flow-player-step:focus-visible { outline: 2px solid #141414; outline-offset: 1px; border-radius: 4px; }
-.ins-flow-player-label { flex: none; min-width: 120px; margin: 0; font: 400 14px/1.2 var(--font-manrope), Inter, sans-serif; color: #696969; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.ins-flow-player-label b { font-weight: 700; color: #141414; }
+.ins-flow-step:focus-visible { outline: 2px solid #141414; outline-offset: 1px; border-radius: 4px; }
+
+@media (max-width: 1239px) {
+  /* Smaller laptops: below this the floating Save would run into Nearby
+     screens, so no centring columns; the player stretches up to Save (back
+     in its own column), then the right-hand buttons. */
+  .ins-screen-preview-foot.ins-flow-foot { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .ins-flow-foot .ins-screen-preview-foot-tags { grid-column: 1; }
+  .ins-flow-foot .ins-flow-player { grid-column: 2; }
+  .ins-flow-foot .ins-screen-preview-foot-primary { grid-column: 3; justify-self: auto; left: 0; }
+  .ins-flow-foot .ins-screen-preview-foot-secondary { grid-column: 4; }
+}
 @media (max-width: 640px) {
-  .ins-flow-player { gap: 10px; margin-top: 14px; }
-  .ins-flow-player-label { min-width: 0; font-size: 13px; }
-  /* Too narrow for a segment per step in a long flow: one continuous bar
-     (still one tap target per step) that fills step by step. */
-  .ins-flow-player-steps.is-dense { gap: 0; }
-  .ins-flow-player-steps.is-dense .ins-flow-player-step::before,
-  .ins-flow-player-steps.is-dense .ins-flow-player-step span { border-radius: 0; }
-  .ins-flow-player-steps.is-dense .ins-flow-player-step:first-child::before,
-  .ins-flow-player-steps.is-dense .ins-flow-player-step:first-child span { border-radius: 999px 0 0 999px; }
-  .ins-flow-player-steps.is-dense .ins-flow-player-step:last-child::before,
-  .ins-flow-player-steps.is-dense .ins-flow-player-step:last-child span { border-radius: 0 999px 999px 0; }
+  /* The tags get a row, then the player and Save share one, as on
+     desktop; Nearby screens / … take the row below. */
+  .ins-screen-preview-foot.ins-flow-foot { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 16px 12px; padding: 20px; }
+  .ins-flow-foot .ins-screen-preview-foot-tags { order: 0; flex: 1 0 100%; }
+  .ins-flow-foot .ins-flow-player { order: 1; flex: 1 1 0; }
+  .ins-flow-foot .ins-screen-preview-foot-primary { order: 2; flex: none; left: 0; }
+  .ins-flow-foot .ins-screen-preview-foot-secondary { order: 3; flex: 1 0 100%; flex-wrap: nowrap; }
+  .ins-flow-head-step { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ins-flow-player-steps.is-playing .ins-flow-player-step.is-current span { width: 100%; animation: none; }
+  .ins-flow-steps.is-playing .ins-flow-step.is-current span { width: 100%; animation: none; }
 }
 
 .ins-screen-preview-foot {
@@ -3353,8 +3421,8 @@ select.ins-input {
 
 @media (max-width: 640px) {
   .ins-screen-preview-modal {
-    width: calc(100vw - 24px);
-    height: calc(100vh - 24px);
+    width: calc(100vw - 40px);
+    height: calc(100vh - 40px);
   }
 
   /* The desktop details pane keeps its 320px width even after the ≤900px
@@ -3490,8 +3558,8 @@ select.ins-input {
 @media (max-width: 900px) {
   .ins-screen-preview-modal {
     flex-direction: column;
-    width: calc(100vw - 32px);
-    height: calc(100vh - 32px);
+    width: calc(100vw - 40px);
+    height: calc(100vh - 40px);
   }
 
   .ins-screen-preview-details {
@@ -4841,6 +4909,13 @@ select.ins-input {
   gap: 8px;
 }
 
+/* Opening upward, for a "…" at the bottom of a dialog (the flow preview). */
+.ins-appmenu-layer--up {
+  top: auto;
+  bottom: calc(100% + 8px);
+  align-items: flex-end;
+}
+
 .ins-appmenu-layer .ins-context-menu {
   position: relative;
   top: auto;
@@ -5683,15 +5758,15 @@ select.ins-input {
 
 /* While the screen preview is open, status messages (toasts and the guest
    notice) sit just above its bottom row of buttons, centred on the main
-   panel, instead of on top of those buttons. The preview is 40px from the
+   panel, instead of on top of those buttons. The preview is 20px from the
    viewport's bottom and its button row 84px above its own bottom edge; the
    main panel is the viewport less the 320px details panel, its 16px gap and
-   the 40px margins. Below 901px the panels stack and the default spot is
+   the 20px margins. Below 901px the panels stack and the default spot is
    kept. */
 @media (min-width: 901px) {
   body:has(.ins-screen-preview-modal) .ins-toast-host {
     left: calc(50% - 168px);
-    bottom: 136px;
+    bottom: 116px;
   }
 }
 
@@ -10379,8 +10454,11 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   width: 100%;
 }
 
-/* A menu item that's a link (View in App Store): no underline, menu colours. */
-.ins-context-menu-link { color: inherit; text-decoration: none; }
+/* A menu item that's a link (View in App Store): no underline, menu colours,
+   and border-box like the button items (links default to content-box, which
+   added the padding on top of the 100% width and fixed height: a wider,
+   taller row whose hover spilled past the menu's edge). */
+.ins-context-menu-link { box-sizing: border-box; color: inherit; text-decoration: none; }
 
 .ins-context-menu-btn {
   background: transparent;

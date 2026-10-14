@@ -4,24 +4,35 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
+import { useStoredValue, writeStoredValue } from '@/hooks/useStoredValue';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
 import { flowCategoryLabel, PLATFORM_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
-import { isDesktopPlatform, type Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type App, type Platform, type Screen } from '@/lib/inspirations/types';
+import type { StoreAction } from '@/lib/inspirations/storeAction';
 import { AppLogo } from './AppLogo';
-import { ExternalIcon } from './Icons';
+import { AppMenu } from './AppMenu';
+import { StoreLinkButton } from './StoreMenuItem';
 import { SaveButton } from './SaveButton';
 import { Screenshot } from './Screenshot';
 import { ScreenLightbox } from './ScreenLightbox';
-import { useToast } from './Toast';
 import { useAsync } from './useAsync';
+import { useDownloadAllScreens } from './useDownloadAllScreens';
 
 /** Search-param name that opens the overlay — see SCREEN_PARAM in ScreenPreviewModal.tsx. */
 export const FLOW_PARAM = 'flow';
 
-/** How long each step shows while the flow plays. */
+/** How long each step shows while the flow plays, at 1×. */
 const STEP_MS = 2600;
+
+/** The speed button cycles through these; the choice is remembered per viewer. */
+const SPEEDS = [1, 1.5, 2, 0.5] as const;
+const SPEED_KEY = 'motvin:flow-player-speed';
+const parseSpeed = (raw: string | null) => {
+  const n = Number(raw);
+  return (SPEEDS as readonly number[]).includes(n) ? n : 1;
+};
 
 /** "Login" for a step's label; a screen with no real type falls back to its own name. */
 function stepLabel(screen: Screen): string {
@@ -65,7 +76,6 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   const saveBtnRef = useRef<HTMLButtonElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const filmRef = useRef<HTMLDivElement>(null);
-  const { show } = useToast();
 
   const { data, loading } = useAsync(() => inspirationsApi.getFlow(flowId), `flow-preview:${flowId}`);
   const flow = data?.flow ?? null;
@@ -74,7 +84,6 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
 
   const [atStart, setAtStart] = useState(true);
   const [atEnd, setAtEnd] = useState(true);
-  const [moreOpen, setMoreOpen] = useState(false);
   // Same two states as ScreenPreviewModal's own toggle: "single-screen" (one
   // step, centered) is the default; "Nearby screens" switches to the full
   // filmstrip of every step, and the same button (now reading "Individual
@@ -82,8 +91,14 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   const [multiScreen, setMultiScreen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [zoomScreen, setZoomScreen] = useState<Screen | null>(null);
-  // The player: steps through the flow on its own, one step every STEP_MS.
+  // The player: steps through the flow on its own, one step every STEP_MS ÷ speed.
   const [playing, setPlaying] = useState(false);
+  const [speed, refreshSpeed] = useStoredValue(SPEED_KEY, 1, parseSpeed);
+  const stepMs = Math.round(STEP_MS / speed);
+  const cycleSpeed = () => {
+    writeStoredValue(SPEED_KEY, String(SPEEDS[(SPEEDS.indexOf(speed as (typeof SPEEDS)[number]) + 1) % SPEEDS.length]));
+    refreshSpeed();
+  };
 
   // A different `?flow=` (a fresh open, or a shared link) starts over rather
   // than carrying across the last flow's filmstrip mode, step, or zoom state.
@@ -92,7 +107,6 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     setSeenId(flowId);
     setActiveIndex(0);
     setMultiScreen(false);
-    setMoreOpen(false);
     setZoomScreen(null);
     setPlaying(false);
   }
@@ -129,9 +143,9 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     const timer = window.setTimeout(() => {
       if (activeIndex >= lastIndex) setPlaying(false);
       else setActiveIndex(activeIndex + 1);
-    }, STEP_MS);
+    }, stepMs);
     return () => window.clearTimeout(timer);
-  }, [playerPaused, activeIndex, lastIndex]);
+  }, [playerPaused, activeIndex, lastIndex, stepMs]);
 
   // Fetch the next step's screenshot ahead of time so playing never flashes blank.
   useEffect(() => {
@@ -145,7 +159,8 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
       if (e.key === 'Escape') {
         // The lightbox has its own Escape handler when it's the thing on top;
         // let that own the key instead of also closing the preview under it.
-        if (zoomScreen) return;
+        // So does the "…" menu while it's open.
+        if (zoomScreen || document.querySelector('.ins-screen-preview-modal .ins-appmenu-layer')) return;
         e.preventDefault();
         close();
         return;
@@ -236,18 +251,11 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   }
 
   const active = screens[activeIndex] ?? screens[0];
+  // The player belongs to the one-step view; the filmstrip already shows every step.
+  const showPlayer = !multiScreen && screens.length > 1;
 
   const store = storeAction(flow.platform, app?.website);
 
-  const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}${pathname}?${FLOW_PARAM}=${flow.id}`);
-      show('Link copied');
-    } catch {
-      show('Copy not available');
-    }
-    setMoreOpen(false);
-  };
 
   return createPortal(
     <>
@@ -271,11 +279,19 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                   {app && <span>{app.name}</span>}
                   {app && <span className="ins-screen-preview-head-sep">/</span>}
                   <span>{flow.name}</span>
+                  {showPlayer && active && (
+                    <span className="ins-flow-head-step">
+                      <span className="ins-screen-preview-head-sep">/</span>
+                      <span>{stepLabel(active)}</span>
+                    </span>
+                  )}
                 </div>
               </div>
-              <button ref={closeRef} type="button" className="ins-screen-preview-close" aria-label="Close" onClick={close}>
-                <img src="/ASSET/Icons/Motvin/screen-preview-modal-close.svg" alt="" width={16} height={16} />
-              </button>
+              <div className="ins-flow-head-actions">
+                <button ref={closeRef} type="button" className="ins-screen-preview-close" aria-label="Close" onClick={close}>
+                  <img src="/ASSET/Icons/Motvin/screen-preview-modal-close.svg" alt="" width={16} height={16} />
+                </button>
+              </div>
             </div>
 
             <div className="ins-screen-preview-filmstrip-wrap">
@@ -329,74 +345,91 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
               )}
             </div>
 
-            {!multiScreen && screens.length > 1 && (
-              <div className="ins-flow-player">
-                <button
-                  type="button"
-                  className="ins-flow-player-play"
-                  aria-label={playing ? 'Pause flow' : 'Play flow'}
-                  aria-pressed={playing}
-                  onClick={togglePlay}
-                >
-                  {playing ? (
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
-                      <rect x="2.5" y="2" width="3.2" height="10" rx="1" />
-                      <rect x="8.3" y="2" width="3.2" height="10" rx="1" />
-                    </svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
-                      <path d="M4 2.6c0-.8.86-1.28 1.53-.86l6.1 3.9a1 1 0 010 1.7l-6.1 3.9A1 1 0 014 10.4V2.6z" />
-                    </svg>
-                  )}
-                </button>
-                <div
-                  className={`ins-flow-player-steps ${playerPaused ? '' : 'is-playing'} ${screens.length > 16 ? 'is-dense' : ''}`}
-                  role="group"
-                  aria-label="Flow steps"
-                  style={{ '--ins-flow-step-ms': `${STEP_MS}ms` } as CSSProperties}
-                >
-                  {screens.map((s, i) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      className={`ins-flow-player-step ${i < activeIndex ? 'is-done' : ''} ${i === activeIndex ? 'is-current' : ''}`}
-                      aria-label={`Step ${i + 1}: ${stepLabel(s)}`}
-                      aria-current={i === activeIndex ? 'step' : undefined}
-                      onClick={() => setActiveIndex(i)}
-                    >
-                      {/* Keyed on the step so its fill restarts each time it becomes current. */}
-                      <span key={i === activeIndex ? `on-${activeIndex}-${playerPaused}` : 'off'} />
-                    </button>
-                  ))}
-                </div>
-                <p className="ins-flow-player-label" aria-live="polite">
-                  <b>
-                    {activeIndex + 1} of {screens.length}
-                  </b>
-                  {active && <> · {stepLabel(active)}</>}
-                </p>
-              </div>
-            )}
-
-            <div className="ins-screen-preview-foot">
+            <div className={`ins-screen-preview-foot ${showPlayer ? 'ins-flow-foot' : ''}`}>
               <div className="ins-screen-preview-foot-tags">
                 <span className="ins-screen-preview-foot-tag">{flowCategoryLabel(flow.category)}</span>
                 <span className="ins-screen-preview-foot-tag">{PLATFORM_LABEL[flow.platform] ?? flow.platform}</span>
               </div>
+              {showPlayer && (
+                <div className="ins-flow-player">
+                  <button
+                    type="button"
+                    className="ins-flow-player-play"
+                    aria-label={playing ? 'Pause flow' : 'Play flow'}
+                    aria-pressed={playing}
+                    onClick={togglePlay}
+                  >
+                    {/* The landing navbar's hover tip (.nav-social-tip), above the button. */}
+                    <span className="ins-flow-tip" aria-hidden="true">
+                      Prototype
+                    </span>
+                    {playing ? (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
+                        <rect x="2.5" y="2" width="3.2" height="10" rx="1" />
+                        <rect x="8.3" y="2" width="3.2" height="10" rx="1" />
+                      </svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
+                        <path d="M4.5 2.6c0-.8.86-1.28 1.53-.86l6.1 3.9a1 1 0 010 1.7l-6.1 3.9a1 1 0 01-1.53-.86V2.6z" />
+                      </svg>
+                    )}
+                  </button>
+                  <div
+                    className={`ins-flow-steps ${playerPaused ? '' : 'is-playing'} ${screens.length > 16 ? 'is-dense' : ''}`}
+                    role="group"
+                    aria-label="Flow steps"
+                    style={{ '--ins-flow-step-ms': `${stepMs}ms` } as CSSProperties}
+                  >
+                    {screens.map((s, i) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className={`ins-flow-step ${i < activeIndex ? 'is-done' : ''} ${i === activeIndex ? 'is-current' : ''}`}
+                        aria-label={`Step ${i + 1}: ${stepLabel(s)}`}
+                        aria-current={i === activeIndex ? 'step' : undefined}
+                        title={`${i + 1}. ${stepLabel(s)}`}
+                        onClick={() => setActiveIndex(i)}
+                      >
+                        {/* Keyed so the fill restarts whenever this step becomes current, pauses or changes speed. */}
+                        <span key={i === activeIndex ? `on-${activeIndex}-${playerPaused}-${stepMs}` : 'off'} />
+                      </button>
+                    ))}
+                  </div>
+                  <p className="ins-flow-player-count" aria-live="polite">
+                    <b>{activeIndex + 1}</b> / {screens.length}
+                  </p>
+                  <button
+                    type="button"
+                    className="ins-flow-player-speed"
+                    aria-label={`Playback speed ${speed}×, change`}
+                    onClick={cycleSpeed}
+                  >
+                    <span className="ins-flow-tip" aria-hidden="true">
+                      Playback speed
+                    </span>
+                    {speed}×
+                  </button>
+                </div>
+              )}
               <div className="ins-screen-preview-foot-primary">
                 <SaveButton
                   ref={saveBtnRef}
                   type="flow"
                   id={flow.id}
-                  variant="button"
+                  variant={showPlayer ? 'icon' : 'button'}
                   app={app ?? undefined}
-                  className="ins-screen-preview-foot-btn ins-screen-preview-foot-btn--save"
+                  className={
+                    showPlayer
+                      ? // Icon only, the "…" button's round look, right after the player.
+                        'ins-screen-preview-foot-more ins-flow-save'
+                      : 'ins-screen-preview-foot-btn ins-screen-preview-foot-btn--save'
+                  }
                 />
-                {store && (
-                  <a className="ins-screen-preview-foot-btn" href={store.href} target="_blank" rel="noopener noreferrer">
-                    <img src={store.icon} alt="" width={18} height={16} />
-                    {store.label}
-                  </a>
+                {/* With the player in the footer there's no room, so View in App
+                    Store lives in the "…" menu (FlowMenu); the all-screens view
+                    (and a one-step flow) has the room and shows it here too. */}
+                {!showPlayer && store && app && (
+                  <StoreLinkButton name={app.name} platform={flow.platform} action={store} className="ins-screen-preview-foot-btn" />
                 )}
               </div>
               <div className="ins-screen-preview-foot-secondary">
@@ -415,25 +448,9 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                     {multiScreen ? 'Individual screen' : 'Nearby screens'}
                   </button>
                 )}
-                <div className="ins-popwrap">
-                  <button
-                    type="button"
-                    className="ins-screen-preview-foot-more"
-                    aria-label="More actions"
-                    aria-expanded={moreOpen}
-                    aria-haspopup="menu"
-                    onClick={() => setMoreOpen((o) => !o)}
-                  >
-                    <img src="/ASSET/Icons/Motvin/detail-menu.svg" alt="" width={16} height={16} />
-                  </button>
-                  {moreOpen && (
-                    <div className="ins-popover ins-popover--right" role="menu" onMouseLeave={() => setMoreOpen(false)}>
-                      <button type="button" className="ins-popover-item" role="menuitem" onClick={() => void copyLink()}>
-                        <ExternalIcon size={14} /> <span>Copy link</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
+                {app ? (
+                  <FlowMenu app={app} flowName={flow.name} screens={screens} store={store} platform={flow.platform} link={`${window.location.origin}${pathname}?${FLOW_PARAM}=${flow.id}`} />
+                ) : null}
               </div>
             </div>
           </div>
@@ -442,5 +459,43 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
       {zoomScreen && <ScreenLightbox screen={zoomScreen} onClose={() => setZoomScreen(null)} />}
     </>,
     document.body,
+  );
+}
+
+/**
+ * The footer's "…": the masthead's own menu (AppMenu) for this flow —
+ * Download all screens (just this flow's, as one zip), Copy flow link and,
+ * below a divider, View in App Store — opening upward from the dialog's foot.
+ */
+function FlowMenu({
+  app,
+  flowName,
+  screens,
+  store,
+  platform,
+  link,
+}: {
+  app: App;
+  flowName: string;
+  screens: Screen[];
+  store: StoreAction | null;
+  platform: Platform;
+  link: string;
+}) {
+  // "spotify-onboarding.zip"
+  const flowPart = flowName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'flow';
+  const dl = useDownloadAllScreens(app, screens, `${app.slug}-${flowPart}`);
+  return (
+    <AppMenu
+      busy={dl.busy}
+      versions={[]}
+      store={store ? { name: app.name, platform, action: store } : undefined}
+      onDownloadAll={() => void dl.downloadAll()}
+      onDownloadVersion={() => {}}
+      linkLabel="Copy flow link"
+      link={() => link}
+      triggerClassName="ins-screen-preview-foot-more"
+      opensUp
+    />
   );
 }

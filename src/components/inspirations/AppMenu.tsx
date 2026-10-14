@@ -30,9 +30,21 @@ export function AppMenu({
   store,
   onDownloadAll,
   onDownloadVersion,
+  linkLabel = 'Copy app link',
+  link,
+  triggerClassName = 'ins-iconbtn',
+  opensUp = false,
 }: {
   busy: boolean;
   versions: AppVersion[];
+  /** "Copy app link" by default; a flow's menu says "Copy flow link". */
+  linkLabel?: string;
+  /** What Copy link copies; the current page's address by default. */
+  link?: () => string;
+  /** The "…" button's look; the masthead's icon button by default. */
+  triggerClassName?: string;
+  /** Open above the button, for a "…" at the bottom of a dialog. */
+  opensUp?: boolean;
   /** Where "View in App Store" goes; left out when the app has nowhere to send people. */
   store?: { name: string; platform: Platform; action: StoreAction };
   onDownloadAll: () => void;
@@ -89,7 +101,7 @@ export function AppMenu({
   const copyLink = async () => {
     close();
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(link ? link() : window.location.href);
       show('Link copied');
     } catch {
       show('Could not copy the link');
@@ -100,7 +112,7 @@ export function AppMenu({
     <div className="ins-appmenu" ref={rootRef}>
       <button
         type="button"
-        className="ins-iconbtn"
+        className={triggerClassName}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="More actions"
@@ -113,7 +125,7 @@ export function AppMenu({
       {open && (
         // The menu hangs from the button's right edge; the versions submenu
         // opens beside it on the left, since the button sits at the page's edge.
-        <div className="ins-appmenu-layer">
+        <div className={`ins-appmenu-layer ${opensUp ? 'ins-appmenu-layer--up' : ''}`}>
           <div className="ins-context-menu ins-appmenu-panel" role="menu">
             <div className="ins-context-menu-group">
               <div className="ins-appmenu-row" onMouseEnter={keepVersions} onMouseLeave={dropVersions}>
@@ -146,7 +158,7 @@ export function AppMenu({
                   <div className="ins-context-menu-icon">
                     <img alt="" src={ICON_LINK} />
                   </div>
-                  <p className="ins-context-menu-text">Copy app link</p>
+                  <p className="ins-context-menu-text">{linkLabel}</p>
                 </div>
               </button>
             </div>

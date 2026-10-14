@@ -12,7 +12,7 @@ import { useDownloadGate } from './useDownloadGate';
  * was asked for. Shared by the masthead's Download button and the "…" menu so
  * both stay in step and cannot run two downloads at once.
  */
-export function useDownloadAllScreens(app: App, screens: Screen[]) {
+export function useDownloadAllScreens(app: App, screens: Screen[], zipBase = `${app.slug}-screens`) {
   const { show } = useToast();
   const { allow } = useDownloadGate();
   const [busy, setBusy] = useState(false);
@@ -62,7 +62,7 @@ export function useDownloadAllScreens(app: App, screens: Screen[]) {
     [allow, busy, show],
   );
 
-  const downloadAll = useCallback(() => download(downloadable, `${app.slug}-screens.zip`), [app.slug, download, downloadable]);
+  const downloadAll = useCallback(() => download(downloadable, `${zipBase}.zip`), [zipBase, download, downloadable]);
 
   /** Just one dated capture's screens (the "…" menu's version submenu). */
   const downloadVersion = useCallback(
