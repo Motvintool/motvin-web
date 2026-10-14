@@ -23,6 +23,9 @@ import { useDownloadAllScreens } from './useDownloadAllScreens';
 /** Search-param name that opens the overlay — see SCREEN_PARAM in ScreenPreviewModal.tsx. */
 export const FLOW_PARAM = 'flow';
 
+/** Present mode's control bar hides after the pointer has been still this long. */
+const PRESENT_HUD_MS = 2500;
+
 /** How long each step shows while the flow plays, at 1×. */
 const STEP_MS = 2600;
 
@@ -99,6 +102,12 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     writeStoredValue(SPEED_KEY, String(SPEEDS[(SPEEDS.indexOf(speed as (typeof SPEEDS)[number]) + 1) % SPEEDS.length]));
     refreshSpeed();
   };
+  // Present mode: the flow full screen and auto-playing, for screen-sharing.
+  // Its small control bar (the HUD) fades out while the pointer is still.
+  const [presenting, setPresenting] = useState(false);
+  const [hudVisible, setHudVisible] = useState(true);
+  const hudTimer = useRef<number | undefined>(undefined);
+  const presentRef = useRef<HTMLDivElement>(null);
 
   // A different `?flow=` (a fresh open, or a shared link) starts over rather
   // than carrying across the last flow's filmstrip mode, step, or zoom state.
@@ -109,6 +118,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     setMultiScreen(false);
     setZoomScreen(null);
     setPlaying(false);
+    setPresenting(false);
   }
 
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
@@ -134,6 +144,45 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     setPlaying(true);
   }, [playing, lastIndex]);
 
+  // Shows the HUD, then hides it again after a still moment.
+  const pokeHud = useCallback(() => {
+    setHudVisible(true);
+    window.clearTimeout(hudTimer.current);
+    hudTimer.current = window.setTimeout(() => setHudVisible(false), PRESENT_HUD_MS);
+  }, []);
+  useEffect(() => () => window.clearTimeout(hudTimer.current), []);
+
+  const startPresent = useCallback(() => {
+    setMultiScreen(false);
+    setZoomScreen(null);
+    setActiveIndex((i) => (i >= lastIndex ? 0 : i));
+    setPlaying(true);
+    setPresenting(true);
+    pokeHud();
+  }, [lastIndex, pokeHud]);
+
+  const exitPresent = useCallback(() => {
+    setPresenting(false);
+    setPlaying(false);
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+  }, []);
+
+  // Full screen while presenting, where the browser allows it. Leaving full
+  // screen the browser's own way (Escape, which then never reaches the page)
+  // leaves present mode too.
+  useEffect(() => {
+    if (!presenting) return;
+    presentRef.current?.requestFullscreen?.().catch(() => {});
+    const onFullscreen = () => {
+      if (!document.fullscreenElement) {
+        setPresenting(false);
+        setPlaying(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', onFullscreen);
+    return () => document.removeEventListener('fullscreenchange', onFullscreen);
+  }, [presenting]);
+
   // While playing: move on after STEP_MS, and stop once the last step has had
   // its turn. Stepping by hand restarts the wait for the new step. The filmstrip
   // view and the zoomed lightbox pause it.
@@ -156,6 +205,22 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Present mode owns the keyboard: Escape leaves it (not the dialog),
+      // Space plays / pauses, arrows step.
+      if (presenting) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          exitPresent();
+        } else if (e.key === ' ') {
+          e.preventDefault();
+          togglePlay();
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          setActiveIndex((i) => Math.min(Math.max(i + (e.key === 'ArrowLeft' ? -1 : 1), 0), screens.length - 1));
+        }
+        pokeHud();
+        return;
+      }
       if (e.key === 'Escape') {
         // The lightbox has its own Escape handler when it's the thing on top;
         // let that own the key instead of also closing the preview under it.
@@ -201,7 +266,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [close, screens.length, multiScreen, zoomScreen, togglePlay]);
+  }, [close, screens.length, multiScreen, zoomScreen, togglePlay, presenting, exitPresent, pokeHud]);
 
   useEffect(() => {
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
@@ -251,6 +316,30 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   }
 
   const active = screens[activeIndex] ?? screens[0];
+  // One segment per step (shared by the footer player and present mode).
+  const stepBar = (extraClass = '') => (
+    <div
+      className={`ins-flow-steps ${playerPaused ? '' : 'is-playing'} ${screens.length > 16 ? 'is-dense' : ''} ${extraClass}`}
+      role="group"
+      aria-label="Flow steps"
+      style={{ '--ins-flow-step-ms': `${stepMs}ms` } as CSSProperties}
+    >
+      {screens.map((s, i) => (
+        <button
+          key={s.id}
+          type="button"
+          className={`ins-flow-step ${i < activeIndex ? 'is-done' : ''} ${i === activeIndex ? 'is-current' : ''}`}
+          aria-label={`Step ${i + 1}: ${stepLabel(s)}`}
+          aria-current={i === activeIndex ? 'step' : undefined}
+          title={`${i + 1}. ${stepLabel(s)}`}
+          onClick={() => setActiveIndex(i)}
+        >
+          {/* Keyed so the fill restarts whenever this step becomes current, pauses or changes speed. */}
+          <span key={i === activeIndex ? `on-${activeIndex}-${playerPaused}-${stepMs}` : 'off'} />
+        </button>
+      ))}
+    </div>
+  );
   // The player belongs to the one-step view; the filmstrip already shows every step.
   const showPlayer = !multiScreen && screens.length > 1;
 
@@ -288,6 +377,15 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                 </div>
               </div>
               <div className="ins-flow-head-actions">
+                {/* Where Figma / Slides keep theirs: top right, beside Close. */}
+                {screens.length > 1 && (
+                  <button type="button" className="ins-flow-present-open" aria-label="Present flow" onClick={startPresent}>
+                    <svg width="12" height="12" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
+                      <path d="M4.5 2.6c0-.8.86-1.28 1.53-.86l6.1 3.9a1 1 0 010 1.7l-6.1 3.9a1 1 0 01-1.53-.86V2.6z" />
+                    </svg>
+                    <span>Present</span>
+                  </button>
+                )}
                 <button ref={closeRef} type="button" className="ins-screen-preview-close" aria-label="Close" onClick={close}>
                   <img src="/ASSET/Icons/Motvin/screen-preview-modal-close.svg" alt="" width={16} height={16} />
                 </button>
@@ -374,27 +472,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                       </svg>
                     )}
                   </button>
-                  <div
-                    className={`ins-flow-steps ${playerPaused ? '' : 'is-playing'} ${screens.length > 16 ? 'is-dense' : ''}`}
-                    role="group"
-                    aria-label="Flow steps"
-                    style={{ '--ins-flow-step-ms': `${stepMs}ms` } as CSSProperties}
-                  >
-                    {screens.map((s, i) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        className={`ins-flow-step ${i < activeIndex ? 'is-done' : ''} ${i === activeIndex ? 'is-current' : ''}`}
-                        aria-label={`Step ${i + 1}: ${stepLabel(s)}`}
-                        aria-current={i === activeIndex ? 'step' : undefined}
-                        title={`${i + 1}. ${stepLabel(s)}`}
-                        onClick={() => setActiveIndex(i)}
-                      >
-                        {/* Keyed so the fill restarts whenever this step becomes current, pauses or changes speed. */}
-                        <span key={i === activeIndex ? `on-${activeIndex}-${playerPaused}-${stepMs}` : 'off'} />
-                      </button>
-                    ))}
-                  </div>
+                  {stepBar()}
                   <p className="ins-flow-player-count" aria-live="polite">
                     <b>{activeIndex + 1}</b> / {screens.length}
                   </p>
@@ -457,6 +535,59 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
         </div>
       </div>
       {zoomScreen && <ScreenLightbox screen={zoomScreen} onClose={() => setZoomScreen(null)} />}
+      {presenting && active && (
+        <div
+          ref={presentRef}
+          className={`ins-flow-present ${hudVisible ? 'is-hud' : ''}`}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Presenting ${flow.name}${app ? ` — ${app.name}` : ''}`}
+          onMouseMove={pokeHud}
+        >
+          <div className="ins-flow-present-top">{stepBar('ins-flow-steps--dark')}</div>
+          {/* Click the left third to go back a step, anywhere else to go on. */}
+          <div
+            className="ins-flow-present-stage"
+            onClick={(e) => {
+              const box = e.currentTarget.getBoundingClientRect();
+              const back = e.clientX < box.left + box.width / 3;
+              setActiveIndex((i) => Math.min(Math.max(i + (back ? -1 : 1), 0), lastIndex));
+              pokeHud();
+            }}
+          >
+            <Screenshot screen={active} priority className="ins-flow-present-shot" />
+          </div>
+          <div className="ins-flow-present-hud">
+            <button
+              type="button"
+              className="ins-flow-present-btn ins-flow-present-btn--play"
+              aria-label={playing ? 'Pause flow' : 'Play flow'}
+              onClick={togglePlay}
+            >
+              {playing ? (
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
+                  <rect x="2.5" y="2" width="3.2" height="10" rx="1" />
+                  <rect x="8.3" y="2" width="3.2" height="10" rx="1" />
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
+                  <path d="M4.5 2.6c0-.8.86-1.28 1.53-.86l6.1 3.9a1 1 0 010 1.7l-6.1 3.9a1 1 0 01-1.53-.86V2.6z" />
+                </svg>
+              )}
+            </button>
+            <p className="ins-flow-present-label" aria-live="polite">
+              <b>{activeIndex + 1}</b> / {screens.length} · {stepLabel(active)}
+            </p>
+            <button type="button" className="ins-flow-present-btn" aria-label={`Playback speed ${speed}×, change`} onClick={cycleSpeed}>
+              {speed}×
+            </button>
+            <span className="ins-flow-present-hint">Space to pause · Esc to exit</span>
+            <button type="button" className="ins-flow-present-btn ins-flow-present-btn--exit" onClick={exitPresent}>
+              Exit
+            </button>
+          </div>
+        </div>
+      )}
     </>,
     document.body,
   );
