@@ -9,6 +9,7 @@ import { isDesktopPlatform, type App, type ElementKind, type Flow, type Pattern,
 import { appPlatform, storeAction } from '@/lib/inspirations/storeAction';
 import { AppLogo } from '../AppLogo';
 import { AppMenu } from '../AppMenu';
+import { AppPaletteMenu, useAppPalette } from '../AppPalette';
 import { AppRating } from '../AppRating';
 import { StoreStrip } from '../StoreStrip';
 import { StoreButton } from '../StoreButton';
@@ -521,6 +522,10 @@ export function AppDetailView({
   const sortedPatternScreens = textFilter(patternScreens);
   const versionPatternCount = patterns.filter((p) => p.screenIds.some((id) => versionScreenIds.has(id))).length;
 
+  // The app's colours (from the shown version's screens), behind the
+  // Palette pill at the end of the store strip.
+  const palette = useAppPalette(app, versionScreens, version);
+
   // Docks into the header on scroll, same as the browse pages' own filter
   // toolbar (ToolbarRow) — reuses its scroll-tracking/portal hook so both
   // read the "past the header edge" boundary identically.
@@ -765,7 +770,19 @@ export function AppDetailView({
         </div>
       </header>
 
-      <StoreStrip name={app.name} platform={appPlatform(app)} />
+      <StoreStrip
+        name={app.name}
+        platform={appPlatform(app)}
+        trailing={
+          <AppPaletteMenu
+            app={app}
+            colors={palette}
+            screens={versionScreens}
+            flowCount={versionFlows.length}
+            patternCount={versionPatternCount}
+          />
+        }
+      />
 
       {floatOpen && (
         <FloatCollectionBar
