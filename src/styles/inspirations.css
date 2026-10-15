@@ -2994,6 +2994,33 @@ select.ins-input {
   background: #d4d4d4;
 }
 
+/* Dark screens (tagged Dark): the same footer turned around — it fades to
+   near-black instead of #fafafa, with light text, a white Save and a
+   see-through Copy, so it reads as part of the dark screenshot. */
+.ins-card.is-dark-shot .ins-card-hover-footer::before {
+  background: linear-gradient(to bottom, #12121200 0%, #121212 75%, #121212 100%);
+}
+.ins-card.is-dark-shot .ins-card-hover-title {
+  color: #fff;
+}
+.ins-card.is-dark-shot .ins-card-hover-tagline {
+  color: rgba(255, 255, 255, 0.64);
+}
+.ins-card.is-dark-shot .ins-btn-save {
+  background: #fff;
+  color: #000;
+}
+.ins-card.is-dark-shot .ins-btn-save:hover {
+  background: #e6e6e6;
+}
+.ins-card.is-dark-shot .ins-btn-copy {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+.ins-card.is-dark-shot .ins-btn-copy:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
 /* Screen preview modal (Figma node 1163:51825, "screen-preview-modal") —
    opened from a screen card in the Explore grid in place of navigating to
    the full detail page. Renders inside .ins-search-overlay, the same
@@ -5385,6 +5412,32 @@ select.ins-input {
   margin-right: 20px;
 }
 
+/* The docked logo as a "back to top" button: no button chrome of its own,
+   just the logo, a hand cursor and a small press. */
+.ins-tabbar-logo-btn {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: scale 0.15s ease;
+}
+
+.ins-tabbar-logo-btn:active {
+  scale: 0.94;
+}
+
+.ins-tabbar-logo-btn:focus-visible {
+  outline: none;
+}
+
+.ins-tabbar-logo-btn:focus-visible .ins-tabbar-logo {
+  outline: 2px solid #141414;
+  outline-offset: 2px;
+}
+
 /* Docks into the header on scroll — same mechanism and look as
    .ins-ftoolbar's own dock (see useDockingRow and the .ins-ftoolbar rules
    above), just wrapping the app-detail tabbar instead of the filter toolbar. */
@@ -5923,7 +5976,8 @@ select.ins-input {
   align-items: flex-start;
   padding: 12px;
   border-radius: 40px;
-  background: rgba(255, 255, 255, 0.75);
+  /* Nearly solid white: at 75% a dark screenshot behind it greyed the bar. */
+  background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 12px 80px rgba(0, 0, 0, 0.12);
   width: 525px;
   transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -6133,14 +6187,11 @@ select.ins-input {
   height: 100%;
 }
 
-.ins-float-collection-arrow {
-  flex: none;
-  opacity: 0.7;
-}
-
+/* Fills the room between the logos and Save (it used to share it with an
+   arrow), however many logos are stacked. */
 .ins-float-collection-selector {
-  flex: 0 1 306px;
-  width: 306px;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -6153,8 +6204,7 @@ select.ins-input {
 }
 
 .ins-float-collection-input {
-  flex: 0 1 306px;
-  width: 306px;
+  flex: 1 1 0;
   min-width: 0;
   max-width: 100%;
   padding: 17px 20px;
@@ -6209,7 +6259,8 @@ select.ins-input {
   height: 78px;
   border-radius: 9999px;
   border: none;
-  background: rgba(255, 255, 255, 0.75);
+  /* Nearly solid white, matching the bar beside it. */
+  background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 12px 80px rgba(0, 0, 0, 0.12);
   transition: background var(--ins-fast) var(--ins-ease), transform var(--ins-fast) var(--ins-ease);
 }
@@ -6221,7 +6272,7 @@ select.ins-input {
 }
 
 .ins-float-collection-close:hover {
-  background: rgba(255, 255, 255, 0.84);
+  background: #fff;
   transform: translateY(-1px);
 }
 

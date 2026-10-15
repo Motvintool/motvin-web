@@ -183,14 +183,7 @@ export function FloatCollectionBar({
               </span>
             ))}
           </div>
-          <img
-            src="/ASSET/Icons/Motvin/float-collection-arrow.svg"
-            alt=""
-            className="ins-float-collection-arrow"
-            width={27}
-            height={20}
-          />
-          
+
           {uiState === 'add-new-collection' ? (
             <input
               type="text"

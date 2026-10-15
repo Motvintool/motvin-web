@@ -63,7 +63,33 @@ if (configuredApi) {
   });
 }
 
+/**
+ * Security headers on every response. Kept to ones that can't break the
+ * site: no Content-Security-Policy (Google sign-in, Firebase and the API's
+ * images would each need allow-listing first) and no Cross-Origin-Opener-
+ * Policy (it would cut off the Google sign-in popup from this page).
+ */
+const SECURITY_HEADERS = [
+  // No other site may show these pages in a frame (clickjacking); the site
+  // itself never frames its own pages either.
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  // Files are only ever treated as the type the server says they are.
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  // Other sites see where a visitor came from (the origin), not the full URL.
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  // No Permissions-Policy: camera, microphone and location are left to the
+  // browser's own per-site prompts, for features that will use them.
+];
+
 const nextConfig: NextConfig = {
+  // Off by default in production already; stated so it stays off — browser
+  // source maps would publish the original source to every visitor.
+  productionBrowserSourceMaps: false,
+  // Don't announce the framework in an X-Powered-By header.
+  poweredByHeader: false,
+  async headers() {
+    return [{ source: '/:path*', headers: SECURITY_HEADERS }];
+  },
   images: {
     remotePatterns: API_IMAGE_PATTERNS,
     // The local API runs on localhost, which Next blocks by default (to stop

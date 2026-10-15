@@ -103,7 +103,14 @@ function ScreenCardImpl({
   const appDescription = app?.tagline || derivedTagline;
 
   return (
-    <article className={`ins-card ${selected ? 'is-selected' : ''}`} data-id={screen.id} role="listitem">
+    // A screen tagged Dark gets the dark hover footer (fades to near-black,
+    // light text) so the overlay blends into the screenshot instead of a
+    // white wash over it.
+    <article
+      className={`ins-card ${selected ? 'is-selected' : ''} ${shownScreen.style?.includes('dark') ? 'is-dark-shot' : ''}`}
+      data-id={screen.id}
+      role="listitem"
+    >
       <div className="ins-card-shot">
         {selectable && (
           <button

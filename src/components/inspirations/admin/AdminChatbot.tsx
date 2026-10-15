@@ -6,7 +6,8 @@ import { useEffect, useRef, useState, type DragEvent, type FormEvent, type Ref }
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { useHydrated } from '@/components/shared/useHydrated';
-import { adminApi, isAdminEmail, type AdminAppRecord, type AdminState } from '@/lib/inspirations/admin';
+import { adminApi, type AdminAppRecord, type AdminState } from '@/lib/inspirations/admin';
+import { useIsLibraryAdmin } from '../useIsLibraryAdmin';
 import { dayLabel, localDateString, parseDateInput } from '@/lib/inspirations/dates';
 import { describeOp, labelFor, type AdminOp, type ScreensAction } from '@/lib/inspirations/admin-chatbot/assistantActions';
 import { inspirationsApi, invalidateInspirationsCache } from '@/lib/inspirations/api';
@@ -142,7 +143,8 @@ function appsOnPlatform(state: AdminState, platform: 'ios' | 'webapp' | 'web'): 
 
 export function AdminChatbot() {
   const { user, ready } = useAuth();
-  const admin = ready && Boolean(user && !user.isAnonymous && isAdminEmail(user.email));
+  const libraryAdmin = useIsLibraryAdmin();
+  const admin = ready && Boolean(user && !user.isAnonymous) && libraryAdmin.status === 'admin';
   const { jobs } = useIngestJobs(admin);
   const { messages, pending: pendingAction, heldImage, heldUpload, expecting } = useAssistantChat();
   // Only the newest answer can be asked again — earlier ones already have

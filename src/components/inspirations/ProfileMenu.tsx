@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { LibraryProfileBadge, badgeWrapClassName } from '@/components/library/LibraryProfileBadge';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { useHydrated } from '@/components/shared/useHydrated';
-import { isAdminEmail } from '@/lib/inspirations/admin';
+import { useIsLibraryAdmin } from './useIsLibraryAdmin';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { ADMIN_PARAM } from './admin/AdminDrawer';
 import { RequestAppModal } from './RequestAppModal';
@@ -38,9 +38,10 @@ export function ProfileMenu() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const signedIn = Boolean(user && !user.isAnonymous);
-  // Presentation only. The admin API verifies the signed-in account itself,
-  // so revealing this link would not grant anyone access.
-  const showAdmin = signedIn && isAdminEmail(user?.email);
+  // Shown once the server confirms this account is an admin (no admin email
+  // in the browser code); the admin API still checks every call itself.
+  const libraryAdmin = useIsLibraryAdmin();
+  const showAdmin = signedIn && libraryAdmin.status === 'admin';
   // Opens the admin drawer over whatever page is showing (see AdminDrawer.tsx)
   // instead of navigating away to a separate page — same `?admin=1`-on-the-
   // current-URL convention ScreenCard uses for `?screen=`.

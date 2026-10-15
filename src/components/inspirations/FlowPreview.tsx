@@ -527,7 +527,12 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                   ))}
                 </div>
               ) : (
-                <div className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--single">
+                // Right-click anywhere on this strip (not only on the screenshot):
+                // the same menu, for the step being viewed.
+                <div
+                  className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--single"
+                  onContextMenu={active ? onShotContextMenu(active) : undefined}
+                >
                   <div
                     className={`ins-screen-preview-shot ${isDesktopPlatform(active?.platform) ? 'ins-screen-preview-shot--web' : ''}`}
                     data-screen-id={active?.id}

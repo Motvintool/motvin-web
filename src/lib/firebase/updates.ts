@@ -17,6 +17,7 @@ import {
   getDoc,
   getDocs,
   getFirestore,
+  limit,
   orderBy,
   query,
   serverTimestamp,
@@ -40,8 +41,6 @@ import { firebaseConfig, isFirebaseConfigured } from './config';
 const RELEASE_COLLECTION = 'updates-feed';
 /** Read fallbacks — different environments named the same collection differently. */
 const READ_COLLECTION_CANDIDATES = ['updates-feed', 'updatesFeed', 'updates'];
-/** Owner allowlist mirrors admin.8d71fd2002.js OWNER_ADMIN_EMAILS. */
-export const OWNER_ADMIN_EMAILS = ['surendarv638@gmail.com'];
 /** Additional admins live in this collection, doc id = lowercased email. */
 export const ADMIN_COLLECTION = 'releaseNotesAdmins';
 /** Storage path prefix for uploaded release images. */
@@ -200,15 +199,28 @@ export function normaliseEmail(value: string | null | undefined): string {
   return String(value ?? '').trim().toLowerCase();
 }
 
-export function isOwnerAdmin(email: string | null | undefined): boolean {
-  return OWNER_ADMIN_EMAILS.includes(normaliseEmail(email));
+/**
+ * Whether the signed-in account is the owner — asked of Firestore, not of an
+ * email list shipped to the browser. The rules let only the owner list the
+ * admin collection (isReleaseNotesOwner), so a list that's allowed is the
+ * answer; permission-denied (or no Firestore) means not the owner.
+ */
+export async function checkIsOwner(): Promise<boolean> {
+  const instance = ensureFirestore();
+  if (!instance) return false;
+  try {
+    await getDocs(query(collection(instance, ADMIN_COLLECTION), limit(1)));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-/** True when the account is owner OR appears in the releaseNotesAdmins doc set. */
+/** True when the account is the owner OR appears in the releaseNotesAdmins doc set. */
 export async function hasAdminAccess(email: string | null | undefined): Promise<boolean> {
   const normalised = normaliseEmail(email);
   if (!normalised) return false;
-  if (isOwnerAdmin(normalised)) return true;
+  if (await checkIsOwner()) return true;
   const instance = ensureFirestore();
   if (!instance) return false;
   try {

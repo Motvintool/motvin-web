@@ -481,7 +481,9 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   ))}
                 </div>
               ) : (
-                <div className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--single">
+                // Right-click anywhere on this strip (not only on the screenshot):
+                // the same menu, for the screen being viewed.
+                <div className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--single" onContextMenu={onShotContextMenu(view)}>
                   <div
                     className={`ins-screen-preview-shot ${isDesktopPlatform((screens[activeIndex] ?? screen).platform) ? 'ins-screen-preview-shot--web' : ''}`}
                     data-screen-id={screens[activeIndex]?.id ?? view.id}

@@ -542,7 +542,23 @@ export function AppDetailView({
       {/* Only once docked — in flow the masthead just above already shows
           its own big logo, so a second one here would be redundant until
           that masthead scrolls out of view. */}
-      {inHeader && <AppLogo app={app} size={36} className="ins-tabbar-logo" />}
+      {/* A way back up: the docked logo returns to the top of the page. */}
+      {inHeader && (
+        <button
+          type="button"
+          className="ins-tabbar-logo-btn"
+          aria-label={`Back to the top of ${app.name}`}
+          title="Back to top"
+          onClick={() =>
+            window.scrollTo({
+              top: 0,
+              behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+            })
+          }
+        >
+          <AppLogo app={app} size={36} className="ins-tabbar-logo" />
+        </button>
+      )}
 
       {/* The scrollable tab list and the category pill are split into
           separate flex children of this row (rather than one shared

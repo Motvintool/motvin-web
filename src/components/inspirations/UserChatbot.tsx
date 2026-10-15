@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
-import { isAdminEmail } from '@/lib/inspirations/admin';
+import { useIsLibraryAdmin } from './useIsLibraryAdmin';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { greetingFor } from '@/lib/inspirations/guide-chatbot/guideGreeting';
 import { nextNudge, nudgeMessages, readNudgeState, writeNudgeState } from '@/lib/inspirations/guide-chatbot/guideNudge';
@@ -57,7 +57,8 @@ export function UserChatbot() {
   const pathname = usePathname();
   const { user, ready } = useAuth();
   const signedIn = ready && Boolean(user && !user.isAnonymous);
-  const alongsideAdmin = signedIn && isAdminEmail(user?.email);
+  const libraryAdmin = useIsLibraryAdmin();
+  const alongsideAdmin = signedIn && libraryAdmin.status === 'admin';
   const displayName = signedIn ? user?.displayName : null;
   const [open, setOpen] = useState(false);
   const [lines, setLines] = useState<Line[]>([]);

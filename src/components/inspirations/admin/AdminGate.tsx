@@ -1,50 +1,28 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { useGoToLogin } from '../useGoToLogin';
 import { useAuth } from '@/components/shared/AuthProvider';
-import { adminApi, isAdminEmail } from '@/lib/inspirations/admin';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { EmptyState } from '../EmptyState';
 import { CheckIcon, CloseIcon } from '../Icons';
+import { useIsLibraryAdmin } from '../useIsLibraryAdmin';
 
 /**
  * Access control for /inspirations/admin.
  *
- * Two checks, deliberately: the email check decides what to render, and the
- * server's own check decides whether anything can actually be done. The second
- * one is the real boundary, so the page confirms with the API before showing
- * the tools rather than trusting the token's claims in the browser.
+ * The server decides: the page asks the admin API whether this account may
+ * administer the library (useIsLibraryAdmin) before showing any tools, and
+ * every admin call is checked again on its own. No admin email is kept in the
+ * browser code to pre-judge it.
  */
 export function AdminGate({ children }: { children: ReactNode }) {
   const { user, ready } = useAuth();
   const goToLogin = useGoToLogin();
-  // Keyed by account so a sign-out or account switch invalidates the previous
-  // answer rather than leaving a stale "allowed" on screen.
-  const [check, setCheck] = useState<{ uid: string; allowed: boolean; error?: string } | null>(null);
+  const { status, error } = useIsLibraryAdmin();
 
   const signedIn = Boolean(user && !user.isAnonymous);
-  const looksLikeAdmin = signedIn && isAdminEmail(user?.email);
-  const uid = user?.uid ?? '';
-
-  useEffect(() => {
-    if (!looksLikeAdmin) return;
-    let cancelled = false;
-    adminApi
-      .session()
-      .then(() => {
-        if (!cancelled) setCheck({ uid, allowed: true });
-      })
-      .catch((err: Error) => {
-        if (!cancelled) setCheck({ uid, allowed: false, error: err.message });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [looksLikeAdmin, uid]);
-
-  const checked = check && check.uid === uid ? check : null;
 
   if (!ready) {
     return <p className="ins-muted ins-admin-status">Checking your account…</p>;
@@ -60,7 +38,11 @@ export function AdminGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!looksLikeAdmin) {
+  if (status === 'unknown') {
+    return <p className="ins-muted ins-admin-status">Verifying with the server…</p>;
+  }
+
+  if (status === 'not-admin') {
     return (
       <EmptyState
         icon={<CloseIcon size={22} />}
@@ -71,16 +53,12 @@ export function AdminGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!checked) {
-    return <p className="ins-muted ins-admin-status">Verifying with the server…</p>;
-  }
-
-  if (!checked.allowed) {
+  if (status === 'error') {
     return (
       <EmptyState
         icon={<CloseIcon size={22} />}
-        title="The server did not accept this account"
-        description={checked.error ?? 'Admin access was refused.'}
+        title="The server could not confirm this account"
+        description={error ?? 'Admin access could not be checked. Try again in a moment.'}
         action={{ label: 'Back to Explore', href: INSPIRATIONS_ROUTES.explore }}
       />
     );

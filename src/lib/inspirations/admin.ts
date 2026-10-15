@@ -5,18 +5,10 @@ import type { Industry, Platform, ScreenType, Style } from './types';
  * Client for the Inspirations admin API.
  *
  * Every call carries the signed-in user's Firebase ID token; the backend
- * verifies it and checks the email against its allowlist. The constant below
- * only decides what the browser bothers to show — it is not what grants
- * access, and editing it in devtools changes nothing server-side.
+ * verifies it and checks the email against its own allowlist. Who is an admin
+ * is never decided (or listed) in the browser: the UI asks the server through
+ * `session()` (see useIsLibraryAdmin).
  */
-
-/** Accounts the UI offers the admin area to. The server decides for real. */
-export const ADMIN_EMAILS = ['surendarv638@gmail.com'];
-
-export function isAdminEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return ADMIN_EMAILS.includes(email.trim().toLowerCase());
-}
 
 function baseUrl(): string {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
