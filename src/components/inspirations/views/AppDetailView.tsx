@@ -9,6 +9,7 @@ import { isDesktopPlatform, type App, type ElementKind, type Flow, type Pattern,
 import { appPlatform, storeAction } from '@/lib/inspirations/storeAction';
 import { AppLogo } from '../AppLogo';
 import { AppMenu } from '../AppMenu';
+import { COMPARE_PARAM, CompareScreens, defaultCompareType } from '../CompareScreens';
 import { AppPaletteMenu, useAppPalette } from '../AppPalette';
 import { AppRating } from '../AppRating';
 import { StoreStrip } from '../StoreStrip';
@@ -524,6 +525,8 @@ export function AppDetailView({
   // The app's colours (from the shown version's screens), behind the
   // Palette button next to Save.
   const palette = useAppPalette(app, versionScreens, version);
+  // "Compare screens" opens on login if this version has any, else its most common type.
+  const compareType = defaultCompareType(versionScreens);
 
   // Docks into the header on scroll, same as the browse pages' own filter
   // toolbar (ToolbarRow) — reuses its scroll-tracking/portal hook so both
@@ -770,11 +773,14 @@ export function AppDetailView({
             busy={dl.busy}
             versions={app.versions ?? []}
             store={store ? { name: app.name, platform: appPlatform(app), action: store } : undefined}
+            compareHref={compareType ? `${pathname}?${COMPARE_PARAM}=${encodeURIComponent(compareType)}` : undefined}
             onDownloadAll={() => void dl.downloadAll()}
             onDownloadVersion={(id) => void dl.downloadVersion(id)}
           />
         </div>
       </header>
+
+      <CompareScreens app={app} screens={versionScreens} />
 
       <StoreStrip
         name={app.name}

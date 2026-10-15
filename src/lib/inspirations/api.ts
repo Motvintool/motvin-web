@@ -182,6 +182,13 @@ export const inspirationsApi = {
     return request(`/screens?${params}`, TTL.list, EMPTY_PAGE as Page<Screen>);
   },
 
+  /** Every screen of one type, across all apps, in one go (the compare view groups them by app). */
+  async listScreensOfType(type: string): Promise<Screen[]> {
+    const params = new URLSearchParams({ type, sort: 'curated', limit: '1000', offset: '0' });
+    const page = await request(`/screens?${params}`, TTL.list, EMPTY_PAGE as Page<Screen>);
+    return page.items;
+  },
+
   listApps(industry?: string, sort?: 'newest' | 'oldest' | 'az' | 'rating'): Promise<App[]> {
     const params = new URLSearchParams();
     if (industry) params.set('industry', industry);

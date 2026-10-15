@@ -408,6 +408,17 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                       <button type="button" className="ins-popover-item" role="menuitem" onClick={() => void copyLink()}>
                         <ExternalIcon size={14} /> <span>Copy link</span>
                       </button>
+                      {/* This screen's type, beside another app's (CompareScreens on the app page). */}
+                      {app && screen.screenType && screen.screenType !== 'other' && (
+                        <Link
+                          className="ins-popover-item"
+                          role="menuitem"
+                          href={`${INSPIRATIONS_ROUTES.app(app)}?compare=${encodeURIComponent(screen.screenType)}`}
+                          onClick={() => setMoreOpen(false)}
+                        >
+                          <CompareIcon /> <span>Compare {screenTypeLabel(screen.screenType).toLowerCase()}</span>
+                        </Link>
+                      )}
                       {screen.downloadable && (
                         <a
                           className="ins-popover-item"
@@ -531,4 +542,9 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     </>,
     document.body,
   );
+}
+
+/** The compare icon (Motvin's compare.svg), for "Compare …". */
+function CompareIcon() {
+  return <img src="/ASSET/Icons/Motvin/compare.svg" alt="" width={14} height={14} aria-hidden />;
 }

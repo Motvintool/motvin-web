@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { AppVersion, Platform } from '@/lib/inspirations/types';
 import type { StoreAction } from '@/lib/inspirations/storeAction';
@@ -19,6 +20,7 @@ import { useToast } from './Toast';
 
 const ICON_DOWNLOAD = '/ASSET/Icons/Motvin/download-png.svg';
 const ICON_LINK = '/ASSET/Icons/Motvin/copy-link.svg';
+const ICON_COMPARE = '/ASSET/Icons/Motvin/compare.svg';
 const ICON_MORE = '/ASSET/Icons/Motvin/right-arrow-small.svg';
 
 /** How long the versions submenu waits before closing once the pointer leaves it. */
@@ -34,6 +36,7 @@ export function AppMenu({
   link,
   triggerClassName = 'ins-iconbtn',
   opensUp = false,
+  compareHref,
 }: {
   busy: boolean;
   versions: AppVersion[];
@@ -45,6 +48,8 @@ export function AppMenu({
   triggerClassName?: string;
   /** Open above the button, for a "…" at the bottom of a dialog. */
   opensUp?: boolean;
+  /** Where "Compare screens" goes (the app page's compare view); left out when there's nothing to compare. */
+  compareHref?: string;
   /** Where "View in App Store" goes; left out when the app has nowhere to send people. */
   store?: { name: string; platform: Platform; action: StoreAction };
   onDownloadAll: () => void;
@@ -161,6 +166,16 @@ export function AppMenu({
                   <p className="ins-context-menu-text">{linkLabel}</p>
                 </div>
               </button>
+              {compareHref && (
+                <Link href={compareHref} scroll={false} className="ins-context-menu-btn ins-context-menu-link" role="menuitem" onClick={close}>
+                  <div className="ins-context-menu-btn-content">
+                    <div className="ins-context-menu-icon">
+                      <img alt="" src={ICON_COMPARE} />
+                    </div>
+                    <p className="ins-context-menu-text">Compare screens</p>
+                  </div>
+                </Link>
+              )}
             </div>
             {/* Set apart at the bottom, like Save collection in the card's menu. */}
             {store && (

@@ -17,8 +17,10 @@ import { StoreLinkButton } from './StoreMenuItem';
 import { SaveButton } from './SaveButton';
 import { Screenshot } from './Screenshot';
 import { ScreenLightbox } from './ScreenLightbox';
+import { SCREEN_PARAM } from './ScreenPreviewModal';
 import { useAsync } from './useAsync';
 import { useDownloadAllScreens } from './useDownloadAllScreens';
+import { useScreenContextMenu } from './useScreenContextMenu';
 
 /** Search-param name that opens the overlay — see SCREEN_PARAM in ScreenPreviewModal.tsx. */
 export const FLOW_PARAM = 'flow';
@@ -94,6 +96,32 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   const [multiScreen, setMultiScreen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [zoomScreen, setZoomScreen] = useState<Screen | null>(null);
+  // Right-click on a step's screenshot: the grid card's menu (Copy png,
+  // Download png, Copy link) for that screenshot, as in the screen preview,
+  // in place of the browser's own "Save image as…". Set up before the early
+  // returns below, so the hooks run in the same order.
+  const [contextScreenId, setContextScreenId] = useState<string | null>(null);
+  const menuScreen = screens.find((s) => s.id === contextScreenId) ?? screens[activeIndex] ?? null;
+  const shotMenu = useScreenContextMenu(menuScreen, app, () =>
+    `${window.location.origin}${pathname}?${SCREEN_PARAM}=${menuScreen?.id ?? ''}`,
+  );
+  const onShotContextMenu = (target: Screen) => (e: React.MouseEvent) => {
+    setContextScreenId(target.id);
+    shotMenu.onContextMenu(e);
+  };
+  // The step under the pointer on the player's bar, for its preview card (as
+  // on the compare view's thumbnails). Kept with `on` false after the pointer
+  // leaves, so the card fades out in place; `glide` from one step to the next.
+  // `bar` is which bar it belongs to: the footer's, or present mode's.
+  const [stepPeek, setStepPeek] = useState<{ bar: string; i: number; x: number; on: boolean; glide: boolean } | null>(null);
+  const hideStepPeek = () => setStepPeek((p) => (p && p.on ? { ...p, on: false } : p));
+  const showStepPeek = (bar: string, i: number, step: HTMLElement) => {
+    const el = step.parentElement;
+    if (!el) return;
+    const r = step.getBoundingClientRect();
+    const x = r.left + r.width / 2 - el.getBoundingClientRect().left;
+    setStepPeek((p) => ({ bar, i, x, on: true, glide: Boolean(p?.on && p.bar === bar) }));
+  };
   // The player: steps through the flow on its own, one step every STEP_MS ÷ speed.
   const [playing, setPlaying] = useState(false);
   const [speed, refreshSpeed] = useStoredValue(SPEED_KEY, 1, parseSpeed);
@@ -317,29 +345,54 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
 
   const active = screens[activeIndex] ?? screens[0];
   // One segment per step (shared by the footer player and present mode).
-  const stepBar = (extraClass = '') => (
-    <div
-      className={`ins-flow-steps ${playerPaused ? '' : 'is-playing'} ${screens.length > 16 ? 'is-dense' : ''} ${extraClass}`}
-      role="group"
-      aria-label="Flow steps"
-      style={{ '--ins-flow-step-ms': `${stepMs}ms` } as CSSProperties}
-    >
-      {screens.map((s, i) => (
-        <button
-          key={s.id}
-          type="button"
-          className={`ins-flow-step ${i < activeIndex ? 'is-done' : ''} ${i === activeIndex ? 'is-current' : ''}`}
-          aria-label={`Step ${i + 1}: ${stepLabel(s)}`}
-          aria-current={i === activeIndex ? 'step' : undefined}
-          title={`${i + 1}. ${stepLabel(s)}`}
-          onClick={() => setActiveIndex(i)}
+  // Hovering a step shows a preview of its screen with its place, "5 / 31"
+  // (the compare view's card): above the footer's bar, below present mode's
+  // (which runs along the top of the screen).
+  const peeked = stepPeek ? screens[stepPeek.i] : undefined;
+  const stepBar = (extraClass = '') => {
+    const bar = extraClass ? 'present' : 'foot';
+    const peek = stepPeek?.bar === bar ? stepPeek : null;
+    return (
+      <div
+        className={`ins-flow-steps ${playerPaused ? '' : 'is-playing'} ${screens.length > 16 ? 'is-dense' : ''} ${extraClass}`}
+        role="group"
+        aria-label="Flow steps"
+        style={{ '--ins-flow-step-ms': `${stepMs}ms` } as CSSProperties}
+        onPointerLeave={hideStepPeek}
+      >
+        {screens.map((s, i) => (
+          <button
+            key={s.id}
+            type="button"
+            className={`ins-flow-step ${i < activeIndex ? 'is-done' : ''} ${i === activeIndex ? 'is-current' : ''}`}
+            aria-label={`Step ${i + 1}: ${stepLabel(s)}`}
+            aria-current={i === activeIndex ? 'step' : undefined}
+            onPointerEnter={(e) => e.pointerType === 'mouse' && showStepPeek(bar, i, e.currentTarget)}
+            onFocus={(e) => e.currentTarget.matches(':focus-visible') && showStepPeek(bar, i, e.currentTarget)}
+            onBlur={hideStepPeek}
+            onClick={() => setActiveIndex(i)}
+          >
+            {/* Keyed so the fill restarts whenever this step becomes current, pauses or changes speed. */}
+            <span key={i === activeIndex ? `on-${activeIndex}-${playerPaused}-${stepMs}` : 'off'} />
+          </button>
+        ))}
+        <div
+          className={`ins-compare-peek ins-flow-step-peek ${isDesktopPlatform(flow.platform) ? 'is-web' : ''} ${peek?.on && peeked ? 'is-visible' : ''} ${peek?.glide ? 'is-gliding' : ''}`}
+          style={peek ? ({ '--x': `${peek.x}px` } as CSSProperties) : undefined}
+          aria-hidden
         >
-          {/* Keyed so the fill restarts whenever this step becomes current, pauses or changes speed. */}
-          <span key={i === activeIndex ? `on-${activeIndex}-${playerPaused}-${stepMs}` : 'off'} />
-        </button>
-      ))}
-    </div>
-  );
+          {peeked && peek && (
+            <>
+              <Screenshot key={peeked.id} screen={peeked} />
+              <span className="ins-compare-peek-label">
+                {peek.i + 1} / {screens.length}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
   // The player belongs to the one-step view; the filmstrip already shows every step.
   const showPlayer = !multiScreen && screens.length > 1;
 
@@ -403,6 +456,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                       className={`ins-screen-preview-shot ${isDesktopPlatform(s.platform) ? 'ins-screen-preview-shot--web' : ''}`}
                       data-screen-id={s.id}
                       onClick={() => setZoomScreen(s)}
+                      onContextMenu={onShotContextMenu(s)}
                     >
                       <Screenshot screen={s} priority={i === activeIndex} />
                     </div>
@@ -414,6 +468,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                     className={`ins-screen-preview-shot ${isDesktopPlatform(active?.platform) ? 'ins-screen-preview-shot--web' : ''}`}
                     data-screen-id={active?.id}
                     onClick={() => active && setZoomScreen(active)}
+                    onContextMenu={active ? onShotContextMenu(active) : undefined}
                   >
                     {active && <Screenshot screen={active} priority />}
                   </div>
@@ -535,6 +590,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
         </div>
       </div>
       {zoomScreen && <ScreenLightbox screen={zoomScreen} onClose={() => setZoomScreen(null)} />}
+      {shotMenu.menu}
       {presenting && active && (
         <div
           ref={presentRef}
