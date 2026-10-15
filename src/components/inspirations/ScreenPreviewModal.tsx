@@ -10,7 +10,6 @@ import { storeAction } from '@/lib/inspirations/storeAction';
 import { INDUSTRY_LABEL, PLATFORM_LABEL, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
-import { DownloadIcon, ExternalIcon } from './Icons';
 import { SaveButton } from './SaveButton';
 import { Screenshot } from './Screenshot';
 import { ScreenLightbox } from './ScreenLightbox';
@@ -406,7 +405,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   {moreOpen && (
                     <div className="ins-popover ins-popover--right" role="menu" onMouseLeave={() => setMoreOpen(false)}>
                       <button type="button" className="ins-popover-item" role="menuitem" onClick={() => void copyLink()}>
-                        <ExternalIcon size={14} /> <span>Copy link</span>
+                        <MenuIcon src={ICON_COPY_LINK} /> <span>Copy link</span>
                       </button>
                       {/* This screen's type, beside another app's (CompareScreens on the app page). */}
                       {app && screen.screenType && screen.screenType !== 'other' && (
@@ -416,7 +415,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                           href={`${INSPIRATIONS_ROUTES.app(app)}?compare=${encodeURIComponent(screen.screenType)}`}
                           onClick={() => setMoreOpen(false)}
                         >
-                          <CompareIcon /> <span>Compare {screenTypeLabel(screen.screenType).toLowerCase()}</span>
+                          <MenuIcon src={ICON_COMPARE} /> <span>Compare {screenTypeLabel(screen.screenType).toLowerCase()}</span>
                         </Link>
                       )}
                       {screen.downloadable && (
@@ -433,7 +432,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                             }
                           }}
                         >
-                          <DownloadIcon size={14} /> <span>Download</span>
+                          <MenuIcon src={ICON_DOWNLOAD} /> <span>Download</span>
                         </a>
                       )}
                     </div>
@@ -544,7 +543,11 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   );
 }
 
-/** The compare icon (Motvin's compare.svg), for "Compare …". */
-function CompareIcon() {
-  return <img src="/ASSET/Icons/Motvin/compare.svg" alt="" width={14} height={14} aria-hidden />;
+/** The "…" menu's icons: Motvin's own set, as in the screen's right-click menu and the app menu. */
+const ICON_COPY_LINK = '/ASSET/Icons/Motvin/copy-link.svg';
+const ICON_COMPARE = '/ASSET/Icons/Motvin/compare.svg';
+const ICON_DOWNLOAD = '/ASSET/Icons/Motvin/download-png.svg';
+
+function MenuIcon({ src }: { src: string }) {
+  return <img src={src} alt="" width={16} height={16} aria-hidden />;
 }

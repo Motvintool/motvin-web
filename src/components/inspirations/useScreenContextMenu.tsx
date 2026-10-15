@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import type { App, Screen } from '@/lib/inspirations/types';
@@ -27,6 +27,21 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
   const { allow } = useDownloadGate();
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  // Where it's drawn: at the pointer, flipped up / left (8px clear of the
+  // edge) when it would run off the bottom or right of the window, as by a
+  // right-click near the foot of a dialog.
+  const [placed, setPlaced] = useState<{ x: number; y: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!position || !el) {
+      setPlaced(null);
+      return;
+    }
+    const { width, height } = el.getBoundingClientRect();
+    const x = position.x + width > window.innerWidth - 8 ? Math.max(8, position.x - width) : position.x;
+    const y = position.y + height > window.innerHeight - 8 ? Math.max(8, position.y - height) : position.y;
+    setPlaced({ x, y });
+  }, [position]);
 
   // Closes on a press anywhere else, a scroll, another right-click or Escape.
   // Listens on the capture phase, so it still hears presses inside dialogs
@@ -146,7 +161,7 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
           <div
             ref={menuRef}
             className="ins-context-menu"
-            style={{ top: position.y, left: position.x, width: 180 }}
+            style={{ top: (placed ?? position).y, left: (placed ?? position).x, width: 180, visibility: placed ? undefined : 'hidden' }}
             // Keeps the press inside the menu, so it doesn't reach (and close)
             // the dialog or card underneath.
             onClick={(e) => e.stopPropagation()}

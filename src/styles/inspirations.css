@@ -12143,22 +12143,22 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
 .ins-compare-menu-count { flex: none; font: 500 13px/1 var(--font-manrope), Inter, sans-serif; color: #8a8a88; font-variant-numeric: tabular-nums; }
 
 /* The stage: the two sides and the seam, leaving the arrows their 32px +
-   64px at each edge. Above phones, each screen sits 216px from the seam's
-   line (the seam's 40px + 176px), the rest of its half left between it and
+   64px at each edge. Above phones, each screen sits 184px from the seam's
+   line (the seam's 40px + 144px), the rest of its half left between it and
    its arrow. On narrower laptops the gap gives way first (the side always
    keeps ~300px for its screen), so the screens never shrink for it. */
 .ins-screen-preview-filmstrip-wrap.ins-compare-stage { display: grid; grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr); align-items: stretch; padding: 0 120px; }
 .ins-compare-side { --ins-compare-brand: #c8c8c6; display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 0; min-height: 0; }
-/* The screen nearly as tall as the stage (95%, leaving a little air above
+/* The screen nearly as tall as the stage (90%, leaving a little air above
    and below), keeping its shape, framed like the preview's own screenshot. */
 .ins-compare-shot { flex: 1 1 0; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; padding: 0; border: 0; background: none; cursor: zoom-in; }
-.ins-compare-shot img, .ins-compare-shot .ins-shot-missing { width: auto; height: auto; max-width: 100%; max-height: 95%; border-radius: 24px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .08); animation: insCompareIn .25s ease-out; }
+.ins-compare-shot img, .ins-compare-shot .ins-shot-missing { width: auto; height: auto; max-width: 100%; max-height: 90%; border-radius: 32px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .08); animation: insCompareIn .25s ease-out; }
 @media (min-width: 901px) {
   /* The gap, shared with the footer so its thumbnails line up with the
      screens: each side is 50vw - 180px wide (the modal's 100vw - 40px, less
      the stage's 240px of arrow room and the 80px seam), and keeps ~300px
      of it for its screen. */
-  .ins-compare-main { --ins-compare-pad: min(176px, max(0px, 50vw - 480px)); }
+  .ins-compare-main { --ins-compare-pad: min(144px, max(0px, 50vw - 480px)); }
   .ins-compare-shot { box-sizing: border-box; }
   .ins-compare-side:first-child .ins-compare-shot { justify-content: flex-end; padding-right: var(--ins-compare-pad); }
   .ins-compare-seam ~ .ins-compare-side .ins-compare-shot { justify-content: flex-start; padding-left: var(--ins-compare-pad); }
@@ -12170,21 +12170,65 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
      300px (room for the longest tags, "Notifications" + "Android"); the
      same on both sides, so they stay even. */
   .ins-compare-foot .ins-compare-strip { max-width: clamp(96px, calc(50vw - 340px - var(--ins-compare-pad)), 252px); }
+  /* Once measured (CompareModal): each side's thumbnails centred under its
+     screen, as wide as it (to ~7 thumbnails), the hairline under the seam;
+     the rules above are only the first paint's fallback. A short side
+     centres its thumbnails in the box. */
+  /* Spanning the footer's grid and out over its 20px / 32px padding, so its
+     box is the footer's own (the measured coordinates' origin); the footer
+     keeps its 116px now the thumbnails don't hold it open. */
+  .ins-screen-preview-foot.ins-flow-foot.ins-compare-foot:has(> .ins-compare-strips.is-placed) { min-height: 116px; box-sizing: border-box; }
+  .ins-compare-foot .ins-compare-strips.is-placed { grid-column: 1 / -1; grid-row: 1; position: absolute; top: -20px; left: -32px; right: -32px; height: 116px; display: block; pointer-events: none; }
+  .ins-compare-strips.is-placed > * { pointer-events: auto; }
+  .ins-compare-strips.is-placed > .ins-compare-strip { position: absolute; top: 50%; height: 76px; max-width: none; transform: translateY(-50%); justify-content: safe center; }
+  .ins-compare-strips.is-placed > .ins-compare-strips-vs { position: absolute; top: 50%; transform: translate(-50%, -50%); }
+  /* The preview card's anchor is now the whole footer: 12px above the
+     thumbnails (the footer's 20px padding, less 8px). */
+  .ins-compare-strips.is-placed > .ins-compare-peek { bottom: calc(100% - 8px); }
 }
 .ins-compare-shot.is-web img { border-radius: 10px; }
 /* Hovering a screen lifts it a touch (it opens on click), easing in and out
    softly (!important over the theme guard, as for the logos). */
-.ins-compare-shot img { transition: transform .55s cubic-bezier(.22, 1, .36, 1), box-shadow .55s cubic-bezier(.22, 1, .36, 1) !important; will-change: transform; backface-visibility: hidden; }
-.ins-compare-shot:hover img { transform: scale(1.02); box-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 18px 40px rgba(0, 0, 0, .12); }
+.ins-compare-shot img { transition: transform .55s cubic-bezier(.22, 1, .36, 1) !important; will-change: transform; backface-visibility: hidden; }
+.ins-compare-shot:hover img { transform: scale(1.02); }
+/* Only the screenshot itself is live (hover, zoom cursor, click), not the
+   empty room around it in its half: the button lets the pointer through
+   and its image takes it (a click on it still reaches the button). */
+.ins-compare-shot { pointer-events: none; }
+.ins-compare-shot > * { pointer-events: auto; }
 .ins-compare-shot:focus-visible { outline: none; }
 .ins-compare-shot:focus-visible img { outline: 2px solid #141414; outline-offset: 3px; }
 @keyframes insCompareIn { from { opacity: .4; } to { opacity: 1; } }
-/* The seam: a hairline with "vs" on it. The lowercase letters sit low in
-   their line box, so a little bottom padding lifts them to the true centre. */
+/* The seam: a hairline, with the pair's swap on it (a round, icon-only
+   button in the old "vs" chip's place: white, #EDEDED ring). */
 .ins-compare-seam { position: relative; display: flex; align-items: center; justify-content: center; }
 /* The hairline fades in from nothing at the top and out at the bottom. */
 .ins-compare-seam::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: linear-gradient(180deg, rgba(237, 237, 235, 0) 0%, #ededeb 35%, #ededeb 65%, rgba(237, 237, 235, 0) 100%); }
-.ins-compare-seam span { position: relative; display: grid; place-items: center; width: 64px; height: 64px; box-sizing: border-box; border: 1px solid #ededed; border-radius: 50%; background: #fff; color: #696969; font: 600 22px/1 var(--font-manrope), Inter, sans-serif; padding-bottom: .19em; }
+/* A screen's lock: a round button at its top outer corner, in the swap's
+   style (white, #EDEDED ring); it shows while the pointer is on that screen
+   (or the lock), and stays, dark, while locked (the arrows then step only
+   the other side). Smaller, inside the screen's corner, on phones. */
+.ins-compare-lock { position: absolute; z-index: 3; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; box-sizing: border-box; border: 1px solid #ededed; border-radius: 50%; background: #fff; color: #696969; cursor: var(--ins-cursor-hand, pointer); opacity: 0; transition: opacity .2s ease, background var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease); }
+.ins-compare-lock.is-shown, .ins-compare-lock:focus-visible, .ins-compare-lock.is-locked { opacity: 1; }
+.ins-compare-lock svg { width: 20px; height: 20px; }
+.ins-compare-lock:hover { border-color: #ccc; color: #141414; }
+.ins-compare-lock.is-locked { border-color: #141414; background: #141414; color: #fff; }
+.ins-compare-lock:focus-visible { outline: 2px solid #141414; outline-offset: 2px; }
+.ins-compare-lock.is-inside { width: 36px; height: 36px; border-color: transparent; background: rgba(255, 255, 255, .9); }
+.ins-compare-lock.is-inside svg { width: 16px; height: 16px; }
+.ins-compare-lock.is-inside.is-locked { background: #141414; }
+.ins-compare-lock:hover .ins-flow-tip, .ins-compare-lock:focus-visible .ins-flow-tip { opacity: 1; transform: translate(-50%, 0); }
+@media (hover: none) { .ins-compare-lock { opacity: 1; } }
+.ins-compare-seam > .ins-compare-swap { position: relative; display: grid; place-items: center; width: 64px; height: 64px; box-sizing: border-box; border: 1px solid #ededed; border-radius: 50%; background: #fff; color: #696969; text-decoration: none; transition: border-color var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease); }
+.ins-compare-seam > .ins-compare-swap:hover { border-color: #ccc; color: #141414; }
+.ins-compare-seam > .ins-compare-swap:focus-visible { outline: 2px solid #141414; outline-offset: 3px; }
+/* The arrows turn over on hover, as the sides would. */
+.ins-compare-seam > .ins-compare-swap svg { transition: rotate .45s cubic-bezier(.22, 1, .36, 1); }
+.ins-compare-seam > .ins-compare-swap:hover svg { rotate: 180deg; }
+/* Its name in the black tooltip (the flow player's), above it. */
+.ins-compare-swap:hover .ins-flow-tip, .ins-compare-swap:focus-visible .ins-flow-tip { opacity: 1; transform: translate(-50%, 0); }
+/* The footer's icon-only swap is for phones, where the seam can't hold it. */
+.ins-compare-foot-swap { display: none; }
 
 /* Footer: tags | the thumbnails | Swap sides — three columns at every
    width above phones (the flow footer's own grid, re-placed). The
@@ -12195,26 +12239,48 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
 .ins-compare-foot .ins-compare-strips { grid-column: 2; grid-row: 1; }
 .ins-compare-foot .ins-screen-preview-foot-secondary { grid-column: 3; }
 .ins-compare-foot .ins-screen-preview-foot-tag { white-space: nowrap; }
+/* The type picker: the footer's outlined button (like Swap sides, so it
+   reads as something to press, unlike the grey tags beside it), with the
+   header pickers' chevron (soft until hovered, turning over while open); a
+   darker outline while its menu, which opens upward from its left edge, is
+   open. */
+.ins-compare-tag-pick { padding-right: 18px; font-family: inherit; line-height: inherit; cursor: var(--ins-cursor-hand, pointer); }
+.ins-compare-tag-pick[aria-expanded="true"] { border-color: #141414; }
+.ins-compare-tag-pick:focus-visible { outline: 2px solid #141414; outline-offset: 2px; }
+.ins-compare-tag-pick .ins-compare-title-chevron { margin-left: -2px; }
+.ins-compare-tag-pick:hover .ins-compare-title-chevron, .ins-compare-tag-pick[aria-expanded="true"] .ins-compare-title-chevron { opacity: .75; }
+.ins-compare-tag-pick[aria-expanded="true"] .ins-compare-title-chevron { rotate: 180deg; }
+.ins-compare-menu.ins-compare-menu--up.ins-context-menu { top: auto; bottom: calc(100% + 12px); left: auto; right: 0; }
 /* No pill of its own: the thumbnails sit straight on the footer, beside the
    grey tags and the outlined button, as two equal halves (as wide as the
-   longer side) either side of a short hairline: the stage's seam carried
-   down (the "vs" is said once, on the stage). */
+   longer side) either side of an empty 1px spacer (no line: the stage's
+   seam and "vs" already divide them). */
 .ins-compare-strips { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; column-gap: 34px; min-width: 0; height: 76px; }
 .ins-compare-strips > .ins-compare-strip:first-child { justify-self: end; }
 .ins-compare-strips-vs ~ .ins-compare-strip { justify-self: start; }
-.ins-compare-strips-vs { width: 1px; height: 44px; background: #ededeb; }
+.ins-compare-strips-vs { width: 1px; height: 44px; }
 /* Each strip is as wide as its thumbnails, up to about seven; past that it
    scrolls, fading only at an end with more hidden past it (has-before /
-   has-after). */
-.ins-compare-strip { --ins-fade-l: 0px; --ins-fade-r: 0px; display: flex; align-items: center; gap: 6px; min-width: 0; width: max-content; max-width: 252px; height: 100%; overflow-x: auto; padding: 0 6px; box-sizing: border-box; scroll-behavior: smooth; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--ins-fade-l), #000 calc(100% - var(--ins-fade-r)), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 var(--ins-fade-l), #000 calc(100% - var(--ins-fade-r)), transparent 100%); }
-.ins-compare-strip.has-before { --ins-fade-l: 32px; }
-.ins-compare-strip.has-after { --ins-fade-r: 32px; }
+   has-after): a long, eased fade (72px, slow at both ends of the ramp), so
+   the thumbnails dissolve away rather than stopping at an edge. */
+/* The sizes are tokens, so the strip's centring (CompareScreens) can work out
+   where the current thumbnail will land before the sizes finish easing. */
+.ins-compare-strip { --ins-thumb: 28px; --ins-thumb-step: 3px; --ins-thumb-min: 18px; --ins-thumb-current: 30px; --ins-thumb-current-m: 3px; --ins-thumb-gap: 6px; --ins-fade-l: 0px; --ins-fade-r: 0px; display: flex; align-items: center; gap: var(--ins-thumb-gap); min-width: 0; width: max-content; max-width: 252px; height: 100%; overflow-x: auto; padding: 0 6px; box-sizing: border-box; scroll-behavior: smooth; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, .06) calc(var(--ins-fade-l) * .2), rgba(0, 0, 0, .22) calc(var(--ins-fade-l) * .42), rgba(0, 0, 0, .5) calc(var(--ins-fade-l) * .62), rgba(0, 0, 0, .8) calc(var(--ins-fade-l) * .82), #000 var(--ins-fade-l), #000 calc(100% - var(--ins-fade-r)), rgba(0, 0, 0, .8) calc(100% - var(--ins-fade-r) * .82), rgba(0, 0, 0, .5) calc(100% - var(--ins-fade-r) * .62), rgba(0, 0, 0, .22) calc(100% - var(--ins-fade-r) * .42), rgba(0, 0, 0, .06) calc(100% - var(--ins-fade-r) * .2), rgba(0, 0, 0, 0) 100%); mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, .06) calc(var(--ins-fade-l) * .2), rgba(0, 0, 0, .22) calc(var(--ins-fade-l) * .42), rgba(0, 0, 0, .5) calc(var(--ins-fade-l) * .62), rgba(0, 0, 0, .8) calc(var(--ins-fade-l) * .82), #000 var(--ins-fade-l), #000 calc(100% - var(--ins-fade-r)), rgba(0, 0, 0, .8) calc(100% - var(--ins-fade-r) * .82), rgba(0, 0, 0, .5) calc(100% - var(--ins-fade-r) * .62), rgba(0, 0, 0, .22) calc(100% - var(--ins-fade-r) * .42), rgba(0, 0, 0, .06) calc(100% - var(--ins-fade-r) * .2), rgba(0, 0, 0, 0) 100%); }
+.ins-compare-strip.has-before { --ins-fade-l: 72px; }
+.ins-compare-strip.has-after { --ins-fade-r: 72px; }
 .ins-compare-strip::-webkit-scrollbar { display: none; }
-/* Every thumbnail at full strength; the current one larger and ringed. */
-.ins-compare-thumb { flex: none; width: 28px; aspect-ratio: 9 / 19.5; padding: 0; overflow: hidden; border: 0; border-radius: 6px; background: #f3f3f2; box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); cursor: var(--ins-cursor-hand, pointer); transition: width .2s cubic-bezier(.22, 1, .36, 1), box-shadow .2s ease, translate .15s ease; }
+/* Every thumbnail at full strength, graded by distance from the current
+   one (--d, 1–4 steps): 25, 22, 19, then 18px wide; the current one the
+   largest and ringed. The sizes ease as the pair moves. */
+.ins-compare-thumb { flex: none; width: max(var(--ins-thumb-min), calc(var(--ins-thumb) - var(--d, 1) * var(--ins-thumb-step))); aspect-ratio: 9 / 19.5; padding: 0; overflow: hidden; border: 0; border-radius: 4px; background: #f3f3f2; box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); cursor: var(--ins-cursor-hand, pointer); transition: width .35s cubic-bezier(.22, 1, .36, 1), box-shadow .2s ease, translate .15s ease; }
 .ins-compare-thumb:hover { translate: 0 -3px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .16), 0 4px 10px rgba(0, 0, 0, .08); }
-.ins-compare-thumb.is-current { width: 30px; margin: 0 3px; border-radius: 7px; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #141414; }
+.ins-compare-thumb.is-current { width: var(--ins-thumb-current); margin: 0 var(--ins-thumb-current-m); border-radius: 4px; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #141414; }
 .ins-compare-thumb.is-current:hover { translate: none; }
+/* Tabbing through the thumbnails: the current one's ring (white gap, dark
+   line), so focus reads like selection; on the current one, a second ring
+   outside its own. The preview card shows on focus too. */
+.ins-compare-thumb:focus-visible { outline: none; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #141414; }
+.ins-compare-thumb.is-current:focus-visible { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #141414, 0 0 0 6px #fff, 0 0 0 7px rgba(20, 20, 20, .35); }
 .ins-compare-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
 /* The hover preview: a larger copy of the hovered thumbnail lifted above the
    strip on the black tooltip card, with its place below it; it glides between
@@ -12238,13 +12304,17 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
   .ins-compare-stage .ins-screen-preview-nav--next { right: calc(50% - 56px); }
   .ins-compare-side { padding-bottom: 64px; }
   /* The seam is 32px here: a smaller chip, so it never covers the screens. */
-  .ins-compare-seam span { width: 40px; height: 40px; font-size: 15px; }
+  .ins-compare-seam > .ins-compare-swap { width: 44px; height: 44px; }
+  .ins-compare-seam > .ins-compare-swap svg { width: 18px; height: 18px; }
 }
 @media (max-width: 640px) {
   .ins-compare-crumbs > span:first-child, .ins-compare-crumbs-vs { display: none; }
   .ins-screen-preview-filmstrip-wrap.ins-compare-stage { grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr); padding: 0 10px; }
-  .ins-compare-seam span { display: none; }
-  .ins-compare-shot img { border-radius: 14px; }
+  .ins-compare-seam > .ins-compare-swap { display: none; }
+  .ins-compare-foot-swap { display: inline-flex; }
+  /* The picker starts its row here: its menu opens from its left edge. */
+  .ins-compare-menu.ins-compare-menu--up.ins-context-menu { left: 0; right: auto; }
+  .ins-compare-shot img { border-radius: 18px; }
   /* The title needs the room: the logos go (the picker names the app). */
   .ins-compare-logos { display: none; }
   /* Screens are width-bound here: each column is only as tall as its
@@ -12261,8 +12331,11 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
   .ins-compare-foot .ins-compare-strips { order: 1; flex: 1 0 100%; min-width: 0; max-width: 100%; column-gap: 12px; height: 64px; }
   .ins-compare-strip { max-width: 100%; }
   .ins-compare-strips-vs { height: 36px; }
-  .ins-compare-thumb { width: 22px; border-radius: 5px; }
-  .ins-compare-thumb.is-current { width: 25px; border-radius: 6px; }
+  .ins-compare-strip { --ins-thumb: 22px; --ins-thumb-step: 2px; --ins-thumb-min: 14px; --ins-thumb-current: 25px; }
+  .ins-compare-thumb { border-radius: 3px; }
+  .ins-compare-strip.has-before { --ins-fade-l: 40px; }
+  .ins-compare-strip.has-after { --ins-fade-r: 40px; }
+  .ins-compare-thumb.is-current { border-radius: 3px; }
   .ins-compare-foot .ins-screen-preview-foot-tags { order: 0; }
   .ins-compare-foot .ins-screen-preview-foot-secondary { order: 2; }
 }
