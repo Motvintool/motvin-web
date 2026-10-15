@@ -120,7 +120,7 @@ export function ProfileMenu() {
                       {user.email}
                     </a>
                   ) : (
-                    <span className="ins-pmenu-email">name@example.com</span>
+                    <span className="ins-pmenu-email">Not signed in</span>
                   )}
                 </div>
                 {signedIn && user?.photoURL ? (
@@ -145,7 +145,7 @@ export function ProfileMenu() {
                     goToLogin();
                   }}
                 >
-                  Login account
+                  Get Access
                 </button>
               )}
             </div>

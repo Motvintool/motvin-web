@@ -1,5 +1,7 @@
 /* 404.css */
-body {
+/* Only while the 404 page shows: Next keeps this file loaded after a
+   client-side move on, where this grey background would otherwise stay. */
+:where(html:has(.page-404-wrapper)) body {
   margin: 0;
   padding: 0;
   background-color: #fafafa;

@@ -91,7 +91,9 @@ export async function POST(request: Request) {
   if (declared > MAX_BYTES) return fail('That recording is larger than 2 GB. Trim it and try again.', 413);
 
   const workDir = await mkdtemp(join(tmpdir(), 'motvin-web-ingest-'));
-  const videoPath = join(workDir, `${sourceName}.${extension}`);
+  // A temp-dir path, never a project file: the ignore keeps the build from
+  // tracing (and shipping) the whole project because of this dynamic join.
+  const videoPath = join(/*turbopackIgnore: true*/ workDir, `${sourceName}.${extension}`);
 
   try {
     await pipeline(Readable.fromWeb(request.body as Parameters<typeof Readable.fromWeb>[0]), createWriteStream(videoPath));

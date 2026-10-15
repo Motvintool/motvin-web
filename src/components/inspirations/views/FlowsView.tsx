@@ -10,7 +10,7 @@ import { FilterPill, NavPill, ToolbarRow } from '../FilterToolbar';
 import { FlowList } from '../FlowList';
 import { FlowIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
-import { CardRowSkeleton } from '../Skeletons';
+import { FlowListSkeleton } from '../Skeletons';
 import { useApps } from '../useApps';
 import { useAsync } from '../useAsync';
 import { useMeta } from '../useMeta';
@@ -83,18 +83,18 @@ export function FlowsView() {
       </ToolbarRow>
 
       {loading ? (
-        <CardRowSkeleton count={6} />
+        <FlowListSkeleton />
       ) : visible.length === 0 ? (
         // "Filtered" means the visitor chose something beyond the defaults —
         // a category, or a platform explicitly in the URL. The iOS default
         // isn't a filter they can clear.
         <EmptyState
           icon={<FlowIcon size={22} />}
-          title={category || params.get('platform') ? 'No flows match this filter' : 'No flows in the library yet'}
+          title={category || params.get('platform') ? 'No flows match this filter' : 'No flows here yet'}
           description={
             category || params.get('platform')
               ? undefined
-              : 'A flow is an ordered set of stored screens. Build one on the admin Flows tab.'
+              : 'We add new flows regularly. Check back soon.'
           }
           action={
             category || params.get('platform')

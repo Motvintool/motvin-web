@@ -49,6 +49,9 @@ export function AppRating({
   const { user, ready } = useAuth();
   const { show } = useToast();
   const [summary, setSummary] = useState<AppRatingSummary>(EMPTY_RATING);
+  // Whether the live rating has come back yet (or failed), so the fact can
+  // hold its place meanwhile rather than popping in once it arrives.
+  const [loaded, setLoaded] = useState(false);
   const [hovered, setHovered] = useState(0);
   const [saving, setSaving] = useState(false);
   const mounted = useRef(true);
@@ -64,8 +67,12 @@ export function AppRating({
   }, []);
 
   const load = useCallback(async () => {
-    const next = await readRating(appId, uid);
-    if (mounted.current) setSummary(next);
+    try {
+      const next = await readRating(appId, uid);
+      if (mounted.current) setSummary(next);
+    } finally {
+      if (mounted.current) setLoaded(true);
+    }
   }, [appId, uid]);
 
   // Re-reads when the signed-in user changes, so "your rating" follows the
@@ -94,6 +101,19 @@ export function AppRating({
   const hasLive = summary.count > 0;
   const average = hasLive ? summary.average : (seed ?? null);
   const count = hasLive ? summary.count : (seedCount ?? 0);
+
+  // Still loading, with nothing seeded to show meanwhile: the label and a bar
+  // the width of "★★★★★ 5.00 (1)", so the facts row doesn't widen later.
+  if (!hasLive && seed == null && ratingsAvailable() && !loaded) {
+    return (
+      <div className="ins-fact" aria-hidden>
+        <dt>Rating</dt>
+        <dd>
+          <span className="ins-skel ins-skel--line ins-rating-skel" />
+        </dd>
+      </div>
+    );
+  }
 
   // Nothing to show and nothing this visitor can do: no score exists anywhere
   // (live or seeded) and they cannot rate either. This is the one case where

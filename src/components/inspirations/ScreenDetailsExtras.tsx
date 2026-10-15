@@ -14,6 +14,9 @@ import { useAsync } from './useAsync';
 /** How many other apps the compare shortcut offers. */
 const COMPARE_PICKS = 3;
 
+/** Bar widths for the loading pills: they wrap two and one, as the loaded ones do. */
+const COMPARE_SKELETON_WIDTHS = [58, 46, 48];
+
 /**
  * This one screenshot's colours, worked out like the app's palette
  * (palette.ts) and cached per screen. `null` while being worked out, `[]`
@@ -126,8 +129,30 @@ export function CompareShortcut({ app, screen }: { app: App; screen: Screen }) {
       .slice(0, COMPARE_PICKS);
   }, [ofType, apps, app.id]);
 
-  if (!type || type === 'other' || !picks?.length) return null;
+  if (!type || type === 'other') return null;
   const label = screenTypeLabel(type).toLowerCase();
+
+  // Still loading: the group holds its place (heading and three pill shapes,
+  // wrapping like the loaded pills) instead of dropping in later and pushing
+  // Source and Tags down.
+  if (picks === null) {
+    return (
+      <section className="ins-details-group" aria-busy="true" aria-labelledby="ins-details-compare">
+        <h3 id="ins-details-compare" className="ins-details-group-title">
+          Compare {label} with
+        </h3>
+        <div className="ins-details-pills" aria-hidden>
+          {COMPARE_SKELETON_WIDTHS.map((width, i) => (
+            <span key={i} className="ins-details-pill ins-details-pill--app ins-details-pill--skel">
+              <span className="ins-skel ins-details-pill-skel-logo" />
+              <span className="ins-skel ins-skel--line" style={{ width }} />
+            </span>
+          ))}
+        </div>
+      </section>
+    );
+  }
+  if (!picks.length) return null;
 
   return (
     <section className="ins-details-group" aria-labelledby="ins-details-compare">

@@ -250,10 +250,10 @@ export function FilteredGallery({
             apps={apps}
             loading={appsLoading}
             webLayout={filters.platforms.length === 1 && isDesktopPlatform(filters.platforms[0])}
-            emptyTitle={appsLibraryEmpty ? 'No apps in the library yet' : 'No apps match these filters'}
+            emptyTitle={appsLibraryEmpty ? 'No apps here yet' : 'No apps match these filters'}
             emptyDescription={
               appsLibraryEmpty
-                ? 'Apps appear here once their screens are added to the store and approved for publishing.'
+                ? 'We add new apps regularly. Check back soon.'
                 : 'Try removing a filter, or search for something broader.'
             }
           />
@@ -289,8 +289,8 @@ export function FilteredGallery({
                 libraryEmpty ? (
                   <EmptyState
                     icon={<ImageIcon size={22} />}
-                    title="No screens in the library yet"
-                    description="Screens appear here once they are added to the store in motvin-backend and approved for publishing."
+                    title="No screens here yet"
+                    description="We add new screens regularly. Check back soon."
                   />
                 ) : (
                   <EmptyState

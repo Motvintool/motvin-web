@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { CloseIcon, PlayIcon } from './Icons';
+import { useToast } from './Toast';
 
 type IconProps = React.SVGProps<SVGSVGElement> & { size?: number };
 
@@ -59,6 +60,7 @@ export function AudioMenu() {
   const [volume, setVolume] = useState(0.7);
   const ref = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { show } = useToast();
   
   useEffect(() => {
     if (!open) return;
@@ -104,7 +106,13 @@ export function AudioMenu() {
       setPlaying(stationName);
       if (audioRef.current) {
         audioRef.current.src = src;
-        audioRef.current.play().catch((err) => console.log('Audio playback failed', err));
+        // A sound that won't load (or is blocked) shouldn't leave the button
+        // saying "Playing" over silence: back to idle, and say so.
+        audioRef.current.play().catch((err: unknown) => {
+          if (err instanceof DOMException && err.name === 'AbortError') return; // replaced by the next pick
+          setPlaying((current) => (current === stationName ? null : current));
+          show(`${stationName} isn't available right now`);
+        });
       }
     }
   };

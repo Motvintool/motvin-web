@@ -4,36 +4,55 @@ import Link from 'next/link';
 
 /**
  * Full 404 footer — brand, socials row, link columns, and the bottom bar with
- * copyright + legal + secondary socials. Ports the footer block from
- * motvin-ui/404.html.
+ * copyright + legal. Ports the footer block from motvin-ui/404.html, wired to
+ * the site's real pages and accounts.
  */
 
-const FOOTER_LINKS: Array<{ heading: string; items: string[] }> = [
+// The site's real destinations (the same ones the landing Footer links to),
+// in place of the mockup's placeholder columns that all pointed at "#".
+const FOOTER_LINKS: Array<{ heading: string; items: Array<{ label: string; href: string; external?: boolean }> }> = [
   {
-    heading: 'Color Generator',
-    items: ['Type Scale', 'Token Export', 'HTML Import', 'Design Analyzer'],
+    heading: 'Inspirations',
+    items: [
+      { label: 'Apps', href: '/inspirations/apps' },
+      { label: 'Screens', href: '/inspirations/screens' },
+      { label: 'Flows', href: '/inspirations/flows' },
+      { label: 'Patterns', href: '/inspirations/patterns' },
+    ],
   },
-  { heading: 'Documentation', items: ['Blog', 'Tutorials', 'Community', 'Status'] },
-  { heading: 'Features', items: ['How it works', 'App', 'Changelog'] },
-  { heading: 'About', items: ['Careers', 'Contact', 'Privacy', 'Terms'] },
+  {
+    heading: 'Library',
+    items: [
+      { label: 'Icons', href: '/icons' },
+      { label: 'Logos', href: '/logos' },
+      { label: 'Illustrations', href: '/illustrations' },
+    ],
+  },
+  {
+    heading: 'Company',
+    items: [
+      { label: 'About us', href: '/about' },
+      { label: 'Updates', href: '/updates' },
+      { label: 'Community', href: 'https://chat.whatsapp.com/JxLUrQpNpaXJ4ido6muIW6?s=cl&p=i&ilr=4', external: true },
+    ],
+  },
+  {
+    heading: 'Legal',
+    items: [
+      { label: 'Privacy', href: '/privacy' },
+      { label: 'Terms', href: '/terms' },
+      { label: 'Copyright', href: '/copyrights' },
+      { label: 'Request a removal', href: '/copyrights#ask-for-a-change-or-removal' },
+    ],
+  },
 ];
 
-const SOCIALS: Array<{ label: string; svg: string }> = [
-  { label: 'Instagram', svg: 'instagram-icon.svg' },
-  { label: 'X', svg: 'x-icon.svg' },
-  { label: 'YouTube', svg: 'youtube-icon.svg' },
-  { label: 'Facebook', svg: 'facebook-icon.svg' },
+// The real accounts and icons the landing Footer uses.
+const SOCIALS: Array<{ label: string; href: string; icon: string }> = [
+  { label: 'Instagram', href: 'https://www.instagram.com/siren.uix', icon: '/ASSET/Icons/instagram-icon.svg' },
+  { label: 'LinkedIn', href: 'https://www.linkedin.com/in/sirenuix/', icon: '/ASSET/Icons/linkedin-icon.svg' },
+  { label: 'Behance', href: 'https://www.behance.net/surendarv', icon: '/ASSET/Icons/behance-icon.svg' },
 ];
-
-const BOTTOM_SOCIALS: Array<{ label: string; svg: string }> = [
-  { label: 'Instagram', svg: 'instagram-icon.svg' },
-  { label: 'LinkedIn', svg: 'linkedin-icon.svg' },
-  { label: 'TikTok', svg: 'tiktok-icon.svg' },
-];
-
-const hideOnError: React.ImgHTMLAttributes<HTMLImageElement>['onError'] = (e) => {
-  e.currentTarget.style.opacity = '0';
-};
 
 export function NotFoundFooter() {
   return (
@@ -42,21 +61,14 @@ export function NotFoundFooter() {
         <div className="footer-404-top">
           <div className="footer-404-brand">
             <Link href="/" className="footer-404-logo">
-              <img
-                src="/ASSET/svg/logo-icon-color.svg"
-                alt="Motvin Logo"
-                className="footer-404-logo-icon"
-                onError={(e) => {
-                  e.currentTarget.onerror = null;
-                  e.currentTarget.src = '/ASSET/svg/logo-icon.svg';
-                }}
-              />
+              {/* The header's colour mark (logo-icon.svg is white, for dark backgrounds). */}
+              <img src="/ASSET/Icons/motvin-logo.svg" alt="Motvin Logo" className="footer-404-logo-icon" />
               <span className="footer-404-logo-text">motvin</span>
             </Link>
             <div className="footer-404-socials">
-              {SOCIALS.map(({ label, svg }) => (
-                <a href="#" key={label} className="footer-404-social-link">
-                  <img src={`/ASSET/svg/${svg}`} alt={label} onError={hideOnError} />
+              {SOCIALS.map(({ label, href, icon }) => (
+                <a href={href} key={label} className="footer-404-social-link" target="_blank" rel="noopener noreferrer" aria-label={label}>
+                  <img src={icon} alt="" />
                 </a>
               ))}
             </div>
@@ -66,11 +78,17 @@ export function NotFoundFooter() {
             {FOOTER_LINKS.map(({ heading, items }) => (
               <div className="footer-404-col" key={heading}>
                 <h4>{heading}</h4>
-                {items.map((label) => (
-                  <a href="#" key={label}>
-                    {label}
-                  </a>
-                ))}
+                {items.map(({ label, href, external }) =>
+                  external ? (
+                    <a href={href} key={label} target="_blank" rel="noopener noreferrer">
+                      {label}
+                    </a>
+                  ) : (
+                    <Link href={href} key={label}>
+                      {label}
+                    </Link>
+                  ),
+                )}
               </div>
             ))}
           </div>
@@ -80,19 +98,12 @@ export function NotFoundFooter() {
       <div className="footer-404-bottom">
         <div className="footer-404-bottom-container">
           <div className="footer-404-copyright">
-            <p>© 2026 Motvin. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} Motvin. All rights reserved.</p>
             <div className="footer-404-legal">
-              <a href="#">Privacy Policy</a>
-              <a href="#">Terms of Service</a>
-              <a href="#">Cookie Policy</a>
+              <Link href="/privacy">Privacy Policy</Link>
+              <Link href="/terms">Terms of Service</Link>
+              <Link href="/copyrights">Copyright</Link>
             </div>
-          </div>
-          <div className="footer-404-bottom-socials">
-            {BOTTOM_SOCIALS.map(({ label, svg }) => (
-              <a href="#" key={label}>
-                <img src={`/ASSET/svg/${svg}`} alt={label} onError={hideOnError} />
-              </a>
-            ))}
           </div>
         </div>
       </div>

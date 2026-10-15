@@ -142,7 +142,9 @@ function PalettePill({
       <span>Palette</span>
       {/* Two colours as overlapping circles, then "+3" for the ones the panel adds. */}
       <span className={`ins-palette-dots ${colors ? '' : 'is-loading'}`} aria-hidden>
-        {(colors ? pillColors(colors) : Array.from({ length: PILL_COLORS }, () => null)).map((c, i) => (
+        {/* While loading, a third grey circle holds the "+N" circle's place, so
+            the pill is already its loaded width and Save beside it doesn't move. */}
+        {(colors ? pillColors(colors) : Array.from({ length: PILL_COLORS + 1 }, () => null)).map((c, i) => (
           <span key={c?.hex ?? i} style={c ? { background: c.hex } : undefined} />
         ))}
         {colors && colors.length > PILL_COLORS && (

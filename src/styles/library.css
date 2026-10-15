@@ -24,18 +24,24 @@
   --right-panel-w: 370px;
 }
 
-* {
+/* Every page-wide rule here is scoped to "while the library is on the page"
+   (:has(.mi-app-shell)), inside :where() so it keeps the bare element's own
+   specificity. Next keeps this stylesheet loaded after a client-side Back to
+   another page (e.g. Inspirations via "Try Icons"); unscoped, the 100%
+   height and overflow: hidden locked that page so it could no longer scroll,
+   and the resets below restyled its links, buttons and box sizing. */
+:where(html:has(.mi-app-shell)) * {
   box-sizing: border-box;
 }
 
-html,
-body {
+:where(html:has(.mi-app-shell)),
+:where(html:has(.mi-app-shell)) body {
   margin: 0;
   padding: 0;
   height: 100%;
 }
 
-body {
+:where(html:has(.mi-app-shell)) body {
   font-family:
     var(--font-inter),
     -apple-system,
@@ -52,12 +58,12 @@ body {
   overflow: hidden;
 }
 
-a {
+:where(html:has(.mi-app-shell)) a {
   color: inherit;
   text-decoration: none;
 }
 
-button {
+:where(html:has(.mi-app-shell)) button {
   font-family: inherit;
   cursor: var(--ins-cursor-hand, pointer);
   border: 0;
@@ -65,8 +71,8 @@ button {
   color: inherit;
 }
 
-input,
-select {
+:where(html:has(.mi-app-shell)) input,
+:where(html:has(.mi-app-shell)) select {
   font-family: inherit;
   color: inherit;
 }
@@ -3483,7 +3489,7 @@ body.mi-full .mi-editor {
   align-items: center;
 }
 
-input[type="color"] {
+:where(html:has(.mi-app-shell)) input[type="color"] {
   width: 44px;
   height: 36px;
   padding: 2px;
@@ -4162,7 +4168,7 @@ input[type="color"] {
 }
 
 @media (max-width: 1300px) {
-  body {
+  :where(html:has(.mi-app-shell)) body {
     overflow: auto;
   }
 

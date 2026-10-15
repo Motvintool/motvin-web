@@ -3032,9 +3032,46 @@ select.ins-input {
 
 /* While `?screen=<id>` is still being resolved (a fresh/shared link, or the
    first open after a refresh): the same two panes, empty, with a spinner. */
-.ins-screen-preview-modal--loading .ins-screen-preview-main {
-  align-items: center;
-  justify-content: center;
+/* The placeholder shapes inside those panes: sized like what replaces
+   them (40px logo, Shortcuts pill, 42px tags, 52px buttons, 50x49 round
+   buttons, 32px details pills), so the content lands where they were. */
+/* The logo's link is 45px tall (its line box), which sets the loaded logo 2px higher; the margin matches it. */
+.ins-skel.ins-preview-skel-logo { flex: none; width: 40px; height: 40px; margin-bottom: 5px; border-radius: 26%; }
+.ins-skel.ins-preview-skel-title { width: 150px; height: 20px; }
+.ins-skel.ins-preview-skel-keys { flex: none; width: 116px; height: 32px; border-radius: 999px; }
+.ins-skel.ins-preview-skel-pill { display: inline-block; flex: none; height: 42px; border-radius: 999px; }
+.ins-skel.ins-preview-skel-pill--lg { height: 52px; }
+.ins-skel.ins-preview-skel-save { width: 106px; }
+.ins-skel.ins-preview-skel-store { width: 212px; }
+.ins-skel.ins-preview-skel-nearby { width: 196px; height: 52px; }
+.ins-skel.ins-preview-skel-round { display: inline-block; flex: none; width: 50px; height: 49px; border-radius: 999px; }
+.ins-skel.ins-preview-skel-value { display: block; height: 32px; border-radius: 999px; }
+
+/* The screenshot's shape: a phone's 1170 x 2532 (or a website's 16:10)
+   filling the frame's height, with nothing to zoom or lift yet. */
+.ins-screen-preview-shot.ins-preview-skel-shot { cursor: default; }
+.ins-screen-preview-shot.ins-preview-skel-shot:hover { transform: none; }
+.ins-preview-skel-shot > .ins-skel { display: block; height: 100%; aspect-ratio: 1170 / 2532; border-radius: 0; }
+.ins-preview-skel-shot.is-web > .ins-skel { aspect-ratio: 2800 / 1750; }
+
+/* The flow player's placeholder (FlowPreview while the flow loads): the
+   header's Present pill, and inside the real player bar its 42px play
+   button, the step track, the "1 / 5" count and the speed pill. */
+.ins-skel.ins-preview-skel-present { flex: none; width: 98px; height: 32px; border-radius: 999px; }
+.ins-flow-player--skel { pointer-events: none; }
+.ins-skel.ins-flow-player-skel-play { flex: none; width: 42px; height: 42px; border-radius: 999px; }
+.ins-skel.ins-flow-player-skel-steps { flex: 1 1 0; min-width: 0; height: 6px; border-radius: 999px; }
+.ins-skel.ins-flow-player-skel-count { flex: none; width: 44px; }
+.ins-skel.ins-flow-player-skel-speed { flex: none; width: 44px; height: 34px; border-radius: 999px; }
+
+/* On a phone the loaded header's Shortcuts is icon only and the Save /
+   App Store buttons are smaller (47px tall, 96px and 187px wide). */
+@media (max-width: 640px) {
+  .ins-skel.ins-preview-skel-keys,
+  .ins-skel.ins-preview-skel-present { width: 32px; }
+  .ins-skel.ins-preview-skel-pill--lg { height: 47px; }
+  .ins-skel.ins-preview-skel-save { width: 96px; }
+  .ins-skel.ins-preview-skel-store { width: 187px; }
 }
 
 .ins-screen-preview-main {
@@ -3251,7 +3288,10 @@ select.ins-input {
    the left, the player centred, an icon-only Save floating just after it
    without taking any room, Nearby screens / … on the right. View in App
    Store is in the "…" menu. */
-.ins-flow-head-actions { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* flex: none — the title beside it is what gives way (it truncates with an
+   ellipsis); shrinking this squeezed Present and Close out past the
+   header's padding on a phone. */
+.ins-flow-head-actions { display: flex; flex: none; align-items: center; gap: 10px; }
 .ins-flow-head-step { display: inline-flex; gap: 5px; color: #8a8a88; }
 
 /* The player is up to 500px, but always leaves each side room for the
@@ -3854,6 +3894,12 @@ select.ins-input {
   border-radius: 6px;
 }
 
+/* A pill's loading shape (the compare shortcut while its apps load): the
+   pill's own size, but nothing to hover or click yet. */
+.ins-details-pill--skel {
+  pointer-events: none;
+}
+
 /* A tag's "#" in the label grey, so the word reads first. */
 .ins-details-pill--tag span {
   margin-right: 1px;
@@ -4407,6 +4453,15 @@ select.ins-input {
   height: 100%;
   object-fit: contain;
 }
+
+/* A flow row as it loads (FlowListSkeleton): the 40px play circle and
+   logo, two text bars in the name + subtitle's 46px, and each step a phone's
+   1170 x 2532 at the strip's 527px height. Nothing to hover or click yet. */
+.ins-flows-row--skeleton { pointer-events: none; }
+.ins-skel.ins-flows-row-skel-play { flex: none; width: 40px; height: 40px; border-radius: 999px; }
+.ins-skel.ins-flows-row-skel-logo { flex: none; width: 40px; height: 40px; border-radius: 8.45px; }
+.ins-flows-row--skeleton .ins-flows-row-text { gap: 9px; padding-block: 4.5px; }
+.ins-skel.ins-flows-row-skel-shot { display: block; height: 100%; aspect-ratio: 1170 / 2532; border-radius: 0; }
 
 .ins-flows-row-missing {
   padding: 24px 0;
@@ -5170,6 +5225,14 @@ select.ins-input {
   gap: var(--ins-space-2);
 }
 
+/* The rating while it loads: the loaded stars-and-score's footprint (148 x
+   23, the bar centred in the line), so the facts row keeps its width. */
+.ins-rating-skel {
+  width: 148px;
+  height: 14px;
+  margin-block: 4.6px;
+}
+
 .ins-rating-none {
   font-size: var(--ins-type-meta);
   font-weight: 400;
@@ -5607,23 +5670,48 @@ select.ins-input {
   border-radius: 6px;
 }
 
+/* Shader-style shimmer: one soft band of light sweeping across the whole
+   screen. The gradient is fixed to the viewport (background-attachment), so
+   every placeholder — bars, pills, cards — shows its own slice of the same
+   band, and the page's skeleton lights up as a single surface instead of
+   each shape flashing on its own. */
 .ins-skel::after {
   content: '';
   position: absolute;
   inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, var(--skeleton-shimmer), transparent);
-  animation: insShimmer 1.3s ease-in-out infinite;
+  background-image: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 41%,
+    rgba(255, 255, 255, 0.5) 47%,
+    rgba(255, 255, 255, 0.85) 50%,
+    rgba(255, 255, 255, 0.5) 53%,
+    transparent 59%,
+    transparent 100%
+  );
+  background-size: 200vw 100%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  animation: insShimmer 2s ease-in-out infinite;
 }
 
+/* The band sits at the middle of a 200vw-wide gradient (100vw in), so a
+   position of -120vw puts it just off the left edge and 20vw just off the
+   right: it glides across the screen, then rests off-screen for a beat. */
 @keyframes insShimmer {
-  to { transform: translateX(100%); }
+  0% { background-position: -120vw 0; }
+  75%, 100% { background-position: 20vw 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-skel::after { animation: none; background-image: none; }
 }
 
 .ins-skel--shot {
   width: 100%;
   aspect-ratio: 346 / 674;
-  border-radius: 48px;
+  /* The loaded screenshot panel's proportional curve, not a fixed 48px. */
+  border-radius: 12.41% / 5.65%;
 }
 
 .ins-skel--line {
@@ -5696,11 +5784,54 @@ select.ins-input {
   padding: 24px 0;
 }
 
+/* App cards (Explore, the Apps grid) as they load: the loaded card's own
+   boxes, so nothing moves or changes shape when it lands — the light grey
+   frame with the screenshot's rounded panel inside it, and the 50px logo
+   row with its 16px sides (98px tall, like the real one). */
+.ins-app-grid .ins-card--skeleton .ins-card-shot {
+  padding: min(36px, 10.4%);
+  background: #f5f5f5;
+}
+
+.ins-app-grid .ins-card--skeleton .ins-skel--shot {
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 12.41% / 5.65%;
+}
+
+.ins-app-grid .ins-card--skeleton .ins-card-meta {
+  padding: 24px 16px;
+}
+
+.ins-app-grid .ins-card--skeleton .ins-skel--app-icon {
+  width: 50px;
+  height: 50px;
+}
+
+/* A Web Apps card as it loads (WebCard's own classes give the frame, the
+   landscape panel and the 98px row): the panel filled edge to edge, and the
+   row's 50px logo and two bars as on the loaded card at every width. */
+.ins-web-card-skel-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+.ins-web-card--skeleton .ins-skel--app-icon {
+  width: 50px;
+  height: 50px;
+}
+
+.ins-web-card--skeleton .ins-web-card-meta-text {
+  gap: 8px;
+}
+
 .ins-skel--app-icon {
   width: 40px;
   height: 40px;
   flex: none;
-  border-radius: 10px;
+  /* AppLogo's own curve (26% of its size, set inline on every logo). */
+  border-radius: 26%;
 }
 
 .ins-card--skeleton .ins-card-meta-text {
@@ -7700,6 +7831,27 @@ select.ins-input {
     width: 38px !important;
     height: 38px !important;
     border-radius: 9px;
+  }
+
+  /* The loading app card's row, at the same smaller size (66px tall). */
+  .ins-app-grid .ins-card--skeleton .ins-card-meta {
+    padding: 12px 2px 16px;
+    gap: 10px;
+  }
+
+  .ins-app-grid .ins-card--skeleton .ins-skel--app-icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  /* Name + tagline bars kept within the 38px logo (16 + 6 + 14), as the
+     smaller loaded type is, so the row is the logo's height. */
+  .ins-app-grid .ins-card--skeleton .ins-card-meta-text {
+    gap: 6px;
+  }
+
+  .ins-app-grid .ins-card--skeleton .ins-skel--app-name {
+    height: 16px;
   }
 
   .ins-card-app {
@@ -11296,10 +11448,11 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: insShimmer 1.6s linear infinite;
+  animation: insTextShimmer 1.6s linear infinite;
 }
 
-@keyframes insShimmer {
+/* Its own name: sharing "insShimmer" overrode the skeleton's keyframes. */
+@keyframes insTextShimmer {
   from {
     background-position: 200% 0;
   }
@@ -11599,6 +11752,9 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   .ins-storebar-list::-webkit-scrollbar { display: none; }
   .ins-storebar-item:first-child { padding-left: 0; border-left: 0; }
   .ins-storebar-item { flex-shrink: 0; }
+  /* The loading bar takes the stacked stats line's own height (15px + its
+     2px padding) so the strip doesn't grow 3px when the stats arrive. */
+  .ins-storebar-skel { height: 15px; margin-bottom: 2px; max-width: 100%; }
   }
 
 .ins-masthead-brand { position: relative; display: inline-block; margin-bottom: var(--ins-space-5); }
@@ -12212,6 +12368,18 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
   100% { transform: translateX(120%); }
 }
 @media (prefers-reduced-motion: reduce) { .ins-pmenu-new::after { animation: none; display: none; } }
+/* The header's "Try Icons" New tag gets the same skim, on its own pill. */
+.ins-try-icons-badge { position: relative; overflow: hidden; }
+.ins-try-icons-badge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.85) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: ins-pmenu-skim 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) { .ins-try-icons-badge::after { animation: none; display: none; } }
 
 .ins-pmenu-foot { display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 16px 16px; border-radius: 12px; }
 .ins-pmenu-legal { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; line-height: normal; color: #000; opacity: 0.6; white-space: nowrap; }
@@ -12319,6 +12487,8 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
     radial-gradient(300px 200px at 56% 26%, rgba(56, 189, 248, 0.04), transparent 72%); }
 .ins-login-card { width: min(380px, 100%); margin: auto 0; display: flex; flex-direction: column; align-items: stretch; text-align: center; }
 .ins-login-logo { width: 48px; height: 48px; display: block; align-self: center; }
+.ins-login-logo-link { align-self: center; display: block; border-radius: 12px; }
+.ins-login-logo-link:focus-visible { outline: 2px solid #111; outline-offset: 4px; }
 .ins-login-title { margin: 24px 0 8px; font-size: 32px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; color: #111; }
 .ins-login-sub { margin: 0 0 32px; font-size: 15px; line-height: 1.5; color: #6b6b70; }
 
@@ -12605,6 +12775,18 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
 .ins-compare-peek::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: #111; }
 .ins-compare-peek img { display: block; width: 100%; height: auto; border-radius: 10px; }
 .ins-compare-peek-label { color: #fff; font: 600 12px/1 var(--font-manrope), Inter, sans-serif; font-variant-numeric: tabular-nums; }
+/* Compare while the other app loads: its name, its screen (in the same
+   frame as the loaded one: 90% of the stage tall, a phone's shape) and its
+   strip's thumbnails as placeholders. Nothing to click or hover yet. */
+.ins-compare-skel-logo { display: block; flex: none; width: 40px; height: 40px; border-radius: 26%; }
+.ins-compare-skel-name { display: inline-block; width: 76px; height: 18px; vertical-align: middle; }
+/* Fills its half like the loaded frame does with its image inside (on a
+   phone the frame shrinks to its content, and a placeholder has none). */
+.ins-compare-shot--skel { cursor: default; flex: 1 1 auto; align-self: stretch; height: 100%; }
+.ins-compare-skel-shot { display: block; height: 90%; max-width: 100%; aspect-ratio: 1170 / 2532; border-radius: 32px; }
+.ins-compare-thumb--skel { pointer-events: none; cursor: default; }
+.ins-compare-thumb--skel.is-current { box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); }
+.ins-compare-thumb--skel > .ins-skel { display: block; width: 100%; height: 100%; border-radius: 0; }
 .ins-compare-empty { margin: auto; padding: 24px; text-align: center; font: 400 14px/1.4 var(--font-manrope), Inter, sans-serif; color: #8a8a88; }
 @media (max-width: 1239px) {
   /* Smaller laptops: about five thumbnails a side, leaving the tags and

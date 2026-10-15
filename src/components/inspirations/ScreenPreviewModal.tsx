@@ -124,6 +124,14 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
 
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
 
+  // Close takes focus once the dialog is drawn, and again when the loaded
+  // content replaces the placeholder (a new Close button). The open effect
+  // below runs before either on a fresh page load, when nothing is drawn yet.
+  const contentReady = Boolean(screen) && !loading;
+  useEffect(() => {
+    if (mounted) closeRef.current?.focus({ preventScroll: true });
+  }, [mounted, contentReady]);
+
   const close = useCallback(() => {
     const sp = new URLSearchParams(params.toString());
     sp.delete(SCREEN_PARAM);
@@ -285,6 +293,9 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   if (!mounted) return null;
 
   if (loading || !screen) {
+    // The placeholder's screenshot shape, guessed from the id until the screen
+    // itself loads ("…-web-…" / "…-webapp-…" ids are website captures).
+    const skeletonIsWeb = /-(web|webapp)-/.test(screenId);
     // Not found (or the request failed): don't leave a dead spinner up.
     if (!loading && !screen) {
       close();
@@ -299,12 +310,73 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
           aria-label="Loading screen"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* The same two panels as the loaded modal, so their corners don't
-              start as one square-seamed block and then split. */}
-          <div className="ins-screen-preview-main">
-            <span className="ins-spinner" />
+          {/* The loaded modal's own layout in placeholder shapes (its panels,
+              header, screenshot, footer and Details rows, on the same classes),
+              so the content lands in place instead of replacing a spinner. */}
+          <div className="ins-screen-preview-main" aria-busy="true">
+            <div className="ins-screen-preview-head">
+              <div className="ins-screen-preview-head-app">
+                <span className="ins-skel ins-preview-skel-logo" />
+                <span className="ins-skel ins-skel--line ins-preview-skel-title" />
+              </div>
+              <div className="ins-flow-head-actions">
+                <span className="ins-skel ins-preview-skel-keys" />
+                <button ref={closeRef} type="button" className="ins-screen-preview-close" aria-label="Close" onClick={close}>
+                  <img src="/ASSET/Icons/Motvin/screen-preview-modal-close.svg" alt="" width={16} height={16} />
+                </button>
+              </div>
+            </div>
+            <div className="ins-screen-preview-filmstrip-wrap">
+              <div className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--single">
+                <div className={`ins-screen-preview-shot ins-preview-skel-shot ${skeletonIsWeb ? 'ins-screen-preview-shot--web is-web' : ''}`}>
+                  <span className="ins-skel" />
+                </div>
+              </div>
+            </div>
+            <div className="ins-screen-preview-foot" aria-hidden>
+              <div className="ins-screen-preview-foot-tags">
+                <span className="ins-skel ins-preview-skel-pill" style={{ width: 151 }} />
+                <span className="ins-skel ins-preview-skel-pill" style={{ width: 66 }} />
+              </div>
+              <div className="ins-screen-preview-foot-primary">
+                <span className="ins-skel ins-preview-skel-pill ins-preview-skel-pill--lg ins-preview-skel-save" />
+                <span className="ins-skel ins-preview-skel-pill ins-preview-skel-pill--lg ins-preview-skel-store" />
+              </div>
+              <div className="ins-screen-preview-foot-secondary">
+                <span className="ins-skel ins-preview-skel-round" />
+                <span className="ins-skel ins-preview-skel-pill ins-preview-skel-nearby" />
+                <span className="ins-skel ins-preview-skel-round" />
+              </div>
+            </div>
           </div>
-          <div className="ins-screen-preview-details" />
+          <div className="ins-screen-preview-details" aria-hidden>
+            <div className="ins-screen-preview-details-head">
+              <h2>Details</h2>
+            </div>
+            <div className="ins-screen-preview-details-body">
+              <section className="ins-details-group">
+                <h3 className="ins-details-group-title">Screen</h3>
+                <dl className="ins-details-list">
+                  {[['App', 92], ['Type', 64], ['Platform', 44], ['Industry', 104], ['Style', 72]].map(([term, width]) => (
+                    <div key={term} className="ins-screen-preview-details-row">
+                      <dt className="ins-screen-preview-details-term">{term}</dt>
+                      <dd className="ins-screen-preview-details-value">
+                        <span className="ins-skel ins-preview-skel-value" style={{ width: Number(width) }} />
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+              <section className="ins-details-group">
+                <h3 className="ins-details-group-title">Colours</h3>
+                <div className="ins-details-swatches is-loading">
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <span key={i} className="ins-details-swatch" />
+                  ))}
+                </div>
+              </section>
+            </div>
+          </div>
         </div>
       </div>,
       document.body,

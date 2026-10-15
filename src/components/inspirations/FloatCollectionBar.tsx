@@ -57,6 +57,21 @@ export function FloatCollectionBar({
     return () => clearTimeout(timer);
   }, [saved, onSaved]);
 
+  // Escape, like the other popups: first back out of the collection list or
+  // the new-collection form, then cancel the selection. Left alone while a
+  // dialog is open over the page (a preview), which owns the key then.
+  useEffect(() => {
+    if (saved) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.querySelector('[aria-modal="true"]')) return;
+      e.preventDefault();
+      if (uiState !== 'default') setUiState('default');
+      else onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [saved, uiState, onClose]);
+
   const onSubmit = (e?: FormEvent) => {
     e?.preventDefault();
     let targetCollectionIds: string[] = [];

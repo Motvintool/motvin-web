@@ -273,13 +273,16 @@ export function ExploreView() {
     },
   ].filter((group) => group.items.length > 0);
 
-  if (loading) {
-    return <ExploreSkeleton />;
-  }
-
+  // The heading stays mounted through loading (only what's below it swaps
+  // from placeholder to content), so its typed phrase starts once on first
+  // paint instead of restarting when the taxonomy arrives.
   return (
-    <div className="ins-explore-view">
+    <div className="ins-explore-view" aria-busy={loading || undefined}>
       <PageHeading title={<RotatingTitle override={hoveredLabel?.text} overrideEmoji={hoveredLabel?.emoji} />} />
+      {loading ? (
+        <ExploreSkeleton web={platforms.length === 1 && isDesktopPlatform(platforms[0])} />
+      ) : (
+      <>
       {taxonomyGroups.length > 0 && (
         <section
           className="ins-explore-taxonomy"
@@ -338,6 +341,8 @@ export function ExploreView() {
 
       {mounted && hoveredCategory && (
         <HoverPreview category={hoveredCategory} mousePos={mousePos} platforms={platforms} />
+      )}
+      </>
       )}
     </div>
   );

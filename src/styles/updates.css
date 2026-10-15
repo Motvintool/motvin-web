@@ -35,16 +35,20 @@
 
 
 /* ----- Reset & Base ----- */
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+/* The page-wide rules in this file apply only while the admin publisher
+   (.admin-main) is showing: Next keeps this file loaded after a client-side
+   move to another page, where this reset would strip every margin and
+   padding. :where() keeps the bare selectors' specificity. */
+:where(html:has(.admin-main)) *, :where(html:has(.admin-main)) *::before, :where(html:has(.admin-main)) *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-html {
+:where(html:has(.admin-main)) {
   scroll-behavior: smooth;
   scroll-padding-top: 120px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-body {
+:where(html:has(.admin-main)) body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 15px;
   line-height: 1.7;
@@ -58,7 +62,7 @@ body.updates-page {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
+  :where(html:has(.admin-main)) {
     scroll-behavior: auto;
   }
 }
@@ -110,15 +114,15 @@ body.updates-page {
 }
 
 /* ----- Selection ----- */
-::selection {
+:where(html:has(.admin-main)) ::selection {
   background: var(--cl-primary);
   color: var(--cl-primary-text);
 }
 
 /* ----- Scrollbar ----- */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--cl-border); border-radius: 10px; }
+:where(html:has(.admin-main))::-webkit-scrollbar, :where(html:has(.admin-main)) ::-webkit-scrollbar { width: 6px; }
+:where(html:has(.admin-main))::-webkit-scrollbar-track, :where(html:has(.admin-main)) ::-webkit-scrollbar-track { background: transparent; }
+:where(html:has(.admin-main))::-webkit-scrollbar-thumb, :where(html:has(.admin-main)) ::-webkit-scrollbar-thumb { background: var(--cl-border); border-radius: 10px; }
 
 /* ----- Navigation ----- */
 .nav {

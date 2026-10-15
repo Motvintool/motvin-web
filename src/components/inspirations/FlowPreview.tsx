@@ -163,6 +163,14 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
 
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
 
+  // Close takes focus once the dialog is drawn, and again when the loaded
+  // flow replaces the placeholder (a new Close button) — the open effect
+  // runs before either on a fresh page load.
+  const flowReady = Boolean(flow) && !loading;
+  useEffect(() => {
+    if (mounted) closeRef.current?.focus({ preventScroll: true });
+  }, [mounted, flowReady]);
+
   const close = useCallback(() => {
     const sp = new URLSearchParams(params.toString());
     sp.delete(FLOW_PARAM);
@@ -349,7 +357,50 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
           aria-label="Loading flow"
           onClick={(e) => e.stopPropagation()}
         >
-          <span className="ins-spinner" />
+          {/* The loaded player's own layout in placeholder shapes (one wide
+              pane: header, the step's screenshot, and the footer's tags,
+              player bar, Save and Nearby screens on the same classes), so the
+              flow lands in place instead of replacing a spinner. */}
+          <div className="ins-screen-preview-main" aria-busy="true">
+            <div className="ins-screen-preview-head">
+              <div className="ins-screen-preview-head-app">
+                <span className="ins-skel ins-preview-skel-logo" />
+                <span className="ins-skel ins-skel--line ins-preview-skel-title" />
+              </div>
+              <div className="ins-flow-head-actions">
+                <span className="ins-skel ins-preview-skel-present" />
+                <button ref={closeRef} type="button" className="ins-screen-preview-close" aria-label="Close" onClick={close}>
+                  <img src="/ASSET/Icons/Motvin/screen-preview-modal-close.svg" alt="" width={16} height={16} />
+                </button>
+              </div>
+            </div>
+            <div className="ins-screen-preview-filmstrip-wrap">
+              <div className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--single">
+                <div className="ins-screen-preview-shot ins-preview-skel-shot">
+                  <span className="ins-skel" />
+                </div>
+              </div>
+            </div>
+            <div className="ins-screen-preview-foot ins-flow-foot" aria-hidden>
+              <div className="ins-screen-preview-foot-tags">
+                <span className="ins-skel ins-preview-skel-pill" style={{ width: 130 }} />
+                <span className="ins-skel ins-preview-skel-pill" style={{ width: 66 }} />
+              </div>
+              <div className="ins-flow-player ins-flow-player--skel">
+                <span className="ins-skel ins-flow-player-skel-play" />
+                <span className="ins-skel ins-skel--line ins-flow-player-skel-steps" />
+                <span className="ins-skel ins-skel--line ins-flow-player-skel-count" />
+                <span className="ins-skel ins-flow-player-skel-speed" />
+              </div>
+              <div className="ins-screen-preview-foot-primary">
+                <span className="ins-skel ins-preview-skel-round" />
+              </div>
+              <div className="ins-screen-preview-foot-secondary">
+                <span className="ins-skel ins-preview-skel-pill ins-preview-skel-nearby" />
+                <span className="ins-skel ins-preview-skel-round" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>,
       document.body,

@@ -169,13 +169,16 @@ export function InspirationsLogin({ defaultMode = 'login' }: { defaultMode?: 'lo
     <div className="ins-login">
       <div className="ins-login-pane">
         <div className="ins-login-card">
-          <img
-            src="/ASSET/svg/Motvin/login/login-signup-motvin-logo.svg"
-            alt="Motvin"
-            className="ins-login-logo"
-            width={48}
-            height={48}
-          />
+          {/* The way back to browsing: this page has no header of its own. */}
+          <Link href="/inspirations" className="ins-login-logo-link" aria-label="Back to Motvin Inspirations">
+            <img
+              src="/ASSET/svg/Motvin/login/login-signup-motvin-logo.svg"
+              alt=""
+              className="ins-login-logo"
+              width={48}
+              height={48}
+            />
+          </Link>
           <h1 className="ins-login-title">
             {mode === 'signup' ? 'Create your account' : 'Welcome back'}
           </h1>

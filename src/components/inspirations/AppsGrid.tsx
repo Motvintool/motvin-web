@@ -51,8 +51,10 @@ export function AppsGrid({
   const { selected, toggle, clear } = useAppSelection();
 
   if (loading || previewsLoading) {
-    // One placeholder per app being loaded (up to a row), so the count doesn't jump when the cards land.
-    return <ScreenGridSkeleton count={Math.min(Math.max(apps.length, 1), 4)} />;
+    // On the cards' own grid (and web layout), one placeholder per app being
+    // loaded — six while the list itself is still on its way — so neither the
+    // columns nor the count jump when the cards land.
+    return <ScreenGridSkeleton count={Math.min(apps.length || 6, 6)} apps web={webLayout} />;
   }
 
   if (!loading && !previewsLoading && apps.length === 0) {

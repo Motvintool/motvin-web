@@ -281,7 +281,12 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
             <div className="ins-screen-preview-head-app">
               <span className="ins-compare-logos" aria-hidden="true">
                 <AppLogo app={app} size={40} className="ins-screen-preview-head-logo" />
-                {other && <AppLogo app={other.app} size={40} className="ins-screen-preview-head-logo" />}
+                {other ? (
+                  <AppLogo app={other.app} size={40} className="ins-screen-preview-head-logo" />
+                ) : loading ? (
+                  // Holds the second logo's place, so the title doesn't shift when it lands.
+                  <span className="ins-skel ins-compare-skel-logo" />
+                ) : null}
               </span>
               <div className="ins-screen-preview-head-title ins-compare-crumbs">
                 <span>{app.name}</span>
@@ -295,7 +300,14 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
                     disabled={!others.length}
                     onClick={() => setMenu(menu === 'app' ? null : 'app')}
                   >
-                    {other ? other.app.name : loading ? 'Finding apps…' : 'No other app'}
+                    {other ? (
+                      other.app.name
+                    ) : loading ? (
+                      // The other app's name as a placeholder bar until the apps load.
+                      <span className="ins-skel ins-skel--line ins-compare-skel-name" aria-label="Finding apps" />
+                    ) : (
+                      'No other app'
+                    )}
                     {others.length > 0 && <Chevron />}
                   </button>
                   {menu === 'app' && (
@@ -368,7 +380,15 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
               />
             ) : (
               <div className="ins-compare-side">
-                <p className="ins-compare-empty">{loading ? 'Loading…' : `No other app has ${label.toLowerCase()} screens yet.`}</p>
+                {loading ? (
+                  // The other app's screen as a placeholder in the same frame
+                  // (and so the same place) as the screen that replaces it.
+                  <span className="ins-compare-shot ins-compare-shot--skel" aria-hidden>
+                    <span className="ins-skel ins-compare-skel-shot" />
+                  </span>
+                ) : (
+                  <p className="ins-compare-empty">{`No other app has ${label.toLowerCase()} screens yet.`}</p>
+                )}
               </div>
             )}
             {/* Each screen's lock, at its top outer corner (inside it on
@@ -457,6 +477,7 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
                 label={label}
                 box={placed ? placed.r ?? null : undefined}
                 onPick={(i) => setSide('right', i)}
+                loading={!other && loading}
               />
             </div>
             <div className="ins-screen-preview-foot-secondary">
@@ -596,6 +617,9 @@ function cubicBezier(x1: number, y1: number, x2: number, y2: number) {
  * where it sits in the footer once measured (null: no room or no screen, so
  * it's hidden; undefined: not measured, so it flows in the grid).
  */
+/** Placeholder thumbnails a loading strip shows (graded like the real ones). */
+const THUMB_SKELETON_COUNT = 6;
+
 function ThumbStrip({
   screens,
   index,
@@ -603,12 +627,15 @@ function ThumbStrip({
   label,
   box,
   onPick,
+  loading = false,
 }: {
   screens: Screen[];
   index: number;
   name: string;
   label: string;
   box?: { x: number; w: number } | null;
+  /** Its screens are still on their way: graded placeholder thumbnails meanwhile. */
+  loading?: boolean;
   onPick: (i: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -732,6 +759,17 @@ function ThumbStrip({
         role="group"
         aria-label={`${name} ${label.toLowerCase()} screens`}
       >
+        {loading && screens.length === 0 &&
+          Array.from({ length: THUMB_SKELETON_COUNT }, (_, i) => (
+            <span
+              key={i}
+              className={`ins-compare-thumb ins-compare-thumb--skel ${i === 0 ? 'is-current' : ''}`}
+              style={{ '--d': Math.min(i, 4) } as CSSProperties}
+              aria-hidden
+            >
+              <span className="ins-skel" />
+            </span>
+          ))}
         {screens.map((s, i) => (
           <button
             key={s.id}
