@@ -3009,7 +3009,7 @@ select.ins-input {
 .ins-screen-preview-modal {
   display: flex;
   align-items: stretch;
-  gap: 16px;
+  gap: 10px;
   /* 20px from every viewport edge, at every size: exactly the room the
      overlay leaves once its padding is 20px for a preview (above), without
      changing the shared overlay class other callers (GlobalSearch) also
@@ -3020,23 +3020,25 @@ select.ins-input {
 
 .ins-screen-preview-main,
 .ins-screen-preview-details {
+  /* Solid, so no backdrop-filter of its own: a blur inside the overlay's
+     blur painted square for a frame on open before the 24px curve clipped it. */
   background: #ffffff;
-  -webkit-backdrop-filter: blur(27.5px);
-  backdrop-filter: blur(27.5px);
   border-radius: 24px;
   overflow: hidden;
+  /* Holds the curve over composited children (the screenshot, the details'
+     masked scroll) on the first frames too. */
+  clip-path: inset(0 round 24px);
 }
 
-/* Shown in place of the two panes above while `?screen=<id>` is still being
-   resolved (a fresh/shared link, not a click from an already-loaded card). */
-.ins-screen-preview-modal--loading {
+/* While `?screen=<id>` is still being resolved (a fresh/shared link, or the
+   first open after a refresh): the same two panes, empty, with a spinner. */
+.ins-screen-preview-modal--loading .ins-screen-preview-main {
   align-items: center;
   justify-content: center;
-  background: #ffffff;
-  border-radius: 24px;
 }
 
 .ins-screen-preview-main {
+  position: relative;
   flex: 1 1 0;
   min-width: 0;
   display: flex;
@@ -3126,6 +3128,10 @@ select.ins-input {
   overflow-y: hidden;
   scroll-behavior: smooth;
   scrollbar-width: none;
+  /* 8px of room on every side for a shot's hover lift (scale 1.02 of up to
+     670px is ~7px each way), which overflow-y: hidden would otherwise clip. */
+  padding: 8px;
+  box-sizing: border-box;
 }
 
 .ins-screen-preview-filmstrip::-webkit-scrollbar {
@@ -3163,12 +3169,31 @@ select.ins-input {
   border-radius: 12.41% / 5.65%;
   cursor: var(--ins-cursor-zoom-in, zoom-in);
   overflow: hidden;
+  /* The same curve as a clip-path too: overflow's rounded clip can skip a
+     freshly decoded (composited) screenshot for a frame on open, showing
+     square corners that then snap round. clip-path always applies. */
+  clip-path: inset(0 round 12.41% / 5.65%);
+  /* Hovering lifts it a touch (it opens full size on click), like the
+     compare view's screens. Its own layer, so its rounded clip holds while
+     it animates. */
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  isolation: isolate;
+}
+
+.ins-screen-preview-shot:hover {
+  transform: scale(1.02);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-screen-preview-shot { transition: none; }
+  .ins-screen-preview-shot:hover { transform: none; }
 }
 
 /* A Web screen is wide, so it takes the gentle corner Web cards use rather
    than the phone's deep one. */
 .ins-screen-preview-shot--web {
   border-radius: 1% / 1.75%;
+  clip-path: inset(0 round 1% / 1.75%);
 }
 
 .ins-screen-preview-shot img {
@@ -3180,6 +3205,12 @@ select.ins-input {
   height: 100%;
   max-width: 100%;
   object-fit: contain;
+  /* The frame's own curve, not the cards' smaller --ins-radius: while the
+     frame animates (its hover lift, often right as the preview opens under
+     the pointer), browsers can draw the image on its own layer outside the
+     frame's clip, and the smaller radius showed through as sharp corners
+     that then snapped back to the curve. */
+  border-radius: inherit;
 }
 
 .ins-screen-preview-nav {
@@ -3197,15 +3228,17 @@ select.ins-input {
   right: 32px;
 }
 
-/* .ins-card-control:disabled dims the whole button (background included) —
-   here only the arrow glyph itself should look disabled at the start/end
-   of the filmstrip, so the button's own background stays fully opaque. */
-.ins-screen-preview-nav:disabled {
-  opacity: 1;
+/* At the first / last screen there's nowhere to go that way, so the arrow
+   fades away rather than sitting there greyed out (and can't be pressed).
+   It keeps its place, so the other arrow doesn't move. */
+.ins-screen-preview-nav {
+  transition: background var(--ins-fast) var(--ins-ease), opacity 0.2s ease, visibility 0.2s;
 }
 
-.ins-screen-preview-nav:disabled img {
-  opacity: 0.4;
+.ins-screen-preview-nav:disabled {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* Matches Figma node 1163:50445 ("footer") exactly: the save/view-store
@@ -3423,6 +3456,31 @@ select.ins-input {
   gap: 12px;
 }
 
+/* The screen preview's footer, when the main panel runs narrow beside the
+   Details panel (laptops): the tags pinned left, the buttons centred and the
+   rest pinned right would overlap, so they fall into a plain left-to-right
+   row instead; narrower, the tags go (the Details panel beside says both);
+   narrower still, the groups wrap onto two centred rows. Sized on the main
+   panel itself (a container query), not the window. The flow and compare
+   footers (.ins-flow-foot) have their own layouts. */
+@media (min-width: 901px) {
+  .ins-screen-preview-main { container: ins-preview / inline-size; }
+
+  @container ins-preview (max-width: 1100px) {
+    .ins-screen-preview-foot:not(.ins-flow-foot) { justify-content: space-between; gap: 16px; padding-inline: 24px; }
+    .ins-screen-preview-foot:not(.ins-flow-foot) .ins-screen-preview-foot-tags,
+    .ins-screen-preview-foot:not(.ins-flow-foot) .ins-screen-preview-foot-secondary { position: static; transform: none; }
+  }
+
+  @container ins-preview (max-width: 980px) {
+    .ins-screen-preview-foot:not(.ins-flow-foot) .ins-screen-preview-foot-tags { display: none; }
+  }
+
+  @container ins-preview (max-width: 720px) {
+    .ins-screen-preview-foot:not(.ins-flow-foot) { flex-wrap: wrap; justify-content: center; row-gap: 12px; }
+  }
+}
+
 .ins-screen-preview-foot-btn {
   display: inline-flex;
   align-items: center;
@@ -3473,6 +3531,136 @@ select.ins-input {
   color: #141414;
   cursor: var(--ins-cursor-hand, pointer);
   transition: border-color var(--ins-fast) var(--ins-ease);
+}
+
+/* Prototype (the screen's flow), icon only beside Nearby screens: its name
+   in the black tooltip on hover. A special feature, so in place of the plain
+   outline it wears an AI-style ring: a colour sweep turning slowly round the
+   white button (the border box shows a spinning conic gradient through a
+   transparent border); a soft violet glow fades in on hover only. */
+@property --ins-flow-ring {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.ins-preview-flow {
+  position: relative;
+  /* A link, not a button, so border-box by hand: the "…" button's 50×49. */
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    conic-gradient(from var(--ins-flow-ring), #8b5cf6, #3b82f6, #22d3ee, #ec4899, #f97316, #8b5cf6) border-box;
+  box-shadow: 0 0 0 rgba(139, 92, 246, 0);
+  animation: insFlowRing 3s linear infinite;
+  transition: box-shadow var(--ins-fast) var(--ins-ease), scale 0.15s ease;
+}
+
+.ins-screen-preview-foot-more.ins-preview-flow:hover {
+  border-color: transparent;
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.24);
+}
+
+.ins-preview-flow:active {
+  scale: 0.95;
+}
+
+@keyframes insFlowRing {
+  to { --ins-flow-ring: 360deg; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-preview-flow { animation: none; }
+}
+
+.ins-preview-flow:hover .ins-flow-tip,
+.ins-preview-flow:focus-visible .ins-flow-tip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* The keyboard shortcuts card: black, dropping from the header's Shortcuts
+   button at the top right, each key a soft chip beside what it does. */
+.ins-preview-keys {
+  position: absolute;
+  top: 64px;
+  right: 24px;
+  z-index: 30;
+  width: 272px;
+  padding: 16px 18px 12px;
+  box-sizing: border-box;
+  border-radius: 18px;
+  background: #141414;
+  color: #fff;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+  cursor: default;
+  animation: insPreviewKeysIn 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes insPreviewKeysIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.ins-preview-keys-title {
+  margin: 0 0 8px;
+  font: 600 13px/1.2 var(--font-manrope), Inter, sans-serif;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.ins-preview-keys dl {
+  margin: 0;
+}
+
+.ins-preview-keys-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.ins-preview-keys-row dt {
+  display: flex;
+  gap: 4px;
+}
+
+.ins-preview-keys-row dd {
+  margin: 0;
+  font: 500 14px/1.3 var(--font-manrope), Inter, sans-serif;
+  color: rgba(255, 255, 255, 0.92);
+  text-align: right;
+}
+
+.ins-preview-keys kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.12);
+  font: 600 12px/1 var(--font-manrope), Inter, sans-serif;
+}
+
+/* The header Shortcuts button's "?", sized like the menu icons. */
+.ins-preview-keys-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1.5px solid #141414;
+  border-radius: 50%;
+  font: 800 10px/1 var(--font-manrope), Inter, sans-serif;
+  color: #141414;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-preview-keys { animation: none; }
 }
 
 .ins-screen-preview-foot-more:hover {
@@ -3543,76 +3731,202 @@ select.ins-input {
   line-height: 1;
 }
 
-/* All definition rows — including what used to be the separately-boxed
-   "Credit/Reuse/Captured" provenance group — are now direct children of
-   the body, flat, all sharing the exact same .ins-screen-preview-details-row
-   styling with no distinct grouping or gradient background. */
+/* The facts, in small labelled groups (Screen, Patterns, Source, Tags), each
+   a quiet grey label over its rows; groups part with a hairline. Linked facts,
+   patterns and tags are the footer tags' grey pills (a shade darker on
+   hover); plain values are body text, numbers in tabular figures. */
 .ins-screen-preview-details-body {
   flex: 1 1 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
   overflow-y: auto;
+  padding: 0 0 24px;
+  /* A soft fade at the foot hints there's more to scroll to; at the very
+     end it falls on the 24px of padding, so nothing is hidden. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
 }
 
-/* Each row carries its own 10px vertical padding (matching Figma's
-   per-row py-10), which reads as unwanted top padding on the body as a
-   whole for the very first row ("App") — drop just that one row's top
-   half so the list starts flush under the header. */
-.ins-screen-preview-details-body > .ins-screen-preview-details-row:first-child {
-  padding-top: 0;
+/* Once scrolled down, the top fades too, as the rows slide up under the
+   header. */
+.ins-screen-preview-details-body.is-scrolled {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+}
+
+.ins-details-group {
+  padding: 16px 24px 18px;
+}
+
+.ins-details-group + .ins-details-group {
+  border-top: 1px solid #f0f0ef;
+}
+
+.ins-details-group:first-child {
+  padding-top: 4px;
+}
+
+.ins-details-group-title {
+  margin: 0 0 12px;
+  font: 600 13px/1 var(--font-manrope), Inter, sans-serif;
+  color: #8a8a88;
+}
+
+.ins-details-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .ins-screen-preview-details-row {
-  box-sizing: border-box;
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 16px;
-  width: 100%;
-  padding: 10px 20px;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
 }
 
 .ins-screen-preview-details-term {
   flex: none;
-  width: 90px;
-  font-size: 16px;
-  color: #8a8f9a;
+  width: 96px;
+  font: 400 14px/1.3 var(--font-manrope), Inter, sans-serif;
+  color: #8a8a88;
 }
 
 .ins-screen-preview-details-value {
   flex: 1 1 0;
   min-width: 0;
-  font-size: 16px;
-  color: #0b0c0e;
+  margin: 0;
+  font: 500 15px/1.35 var(--font-manrope), Inter, sans-serif;
+  color: #141414;
+  overflow-wrap: anywhere;
 }
 
-/* The four "linked" facts (App, Platform, Screen type, Industry) read as
-   dotted-underlined text in Figma, distinct from the plain values below
-   them (In recording, Style, Size, Credit, Reuse, Captured). */
-.ins-screen-preview-details-value--linked a {
-  color: inherit;
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  text-underline-offset: 2px;
+.ins-details-num {
+  font-variant-numeric: tabular-nums;
 }
 
-.ins-screen-preview-details-tags {
+.ins-details-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.ins-screen-preview-details-tag {
+.ins-details-pill {
   display: inline-flex;
   align-items: center;
-  padding: 4px 12px;
-  border: 1px solid #ccc;
-  border-radius: 100px;
-  color: #6a5b5b;
-  font-size: 16px;
+  max-width: 100%;
+  height: 32px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: rgba(64, 64, 64, 0.08);
+  color: #141414;
+  font: 500 14px/1 var(--font-manrope), Inter, sans-serif;
   text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+
+.ins-details-pill:hover {
+  background: rgba(64, 64, 64, 0.14);
+}
+
+.ins-details-pill:focus-visible {
+  outline: 2px solid #141414;
+  outline-offset: 2px;
+}
+
+/* The App pill leads with the app's own logo, a little rounded square. */
+.ins-details-pill--app {
+  gap: 8px;
+  padding-left: 6px;
+}
+
+.ins-details-pill--app img,
+.ins-details-pill--app > :first-child {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+/* A tag's "#" in the label grey, so the word reads first. */
+.ins-details-pill--tag span {
+  margin-right: 1px;
+  color: #8a8a88;
+}
+
+/* Colours: the screenshot's palette as a stack of overlapping circles, like
+   the Palette button's dots (a white ring, a soft shadow, a hairline inside
+   so white ones hold their edge). Hovering the row fans them apart so each
+   is easy to hit; the one under the pointer lifts to the front and shows its
+   hex in the black tooltip; click copies it. Grey placeholders while read. */
+.ins-details-swatches {
+  display: flex;
+  align-items: center;
+  padding-left: 10px;
+}
+
+.ins-details-swatch {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  margin-left: -10px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--swatch, #ececea);
+  box-shadow: 0 0 0 2px #fff, 0 1px 3px 2px rgba(0, 0, 0, 0.08), inset 0 0 0 1px rgba(0, 0, 0, 0.14);
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: margin 0.3s cubic-bezier(0.22, 1, 0.36, 1), transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ins-details-swatches:not(.is-loading):hover .ins-details-swatch,
+.ins-details-swatches:focus-within .ins-details-swatch {
+  margin-left: 4px;
+}
+
+.ins-details-swatches:not(.is-loading):hover .ins-details-swatch:first-child,
+.ins-details-swatches:focus-within .ins-details-swatch:first-child {
+  margin-left: -10px;
+}
+
+.ins-details-swatch:hover,
+.ins-details-swatch:focus-visible {
+  z-index: 1;
+  transform: translateY(-2px);
+}
+
+.ins-details-swatch:focus-visible {
+  outline: 2px solid #141414;
+  outline-offset: 2px;
+}
+
+.ins-details-swatch:hover .ins-flow-tip,
+.ins-details-swatch:focus-visible .ins-flow-tip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.ins-details-swatches.is-loading .ins-details-swatch {
+  cursor: default;
+  animation: insDetailsPulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes insDetailsPulse {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-details-swatch { transition: none; }
+  .ins-details-swatch:hover, .ins-details-swatch:focus-visible { transform: none; }
+  .ins-details-swatches.is-loading .ins-details-swatch { animation: none; }
 }
 
 @media (max-width: 900px) {

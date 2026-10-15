@@ -8,8 +8,9 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
 import { INDUSTRY_LABEL, PLATFORM_LABEL, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
-import { isDesktopPlatform, type Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type Flow, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
+import { CompareShortcut, ScreenColours } from './ScreenDetailsExtras';
 import { SaveButton } from './SaveButton';
 import { Screenshot } from './Screenshot';
 import { ScreenLightbox } from './ScreenLightbox';
@@ -20,12 +21,6 @@ import { useAsync } from './useAsync';
 
 /** Search-param name that opens the overlay — see FLOW_PARAM in FlowPreview.tsx. */
 export const SCREEN_PARAM = 'screen';
-
-/** 9.2 → "0:09", for the moment in a recording a screen was seen. */
-function formatClock(seconds: number): string {
-  const whole = Math.floor(seconds);
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
-}
 
 /** The mounted flag never changes after hydration, so nothing to subscribe to. */
 function subscribeNever() {
@@ -72,6 +67,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const patterns = data?.patterns ?? [];
 
   const [siblingScreens, setSiblingScreens] = useState<Screen[]>([]);
+  // The app's flows, from the same getApp call, for the foot's Flow button.
+  const [appFlows, setAppFlows] = useState<Flow[]>([]);
   const [atStart, setAtStart] = useState(true);
   const [atEnd, setAtEnd] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -83,6 +80,21 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const [activeId, setActiveId] = useState(screenId);
   const [zoomScreen, setZoomScreen] = useState<Screen | null>(null);
   const [contextScreenId, setContextScreenId] = useState<string | null>(null);
+  // The keyboard shortcuts card (? or the header's Shortcuts button).
+  const [showKeys, setShowKeys] = useState(false);
+  const keysRef = useRef<HTMLDivElement>(null);
+  const keysBtnRef = useRef<HTMLButtonElement>(null);
+  // A click anywhere outside the card closes it (the button toggles it itself).
+  useEffect(() => {
+    if (!showKeys) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (keysRef.current?.contains(t) || keysBtnRef.current?.contains(t)) return;
+      setShowKeys(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [showKeys]);
 
   // A different `?screen=` (a fresh open, or a shared link) starts over
   // rather than carrying across the last screen's filmstrip mode, scroll
@@ -131,7 +143,9 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
       // getApp, which is why that tab starts at the splash screen and this
       // modal didn't. Matching that call gets the same true flow order.
       void inspirationsApi.getApp(app.slug).then((data) => {
-        if (!cancelled && data?.screens.length) setSiblingScreens(data.screens);
+        if (cancelled || !data) return;
+        if (data.screens.length) setSiblingScreens(data.screens);
+        setAppFlows(data.flows);
       });
     }
     return () => {
@@ -146,7 +160,9 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
         // let that own the key instead of also closing the preview under it.
         if (zoomScreen) return;
         e.preventDefault();
-        close();
+        // The shortcuts card first, then the preview.
+        if (showKeys) setShowKeys(false);
+        else close();
         return;
       }
       if (zoomScreen) return;
@@ -178,7 +194,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [close, screens, multiScreen, zoomScreen]);
+  }, [close, screens, multiScreen, zoomScreen, showKeys]);
 
   useEffect(() => {
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
@@ -228,6 +244,44 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     shotMenu.onContextMenu(e);
   };
 
+  // The screen being looked at, for the footer's Copy png and the C / L keys.
+  const currentScreen = screens[activeIndex] ?? screen;
+  const currentShot = useScreenContextMenu(currentScreen, app, () =>
+    `${window.location.origin}${pathname}?${SCREEN_PARAM}=${currentScreen?.id ?? screenId}`,
+  );
+  const copyCurrentLink = useCallback(async () => {
+    if (!currentScreen) return;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${pathname}?${SCREEN_PARAM}=${currentScreen.id}`);
+      show('Link copied');
+    } catch {
+      show('Copy not available');
+    }
+  }, [currentScreen, pathname, show]);
+  // C copies the png, L the link, ? shows the shortcuts card (S, ←/→ and Esc
+  // are handled above). Plain keys only, never while typing, and not under
+  // the lightbox; Cmd/Ctrl+C stays the browser's copy.
+  const copyCurrentPng = currentShot.copyPng;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (zoomScreen || e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        void copyCurrentPng();
+      } else if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault();
+        void copyCurrentLink();
+      } else if (e.key === '?') {
+        e.preventDefault();
+        setShowKeys((v) => !v);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [zoomScreen, copyCurrentPng, copyCurrentLink]);
+
   if (!mounted) return null;
 
   if (loading || !screen) {
@@ -245,16 +299,40 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
           aria-label="Loading screen"
           onClick={(e) => e.stopPropagation()}
         >
-          <span className="ins-spinner" />
+          {/* The same two panels as the loaded modal, so their corners don't
+              start as one square-seamed block and then split. */}
+          <div className="ins-screen-preview-main">
+            <span className="ins-spinner" />
+          </div>
+          <div className="ins-screen-preview-details" />
         </div>
       </div>,
       document.body,
     );
   }
 
+  // The screen being looked at (← / → step it), so the title, foot, menu and
+  // details follow it rather than staying on the one first opened.
+  const view = screens[activeIndex] ?? screen;
+
+  // The flow this screen is a step of (a top-level one first, over a detour),
+  // opened in FlowPreview on this screen's step, in place of this preview.
+  // `flow` / `step` are FlowPreview's params, written out: it imports this file.
+  const viewFlow =
+    appFlows.find((f) => !f.parentId && f.screenIds.includes(view.id)) ??
+    appFlows.find((f) => f.screenIds.includes(view.id));
+  const flowHref = (() => {
+    if (!viewFlow) return null;
+    const sp = new URLSearchParams(params.toString());
+    sp.delete(SCREEN_PARAM);
+    sp.set('flow', viewFlow.id);
+    sp.set('step', view.id);
+    return `${pathname}?${sp.toString()}`;
+  })();
+
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}${pathname}?${SCREEN_PARAM}=${screen.id}`);
+      await navigator.clipboard.writeText(`${window.location.origin}${pathname}?${SCREEN_PARAM}=${view.id}`);
       show('Link copied');
     } catch {
       show('Copy not available');
@@ -262,17 +340,10 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     setMoreOpen(false);
   };
 
-  const store = storeAction(screen.platform, app?.website);
+  const store = storeAction(view.platform, app?.website);
 
 
-  const recording =
-    screen.capture && screen.capture.atSeconds !== null ? (
-      <>
-        {formatClock(screen.capture.atSeconds)}
-        {screen.capture.holdSeconds !== null && ` · held ${screen.capture.holdSeconds}s`}
-        {(screen.capture.visits ?? 1) > 1 && ` · seen ${screen.capture.visits}×`}
-      </>
-    ) : null;
+  const credit = view.source.attribution || null;
 
   return createPortal(
     <>
@@ -281,7 +352,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
           className="ins-screen-preview-modal"
           role="dialog"
           aria-modal="true"
-          aria-label={`${screen.name}${app ? ` — ${app.name}` : ''}`}
+          aria-label={`${view.name}${app ? ` — ${app.name}` : ''}`}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="ins-screen-preview-main">
@@ -295,12 +366,31 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                 <div className="ins-screen-preview-head-title">
                   {app && <span>{app.name}</span>}
                   {app && <span className="ins-screen-preview-head-sep">/</span>}
-                  <span>{screenTypeLabel(screen.screenType)}</span>
+                  <span>{screenTypeLabel(view.screenType)}</span>
                 </div>
               </div>
-              <button ref={closeRef} type="button" className="ins-screen-preview-close" aria-label="Close" onClick={close}>
-                <img src="/ASSET/Icons/Motvin/screen-preview-modal-close.svg" alt="" width={16} height={16} />
-              </button>
+              <div className="ins-flow-head-actions">
+                {/* Keyboard shortcuts beside Close, like the flow preview's Present. */}
+                <button
+                  ref={keysBtnRef}
+                  type="button"
+                  className="ins-flow-present-open"
+                  aria-label="Keyboard shortcuts"
+                  aria-expanded={showKeys}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setShowKeys((v) => !v);
+                  }}
+                >
+                  <span className="ins-preview-keys-icon" aria-hidden="true">
+                    ?
+                  </span>
+                  <span>Shortcuts</span>
+                </button>
+                <button ref={closeRef} type="button" className="ins-screen-preview-close" aria-label="Close" onClick={close}>
+                  <img src="/ASSET/Icons/Motvin/screen-preview-modal-close.svg" alt="" width={16} height={16} />
+                </button>
+              </div>
             </div>
 
             <div className="ins-screen-preview-filmstrip-wrap">
@@ -322,7 +412,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                 <div className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--single">
                   <div
                     className={`ins-screen-preview-shot ${isDesktopPlatform((screens[activeIndex] ?? screen).platform) ? 'ins-screen-preview-shot--web' : ''}`}
-                    data-screen-id={screens[activeIndex]?.id ?? screen.id}
+                    data-screen-id={screens[activeIndex]?.id ?? view.id}
                     onClick={() => setZoomScreen(screens[activeIndex] ?? screen)}
                     onContextMenu={onShotContextMenu(screens[activeIndex] ?? screen)}
                   >
@@ -356,14 +446,14 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
 
             <div className="ins-screen-preview-foot">
               <div className="ins-screen-preview-foot-tags">
-                <span className="ins-screen-preview-foot-tag">{INDUSTRY_LABEL[screen.industry]}</span>
-                <span className="ins-screen-preview-foot-tag">{PLATFORM_LABEL[screen.platform]}</span>
+                <span className="ins-screen-preview-foot-tag">{INDUSTRY_LABEL[view.industry]}</span>
+                <span className="ins-screen-preview-foot-tag">{PLATFORM_LABEL[view.platform]}</span>
               </div>
               <div className="ins-screen-preview-foot-primary">
                 <SaveButton
                   ref={saveBtnRef}
                   type="screen"
-                  id={screen.id}
+                  id={view.id}
                   variant="button"
                   app={app ?? undefined}
                   className="ins-screen-preview-foot-btn ins-screen-preview-foot-btn--save"
@@ -376,6 +466,19 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                 )}
               </div>
               <div className="ins-screen-preview-foot-secondary">
+                {flowHref && viewFlow && (
+                  <Link
+                    className="ins-screen-preview-foot-more ins-preview-flow"
+                    href={flowHref}
+                    scroll={false}
+                    aria-label={`Prototype: the ${viewFlow.name} flow`}
+                  >
+                    <img src="/ASSET/Icons/Motvin/flow.svg" alt="" width={18} height={18} />
+                    <span className="ins-flow-tip" aria-hidden="true">
+                      Prototype
+                    </span>
+                  </Link>
+                )}
                 {screens.length > 1 && (
                   <button
                     type="button"
@@ -384,7 +487,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                     onClick={() => setMultiScreen((v) => !v)}
                   >
                     {multiScreen ? (
-                      <img src="/ASSET/Icons/Motvin/indiviudal-screen.svg" alt="" width={20} height={20} />
+                      <img src="/ASSET/Icons/Motvin/indiviudal-view.svg" alt="" width={20} height={20} />
                     ) : (
                       <img src="/ASSET/Icons/Motvin/show-all-screens.svg" alt="" width={20} height={20} />
                     )}
@@ -407,22 +510,33 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                       <button type="button" className="ins-popover-item" role="menuitem" onClick={() => void copyLink()}>
                         <MenuIcon src={ICON_COPY_LINK} /> <span>Copy link</span>
                       </button>
+                      <button
+                        type="button"
+                        className="ins-popover-item"
+                        role="menuitem"
+                        onClick={() => {
+                          setMoreOpen(false);
+                          void currentShot.copyPng();
+                        }}
+                      >
+                        <MenuIcon src={ICON_COPY_PNG} /> <span>Copy png</span>
+                      </button>
                       {/* This screen's type, beside another app's (CompareScreens on the app page). */}
-                      {app && screen.screenType && screen.screenType !== 'other' && (
+                      {app && view.screenType && view.screenType !== 'other' && (
                         <Link
                           className="ins-popover-item"
                           role="menuitem"
-                          href={`${INSPIRATIONS_ROUTES.app(app)}?compare=${encodeURIComponent(screen.screenType)}`}
+                          href={`${INSPIRATIONS_ROUTES.app(app)}?compare=${encodeURIComponent(view.screenType)}`}
                           onClick={() => setMoreOpen(false)}
                         >
-                          <MenuIcon src={ICON_COMPARE} /> <span>Compare {screenTypeLabel(screen.screenType).toLowerCase()}</span>
+                          <MenuIcon src={ICON_COMPARE} /> <span>Compare {screenTypeLabel(view.screenType).toLowerCase()}</span>
                         </Link>
                       )}
-                      {screen.downloadable && (
+                      {view.downloadable && (
                         <a
                           className="ins-popover-item"
                           role="menuitem"
-                          href={inspirationsApi.downloadUrl(screen)}
+                          href={inspirationsApi.downloadUrl(view)}
                           download
                           // Guests get the sign-in notice instead of the file.
                           onClick={(e) => {
@@ -440,97 +554,148 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                 </div>
               </div>
             </div>
+
+            {/* The keyboard shortcuts, on ? (or the header's Shortcuts): a small
+                black card under that button; Esc, ? or a click closes it. */}
+            {showKeys && (
+              <div ref={keysRef} className="ins-preview-keys" role="dialog" aria-label="Keyboard shortcuts" onClick={() => setShowKeys(false)}>
+                <p className="ins-preview-keys-title">Keyboard shortcuts</p>
+                <dl>
+                  {KEYS.map(([keys, label]) => (
+                    <div key={label} className="ins-preview-keys-row">
+                      <dt>
+                        {keys.map((k) => (
+                          <kbd key={k}>{k}</kbd>
+                        ))}
+                      </dt>
+                      <dd>{label}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
           </div>
 
           <div className="ins-screen-preview-details">
             <div className="ins-screen-preview-details-head">
               <h2>Details</h2>
             </div>
-            <div className="ins-screen-preview-details-body">
-              {app && (
-                <div className="ins-screen-preview-details-row">
-                  <dt className="ins-screen-preview-details-term">App</dt>
-                  <dd className="ins-screen-preview-details-value ins-screen-preview-details-value--linked">
-                    <Link href={INSPIRATIONS_ROUTES.app(app)}>{app.name}</Link>
-                  </dd>
-                </div>
-              )}
-              <div className="ins-screen-preview-details-row">
-                <dt className="ins-screen-preview-details-term">Platform</dt>
-                <dd className="ins-screen-preview-details-value ins-screen-preview-details-value--linked">
-                  <Link href={`${INSPIRATIONS_ROUTES.screens}?platform=${screen.platform}`}>{PLATFORM_LABEL[screen.platform]}</Link>
-                </dd>
-              </div>
-              <div className="ins-screen-preview-details-row">
-                <dt className="ins-screen-preview-details-term">Screen type</dt>
-                <dd className="ins-screen-preview-details-value ins-screen-preview-details-value--linked">
-                  <Link href={`${INSPIRATIONS_ROUTES.screens}?type=${screen.screenType}`}>{screenTypeLabel(screen.screenType)}</Link>
-                </dd>
-              </div>
-              <div className="ins-screen-preview-details-row">
-                <dt className="ins-screen-preview-details-term">Industry</dt>
-                <dd className="ins-screen-preview-details-value ins-screen-preview-details-value--linked">
-                  <Link href={`${INSPIRATIONS_ROUTES.screens}?industry=${screen.industry}`}>{INDUSTRY_LABEL[screen.industry]}</Link>
-                </dd>
-              </div>
-              {recording && (
-                <div className="ins-screen-preview-details-row">
-                  <dt className="ins-screen-preview-details-term">In recording</dt>
-                  <dd className="ins-screen-preview-details-value">{recording}</dd>
-                </div>
-              )}
-              {screen.style.length > 0 && (
-                <div className="ins-screen-preview-details-row">
-                  <dt className="ins-screen-preview-details-term">Style</dt>
-                  <dd className="ins-screen-preview-details-value">{screen.style.map((s) => styleLabel(s)).join(', ')}</dd>
-                </div>
-              )}
-              <div className="ins-screen-preview-details-row">
-                <dt className="ins-screen-preview-details-term">Size</dt>
-                <dd className="ins-screen-preview-details-value">
-                  {screen.width} × {screen.height}
-                </dd>
-              </div>
+            {/* The facts in small labelled groups: the linked ones (App, Type,
+                Platform, Industry) as the footer's grey pills; the screen's
+                colours; patterns; a compare shortcut; the source; tags. */}
+            <div
+              className="ins-screen-preview-details-body"
+              // Scrolled down: a fade at the top too (straight on the element, no re-render).
+              onScroll={(e) => e.currentTarget.classList.toggle('is-scrolled', e.currentTarget.scrollTop > 2)}
+            >
+              <section className="ins-details-group" aria-labelledby="ins-details-screen">
+                <h3 id="ins-details-screen" className="ins-details-group-title">
+                  Screen
+                </h3>
+                <dl className="ins-details-list">
+                  {app && (
+                    <div className="ins-screen-preview-details-row">
+                      <dt className="ins-screen-preview-details-term">App</dt>
+                      <dd className="ins-screen-preview-details-value">
+                        <Link href={INSPIRATIONS_ROUTES.app(app)} className="ins-details-pill ins-details-pill--app">
+                          <AppLogo app={app} size={20} />
+                          {app.name}
+                        </Link>
+                      </dd>
+                    </div>
+                  )}
+                  <div className="ins-screen-preview-details-row">
+                    <dt className="ins-screen-preview-details-term">Type</dt>
+                    <dd className="ins-screen-preview-details-value">
+                      <Link href={`${INSPIRATIONS_ROUTES.screens}?type=${view.screenType}`} className="ins-details-pill">
+                        {screenTypeLabel(view.screenType)}
+                      </Link>
+                    </dd>
+                  </div>
+                  <div className="ins-screen-preview-details-row">
+                    <dt className="ins-screen-preview-details-term">Platform</dt>
+                    <dd className="ins-screen-preview-details-value">
+                      <Link href={`${INSPIRATIONS_ROUTES.screens}?platform=${view.platform}`} className="ins-details-pill">
+                        {PLATFORM_LABEL[view.platform]}
+                      </Link>
+                    </dd>
+                  </div>
+                  <div className="ins-screen-preview-details-row">
+                    <dt className="ins-screen-preview-details-term">Industry</dt>
+                    <dd className="ins-screen-preview-details-value">
+                      <Link href={`${INSPIRATIONS_ROUTES.screens}?industry=${view.industry}`} className="ins-details-pill">
+                        {INDUSTRY_LABEL[view.industry]}
+                      </Link>
+                    </dd>
+                  </div>
+                  {view.style.length > 0 && (
+                    <div className="ins-screen-preview-details-row">
+                      <dt className="ins-screen-preview-details-term">Style</dt>
+                      <dd className="ins-screen-preview-details-value">{view.style.map((st) => styleLabel(st)).join(', ')}</dd>
+                    </div>
+                  )}
+                </dl>
+              </section>
+
+              <ScreenColours key={view.id} screen={view} />
+
               {patterns.length > 0 && (
-                <div className="ins-screen-preview-details-row">
-                  <dt className="ins-screen-preview-details-term">Patterns</dt>
-                  <dd className="ins-screen-preview-details-value ins-screen-preview-details-tags">
+                <section className="ins-details-group" aria-labelledby="ins-details-patterns">
+                  <h3 id="ins-details-patterns" className="ins-details-group-title">
+                    Patterns
+                  </h3>
+                  <div className="ins-details-pills">
                     {patterns.map((p) => (
-                      <Link key={p.id} href={INSPIRATIONS_ROUTES.pattern(p)} className="ins-screen-preview-details-tag">
+                      <Link key={p.id} href={INSPIRATIONS_ROUTES.pattern(p)} className="ins-details-pill">
                         {p.name}
                       </Link>
                     ))}
-                  </dd>
-                </div>
+                  </div>
+                </section>
               )}
 
-              {screen.source.attribution && (
-                <div className="ins-screen-preview-details-row">
-                  <dt className="ins-screen-preview-details-term">Credit</dt>
-                  <dd className="ins-screen-preview-details-value">{screen.source.attribution}</dd>
-                </div>
+              {app && <CompareShortcut app={app} screen={view} />}
+
+              {(credit || view.capturedAt) && (
+                <section className="ins-details-group" aria-labelledby="ins-details-source">
+                  <h3 id="ins-details-source" className="ins-details-group-title">
+                    Source
+                  </h3>
+                  <dl className="ins-details-list">
+                    {credit && (
+                      <div className="ins-screen-preview-details-row">
+                        <dt className="ins-screen-preview-details-term">Credit</dt>
+                        <dd className="ins-screen-preview-details-value">{credit}</dd>
+                      </div>
+                    )}
+                    {view.capturedAt && (
+                      <div className="ins-screen-preview-details-row">
+                        <dt className="ins-screen-preview-details-term">Last Updated</dt>
+                        <dd className="ins-screen-preview-details-value ins-details-num">
+                          <time dateTime={view.capturedAt.slice(0, 10)} title={view.capturedAt.slice(0, 10)}>
+                            {formatDay(view.capturedAt)}
+                          </time>
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                </section>
               )}
-              <div className="ins-screen-preview-details-row">
-                <dt className="ins-screen-preview-details-term">Reuse</dt>
-                <dd className="ins-screen-preview-details-value">{screen.downloadable ? 'Permitted' : 'View only'}</dd>
-              </div>
-              {screen.capturedAt && (
-                <div className="ins-screen-preview-details-row">
-                  <dt className="ins-screen-preview-details-term">Captured</dt>
-                  <dd className="ins-screen-preview-details-value">{screen.capturedAt.slice(0, 10)}</dd>
-                </div>
-              )}
-              {screen.tags.length > 0 && (
-                <div className="ins-screen-preview-details-row">
-                  <dt className="ins-screen-preview-details-term">Tags</dt>
-                  <dd className="ins-screen-preview-details-value ins-screen-preview-details-tags">
-                    {screen.tags.map((t) => (
-                      <Link key={t} href={INSPIRATIONS_ROUTES.searchFor(t)} className="ins-screen-preview-details-tag">
-                        #{t}
+
+              {view.tags.length > 0 && (
+                <section className="ins-details-group" aria-labelledby="ins-details-tags">
+                  <h3 id="ins-details-tags" className="ins-details-group-title">
+                    Tags
+                  </h3>
+                  <div className="ins-details-pills">
+                    {view.tags.map((t) => (
+                      <Link key={t} href={INSPIRATIONS_ROUTES.searchFor(t)} className="ins-details-pill ins-details-pill--tag">
+                        <span aria-hidden="true">#</span>
+                        {t}
                       </Link>
                     ))}
-                  </dd>
-                </div>
+                  </div>
+                </section>
               )}
             </div>
           </div>
@@ -543,8 +708,26 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   );
 }
 
+/** The shortcuts card's rows: keys, then what they do. */
+const KEYS: [string[], string][] = [
+  [['←', '→'], 'Previous / next screen'],
+  [['S'], 'Save'],
+  [['C'], 'Copy png'],
+  [['L'], 'Copy link'],
+  [['?'], 'Show these shortcuts'],
+  [['Esc'], 'Close'],
+];
+
+/** "2026-10-06…" → "6 Oct 2026" (the day as captured, not shifted by the viewer's time zone). */
+function formatDay(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return iso.slice(0, 10);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
 /** The "…" menu's icons: Motvin's own set, as in the screen's right-click menu and the app menu. */
 const ICON_COPY_LINK = '/ASSET/Icons/Motvin/copy-link.svg';
+const ICON_COPY_PNG = '/ASSET/Icons/Motvin/copy-png.svg';
 const ICON_COMPARE = '/ASSET/Icons/Motvin/compare.svg';
 const ICON_DOWNLOAD = '/ASSET/Icons/Motvin/download-png.svg';
 

@@ -24,6 +24,8 @@ import { useScreenContextMenu } from './useScreenContextMenu';
 
 /** Search-param name that opens the overlay — see SCREEN_PARAM in ScreenPreviewModal.tsx. */
 export const FLOW_PARAM = 'flow';
+/** Optional `&step=<screen id>`: open the flow on that step rather than the first. */
+const STEP_PARAM = 'step';
 
 /** Present mode's control bar hides after the pointer has been still this long. */
 const PRESENT_HUD_MS = 2500;
@@ -95,6 +97,15 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   // screen") switches back.
   const [multiScreen, setMultiScreen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  // `&step=` (the screen preview's Flow button): start on that step, once
+  // the flow's screens are in.
+  const startStep = params.get(STEP_PARAM);
+  const [startedAt, setStartedAt] = useState<string | null>(null);
+  if (startStep && screens.length > 0 && startedAt !== startStep) {
+    setStartedAt(startStep);
+    const i = screens.findIndex((s) => s.id === startStep);
+    if (i > 0) setActiveIndex(i);
+  }
   const [zoomScreen, setZoomScreen] = useState<Screen | null>(null);
   // Right-click on a step's screenshot: the grid card's menu (Copy png,
   // Download png, Copy link) for that screenshot, as in the screen preview,
@@ -143,6 +154,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   if (seenId !== flowId) {
     setSeenId(flowId);
     setActiveIndex(0);
+    setStartedAt(null);
     setMultiScreen(false);
     setZoomScreen(null);
     setPlaying(false);
@@ -154,6 +166,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   const close = useCallback(() => {
     const sp = new URLSearchParams(params.toString());
     sp.delete(FLOW_PARAM);
+    sp.delete(STEP_PARAM);
     const qs = sp.toString();
     // back() keeps history tidy when the overlay was opened from this page;
     // replace() covers arriving here from a shared link.
