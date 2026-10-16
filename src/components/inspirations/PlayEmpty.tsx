@@ -20,18 +20,21 @@ export function PlayEmpty({
   title,
   description,
   action,
+  inline = false,
   children,
 }: {
   title: ReactNode;
   description?: ReactNode;
   action?: PlayEmptyAction;
+  /** Sits low in a page (an app's tabs): the balls stay in this box, under the message (LogoPile's `inline`). */
+  inline?: boolean;
   children?: ReactNode;
 }) {
   const { data: apps } = useAsync(() => inspirationsApi.listApps(), 'apps:all');
   const withLogos = (apps ?? []).filter((a) => inspirationsApi.mediaUrl(a.logo));
 
   return (
-    <div className="ins-search-empty" role="status">
+    <div className={`ins-search-empty${inline ? ' is-inline' : ''}`} role="status">
       <div className="ins-search-empty-copy">
         <p className="ins-search-empty-title">{title}</p>
         {description && <p className="ins-search-empty-desc">{description}</p>}
@@ -50,7 +53,7 @@ export function PlayEmpty({
         )}
       </div>
 
-      <LogoPile apps={withLogos} />
+      <LogoPile apps={withLogos} inline={inline} />
 
       {children}
     </div>

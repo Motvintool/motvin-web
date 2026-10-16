@@ -32,6 +32,16 @@ const BAT_SWING = 0.95;
 const BAT_GRIN = 6;
 /** Frames the hand must hold still before the bat stops being solid (about a tenth of a second). */
 const BAT_SETTLE = 6;
+/** One physics step (ms): the world always moves in 60fps steps. */
+const STEP = 1000 / 60;
+/** The longest the drop waits for the logos to be decoded (ms). */
+const DECODE_WAIT = 1200;
+/** The collision category of an inline pile's ceiling; a ball meets it only once wholly inside the box. */
+const CEILING = 0x0002;
+/** Frames the pile must stay wholly still before its frame loop stops. */
+const IDLE_FRAMES = 20;
+/** The tallest an inline pile's box gets (its CSS min-height). */
+const INLINE_MAX = 440;
 /** The slowest hit (px per step, along the hit) that makes a ball boing; gentler touches don't. */
 const BOING_MIN = 1.5;
 
@@ -47,12 +57,18 @@ const BOING_MIN = 1.5;
  * plain click still opens the app. Each app shows once (up to MAX_ICONS),
  * and each ball is a link, so the keyboard reaches them too.
  *
+ * The pile fills the window, the shelf at its foot, for an empty state that
+ * is the page (search). `inline` keeps it inside the empty state's own box
+ * instead, the shelf under the message, for one that sits low in a page
+ * (an app's tabs), where the window's foot would be on top of the message;
+ * the bat is out only over that box.
+ *
  * The physics library is loaded only once this mounts. Bodies are drawn by
  * writing each icon's transform every frame (no React renders per frame).
  * With reduced motion, the icons are laid out in a still, stacked heap
  * instead.
  */
-export function LogoPile({ apps }: { apps: App[] }) {
+export function LogoPile({ apps, inline = false }: { apps: App[]; inline?: boolean }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const shelfRef = useRef<HTMLDivElement>(null);
   const batRef = useRef<HTMLDivElement>(null);
@@ -72,9 +88,20 @@ export function LogoPile({ apps }: { apps: App[] }) {
       if (cancelled) return;
       const { Engine, Bodies, Body, Composite, Constraint, Events, Sleeping } = Matter;
       let width = root.clientWidth;
-      let height = root.clientHeight;
       const phone = width < 640;
       const size = phone ? SIZE_PHONE : SIZE;
+      // Inline, the box reaches down to the window's foot where there's room
+      // (so the heap is in view without scrolling), never shorter than the
+      // message and a row of balls on the shelf, nor taller than its CSS.
+      const box = inline ? root.closest<HTMLElement>('.ins-search-empty') : null;
+      if (box) {
+        const top = box.getBoundingClientRect().top;
+        const copy = box.querySelector('.ins-search-empty-copy')?.getBoundingClientRect();
+        const least = (copy ? copy.bottom - top : 160) + size + SHELF_BOTTOM + SHELF_H + 24;
+        const fit = window.innerHeight - top - 12;
+        box.style.minHeight = `${Math.round(Math.max(least, Math.min(INLINE_MAX, fit)))}px`;
+      }
+      let height = root.clientHeight;
       const count = items.length;
       const els = itemRefs.current;
       els.forEach((el) => {
@@ -136,6 +163,13 @@ export function LogoPile({ apps }: { apps: App[] }) {
           Bodies.rectangle(-T / 2, height - height * 2, T, height * 6, { isStatic: true }),
           Bodies.rectangle(width + T / 2, height - height * 2, T, height * 6, { isStatic: true }),
         ];
+        // Inline, a ceiling too, so the box is walled on all four sides: a
+        // hard hit bounces off its top rather than flying out of the panel.
+        // Only a ball wholly inside meets it (see CEILING), so the drop in
+        // from above still comes through.
+        if (inline) {
+          walls.push(Bodies.rectangle(width / 2, -T / 2, width + T * 2, T, { isStatic: true, collisionFilter: { category: CEILING } }));
+        }
         Composite.add(engine.world, walls);
       };
       buildWalls();
@@ -155,6 +189,8 @@ export function LogoPile({ apps }: { apps: App[] }) {
             frictionStatic: 0.6,
             frictionAir: 0.012,
             density: 0.0016,
+            // Passes the ceiling until it's wholly inside (set in the frame loop).
+            collisionFilter: { category: 0x0001, mask: ~CEILING },
           },
         ),
       );
@@ -221,8 +257,13 @@ export function LogoPile({ apps }: { apps: App[] }) {
       const blade = Bodies.rectangle(-1000, -1000, BLADE.w, BLADE.h, { isStatic: true, chamfer: { radius: 13 } });
       Composite.add(engine.world, blade);
       const bat = { on: false, x: -1000, y: -1000, vx: 0, angle: BAT_TILT, lastX: 0 };
+      // (Re)starts the frame loop, which stops itself once the pile is still
+      // (set once it exists, below). The bat coming out starts it too, as the
+      // pile is plainly in view then.
+      let wake = () => {};
       const setBatOn = (on: boolean) => {
         if (bat.on === on) return;
+        if (on) wake();
         bat.on = on;
         document.documentElement.classList.toggle('ins-bat-on', on);
         if (!on) Body.setPosition(blade, { x: -1000, y: -1000 });
@@ -230,13 +271,15 @@ export function LogoPile({ apps }: { apps: App[] }) {
       const onHover = (e: PointerEvent) => {
         if (e.pointerType !== 'mouse' || drag) return;
         const r = root.getBoundingClientRect();
-        // Over this empty state (its message, the balls) or the page round
-        // it, from its top down; not the header above it, or anything laid
-        // over it (a modal, the chat button). Over its button (or any other
-        // control but the balls) the usual pointer is back, so it's plain
-        // what will be clicked.
+        // Over this empty state (its message, the balls) or, filling the
+        // window, the page round it, from its top down; inline, only over its
+        // own box. Never the header above it, or anything laid over it (a
+        // modal, the chat button). Over its button (or any other control but
+        // the balls) the usual pointer is back, so it's plain what will be
+        // clicked.
         const t = e.target instanceof Node ? e.target : null;
-        const over = !!zone && !!t && (zone.contains(t) || t.contains(zone));
+        const inBox = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+        const over = !!zone && !!t && (inline ? inBox && zone.contains(t) : zone.contains(t) || t.contains(zone));
         const control = t instanceof Element && !root.contains(t) && t.closest('a, button, input, select, textarea, [role="button"]');
         setBatOn(over && !control && e.clientY >= (zone?.getBoundingClientRect().top ?? 0));
         bat.vx = bat.vx * 0.5 + (e.clientX - bat.lastX) * 0.5;
@@ -259,10 +302,33 @@ export function LogoPile({ apps }: { apps: App[] }) {
         bat.vx *= 0.82;
         const goal = BAT_TILT + Math.max(-BAT_SWING, Math.min(BAT_SWING, bat.vx * 0.05));
         bat.angle += (goal - bat.angle) * 0.3;
+        // Inline, the whole bat stays in the box, however it's turned: its
+        // sweet spot is held back from each edge by as far as the drawing
+        // reaches past it that way, so it stops at the wall rather than
+        // being cut off by it.
+        let bx = bat.x;
+        let by = bat.y;
+        if (inline) {
+          const cos = Math.cos(bat.angle);
+          const sin = Math.sin(bat.angle);
+          const xs: number[] = [];
+          const ys: number[] = [];
+          for (const [px, py] of [
+            [-BAT_HOT.x, -BAT_HOT.y],
+            [BAT_W - BAT_HOT.x, -BAT_HOT.y],
+            [-BAT_HOT.x, BAT_H - BAT_HOT.y],
+            [BAT_W - BAT_HOT.x, BAT_H - BAT_HOT.y],
+          ]) {
+            xs.push(px * cos - py * sin);
+            ys.push(px * sin + py * cos);
+          }
+          bx = Math.max(-Math.min(...xs) + 2, Math.min(width - Math.max(...xs) - 2, bx));
+          by = Math.max(-Math.min(...ys) + 2, Math.min(height - Math.max(...ys) - 2, by));
+        }
         // The blade's centre: BLADE.offset along the bat from the sweet spot,
         // turned with it.
-        const cx = bat.x - Math.sin(bat.angle) * BLADE.offset;
-        const cy = bat.y + Math.cos(bat.angle) * BLADE.offset;
+        const cx = bx - Math.sin(bat.angle) * BLADE.offset;
+        const cy = by + Math.cos(bat.angle) * BLADE.offset;
         // Just come out (from where it's parked off screen): it lands where
         // the hand is, which may be inside a ball, so it starts out passing
         // through, as if held still, until the hand moves.
@@ -281,7 +347,7 @@ export function LogoPile({ apps }: { apps: App[] }) {
           });
         }
         if (batEl) {
-          batEl.style.transform = `translate3d(${bat.x - BAT_HOT.x}px, ${bat.y - BAT_HOT.y}px, 0) rotate(${bat.angle}rad)`;
+          batEl.style.transform = `translate3d(${bx - BAT_HOT.x}px, ${by - BAT_HOT.y}px, 0) rotate(${bat.angle}rad)`;
           batEl.classList.toggle('is-swinging', Math.abs(bat.vx) > BAT_GRIN);
         }
       };
@@ -302,6 +368,7 @@ export function LogoPile({ apps }: { apps: App[] }) {
         el.setPointerCapture(e.pointerId);
         // Put down while holding an icon, so it doesn't shove it.
         setBatOn(false);
+        wake();
         const p = local(e);
         Sleeping.set(body, false);
         const constraint = Constraint.create({
@@ -349,6 +416,7 @@ export function LogoPile({ apps }: { apps: App[] }) {
         placeShelf();
         buildWalls();
         bodies.forEach((b) => Sleeping.set(b, false));
+        wake();
       };
       window.addEventListener('resize', onResize);
 
@@ -356,42 +424,131 @@ export function LogoPile({ apps }: { apps: App[] }) {
       // up far outside (thrown hard) drops back in from the top.
       let frame = 0;
       let last = performance.now();
+      // Each body's place before the latest step, so a frame that falls
+      // between two steps draws it part way from one to the other.
+      const prev = bodies.map((b) => ({ x: b.position.x, y: b.position.y, angle: b.angle }));
+      let acc = 0;
       const tick = (now: number) => {
         stepBat();
-        // In steps of a 60fps frame at most (longer ones make matter-js
-        // jittery), however long this frame took.
-        const elapsed = Math.min(50, now - last);
-        const steps = Math.max(1, Math.ceil(elapsed / (1000 / 60)));
-        for (let n = 0; n < steps; n++) Engine.update(engine, elapsed / steps);
+        // The world moves in fixed 60fps steps, however often frames come (a
+        // 120Hz screen, a late frame): an uneven step makes matter-js jerky.
+        // What's drawn is interpolated between the last two steps, so the
+        // balls glide at any frame rate. Never a step back in time: the first
+        // frame's timestamp can come before the moment the pile was built.
+        acc += Math.min(50, Math.max(0, now - last));
         last = now;
+        for (let n = 0; acc >= STEP && n < 4; n++) {
+          bodies.forEach((b, i) => {
+            prev[i].x = b.position.x;
+            prev[i].y = b.position.y;
+            prev[i].angle = b.angle;
+          });
+          Engine.update(engine, STEP);
+          acc -= STEP;
+        }
+        acc = Math.min(acc, STEP);
+        const alpha = acc / STEP;
         bodies.forEach((b, i) => {
           if (b.position.y > height + 400 || b.position.x < -400 || b.position.x > width + 400) {
             Body.setPosition(b, { x: width / 2, y: -size });
             shown[i].x = NaN;
             Body.setVelocity(b, { x: 0, y: 0 });
+            b.collisionFilter.mask = ~CEILING;
+            prev[i].x = b.position.x;
+            prev[i].y = b.position.y;
           }
+          // Wholly inside now: from here on the ceiling holds it in.
+          const mask = b.collisionFilter.mask ?? ~CEILING;
+          if (!(mask & CEILING) && b.position.y - size / 2 > 1) b.collisionFilter.mask = mask | CEILING;
+          const p = prev[i];
+          const x = p.x + (b.position.x - p.x) * alpha;
+          const y = p.y + (b.position.y - p.y) * alpha;
+          const angle = p.angle + (b.angle - p.angle) * alpha;
           const s = shown[i];
           const moving = b.speed > 0.4 || Math.abs(b.angularVelocity) > 0.02 || drag?.constraint.bodyB === b;
           if (moving || Number.isNaN(s.x)) {
-            s.x = b.position.x;
-            s.y = b.position.y;
-            s.angle += b.angle - s.lastAngle;
+            s.x = x;
+            s.y = y;
+            s.angle += angle - s.lastAngle;
           } else {
             // Still: drift to where the body is, and ease the logo round to
             // upright, the short way (to the full turn nearest its turn now).
-            s.x += (b.position.x - s.x) * 0.2;
-            s.y += (b.position.y - s.y) * 0.2;
+            s.x += (x - s.x) * 0.2;
+            s.y += (y - s.y) * 0.2;
             const turn = Math.PI * 2;
             s.angle += (Math.round(s.angle / turn) * turn - s.angle) * 0.12;
           }
-          s.lastAngle = b.angle;
+          s.lastAngle = angle;
           place(i, s.x, s.y, s.angle);
         });
+        // Nothing left to do (every ball asleep and drawn where it rests,
+        // logo upright; no bat, nothing held) or out of sight: stop until
+        // something wakes it, so a still pile costs nothing.
+        const turn = Math.PI * 2;
+        const still =
+          !bat.on &&
+          !drag &&
+          bodies.every((b, i) => {
+            const s = shown[i];
+            return (
+              b.isSleeping &&
+              Math.abs(s.x - b.position.x) < 0.05 &&
+              Math.abs(s.y - b.position.y) < 0.05 &&
+              Math.abs(s.angle - Math.round(s.angle / turn) * turn) < 0.002
+            );
+          });
+        idleFrames = still ? idleFrames + 1 : 0;
+        if (idleFrames > IDLE_FRAMES || !visible) {
+          running = false;
+          return;
+        }
         frame = requestAnimationFrame(tick);
       };
-      frame = requestAnimationFrame(tick);
+      // The drop starts once the pile is in view (at once for one filling the
+      // window; when it's scrolled to for an inline one below the fold), so
+      // the balls are seen falling rather than found already landed. After
+      // that, the loop runs only while something moves and the pile is on
+      // screen.
+      let started = false;
+      let running = false;
+      let visible = true;
+      let idleFrames = 0;
+      // The logos are decoded before the first drop (or DECODE_WAIT at the
+      // most), so no image decodes mid-fall and stalls a frame.
+      let decoded = false;
+      void Promise.race([
+        Promise.all(logos.map((img) => img?.decode?.().catch(() => {}))),
+        new Promise((r) => setTimeout(r, DECODE_WAIT)),
+      ]).then(() => {
+        decoded = true;
+        if (started) wake();
+      });
+      wake = () => {
+        started = true;
+        if (cancelled || !decoded || running || !visible) return;
+        running = true;
+        idleFrames = 0;
+        last = performance.now();
+        frame = requestAnimationFrame(tick);
+      };
+      const seen = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          wake();
+          seen.disconnect();
+        }
+      }, { threshold: inline ? 1 : 0.2 });
+      // Inline, once its shelf is wholly in view, so the landing is seen too.
+      seen.observe(inline ? (shelfRef.current ?? root) : root);
+      // Scrolled away, it pauses; back in view, it picks up where it was.
+      const onScreen = new IntersectionObserver((entries) => {
+        visible = entries[entries.length - 1].isIntersecting;
+        if (visible && started) wake();
+      });
+      onScreen.observe(root);
 
       cleanup = () => {
+        seen.disconnect();
+        onScreen.disconnect();
         cancelAnimationFrame(frame);
         els.slice(0, count).forEach((el, i) => el?.removeEventListener('pointerdown', downs[i]));
         window.removeEventListener('pointermove', onMove);
@@ -419,7 +576,7 @@ export function LogoPile({ apps }: { apps: App[] }) {
   if (!items.length) return null;
 
   return (
-    <div ref={rootRef} className="ins-search-pile" aria-label="Apps in the library">
+    <div ref={rootRef} className={`ins-search-pile${inline ? ' is-inline' : ''}`} aria-label="Apps in the library">
       {/* The frosted shelf the balls land on. */}
       <div ref={shelfRef} className="ins-search-pile-shelf" aria-hidden />
       {/* The bat that stands in for the pointer: a chubby willow blade with a

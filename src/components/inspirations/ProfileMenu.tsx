@@ -87,7 +87,7 @@ export function ProfileMenu() {
     <div className="mi-profile-menu-container" ref={rootRef}>
       <div className={`ins-profile-pill ${!signedIn ? 'is-logged-out' : ''}`}>
         {!signedIn && (
-          <button type="button" className="ins-profile-login-btn" onClick={goToLogin}>
+          <button type="button" className="ins-profile-login-btn" onClick={() => goToLogin()}>
             Login
           </button>
         )}

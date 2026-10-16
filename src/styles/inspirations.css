@@ -4318,7 +4318,7 @@ select.ins-input {
 /* Figma node 1180:53630 ("Search Input - Search flows"). */
 .ins-flows-search-input {
   width: 100%;
-  padding: 8px 10px 8px 40px;
+  padding: 8px 40px 8px 40px;
   font: inherit;
   font-size: 16px;
   color: var(--ins-text);
@@ -4331,9 +4331,23 @@ select.ins-input {
   color: #757575;
 }
 
+/* The browser's own clear button is hidden; ours (the header search's,
+   .ins-search-clear) sits at the right end instead. */
+.ins-flows-search-input::-webkit-search-cancel-button {
+  display: none;
+}
+.ins-flows-search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* No focus ring: the caret in the field is the cue, as in the other search fields. */
+.ins-flows-search-input:focus,
 .ins-flows-search-input:focus-visible {
-  outline: 2px solid var(--ins-accent);
-  outline-offset: 1px;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .ins-flows-chevron {
@@ -4343,11 +4357,6 @@ select.ins-input {
 
 .ins-flows-chevron.is-collapsed {
   transform: rotate(-90deg);
-}
-
-.ins-flows-nav-empty {
-  padding: 4px;
-  font-size: 16px;
 }
 
 .ins-flows-stream {
@@ -13671,6 +13680,14 @@ html.ins-guest img[src*="/api/inspirations/logos/"] {
   overflow: hidden;
   pointer-events: none;
 }
+/* Inline (an empty state low in a page, like an app's tabs): the pile is
+   this box, its shelf under the message rather than at the window's foot,
+   which would be on top of it. The box is tall enough for a heap. */
+.ins-search-empty.is-inline {
+  min-height: 440px;
+  padding-top: 24px;
+}
+.ins-search-pile.is-inline { position: absolute; }
 /* The frosted shelf the icons land on (LogoPile sets its width), in the
    look of the logo view's dock: a soft white bar with a hairline edge. */
 .ins-search-pile-shelf {
@@ -13696,6 +13713,7 @@ html.ins-guest img[src*="/api/inspirations/logos/"] {
 html.ins-bat-on, html.ins-bat-on * { cursor: none !important; }
 .ins-search-bat {
   position: absolute;
+  will-change: transform;
   top: 0;
   left: 0;
   z-index: 3;
@@ -13759,7 +13777,9 @@ html.ins-bat-on .ins-search-bat { display: block; }
     radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 62%, rgba(0, 0, 0, 0.14) 100%);
   pointer-events: none;
 }
-.ins-search-pile-art img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+/* Its own layer, so the logo's spin moves on the GPU instead of repainting
+   the ball (and its shadow) every frame. */
+.ins-search-pile-art img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; will-change: transform; }
 .ins-search-pile-item:hover .ins-search-pile-art { transform: scale(1.06); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 14px 28px rgba(0, 0, 0, 0.14); }
 /* Held: lifted a little more, with a soft shadow. */
 .ins-search-pile-item.is-dragging .ins-search-pile-art { transform: scale(1.1); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 18px 34px rgba(0, 0, 0, 0.08); }

@@ -6,7 +6,9 @@ import { PlayEmpty } from './PlayEmpty';
  * Quiet empty state — one line of copy and a single next step. Used for
  * no-results, empty saved lists and empty collections. With `play`, for
  * when a search or filter found nothing (or a page doesn't exist), it is
- * the playful one instead (PlayEmpty), and `icon` is not shown.
+ * the playful one instead (PlayEmpty), and `icon` is not shown;
+ * `play="inline"` for one that sits low in a page, so its balls stay in its
+ * own box rather than the window's foot.
  */
 export function EmptyState({
   title,
@@ -19,9 +21,9 @@ export function EmptyState({
   description?: string;
   action?: { label: string; href?: string; onClick?: () => void };
   icon?: ReactNode;
-  play?: boolean;
+  play?: boolean | 'inline';
 }) {
-  if (play) return <PlayEmpty title={title} description={description} action={action} />;
+  if (play) return <PlayEmpty title={title} description={description} action={action} inline={play === 'inline'} />;
 
   return (
     <div className="ins-empty" role="status">

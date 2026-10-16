@@ -87,7 +87,14 @@ function ArtCard({ shot }: { shot: Shot }) {
   );
 }
 
-export function InspirationsLogin({ defaultMode = 'login' }: { defaultMode?: 'login' | 'signup' }) {
+export function InspirationsLogin({
+  defaultMode = 'login',
+  backHref = '/inspirations',
+}: {
+  defaultMode?: 'login' | 'signup';
+  /** Where the logo leads: the page that sent the visitor here, or the library. */
+  backHref?: string;
+}) {
   const { signInWithGoogle, signInWithEmail, signUpWithEmail, sendPasswordReset } = useAuth();
   const [step, setStep] = useState<'email' | 'password'>('email');
   const [mode, setMode] = useState<'login' | 'signup'>(defaultMode);
@@ -169,8 +176,9 @@ export function InspirationsLogin({ defaultMode = 'login' }: { defaultMode?: 'lo
     <div className="ins-login">
       <div className="ins-login-pane">
         <div className="ins-login-card">
-          {/* The way back to browsing: this page has no header of its own. */}
-          <Link href="/inspirations" className="ins-login-logo-link" aria-label="Back to Motvin Inspirations">
+          {/* The way back to browsing (to the page that sent the visitor here):
+              this page has no header of its own. */}
+          <Link href={backHref} className="ins-login-logo-link" aria-label="Back to Motvin Inspirations">
             <img
               src="/ASSET/svg/Motvin/login/login-signup-motvin-logo.svg"
               alt=""

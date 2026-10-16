@@ -180,7 +180,7 @@ export function SettingsView() {
                 <p>
                   <b>You’re using Motvin as a guest.</b> Sign in to keep these requests with your account, on any device.
                 </p>
-                <button type="button" className="ins-set-guest-signin" onClick={goToLogin}>
+                <button type="button" className="ins-set-guest-signin" onClick={() => goToLogin()}>
                   Sign in
                 </button>
               </div>

@@ -6,7 +6,8 @@ import { useSearchParams } from 'next/navigation';
 import { FLOW_PARAM } from './FlowPreview';
 import { flowActionPhrase, type App, type Flow, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
-import { ChevronDownIcon, PlayOutlineIcon, SearchIcon } from './Icons';
+import { EmptyState } from './EmptyState';
+import { ChevronDownIcon, CloseIcon, PlayOutlineIcon, SearchIcon } from './Icons';
 import { Screenshot } from './Screenshot';
 
 /**
@@ -69,6 +70,7 @@ export function FlowsBrowser({ entries, apps }: { entries: Entry[]; apps: Map<st
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const searchRef = useRef<HTMLInputElement>(null);
   const params = useSearchParams();
 
   const tree = useMemo(() => buildTree(entries), [entries]);
@@ -143,6 +145,7 @@ export function FlowsBrowser({ entries, apps }: { entries: Entry[]; apps: Map<st
         <div className="ins-flows-search">
           <SearchIcon size={20} className="ins-flows-search-icon" />
           <input
+            ref={searchRef}
             type="search"
             className="ins-flows-search-input"
             placeholder="Search…"
@@ -150,11 +153,23 @@ export function FlowsBrowser({ entries, apps }: { entries: Entry[]; apps: Map<st
             onChange={(event) => setQuery(event.target.value)}
             aria-label="Search flows"
           />
+          {/* The header search's own clear button, in place of the browser's. */}
+          {query && (
+            <button
+              type="button"
+              className="ins-search-clear ins-flows-search-clear"
+              aria-label="Clear search"
+              onClick={() => {
+                setQuery('');
+                searchRef.current?.focus();
+              }}
+            >
+              <CloseIcon size={14} />
+            </button>
+          )}
         </div>
 
-        {visible.length === 0 ? (
-          <p className="ins-muted ins-flows-nav-empty">Nothing matches “{query}”.</p>
-        ) : (
+        {visible.length > 0 && (
           <nav>
             <ul className="ins-flowtree">{visible.map(renderNode)}</ul>
           </nav>
@@ -162,6 +177,10 @@ export function FlowsBrowser({ entries, apps }: { entries: Entry[]; apps: Map<st
       </aside>
 
       <div className="ins-flows-stream">
+        {/* Nothing matched the search: the playful empty state, in place of the strips. */}
+        {visible.length === 0 && (
+          <EmptyState play="inline" title="No flows found" />
+        )}
         {ordered.map((node) => (
           <FlowRow
             key={node.entry.flow.id}

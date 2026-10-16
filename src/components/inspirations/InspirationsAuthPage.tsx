@@ -24,13 +24,13 @@ function AuthRoute({ defaultMode }: { defaultMode: 'login' | 'signup' }) {
     if (signedIn) router.replace(next);
   }, [signedIn, next, router]);
 
-  return <InspirationsLogin defaultMode={mode} />;
+  return <InspirationsLogin defaultMode={mode} backHref={next} />;
 }
 
 /**
  * The standalone /login and /signup pages — the same screen the library shows
  * to signed-out visitors. Signed-in visitors are sent on to `?next=` (or the
- * library). Suspense is required because AuthRoute reads `useSearchParams`.
+ * library), and the logo leads back there too. Suspense is required because AuthRoute reads `useSearchParams`.
  */
 export function InspirationsAuthPage({ defaultMode }: { defaultMode: 'login' | 'signup' }) {
   return (

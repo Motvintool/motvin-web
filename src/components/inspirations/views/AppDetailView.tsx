@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
@@ -50,7 +50,8 @@ function versionOptions(versions: App['versions']): SortOption<string>[] {
   return versions.map((v) => ({ value: v.id, label: v.isLatest ? 'Latest' : v.label }));
 }
 
-
+/** For useSyncExternalStore's "is this the browser yet": nothing to subscribe to. */
+const noSubscribe = () => () => {};
 
 /**
  * A tabbar filter pill (Figma: "ui-elements-menu") — a checkbox multi-select
@@ -60,6 +61,7 @@ function versionOptions(versions: App['versions']): SortOption<string>[] {
  * by the UI Elements and Patterns tabs here and by the search page's Patterns
  * tab — only the label, options and search copy differ.
  */
+
 export function CheckboxFilterPill({
   label,
   options,
@@ -467,8 +469,20 @@ export function AppDetailView({
 
   // "View in App Store" for a phone app, "Visit website" for a Web one.
   const store = storeAction(appPlatform(app), app.website);
-  // The logo view, opened by the masthead logo itself or from the "…" menu.
-  const [logoOpen, setLogoOpen] = useState(false);
+  // The logo view, opened by the masthead logo itself or from the "…" menu,
+  // or by `?logo=1` (back from signing in to copy or download a logo). That
+  // param is dropped once read, so a reload doesn't reopen it. The view is
+  // held until the page is hydrated: it renders into document.body, which
+  // the server doesn't have.
+  const [logoOpen, setLogoOpen] = useState(() => params.get('logo') === '1');
+  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
+  useEffect(() => {
+    if (params.get('logo') !== '1') return;
+    const rest = new URLSearchParams(params.toString());
+    rest.delete('logo');
+    const query = rest.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [params, pathname, router]);
   const hasLogo = Boolean(inspirationsApi.mediaUrl(app.logo));
   const dl = useDownloadAllScreens(app, screens);
   const screenIds = new Set(screens.map((s) => s.id));
@@ -727,7 +741,7 @@ export function AppDetailView({
       <header className="ins-masthead">
         <div className="ins-masthead-main">
         <div className="ins-masthead-brand">
-          <MastheadLogo app={app} open={logoOpen} onOpenChange={setLogoOpen} />
+          <MastheadLogo app={app} open={logoOpen && hydrated} onOpenChange={setLogoOpen} />
           <StoreRankBadge name={app.name} platform={appPlatform(app)} />
         </div>
 
@@ -847,8 +861,8 @@ export function AppDetailView({
               textHighlights={textHighlights}
               empty={
                 <EmptyState
-                  play={textActive}
-                  title={textActive ? 'No screenshots matched that text' : 'No screens stored for this app yet'}
+                  play={textActive && 'inline'}
+                  title={textActive ? 'No screens found' : 'No screens stored for this app yet'}
                 />
               }
             />
@@ -893,7 +907,7 @@ export function AppDetailView({
               selectable
               textHighlights={textHighlights}
               empty={
-                <EmptyState play title={textActive ? 'No screenshots matched that text' : 'No screens matched this element'} />
+                <EmptyState play="inline" title={textActive ? 'No screens found' : 'No screens matched this element'} />
               }
             />
           )}
@@ -918,7 +932,7 @@ export function AppDetailView({
               selectable
               textHighlights={textHighlights}
               empty={
-                <EmptyState play title={textActive ? 'No screenshots matched that text' : 'No screens matched this category'} />
+                <EmptyState play="inline" title={textActive ? 'No screens found' : 'No screens matched this category'} />
               }
             />
           )}

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useAuthModal } from '@/components/shared/AuthModal';
 import { GUEST_DOWNLOAD_EVENT, type GatedDetail } from './useDownloadGate';
+import { useGoToLogin } from './useGoToLogin';
 
 /** How long the notice stays up. */
 const SHOW_MS = 3200;
@@ -12,10 +12,11 @@ const SHOW_MS = 3200;
  * the "Saved to collection" pill (FloatCollectionBar), with a lock in the
  * black circle and a Sign in button. Shown whenever useDownloadGate (or
  * GuestImageGuard) turns a guest's download or PNG copy away, worded for
- * what they tried ("Sign in to copy logos"); renders nothing otherwise.
+ * what they tried ("Sign in to copy logos"). Sign in goes to the login page,
+ * as the header's Login does, and back here after. Renders nothing otherwise.
  */
 export function GuestDownloadNotice() {
-  const { open } = useAuthModal();
+  const goToLogin = useGoToLogin();
   const [visible, setVisible] = useState(false);
   const [blocked, setBlocked] = useState<GatedDetail>({ action: 'download', subject: 'screens' });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,7 +53,9 @@ export function GuestDownloadNotice() {
           className="ins-guest-download-signin"
           onClick={() => {
             setVisible(false);
-            open('login');
+            // Turned away in an app's logo view: come back to it open.
+            const inLogoView = blocked.subject === 'logos' && document.querySelector('.ins-logo-view-dialog');
+            goToLogin(inLogoView ? { logo: '1' } : undefined);
           }}
         >
           Sign in
