@@ -96,7 +96,7 @@ function ScreenCardImpl({
     router.push(href, { scroll: false });
   };
 
-  // Right-click on the shot: Copy png, Download png, Copy link (guests get the sign-in notice).
+  // Right-click on the shot: Copy PNG, Download PNG, Copy link (guests get the sign-in notice).
   const shotMenu = useScreenContextMenu(shownScreen, app, () => new URL(href, window.location.origin).toString());
 
   const { title: appTitle, tagline: derivedTagline } = app ? splitAppName(app.name) : { title: '', tagline: null };

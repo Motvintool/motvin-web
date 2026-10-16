@@ -14,6 +14,7 @@ import { onMenuKeyDown, onTriggerKeyDown, ToolbarRow, useAutoFocusMenu, useDismi
 import { AppliedFilterPills, FiltersPill, type FilterSection } from '../FiltersPanel';
 import { FlowList } from '../FlowList';
 import { ScreenshotTextSearch } from '../ScreenshotTextSearch';
+import { SearchEmpty } from '../SearchEmpty';
 import { CloseIcon, SearchIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
 import { ScreenGrid } from '../ScreenGrid';
@@ -383,11 +384,7 @@ export function SearchView() {
           <ScreenGridSkeleton count={kind === 'apps' ? 4 : 10} meta={kind === 'apps'} />
         </div>
       ) : (first?.total ?? 0) === 0 && !anyFilter ? (
-        <EmptyState
-          title="Nothing matched that search"
-          description="Try a broader phrase, or browse everything in the library."
-          action={{ label: 'Browse everything', href: INSPIRATIONS_ROUTES.explore }}
-        />
+        <SearchEmpty query={query} platform={filters.platforms[0] ?? 'ios'} />
       ) : (
         <div className="ins-results">
           {kind === 'apps' && data.apps.length > 0 && (

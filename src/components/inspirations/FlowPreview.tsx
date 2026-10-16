@@ -107,8 +107,8 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     if (i > 0) setActiveIndex(i);
   }
   const [zoomScreen, setZoomScreen] = useState<Screen | null>(null);
-  // Right-click on a step's screenshot: the grid card's menu (Copy png,
-  // Download png, Copy link) for that screenshot, as in the screen preview,
+  // Right-click on a step's screenshot: the grid card's menu (Copy PNG,
+  // Download PNG, Copy link) for that screenshot, as in the screen preview,
   // in place of the browser's own "Save image as…". Set up before the early
   // returns below, so the hooks run in the same order.
   const [contextScreenId, setContextScreenId] = useState<string | null>(null);

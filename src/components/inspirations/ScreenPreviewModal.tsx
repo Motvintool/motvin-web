@@ -239,7 +239,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     if (next) setActiveId(next.id);
   };
 
-  // Right-click on a screenshot: the grid card's menu (Copy png, Download png,
+  // Right-click on a screenshot: the grid card's menu (Copy PNG, Download PNG,
   // Copy link) for whichever screenshot was clicked, in place of the
   // browser's own "Save image as…". Guests get the sign-in notice. Set up
   // before the early returns below, so the hooks run in the same order.
@@ -252,7 +252,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     shotMenu.onContextMenu(e);
   };
 
-  // The screen being looked at, for the footer's Copy png and the C / L keys.
+  // The screen being looked at, for the footer's Copy PNG and the C / L keys.
   const currentScreen = screens[activeIndex] ?? screen;
   const currentShot = useScreenContextMenu(currentScreen, app, () =>
     `${window.location.origin}${pathname}?${SCREEN_PARAM}=${currentScreen?.id ?? screenId}`,
@@ -266,7 +266,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
       show('Copy not available');
     }
   }, [currentScreen, pathname, show]);
-  // C copies the png, L the link, ? shows the shortcuts card (S, ←/→ and Esc
+  // C copies the PNG, L the link, ? shows the shortcuts card (S, ←/→ and Esc
   // are handled above). Plain keys only, never while typing, and not under
   // the lightbox; Cmd/Ctrl+C stays the browser's copy.
   const copyCurrentPng = currentShot.copyPng;
@@ -581,9 +581,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   </button>
                   {moreOpen && (
                     <div className="ins-popover ins-popover--right" role="menu" onMouseLeave={() => setMoreOpen(false)}>
-                      <button type="button" className="ins-popover-item" role="menuitem" onClick={() => void copyLink()}>
-                        <MenuIcon src={ICON_COPY_LINK} /> <span>Copy link</span>
-                      </button>
+                      {/* The image (copy, download), then the rest (link, compare),
+                          split by a divider so the list scans at a glance. */}
                       <button
                         type="button"
                         className="ins-popover-item"
@@ -593,19 +592,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                           void currentShot.copyPng();
                         }}
                       >
-                        <MenuIcon src={ICON_COPY_PNG} /> <span>Copy png</span>
+                        <MenuIcon src={ICON_COPY_PNG} /> <span>Copy PNG</span>
                       </button>
-                      {/* This screen's type, beside another app's (CompareScreens on the app page). */}
-                      {app && view.screenType && view.screenType !== 'other' && (
-                        <Link
-                          className="ins-popover-item"
-                          role="menuitem"
-                          href={`${INSPIRATIONS_ROUTES.app(app)}?compare=${encodeURIComponent(view.screenType)}`}
-                          onClick={() => setMoreOpen(false)}
-                        >
-                          <MenuIcon src={ICON_COMPARE} /> <span>Compare {screenTypeLabel(view.screenType).toLowerCase()}</span>
-                        </Link>
-                      )}
                       {view.downloadable && (
                         <a
                           className="ins-popover-item"
@@ -622,6 +610,21 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                         >
                           <MenuIcon src={ICON_DOWNLOAD} /> <span>Download</span>
                         </a>
+                      )}
+                      <div className="ins-popover-divider" role="separator" />
+                      <button type="button" className="ins-popover-item" role="menuitem" onClick={() => void copyLink()}>
+                        <MenuIcon src={ICON_COPY_LINK} /> <span>Copy link</span>
+                      </button>
+                      {/* This screen's type, beside another app's (CompareScreens on the app page). */}
+                      {app && view.screenType && view.screenType !== 'other' && (
+                        <Link
+                          className="ins-popover-item"
+                          role="menuitem"
+                          href={`${INSPIRATIONS_ROUTES.app(app)}?compare=${encodeURIComponent(view.screenType)}`}
+                          onClick={() => setMoreOpen(false)}
+                        >
+                          <MenuIcon src={ICON_COMPARE} /> <span>Compare {screenTypeLabel(view.screenType).toLowerCase()}</span>
+                        </Link>
                       )}
                     </div>
                   )}
@@ -786,7 +789,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
 const KEYS: [string[], string][] = [
   [['←', '→'], 'Previous / next screen'],
   [['S'], 'Save'],
-  [['C'], 'Copy png'],
+  [['C'], 'Copy PNG'],
   [['L'], 'Copy link'],
   [['?'], 'Show these shortcuts'],
   [['Esc'], 'Close'],

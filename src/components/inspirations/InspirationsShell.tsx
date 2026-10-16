@@ -4,6 +4,7 @@ import { Suspense, type ReactNode } from 'react';
 import { FlowPreview } from './FlowPreview';
 import { GuestRequestsNotice } from './GuestRequestsNotice';
 import { GuestDownloadNotice } from './GuestDownloadNotice';
+import { GuestImageGuard } from './GuestImageGuard';
 import { Header } from './Header';
 import { LibrarySync } from './LibrarySync';
 import { ScreenPreviewOverlay } from './ScreenPreviewModal';
@@ -53,6 +54,9 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
         <GuestRequestsNotice />
         {/* Tells a guest downloads need an account (see useDownloadGate). */}
         <GuestDownloadNotice />
+        {/* For a guest, also stops the browser's own save / copy / drag of a
+            screenshot or logo (see GuestImageGuard). Renders nothing. */}
+        <GuestImageGuard />
         <main className={`ins-main ${wide ? 'ins-main--wide' : ''}`}>{children}</main>
         {/* Reads ?flow= and renders over whatever page is showing. */}
         <Suspense fallback={null}>

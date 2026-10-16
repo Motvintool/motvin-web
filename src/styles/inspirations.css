@@ -13026,25 +13026,56 @@ button.ins-app-icon:hover .ins-app-icon-name,
   flex-direction: column;
   align-items: center;
 }
+/* The logo and its glow: a blurred, brighter copy behind it, so each brand
+   lights the overlay in its own colour. Settles in on each new logo (the
+   theme turns transitions off on images, so the wrapper animates). */
+.ins-logo-view-figure {
+  position: relative;
+  animation: insLogoFigureIn 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes insLogoFigureIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.ins-logo-view-glow {
+  position: absolute;
+  inset: 8%;
+  width: 84%;
+  height: 84%;
+  border-radius: 26%;
+  filter: blur(70px) saturate(1.5);
+  opacity: 0.28;
+  transform: translateY(8%) scale(1.15);
+  pointer-events: none;
+}
 .ins-logo-view-art {
+  position: relative;
   display: block;
-  width: min(360px, 70vw, calc(100vh - 360px));
+  width: min(360px, 70vw, calc(100vh - 400px));
   height: auto;
   aspect-ratio: 1;
   border-radius: 26%;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 16px 40px rgba(0, 0, 0, 0.2);
   user-select: none;
 }
 
 .ins-logo-view-meta {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
-  margin: 28px 0 0;
+  margin: 32px 0 0;
   font: 500 15px/1.4 var(--font-manrope), Inter, sans-serif;
 }
-.ins-logo-view-meta strong { color: #fff; font-weight: 600; }
-.ins-logo-view-meta span { color: rgba(255, 255, 255, 0.55); font-size: 14px; }
+.ins-logo-view-meta strong { color: #fff; font-size: 17px; font-weight: 600; }
+/* Size and format, as a quiet chip beside the name. */
+.ins-logo-view-chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
 
 /* Pills in the close button's own glass, on the dark backdrop. */
 /* Two equal columns (the wider label sets both); stacked full width on phones. */
@@ -13069,16 +13100,38 @@ button.ins-app-icon:hover .ins-app-icon-name,
   transition: background var(--ins-fast) var(--ins-ease);
 }
 .ins-logo-view-btn:hover { background: rgba(255, 255, 255, 0.22); }
-.ins-logo-view-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.ins-logo-view-btn:active { scale: 0.97; }
+.ins-logo-view-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; box-shadow: none; }
 /* The icons are drawn black; white here. */
 .ins-logo-view-btn img { width: 18px; height: 18px; filter: brightness(0) invert(1); }
+/* The lead action: solid white, dark text and icon. */
+.ins-logo-view-btn--primary { background: #fff; color: #141414; }
+.ins-logo-view-btn--primary:hover { background: #e8e8e6; }
+.ins-logo-view-btn--primary img { filter: none; }
+/* The button's key, small and quiet after its label. */
+.ins-logo-view-kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 2px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  font: 600 12px/1 var(--font-manrope), Inter, sans-serif;
+}
+.ins-logo-view-btn--primary .ins-logo-view-kbd { background: rgba(0, 0, 0, 0.08); color: rgba(20, 20, 20, 0.6); }
+/* Phones have no keyboard to press them on. */
+@media (hover: none) { .ins-logo-view-kbd { display: none; } }
 
 /* "Open page", when the logo shown is another app's. */
 .ins-logo-view-open { margin-left: 4px; color: #fff; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(255, 255, 255, 0.4); }
 .ins-logo-view-open:hover { text-decoration-color: #fff; }
 
-/* Room under the logo for the dock, which sits over the overlay's foot. */
-.ins-logo-view:not(.is-grid) { padding-bottom: 128px; }
+/* Room under the logo for the dock, which sits over the overlay's foot, and
+   above it for a status message at the top. */
+.ins-logo-view:not(.is-grid) { padding-top: 96px; padding-bottom: 128px; }
 
 /* The dock: every logo in a frosted strip along the bottom, in the close
    button's glass. The hovered logo lifts and grows, its neighbours a little
@@ -13518,6 +13571,9 @@ button.ins-app-icon:hover .ins-app-icon-name,
 
 /* Status messages ("Logo copied as png") above the overlay, not under it. */
 body:has(.ins-logo-view) .ins-toast-host { z-index: 130; }
+/* …and at the top, level with Close, while the dock fills the foot: there
+   they'd cover its logos or the buttons above it. */
+body:has(.ins-logo-dock) .ins-toast-host { top: clamp(12px, 3vw, 28px); bottom: auto; }
 
 @media (prefers-reduced-motion: reduce) {
   .ins-logo-trigger,
@@ -13526,7 +13582,7 @@ body:has(.ins-logo-view) .ins-toast-host { z-index: 130; }
   .ins-logo-dock-item,
   .ins-logo-dock-all,
   .ins-logo-grid-art { transition: none; }
-  .ins-logo-dock, .ins-logo-grid, .ins-logo-grid-clear, .ins-logo-grid-skel, .ins-logo-grid-skel-name { animation: none; }
+  .ins-logo-dock, .ins-logo-grid, .ins-logo-grid-clear, .ins-logo-grid-skel, .ins-logo-grid-skel-name, .ins-logo-view-figure { animation: none; }
   .ins-logo-dock-item:hover,
   .ins-logo-dock-item:hover + .ins-logo-dock-item,
   .ins-logo-dock-item:has(+ .ins-logo-dock-item:hover),
@@ -13538,4 +13594,103 @@ body:has(.ins-logo-view) .ins-toast-host { z-index: 130; }
   .ins-logo-trigger:focus-visible ~ .ins-rank { transform: none; }
   .ins-logo-trigger:hover,
   .ins-logo-trigger:active { transform: none; }
+}
+
+/* A thin rule between groups in a popover menu (the screen preview's "…"),
+   as .ins-context-menu-divider does in the right-click menus. */
+.ins-popover-divider { height: 1px; margin: 4px 6px; background: #f0f0f0; }
+
+/* Guests (GuestImageGuard sets html.ins-guest): no iOS long-press "Save
+   image", drag-out or selection on the library's screenshots and logos. */
+html.ins-guest img[src*="/api/inspirations/screens/"],
+html.ins-guest img[src*="/api/inspirations/logos/"] {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* =========================================================
+   SEARCH — NO RESULTS (SearchEmpty)
+   What to do next, centred, over a heap of the library's app icons that
+   tumble in from above and settle at the foot of the page.
+   ========================================================= */
+
+.ins-search-empty {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Room under the message for the pile, which itself rests on the
+     window's bottom edge (fixed, below). */
+  min-height: 300px;
+  padding-top: clamp(40px, 8vh, 96px);
+  text-align: center;
+}
+.ins-search-empty-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 520px;
+  animation: insLogoGridIn 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-search-empty-title {
+  margin: 0;
+  color: #141414;
+  font: 800 clamp(24px, 2.6vw, 32px)/1.15 var(--font-outfit), var(--font-inter), sans-serif;
+  letter-spacing: var(--ins-tracking-display);
+  overflow-wrap: anywhere;
+}
+.ins-search-empty-desc { margin: 0; color: var(--ins-sub); font-size: 16px; }
+.ins-search-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 14px; }
+
+/* The pile (LogoPile): a window-sized layer over the page (under the
+   header), where matter-js drops the icons from above onto its bottom edge.
+   Only the icons take the pointer; LogoPile positions each one every frame. */
+.ins-search-pile {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ins-search-pile-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 80px;
+  height: 80px;
+  /* Off screen until the first frame places it. */
+  transform: translate3d(-200px, -200px, 0);
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+  will-change: transform;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+.ins-search-pile-item.is-dragging { cursor: grabbing; }
+/* The lift on hover is on this wrapper: the theme turns transitions off on images. */
+.ins-search-pile-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 26%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 6px 16px rgba(0, 0, 0, 0.08);
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-search-pile-art img { display: block; width: 100%; height: 100%; border-radius: 26%; pointer-events: none; }
+.ins-search-pile-item:hover .ins-search-pile-art { transform: scale(1.06); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 14px 28px rgba(0, 0, 0, 0.14); }
+/* Held: lifted a little more, with a deeper shadow. */
+.ins-search-pile-item.is-dragging .ins-search-pile-art { transform: scale(1.1); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 22px 40px rgba(0, 0, 0, 0.2); }
+.ins-search-pile-item:focus-visible { outline: none; }
+.ins-search-pile-item:focus-visible .ins-search-pile-art { outline: 2px solid #141414; outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-search-empty-copy { animation: none; }
+  .ins-search-pile-art { transition: none; }
+  .ins-search-pile-item:hover .ins-search-pile-art,
+  .ins-search-pile-item.is-dragging .ins-search-pile-art { transform: none; }
 }

@@ -93,8 +93,8 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
   const lastLeft = ownScreens.length - 1;
   const lastRight = otherScreens.length - 1;
   const setSide = (side: 'left' | 'right', i: number) => setPos({ key: pairKey, left: side === 'left' ? i : left, right: side === 'right' ? i : right });
-  // Right-click on a screen: the grid card's menu (Copy png,
-  // Download png, Copy link) for that screenshot, with its own app's
+  // Right-click on a screen: the grid card's menu (Copy PNG,
+  // Download PNG, Copy link) for that screenshot, with its own app's
   // watermark and link, in place of the browser's "Save image as…".
   const [ctx, setCtx] = useState<{ side: 'left' | 'right'; id: string } | null>(null);
   const ctxScreen =

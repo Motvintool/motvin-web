@@ -13,7 +13,7 @@ const ICON_DOWNLOAD_PNG = '/ASSET/Icons/Motvin/download-png.svg';
 const ICON_COPY_LINK = '/ASSET/Icons/Motvin/copy-link.svg';
 
 /**
- * The right-click menu for a screenshot — Copy png, Download png, Copy link —
+ * The right-click menu for a screenshot — Copy PNG, Download PNG, Copy link —
  * shared by the grid's screen cards (ScreenCard) and the image in the screen
  * preview (ScreenPreviewModal), so both offer the same thing in place of the
  * browser's own "Save image as…". Copying and downloading go through
@@ -102,13 +102,13 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
       // Fetching the full screenshot and stamping the watermark takes a
       // moment, so say so straight away instead of looking like nothing
       // happened.
-      show('Preparing png…');
+      show('Preparing PNG…');
       try {
         // The clipboard write starts now, inside the click, and is handed the
         // image once it's ready: browsers (Safari above all) refuse a write
         // that only begins seconds after the click.
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': watermarked() })]);
-        show('Copied as png');
+        show('Copied as PNG');
       } catch (error) {
         console.error('Failed to copy', error);
         show('Failed to copy');
@@ -176,7 +176,7 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
                   <div className="ins-context-menu-icon">
                     <img alt="" src={ICON_COPY_PNG} />
                   </div>
-                  <p className="ins-context-menu-text">Copy png</p>
+                  <p className="ins-context-menu-text">Copy PNG</p>
                 </div>
               </button>
               <button type="button" className="ins-context-menu-btn" onClick={downloadPng}>
@@ -184,7 +184,7 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
                   <div className="ins-context-menu-icon">
                     <img alt="" src={ICON_DOWNLOAD_PNG} />
                   </div>
-                  <p className="ins-context-menu-text">Download png</p>
+                  <p className="ins-context-menu-text">Download PNG</p>
                 </div>
               </button>
             </div>

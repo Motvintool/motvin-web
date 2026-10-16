@@ -10,6 +10,7 @@ import type { App, Industry } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { CloseIcon, SearchIcon } from './Icons';
 import { useAsync } from './useAsync';
+import { useDownloadGate } from './useDownloadGate';
 import { useToast } from './Toast';
 
 const ICON_COPY_PNG = '/ASSET/Icons/Motvin/copy-png.svg';
@@ -30,15 +31,31 @@ async function logoPng(src: string): Promise<Blob> {
 /**
  * The app page's logo. Clicking it opens the logo large in the screen
  * lightbox's own overlay (ScreenLightbox: dark backdrop, close at the top
- * right, Escape), with Copy png and Download png under it, and every other
+ * right, Escape), with Copy PNG and Download PNG under it, and every other
  * app's logo to browse: a dock along the bottom (← / → step through it) and
- * an "All logos" grid. Not gated on signing in like screens are: a logo is
- * the brand's own public mark. An app without a logo file shows its
- * initials, not clickable.
+ * an "All logos" grid. Copying and downloading need an account, as for
+ * screens (useDownloadGate); a guest gets the sign-in notice. An app without
+ * a logo file shows its initials, not clickable.
+ *
+ * `open` / `onOpenChange` let the page open the view from elsewhere too (the
+ * masthead's "…" menu); without them it keeps its own state.
  */
-export function MastheadLogo({ app }: { app: App }) {
+export function MastheadLogo({
+  app,
+  open: openProp,
+  onOpenChange,
+}: {
+  app: App;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const src = inspirationsApi.mediaUrl(app.logo);
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    onOpenChange?.(next);
+  };
 
   if (!src) return <AppLogo app={app} size={90} className="ins-masthead-logo" />;
 
@@ -69,6 +86,7 @@ export function MastheadLogo({ app }: { app: App }) {
 
 function LogoLightbox({ app, onClose }: { app: App; onClose: () => void }) {
   const { show } = useToast();
+  const { allow } = useDownloadGate();
   const closeRef = useRef<HTMLButtonElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const [currentId, setCurrentId] = useState(app.id);
@@ -182,6 +200,8 @@ function LogoLightbox({ app, onClose }: { app: App; onClose: () => void }) {
   const copyPng = async (a: App) => {
     const logo = inspirationsApi.mediaUrl(a.logo);
     if (!logo) return;
+    // Guests get the sign-in notice instead.
+    if (!allow('copy', 'logos')) return;
     if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
       show('Copying not supported');
       return;
@@ -190,7 +210,7 @@ function LogoLightbox({ app, onClose }: { app: App; onClose: () => void }) {
       // The write starts inside the click and is handed the image once it's
       // ready: Safari refuses a write that only begins after the click.
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': logoPng(logo) })]);
-      show('Logo copied as png');
+      show('Logo copied as PNG');
     } catch (error) {
       console.error('Failed to copy', error);
       show('Failed to copy');
@@ -200,6 +220,7 @@ function LogoLightbox({ app, onClose }: { app: App; onClose: () => void }) {
   const downloadPng = async (a: App) => {
     const logo = inspirationsApi.mediaUrl(a.logo);
     if (!logo) return;
+    if (!allow('download', 'logos')) return;
     try {
       const blobUrl = URL.createObjectURL(await logoPng(logo));
       const link = document.createElement('a');
@@ -213,6 +234,23 @@ function LogoLightbox({ app, onClose }: { app: App; onClose: () => void }) {
       show('Failed to download');
     }
   };
+
+  // C copies and D downloads the logo shown large (the keys the buttons show),
+  // unless typing or a modifier is held (⌘C stays the browser's copy).
+  useEffect(() => {
+    if (mode !== 'single') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const key = e.key.toLowerCase();
+      if (key !== 'c' && key !== 'd') return;
+      e.preventDefault();
+      void (key === 'c' ? copyPng(current) : downloadPng(current));
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
 
   const pick = (id: string) => {
     setCurrentId(id);
@@ -331,10 +369,10 @@ function LogoLightbox({ app, onClose }: { app: App; onClose: () => void }) {
                     {/* Copy / download straight from the tile, on hover (or
                         keyboard focus) at the logo's top right corner. */}
                     <span className="ins-logo-grid-actions">
-                      <button type="button" aria-label={`Copy ${a.name} logo as png`} title="Copy png" onClick={() => copyPng(a)}>
+                      <button type="button" aria-label={`Copy ${a.name} logo as PNG`} title="Copy PNG" onClick={() => copyPng(a)}>
                         <img src={ICON_COPY_PNG} alt="" width={14} height={14} />
                       </button>
-                      <button type="button" aria-label={`Download ${a.name} logo as png`} title="Download png" onClick={() => downloadPng(a)}>
+                      <button type="button" aria-label={`Download ${a.name} logo as PNG`} title="Download PNG" onClick={() => downloadPng(a)}>
                         <img src={ICON_DOWNLOAD_PNG} alt="" width={14} height={14} />
                       </button>
                     </span>
@@ -358,17 +396,21 @@ function LogoLightbox({ app, onClose }: { app: App; onClose: () => void }) {
           </>
         ) : (
           <>
-            <img
-              key={current.id}
-              className="ins-logo-view-art"
-              src={src}
-              alt={`${current.name} logo`}
-              onLoad={(e) => setSize({ id: current.id, w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
-            />
+            {/* The logo over a soft glow of itself (a blurred copy), so each
+                brand tints its own light; keyed so a new logo settles in. */}
+            <div key={current.id} className="ins-logo-view-figure">
+              <img className="ins-logo-view-glow" src={src} alt="" aria-hidden />
+              <img
+                className="ins-logo-view-art"
+                src={src}
+                alt={`${current.name} logo`}
+                onLoad={(e) => setSize({ id: current.id, w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+              />
+            </div>
 
             <p className="ins-logo-view-meta">
               <strong>{current.name}</strong>
-              {size?.id === current.id && <span>{size.w} × {size.h} px · PNG</span>}
+              {size?.id === current.id && <span className="ins-logo-view-chip">{size.w} × {size.h} · PNG</span>}
               {current.slug !== app.slug && (
                 <Link href={INSPIRATIONS_ROUTES.app(current)} className="ins-logo-view-open">
                   Open page
@@ -376,14 +418,18 @@ function LogoLightbox({ app, onClose }: { app: App; onClose: () => void }) {
               )}
             </p>
 
+            {/* Download leads (solid); Copy beside it in the overlay's glass.
+                Each shows its key. */}
             <div className="ins-logo-view-actions">
-              <button type="button" className="ins-logo-view-btn" onClick={() => copyPng(current)}>
+              <button type="button" className="ins-logo-view-btn" aria-keyshortcuts="C" onClick={() => copyPng(current)}>
                 <img src={ICON_COPY_PNG} alt="" width={16} height={16} />
-                Copy png
+                Copy PNG
+                <kbd className="ins-logo-view-kbd" aria-hidden>C</kbd>
               </button>
-              <button type="button" className="ins-logo-view-btn" onClick={() => downloadPng(current)}>
+              <button type="button" className="ins-logo-view-btn ins-logo-view-btn--primary" aria-keyshortcuts="D" onClick={() => downloadPng(current)}>
                 <img src={ICON_DOWNLOAD_PNG} alt="" width={16} height={16} />
-                Download png
+                Download PNG
+                <kbd className="ins-logo-view-kbd" aria-hidden>D</kbd>
               </button>
             </div>
           </>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useAuthModal } from '@/components/shared/AuthModal';
-import { GUEST_DOWNLOAD_EVENT, type GatedAction } from './useDownloadGate';
+import { GUEST_DOWNLOAD_EVENT, type GatedDetail } from './useDownloadGate';
 
 /** How long the notice stays up. */
 const SHOW_MS = 3200;
@@ -10,18 +10,20 @@ const SHOW_MS = 3200;
 /**
  * The pill that tells a guest downloads need an account, in the same look as
  * the "Saved to collection" pill (FloatCollectionBar), with a lock in the
- * black circle and a Sign in button. Shown whenever useDownloadGate turns a
- * guest's download or PNG copy away; renders nothing otherwise.
+ * black circle and a Sign in button. Shown whenever useDownloadGate (or
+ * GuestImageGuard) turns a guest's download or PNG copy away, worded for
+ * what they tried ("Sign in to copy logos"); renders nothing otherwise.
  */
 export function GuestDownloadNotice() {
   const { open } = useAuthModal();
   const [visible, setVisible] = useState(false);
-  const [action, setAction] = useState<GatedAction>('download');
+  const [blocked, setBlocked] = useState<GatedDetail>({ action: 'download', subject: 'screens' });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const onBlocked = (event: Event) => {
-      setAction((event as CustomEvent<GatedAction>).detail === 'copy' ? 'copy' : 'download');
+      const detail = (event as CustomEvent<Partial<GatedDetail>>).detail;
+      setBlocked({ action: detail?.action === 'copy' ? 'copy' : 'download', subject: detail?.subject === 'logos' ? 'logos' : 'screens' });
       setVisible(true);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => setVisible(false), SHOW_MS);
@@ -44,7 +46,7 @@ export function GuestDownloadNotice() {
             <path d="M5.25 7V5.25a2.75 2.75 0 0 1 5.5 0V7" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
           </svg>
         </span>
-        {action === 'copy' ? 'Sign in to copy screens' : 'Sign in to download screens'}
+        {`Sign in to ${blocked.action} ${blocked.subject}`}
         <button
           type="button"
           className="ins-guest-download-signin"

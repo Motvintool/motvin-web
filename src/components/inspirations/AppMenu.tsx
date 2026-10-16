@@ -10,7 +10,8 @@ import { useToast } from './Toast';
 /**
  * The "…" menu on an app's masthead: the same menu, look and items as an app
  * card's right-click menu (AppCard) — Download all screens (with a submenu of
- * the app's dated versions) and Copy app link — then, below a divider, View
+ * the app's dated versions), Download logo (the app page's logo view)
+ * and Copy app link — then, below a divider, View
  * in App Store (or Google Play / Visit website) when the app has one. Saving lives on the masthead's
  * own Save button, so it isn't repeated here.
  *
@@ -21,6 +22,7 @@ import { useToast } from './Toast';
 const ICON_DOWNLOAD = '/ASSET/Icons/Motvin/download-png.svg';
 const ICON_LINK = '/ASSET/Icons/Motvin/copy-link.svg';
 const ICON_COMPARE = '/ASSET/Icons/Motvin/compare.svg';
+const ICON_LOGO = '/ASSET/Icons/Motvin/view-logo.svg';
 const ICON_MORE = '/ASSET/Icons/Motvin/right-arrow-small.svg';
 
 /** How long the versions submenu waits before closing once the pointer leaves it. */
@@ -37,6 +39,7 @@ export function AppMenu({
   triggerClassName = 'ins-iconbtn',
   opensUp = false,
   compareHref,
+  onOpenLogo,
 }: {
   busy: boolean;
   versions: AppVersion[];
@@ -50,6 +53,9 @@ export function AppMenu({
   opensUp?: boolean;
   /** Where "Compare screens" goes (the app page's compare view); left out when there's nothing to compare. */
   compareHref?: string;
+  /** "Download logo": what opens the logo view; left out where there's no
+   * logo view (a flow's menu). */
+  onOpenLogo?: () => void;
   /** Where "View in App Store" goes; left out when the app has nowhere to send people. */
   store?: { name: string; platform: Platform; action: StoreAction };
   onDownloadAll: () => void;
@@ -158,6 +164,30 @@ export function AppMenu({
                   )}
                 </button>
               </div>
+              {onOpenLogo && (
+                <button
+                  type="button"
+                  className="ins-context-menu-btn"
+                  role="menuitem"
+                  onClick={() => {
+                    close();
+                    onOpenLogo();
+                  }}
+                >
+                  <div className="ins-context-menu-btn-content">
+                    <div className="ins-context-menu-icon">
+                      <img alt="" src={ICON_LOGO} />
+                    </div>
+                    <p className="ins-context-menu-text">Download logo</p>
+                  </div>
+                </button>
+              )}
+            </div>
+            {/* Downloads, then link and compare, then the store: grouped so a
+                longer menu still scans at a glance. Only split where there's
+                a second download beside the screens. */}
+            {onOpenLogo && <div className="ins-context-menu-divider" />}
+            <div className="ins-context-menu-group">
               <button type="button" className="ins-context-menu-btn" role="menuitem" onClick={copyLink}>
                 <div className="ins-context-menu-btn-content">
                   <div className="ins-context-menu-icon">

@@ -467,6 +467,9 @@ export function AppDetailView({
 
   // "View in App Store" for a phone app, "Visit website" for a Web one.
   const store = storeAction(appPlatform(app), app.website);
+  // The logo view, opened by the masthead logo itself or from the "…" menu.
+  const [logoOpen, setLogoOpen] = useState(false);
+  const hasLogo = Boolean(inspirationsApi.mediaUrl(app.logo));
   const dl = useDownloadAllScreens(app, screens);
   const screenIds = new Set(screens.map((s) => s.id));
   const screenById = new Map(screens.map((s) => [s.id, s]));
@@ -724,7 +727,7 @@ export function AppDetailView({
       <header className="ins-masthead">
         <div className="ins-masthead-main">
         <div className="ins-masthead-brand">
-          <MastheadLogo app={app} />
+          <MastheadLogo app={app} open={logoOpen} onOpenChange={setLogoOpen} />
           <StoreRankBadge name={app.name} platform={appPlatform(app)} />
         </div>
 
@@ -793,6 +796,7 @@ export function AppDetailView({
             compareHref={compareType ? `${pathname}?${COMPARE_PARAM}=${encodeURIComponent(compareType)}` : undefined}
             onDownloadAll={() => void dl.downloadAll()}
             onDownloadVersion={(id) => void dl.downloadVersion(id)}
+            onOpenLogo={hasLogo ? () => setLogoOpen(true) : undefined}
           />
         </div>
       </header>
