@@ -13629,6 +13629,7 @@ html.ins-guest img[src*="/api/inspirations/logos/"] {
 .ins-search-empty-copy {
   position: relative;
   z-index: 1;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -13636,6 +13637,20 @@ html.ins-guest img[src*="/api/inspirations/logos/"] {
   max-width: 520px;
   animation: insLogoGridIn 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
+/* A very soft glow in the Motvin mark's colours behind the message,
+   turning slowly. */
+.ins-search-empty-copy::before {
+  content: '';
+  position: absolute;
+  inset: -24px -40px;
+  z-index: -1;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(139, 92, 246, 0.05), rgba(59, 130, 246, 0.045), rgba(34, 197, 94, 0.04), rgba(244, 63, 94, 0.04), rgba(139, 92, 246, 0.05));
+  filter: blur(40px);
+  animation: insSearchGlow 24s linear infinite;
+  pointer-events: none;
+}
+@keyframes insSearchGlow { to { rotate: 360deg; } }
 .ins-search-empty-title {
   margin: 0;
   color: #141414;
@@ -13656,12 +13671,61 @@ html.ins-guest img[src*="/api/inspirations/logos/"] {
   overflow: hidden;
   pointer-events: none;
 }
+/* The frosted shelf the icons land on (LogoPile sets its width), in the
+   look of the logo view's dock: a soft white bar with a hairline edge. */
+.ins-search-pile-shelf {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  box-sizing: border-box;
+  /* SHELF_BOTTOM and SHELF_H in LogoPile, so icons rest exactly on it. */
+  height: 14px;
+  border: 1px solid rgba(20, 20, 20, 0.06);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(244, 244, 242, 0.95));
+  box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(20, 20, 20, 0.04), 0 12px 32px rgba(20, 20, 20, 0.07);
+  transform: translateX(-50%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: insFadeIn 0.5s ease both;
+}
+/* The little cricket bat that stands in for the pointer over the empty
+   state (LogoPile moves and turns it about its sweet spot, on its face);
+   the system pointer is hidden while it's out. It blinks now and then, and
+   squints happily on a big swing. */
+html.ins-bat-on, html.ins-bat-on * { cursor: none !important; }
+.ins-search-bat {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  display: none;
+  width: 36px;
+  height: 100px;
+  transform-origin: 18px 66px;
+  filter: drop-shadow(0 8px 12px rgba(20, 20, 20, 0.14));
+  pointer-events: none;
+}
+html.ins-bat-on .ins-search-bat { display: block; }
+.ins-search-bat svg { display: block; overflow: visible; }
+.ins-search-bat-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: insBatBlink 3.6s ease-in-out infinite;
+}
+.ins-search-bat-happy { display: none; }
+.ins-search-bat.is-swinging .ins-search-bat-eyes { display: none; }
+.ins-search-bat.is-swinging .ins-search-bat-happy { display: inline; }
+@keyframes insBatBlink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  94% { transform: scaleY(0.1); }
+}
 .ins-search-pile-item {
   position: absolute;
   top: 0;
   left: 0;
-  width: 80px;
-  height: 80px;
+  width: 68px;
+  height: 68px;
   /* Off screen until the first frame places it. */
   transform: translate3d(-200px, -200px, 0);
   pointer-events: auto;
@@ -13672,24 +13736,38 @@ html.ins-guest img[src*="/api/inspirations/logos/"] {
   user-select: none;
 }
 .ins-search-pile-item.is-dragging { cursor: grabbing; }
-/* The lift on hover is on this wrapper: the theme turns transitions off on images. */
+/* Each logo as a ball. The lift on hover is on this wrapper (the theme
+   turns transitions off on images); the logo inside spins with the ball
+   (LogoPile turns the img) under a shine that stays put. */
 .ins-search-pile-art {
+  position: relative;
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: 26%;
+  overflow: hidden;
+  border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 6px 16px rgba(0, 0, 0, 0.08);
   transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.ins-search-pile-art img { display: block; width: 100%; height: 100%; border-radius: 26%; pointer-events: none; }
+.ins-search-pile-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0) 34%),
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 62%, rgba(0, 0, 0, 0.14) 100%);
+  pointer-events: none;
+}
+.ins-search-pile-art img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 .ins-search-pile-item:hover .ins-search-pile-art { transform: scale(1.06); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 14px 28px rgba(0, 0, 0, 0.14); }
-/* Held: lifted a little more, with a deeper shadow. */
-.ins-search-pile-item.is-dragging .ins-search-pile-art { transform: scale(1.1); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 22px 40px rgba(0, 0, 0, 0.2); }
+/* Held: lifted a little more, with a soft shadow. */
+.ins-search-pile-item.is-dragging .ins-search-pile-art { transform: scale(1.1); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 18px 34px rgba(0, 0, 0, 0.08); }
 .ins-search-pile-item:focus-visible { outline: none; }
 .ins-search-pile-item:focus-visible .ins-search-pile-art { outline: 2px solid #141414; outline-offset: 3px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ins-search-empty-copy { animation: none; }
+  .ins-search-empty-copy, .ins-search-empty-copy::before, .ins-search-bat-eyes { animation: none; }
   .ins-search-pile-art { transition: none; }
   .ins-search-pile-item:hover .ins-search-pile-art,
   .ins-search-pile-item.is-dragging .ins-search-pile-art { transform: none; }

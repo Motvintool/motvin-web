@@ -89,6 +89,7 @@ export function FlowsView() {
         // a category, or a platform explicitly in the URL. The iOS default
         // isn't a filter they can clear.
         <EmptyState
+          play={Boolean(category || params.get('platform'))}
           icon={<FlowIcon size={22} />}
           title={category || params.get('platform') ? 'No flows match this filter' : 'No flows here yet'}
           description={

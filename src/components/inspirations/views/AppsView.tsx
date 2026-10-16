@@ -93,6 +93,7 @@ export function AppsView() {
         loading={loading}
         webLayout={isDesktopPlatform(platform)}
         emptyTitle={industry || params.get('platform') ? 'No apps match these filters' : 'No apps here yet'}
+        emptyPlay={Boolean(industry || params.get('platform'))}
         emptyDescription={
           industry || params.get('platform')
             ? undefined

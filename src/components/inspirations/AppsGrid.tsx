@@ -31,6 +31,7 @@ export function AppsGrid({
   emptyTitle = 'No apps to show',
   emptyDescription,
   emptyAction,
+  emptyPlay = false,
   webLayout = false,
 }: {
   apps: App[];
@@ -38,6 +39,8 @@ export function AppsGrid({
   emptyTitle?: string;
   emptyDescription?: string;
   emptyAction?: { label: string; href?: string; onClick?: () => void };
+  /** The empty grid is a no-match (filters found nothing): show the playful empty state. */
+  emptyPlay?: boolean;
   webLayout?: boolean;
 }) {
   const key = apps.map((a) => a.id).join(',');
@@ -60,6 +63,7 @@ export function AppsGrid({
   if (!loading && !previewsLoading && apps.length === 0) {
     return (
       <EmptyState
+        play={emptyPlay}
         icon={<FolderIcon size={22} />}
         title={emptyTitle}
         description={emptyDescription}

@@ -251,6 +251,7 @@ export function FilteredGallery({
             loading={appsLoading}
             webLayout={filters.platforms.length === 1 && isDesktopPlatform(filters.platforms[0])}
             emptyTitle={appsLibraryEmpty ? 'No apps here yet' : 'No apps match these filters'}
+            emptyPlay={!appsLibraryEmpty}
             emptyDescription={
               appsLibraryEmpty
                 ? 'We add new apps regularly. Check back soon.'
@@ -294,6 +295,7 @@ export function FilteredGallery({
                   />
                 ) : (
                   <EmptyState
+                    play
                     title="No screens match these filters"
                     description="Try removing a filter, or search for something broader."
                     action={{ label: 'Clear filters', onClick: clearScreens }}

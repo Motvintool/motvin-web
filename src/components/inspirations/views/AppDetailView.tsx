@@ -847,6 +847,7 @@ export function AppDetailView({
               textHighlights={textHighlights}
               empty={
                 <EmptyState
+                  play={textActive}
                   title={textActive ? 'No screenshots matched that text' : 'No screens stored for this app yet'}
                 />
               }
@@ -892,7 +893,7 @@ export function AppDetailView({
               selectable
               textHighlights={textHighlights}
               empty={
-                <EmptyState title={textActive ? 'No screenshots matched that text' : 'No screens matched this element'} />
+                <EmptyState play title={textActive ? 'No screenshots matched that text' : 'No screens matched this element'} />
               }
             />
           )}
@@ -917,7 +918,7 @@ export function AppDetailView({
               selectable
               textHighlights={textHighlights}
               empty={
-                <EmptyState title={textActive ? 'No screenshots matched that text' : 'No screens matched this category'} />
+                <EmptyState play title={textActive ? 'No screenshots matched that text' : 'No screens matched this category'} />
               }
             />
           )}

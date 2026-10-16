@@ -133,6 +133,7 @@ export function PatternsView() {
             onLoadMore={() => setShown((n) => n + PAGE)}
             empty={
               <EmptyState
+                play={Boolean(textQuery || picked.length)}
                 icon={<GridIcon size={22} />}
                 title={
                   textQuery

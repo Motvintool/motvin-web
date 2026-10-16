@@ -302,7 +302,7 @@ export function SearchView() {
     replaceParams((sp) => ['app', 'text', 'element', 'pattern', 'type', 'state', 'industry', 'style'].forEach((k) => sp.delete(k)));
   };
   const filteredEmpty = (
-    <EmptyState title="Nothing matches these filters" description="Try removing a filter to see more results." action={{ label: 'Clear filters', onClick: clearFilters }} />
+    <EmptyState play title="Nothing matches these filters" description="Try removing a filter to see more results." action={{ label: 'Clear filters', onClick: clearFilters }} />
   );
 
   const screenFiltersOn = SCREEN_KINDS.includes(kind);
@@ -435,7 +435,7 @@ export function SearchView() {
                   showMeta={false}
                   selectable
                   textHighlights={textQuery ? data.textHighlights : undefined}
-                  empty={anyFilter ? filteredEmpty : <EmptyState title="No pattern screens matched" />}
+                  empty={anyFilter ? filteredEmpty : <EmptyState play title="No pattern screens matched" />}
                 />
               )}
             </section>
@@ -443,7 +443,7 @@ export function SearchView() {
 
           {countFor(kind) === 0 &&
             !(kind === 'patterns' && data.patterns.length > 0) &&
-            (kindFiltered ? filteredEmpty : <EmptyState title={`No ${KINDS.find((x) => x.id === kind)?.label.toLowerCase()} matched “${query}”`} />)}
+            (kindFiltered ? filteredEmpty : <EmptyState play title={`No ${KINDS.find((x) => x.id === kind)?.label.toLowerCase()} matched “${query}”`} />)}
         </div>
       )}
     </>
