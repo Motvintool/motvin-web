@@ -24,6 +24,7 @@ const FIGMA_APP_ART = '/ASSET/search-modal/figma-02.png';
 const TEXT_IN_SCREENSHOT_ICON = '/ASSET/Icons/Motvin/text-in-screenshot.svg';
 const FIGMA_MODAL_ICONS = {
   search: '/ASSET/search-modal/icons/search.svg',
+  apps: '/ASSET/search-modal/icons/apps.svg',
   list: '/ASSET/search-modal/icons/list.svg',
   grid: '/ASSET/search-modal/icons/grid.svg',
   flow: '/ASSET/search-modal/icons/flow.svg',
@@ -116,7 +117,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [active, setActive] = useState(-1);
   const [activeSearchAction, setActiveSearchAction] = useState<'search' | 'screenshot' | null>('search');
-  const [section, setSection] = useState<'top' | 'categories' | 'screens' | 'elements' | 'flows'>('top');
+  const [section, setSection] = useState<SearchSection>('top');
   // Phones swap the section tab list for a dropdown pill (see .ins-search-nav-dropdown).
   const [navMenuOpen, setNavMenuOpen] = useState(false);
   // Arrow-key position within whichever single-column section (Categories,
@@ -137,9 +138,9 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // honest per-platform breakdown to filter with the data this modal fetches.
   const [modalPlatform, setModalPlatform] = useState<Platform | null>('ios');
   const [topApps, setTopApps] = useState<App[]>([]);
-  // Unlike `topApps` (there's no dedicated "Apps" sidebar section — apps only
-  // ever appear in the Top Rated preview, so capping the fetch itself is
-  // fine), these three back BOTH the Top Rated preview AND their own
+  // Unlike `topApps` (the Top Rated preview's own short row — the Apps
+  // section lists `allApps` below instead, so capping this one is fine),
+  // these three back BOTH the Top Rated preview AND their own
   // sidebar section (Screens/UI Elements/Flows) — the section needs the
   // real, full list, so nothing here gets truncated at fetch time. The
   // preview-sized slices for the Top Rated tab are derived below instead.
@@ -157,6 +158,8 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // per platform below (`categories`), so the platform pills actually change them.
   const [industries, setIndustries] = useState<string[]>([]);
   const [allApps, setAllApps] = useState<App[]>([]);
+  // Whether the apps and flows below have arrived, so a list can tell "loading" from "none on this platform".
+  const [libraryReady, setLibraryReady] = useState(false);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>(loadRecentSearches);
   const inputRef = useRef<HTMLInputElement>(null);
   const modalInputRef = useRef<HTMLInputElement>(null);
@@ -239,8 +242,8 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
         e.preventDefault();
         if (!value.trim()) {
           setSection((prev) => {
-            const keys = ['top', 'categories', 'screens', 'elements', 'flows'] as const;
-            const currentIndex = keys.indexOf(prev as any);
+            const keys = ['top', 'apps', 'categories', 'screens', 'elements', 'flows'] as const;
+            const currentIndex = keys.indexOf(prev);
             const nextIndex = e.shiftKey ? (currentIndex - 1 + keys.length) % keys.length : (currentIndex + 1) % keys.length;
             return keys[nextIndex];
           });
@@ -314,6 +317,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
         setFlows(flowsList);
         setIndustries(meta.taxonomy.industries);
         setAllApps(apps);
+        setLibraryReady(true);
     });
     return () => {
       cancelled = true;
@@ -452,6 +456,8 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     .filter((c) => c.count > 0)
     .sort((a, b) => b.count - a.count);
   const visibleTopApps = modalPlatform ? topApps.filter((app) => app.platforms.includes(modalPlatform)) : topApps;
+  // The Apps tab: every app on the picked platform, best rated first (the order they're fetched in).
+  const visibleApps = modalPlatform ? allApps.filter((app) => app.platforms.includes(modalPlatform)) : allApps;
   const visibleFlows = modalPlatform ? flows.filter((flow) => flow.platform === modalPlatform) : flows;
   // Unlike the Top Rated tab's decorative Screens showcase (fixed stock
   // imagery, positionally paired with whichever screen happens to fill that
@@ -468,6 +474,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   const previewFlows = visibleFlows.slice(0, 12);
   const modalSections = [
     { key: 'top' as const, label: 'Top rated', icon: FIGMA_MODAL_ICONS.topRated },
+    { key: 'apps' as const, label: 'Apps', icon: FIGMA_MODAL_ICONS.apps },
     { key: 'categories' as const, label: 'Categories', icon: FIGMA_MODAL_ICONS.categories },
     { key: 'screens' as const, label: 'Screens', icon: FIGMA_MODAL_ICONS.grid },
     { key: 'elements' as const, label: 'UI Elements', icon: FIGMA_MODAL_ICONS.list },
@@ -485,6 +492,8 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
           ...previewElements.map((el) => ({ onActivate: () => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(el.kind)}`); } })),
           ...previewFlows.map((flow) => ({ onActivate: () => { close(); router.push(flowPreviewHref(flow)); } })),
         ]
+      : section === 'apps'
+      ? visibleApps.map((app) => ({ onActivate: () => { close(); router.push(INSPIRATIONS_ROUTES.app(app)); } }))
       : section === 'categories'
       ? categories.map((c) => ({ onActivate: () => { close(); router.push(`${INSPIRATIONS_ROUTES.screens}?industry=${c.value}`); } }))
       : section === 'screens'
@@ -721,7 +730,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
               </nav>
             )}
             <div className="ins-search-modal-results" role="listbox">
-              {(!value.trim() && section !== 'top') && <div className="ins-search-modal-title">{section === 'categories' ? 'Categories' : section === 'screens' ? 'Screens' : section === 'elements' ? 'UI Elements' : 'Flows'}</div>}
+              {(!value.trim() && section !== 'top') && <div className="ins-search-modal-title">{modalSections.find((item) => item.key === section)?.label}</div>}
               {(() => {
                 let currentTopIndex = 0;
                 return !value.trim() && section === 'top' ? (
@@ -744,7 +753,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                           </button>
                         );
                       })}
-                    {modalPlatform && visibleTopApps.length === 0 && (
+                    {libraryReady && modalPlatform && visibleTopApps.length === 0 && (
                       <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} apps yet.</p>
                     )}
                   </div>
@@ -815,12 +824,44 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                           </button>
                         );
                       })}
-                      {modalPlatform && previewFlows.length === 0 && (
+                      {libraryReady && modalPlatform && previewFlows.length === 0 && (
                         <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} flows yet.</p>
                       )}
                     </div>
                   </section>
                 </div>
+              ) : !value.trim() && section === 'apps' ? (
+                // Every app as its home-screen icon, best rated first.
+                <ul className="ins-search-app-icons" aria-label="Apps" aria-busy={!libraryReady}>
+                  {libraryReady
+                    ? visibleApps.map((app, index) => (
+                        <li key={app.id}>
+                          <button
+                            type="button"
+                            className={`ins-app-icon ${index === browseActive ? 'is-active' : ''}`}
+                            onMouseEnter={() => setBrowseActive(index)}
+                            onFocus={() => setBrowseActive(index)}
+                            onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.app(app)); }}
+                          >
+                            <span className="ins-app-icon-art">
+                              <AppLogo app={app} size={72} className="ins-app-icon-logo" />
+                            </span>
+                            <span className="ins-app-icon-name">{app.name}</span>
+                          </button>
+                        </li>
+                      ))
+                    : Array.from({ length: 10 }, (_, i) => (
+                        <li key={i} className="ins-app-icon ins-app-icon--skeleton" aria-hidden>
+                          <span className="ins-app-icon-art">
+                            <span className="ins-skel ins-app-icon-skel-logo" />
+                          </span>
+                          <span className="ins-skel ins-skel--line ins-app-icon-skel-name" />
+                        </li>
+                      ))}
+                  {libraryReady && modalPlatform && visibleApps.length === 0 && (
+                    <li className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} apps yet.</li>
+                  )}
+                </ul>
               ) : !value.trim() && section === 'categories' ? (
                 <div className="ins-search-categories" aria-label="Categories">
                   {categories.map(({ value, label, count }, index) => (

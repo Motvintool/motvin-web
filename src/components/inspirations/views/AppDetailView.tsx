@@ -8,6 +8,7 @@ import { elementLabel, INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations
 import { isDesktopPlatform, type App, type ElementKind, type Flow, type Pattern, type Screen } from '@/lib/inspirations/types';
 import { appPlatform, storeAction } from '@/lib/inspirations/storeAction';
 import { AppLogo } from '../AppLogo';
+import { MastheadLogo } from '../MastheadLogo';
 import { AppMenu } from '../AppMenu';
 import { COMPARE_PARAM, CompareScreens, defaultCompareType } from '../CompareScreens';
 import { AppPaletteMenu, useAppPalette } from '../AppPalette';
@@ -723,7 +724,7 @@ export function AppDetailView({
       <header className="ins-masthead">
         <div className="ins-masthead-main">
         <div className="ins-masthead-brand">
-          <AppLogo app={app} size={90} className="ins-masthead-logo" />
+          <MastheadLogo app={app} />
           <StoreRankBadge name={app.name} platform={appPlatform(app)} />
         </div>
 

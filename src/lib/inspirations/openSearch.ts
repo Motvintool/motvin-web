@@ -4,7 +4,7 @@
  * is a window event rather than a prop: no page needs a reference to it.
  */
 
-export type SearchSection = 'top' | 'categories' | 'screens' | 'elements' | 'flows';
+export type SearchSection = 'top' | 'apps' | 'categories' | 'screens' | 'elements' | 'flows';
 
 export const OPEN_SEARCH_EVENT = 'motvin:open-search';
 

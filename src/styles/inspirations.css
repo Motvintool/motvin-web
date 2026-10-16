@@ -12893,3 +12893,649 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
   .ins-compare-logos:hover > * { transform: none; }
   .ins-compare-thumb, .ins-compare-peek { transition: none; }
 }
+
+/* =========================================================
+   SEARCH MODAL — APPS SECTION (GlobalSearch, section "apps")
+   Every app as its home-screen icon with its name under it, AppLogo's
+   own 26% curve. !important on the logo size: AppLogo sets it inline.
+   ========================================================= */
+
+.ins-search-app-icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 28px 8px;
+  margin: 0;
+  padding: 8px 8px 24px;
+  list-style: none;
+}
+.ins-search-app-icons > .ins-muted { grid-column: 1 / -1; }
+
+.ins-app-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+}
+button.ins-app-icon { width: 100%; padding: 0; border: 0; background: none; font: inherit; cursor: pointer; }
+
+/* The icon itself: a hairline edge and soft shadow so light logos (white
+   tiles) still read as tiles; a gentle lift on hover, a press on click. */
+.ins-app-icon-art {
+  display: block;
+  border-radius: 26%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-app-icon-logo { display: block; width: 72px !important; height: 72px !important; }
+button.ins-app-icon:hover .ins-app-icon-art,
+.ins-app-icon.is-active .ins-app-icon-art {
+  transform: translateY(-4px);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 14px 28px rgba(0, 0, 0, 0.12);
+}
+button.ins-app-icon:active .ins-app-icon-art { transform: translateY(-1px) scale(0.97); }
+button.ins-app-icon:focus-visible { outline: none; }
+button.ins-app-icon:focus-visible .ins-app-icon-art { outline: 2px solid #141414; outline-offset: 4px; }
+
+/* The name in soft grey, up to two lines, centred under the icon. */
+.ins-app-icon-name {
+  display: -webkit-box;
+  max-width: 104px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: #8a8a88;
+  font: 500 14px/1.4 var(--font-manrope), Inter, sans-serif;
+  text-align: center;
+  transition: color var(--ins-fast) var(--ins-ease);
+}
+button.ins-app-icon:hover .ins-app-icon-name,
+.ins-app-icon.is-active .ins-app-icon-name { color: #141414; }
+
+/* Loading: the same tiles as placeholders (icon box and a name line). */
+.ins-app-icon--skeleton .ins-app-icon-art { box-shadow: none; }
+.ins-skel.ins-app-icon-skel-logo { display: block; width: 72px; height: 72px; border-radius: 26%; }
+.ins-skel.ins-app-icon-skel-name { width: 60px; margin-block: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-app-icon-art { transition: none; }
+  button.ins-app-icon:hover .ins-app-icon-art,
+  .ins-app-icon.is-active .ins-app-icon-art { transform: none; }
+}
+
+@media (max-width: 640px) {
+  .ins-search-app-icons { gap: 24px 8px; padding: 8px 0 24px; }
+  .ins-app-icon-name { font-size: 13px; }
+  .ins-skel.ins-app-icon-skel-name { margin-block: 2.6px; }
+}
+
+/* =========================================================
+   APP PAGE — LOGO VIEW (MastheadLogo)
+   Clicking the masthead logo opens it large in the screen lightbox's
+   overlay (.ins-lightbox, .ins-lightbox-close), with its size and the
+   Copy png / Download png buttons under it.
+   ========================================================= */
+
+.ins-logo-trigger {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 24px;
+  background: none;
+  cursor: var(--ins-cursor-zoom-in, zoom-in);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-logo-trigger:hover { transform: scale(1.04); }
+.ins-logo-trigger:active { transform: scale(0.97); }
+.ins-logo-trigger:focus-visible { outline: 2px solid #141414; outline-offset: 4px; }
+
+/* Hover (and keyboard focus): a soft scrim over the logo, in its own curve,
+   with the white "open" icon in its middle. */
+.ins-logo-trigger-hover {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: inherit;
+  background: rgba(20, 20, 20, 0.55);
+  opacity: 0;
+  transition: opacity 0.2s var(--ins-ease);
+  pointer-events: none;
+}
+.ins-logo-trigger-hover svg {
+  display: block;
+  width: 28px;
+  height: 28px;
+  color: #fff;
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.45));
+}
+.ins-logo-trigger:hover .ins-logo-trigger-hover,
+.ins-logo-trigger:focus-visible .ins-logo-trigger-hover { opacity: 1; }
+/* The rank badge slides down out of the zooming logo's way, on the zoom's
+   own curve. */
+.ins-masthead-brand .ins-rank { transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+.ins-logo-trigger:hover ~ .ins-rank,
+.ins-logo-trigger:focus-visible ~ .ins-rank { transform: translateY(8px); }
+/* "View logo" in the black tooltip (the flow player's), above the logo. */
+.ins-logo-trigger:hover .ins-flow-tip,
+.ins-logo-trigger:focus-visible .ins-flow-tip { opacity: 1; transform: translate(-50%, 0); }
+
+.ins-logo-view-dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ins-logo-view-art {
+  display: block;
+  width: min(360px, 70vw, calc(100vh - 360px));
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 26%;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  user-select: none;
+}
+
+.ins-logo-view-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 28px 0 0;
+  font: 500 15px/1.4 var(--font-manrope), Inter, sans-serif;
+}
+.ins-logo-view-meta strong { color: #fff; font-weight: 600; }
+.ins-logo-view-meta span { color: rgba(255, 255, 255, 0.55); font-size: 14px; }
+
+/* Pills in the close button's own glass, on the dark backdrop. */
+/* Two equal columns (the wider label sets both); stacked full width on phones. */
+.ins-logo-view-actions { display: grid; grid-auto-columns: 1fr; grid-auto-flow: column; gap: 12px; margin-top: 22px; }
+@media (max-width: 480px) {
+  .ins-logo-view-actions { grid-auto-flow: row; width: min(100%, 300px); }
+}
+.ins-logo-view-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 210px;
+  height: 54px;
+  padding: 0 28px 0 24px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font: 500 16px/1 var(--font-manrope), Inter, sans-serif;
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+.ins-logo-view-btn:hover { background: rgba(255, 255, 255, 0.22); }
+.ins-logo-view-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* The icons are drawn black; white here. */
+.ins-logo-view-btn img { width: 18px; height: 18px; filter: brightness(0) invert(1); }
+
+/* "Open page", when the logo shown is another app's. */
+.ins-logo-view-open { margin-left: 4px; color: #fff; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(255, 255, 255, 0.4); }
+.ins-logo-view-open:hover { text-decoration-color: #fff; }
+
+/* Room under the logo for the dock, which sits over the overlay's foot. */
+.ins-logo-view:not(.is-grid) { padding-bottom: 128px; }
+
+/* The dock: every logo in a frosted strip along the bottom, in the close
+   button's glass. The hovered logo lifts and grows, its neighbours a little
+   (a macOS-style magnify); the shown one sits raised over a white dot. The
+   track scrolls sideways once there are more logos than fit. */
+.ins-logo-dock {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(16px, 3vw, 28px);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100vw - 32px);
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  transform: translateX(-50%);
+  animation: insLogoDockIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes insLogoDockIn {
+  from { opacity: 0; transform: translate(-50%, 16px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.ins-logo-dock-track {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  min-width: 0;
+  /* Headroom inside the scroller for the lift, and for the dot below. */
+  padding: 16px 4px 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ins-logo-dock-track::-webkit-scrollbar { display: none; }
+.ins-logo-dock-item {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  border-radius: 26%;
+  background: none;
+  cursor: var(--ins-cursor-hand, pointer);
+  transform-origin: 50% 100%;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-logo-dock-item img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 26%;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.ins-logo-dock-item:hover { transform: translateY(-6px) scale(1.16); }
+.ins-logo-dock-item:hover + .ins-logo-dock-item,
+.ins-logo-dock-item:has(+ .ins-logo-dock-item:hover) { transform: translateY(-2px) scale(1.06); }
+.ins-logo-dock-item[aria-current='true'] { transform: translateY(-4px); }
+.ins-logo-dock-item[aria-current='true']:hover { transform: translateY(-6px) scale(1.16); }
+.ins-logo-dock-item::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 0.2s var(--ins-ease);
+}
+.ins-logo-dock-item[aria-current='true']::after { opacity: 1; }
+.ins-logo-dock-item:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+.ins-logo-dock-divider { flex: none; width: 1px; height: 32px; background: rgba(255, 255, 255, 0.18); }
+.ins-logo-dock-all {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  margin: 0 2px;
+  border: 0;
+  border-radius: 26%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: background var(--ins-fast) var(--ins-ease), transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-logo-dock-all:hover { background: rgba(255, 255, 255, 0.22); transform: translateY(-2px); }
+.ins-logo-dock-all:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+/* All logos: a home-screen grid of every app on the dark overlay, names in
+   soft white under each, the shown one ringed. */
+/* A deeper, blurrier backdrop here: the page's own text behind a grid of
+   tiles read as clutter between them. */
+.ins-logo-view.is-grid .ins-lightbox-backdrop { background: rgba(8, 9, 12, 0.94); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+/* As wide as the top bar: edge to edge with Back and Close, with some air
+   between the bar and the title. */
+.ins-logo-view.is-grid .ins-logo-view-dialog {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: calc(100dvh - clamp(12px, 3vw, 28px) - 64px);
+  align-items: stretch;
+  padding-top: 56px;
+}
+.ins-logo-grid-head { flex: none; }
+/* The grid's own scroll, faded at its top and bottom edges (a mask, so the
+   logos themselves fade into whatever is behind). Padded inside so a hover
+   lift or the shown logo's ring isn't clipped at an edge, and pulled out by
+   the same so the grid still lines up with Back and Close. */
+.ins-logo-grid-scroll {
+  flex: 1;
+  min-height: 0;
+  margin: 0 -8px;
+  padding: 12px 8px 72px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--ins-logo-fade-top), #000 calc(100% - 96px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--ins-logo-fade-top), #000 calc(100% - 96px), transparent 100%);
+  transition: --ins-logo-fade-top 0.25s var(--ins-ease);
+}
+/* The top fade eases in once the grid has scrolled, so the first row isn't
+   dimmed at rest. */
+@property --ins-logo-fade-top {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+.ins-logo-grid-scroll.is-scrolled { --ins-logo-fade-top: 64px; }
+.ins-logo-grid-scroll::-webkit-scrollbar { display: none; }
+/* Room at the top for Back and Close, which sit fixed in its corners; held
+   to the top (not centred) so the title and search stay put as a search
+   shortens the grid. */
+.ins-logo-view.is-grid {
+  align-items: flex-start;
+  /* The grid scrolls in its own area below, not the whole overlay. */
+  overflow: hidden;
+  padding: calc(clamp(12px, 3vw, 28px) + 64px) clamp(12px, 3vw, 28px) 0;
+}
+.ins-logo-grid-head { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; padding: 0 12px; }
+/* "Clear", beside the heading while a category or a search narrows the grid. */
+.ins-logo-grid-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px 0 9px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font: 500 13px/1 var(--font-manrope), Inter, sans-serif;
+  cursor: var(--ins-cursor-hand, pointer);
+  animation: insLogoGridIn 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+.ins-logo-grid-clear:hover { background: rgba(255, 255, 255, 0.18); }
+.ins-logo-grid-clear:focus-visible { outline: 2px solid #fff; outline-offset: 2px; box-shadow: none; }
+/* Level with .ins-lightbox-close: the same inset from the corner, the same 40px height. */
+.ins-logo-view-back {
+  position: fixed;
+  top: clamp(12px, 3vw, 28px);
+  left: clamp(12px, 3vw, 28px);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 16px 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font: 500 15px/1 var(--font-manrope), Inter, sans-serif;
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+.ins-logo-view-back:hover { background: rgba(255, 255, 255, 0.22); }
+.ins-logo-view-back:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.ins-logo-grid-title { margin: 0; color: #fff; font: 700 22px/1.2 var(--font-outfit), var(--font-inter), sans-serif; letter-spacing: var(--ins-tracking-display); }
+.ins-logo-grid-title span { margin-left: 6px; color: rgba(255, 255, 255, 0.5); font-weight: 500; }
+
+/* The search, centred in the top bar between Back and Close and as tall as
+   them; the category filter hangs off its right edge (absolute, below), so
+   it doesn't pull the search off centre. Its width leaves room on each side
+   for the category button and Close (40px each), 8px clear of each. */
+.ins-logo-grid-tools {
+  position: fixed;
+  top: clamp(12px, 3vw, 28px);
+  left: 50%;
+  z-index: 1;
+  display: flex;
+  width: min(440px, calc(100vw - 2 * clamp(12px, 3vw, 28px) - 192px));
+  transform: translateX(-50%);
+}
+/* The search: a pill in the overlay's glass; brighter edge while typing. */
+.ins-logo-grid-search {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+  transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease);
+}
+.ins-logo-grid-search:focus-within { border-color: rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.12); }
+.ins-logo-grid-search svg { flex: none; }
+.ins-logo-grid-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: #fff;
+  font: 500 15px/1 var(--font-manrope), Inter, sans-serif;
+}
+.ins-logo-grid-search input::placeholder { color: rgba(255, 255, 255, 0.45); }
+/* The pill's brighter edge shows focus; not the site's ring on the input inside it too. */
+.ins-logo-grid-search input:focus-visible { box-shadow: none; }
+.ins-logo-grid-search input::-webkit-search-cancel-button {
+  width: 16px;
+  height: 16px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M4 4l8 8M12 4l-8 8'/%3E%3C/svg%3E") center / contain no-repeat;
+  opacity: 0.6;
+  cursor: var(--ins-cursor-hand, pointer);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.ins-logo-grid-search input::-webkit-search-cancel-button:hover { opacity: 1; }
+/* The category filter: an icon button in the search's glass, brighter once
+   one is picked (the heading then names it), with a dark glass menu of
+   categories and their counts below. */
+.ins-logo-grid-category { position: absolute; top: 0; left: calc(100% + 8px); }
+.ins-logo-grid-category-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: background var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease);
+}
+.ins-logo-grid-category-btn:hover,
+.ins-logo-grid-category-btn[aria-expanded='true'] { background: rgba(255, 255, 255, 0.14); }
+.ins-logo-grid-category-btn.is-set { border-color: rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.16); color: #fff; }
+.ins-logo-grid-category-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; box-shadow: none; }
+
+.ins-logo-grid-category-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 230px;
+  max-height: min(360px, 60vh);
+  padding: 6px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(30, 30, 33, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  transform-origin: top right;
+  animation: insLogoMenuIn 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes insLogoMenuIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+.ins-logo-grid-category-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: rgba(255, 255, 255, 0.85);
+  font: 500 15px/1 var(--font-manrope), Inter, sans-serif;
+  text-align: left;
+  white-space: nowrap;
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+.ins-logo-grid-category-item:hover { background: rgba(255, 255, 255, 0.08); }
+.ins-logo-grid-category-item[aria-selected='true'] { background: rgba(255, 255, 255, 0.12); color: #fff; font-weight: 600; }
+.ins-logo-grid-category-item:focus-visible { outline: 2px solid #fff; outline-offset: -2px; box-shadow: none; }
+.ins-logo-grid-category-count { color: rgba(255, 255, 255, 0.45); font-size: 14px; font-weight: 500; }
+
+.ins-logo-grid-empty { margin: 8px 0 0; padding: 0 12px; color: rgba(255, 255, 255, 0.55); font: 500 15px/1.4 var(--font-manrope), Inter, sans-serif; }
+
+/* Ten columns on a wide screen, fewer as it narrows; each logo fills its
+   column (up to 140px), so a wide screen shows them larger. */
+.ins-logo-grid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 40px 20px;
+  margin: 0;
+  padding: 0 0 24px;
+  list-style: none;
+  animation: insLogoGridIn 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (max-width: 1199px) { .ins-logo-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
+@media (max-width: 899px) { .ins-logo-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 32px 16px; } }
+@keyframes insLogoGridIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.ins-logo-grid-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: var(--ins-cursor-hand, pointer);
+}
+/* The lift is on this wrapper: the theme turns transitions off on images. */
+.ins-logo-grid-art {
+  display: block;
+  border-radius: 26%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-logo-grid-cell { position: relative; --ins-logo-art-max: 140px; }
+.ins-logo-grid-art { width: 100%; max-width: var(--ins-logo-art-max); }
+.ins-logo-grid-art img { display: block; width: 100%; height: auto; aspect-ratio: 1; border-radius: 26%; }
+/* The lift is on the whole cell, so it holds while the pointer is on the
+   tile's corner buttons too. */
+.ins-logo-grid-cell:hover .ins-logo-grid-art { transform: translateY(-4px); box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45); }
+.ins-logo-grid-item:active .ins-logo-grid-art { transform: scale(0.96); }
+.ins-logo-grid-item[aria-current='true'] .ins-logo-grid-art { outline: 2px solid #fff; outline-offset: 4px; }
+.ins-logo-grid-item:focus-visible { outline: none; }
+.ins-logo-grid-item:focus-visible .ins-logo-grid-art { outline: 2px solid #fff; outline-offset: 4px; }
+.ins-logo-grid-name {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: rgba(255, 255, 255, 0.7);
+  font: 500 14px/1.4 var(--font-manrope), Inter, sans-serif;
+  text-align: center;
+  transition: color var(--ins-fast) var(--ins-ease);
+}
+.ins-logo-grid-cell:hover .ins-logo-grid-name,
+.ins-logo-grid-item[aria-current='true'] .ins-logo-grid-name { color: #fff; }
+
+/* A tile's Copy / Download: small dark glass buttons over the logo's top
+   right corner (the box below is the logo's own: centred, as wide as it),
+   shown on hover or keyboard focus. Touch screens open the logo instead. */
+.ins-logo-grid-actions {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  width: min(100%, var(--ins-logo-art-max));
+  /* More room at the top and right, clear of the logo's curved corner. */
+  padding: 12px 12px 7px 7px;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 0.18s var(--ins-ease), transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+.ins-logo-grid-cell:hover .ins-logo-grid-actions { transform: translate(-50%, -4px); }
+.ins-logo-grid-cell:hover .ins-logo-grid-actions,
+.ins-logo-grid-cell:focus-within .ins-logo-grid-actions { opacity: 1; pointer-events: auto; }
+.ins-logo-grid-actions button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  background: rgba(10, 10, 12, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+.ins-logo-grid-actions button:hover { background: rgba(10, 10, 12, 0.85); }
+.ins-logo-grid-actions button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; box-shadow: none; }
+.ins-logo-grid-actions img { display: block; filter: brightness(0) invert(1); }
+@media (hover: none) { .ins-logo-grid-actions { display: none; } }
+
+/* Loading: the tiles' own boxes, softly pulsing on the dark overlay. */
+.ins-logo-grid-skel,
+.ins-logo-grid-skel-name { background: rgba(255, 255, 255, 0.07); animation: insLogoSkel 1.4s ease-in-out infinite; }
+.ins-logo-grid-art.ins-logo-grid-skel { aspect-ratio: 1; box-shadow: none; }
+.ins-logo-grid-name.ins-logo-grid-skel-name { display: block; width: 56%; height: 14px; margin: 2.8px 0; border-radius: 7px; }
+@keyframes insLogoSkel { 50% { opacity: 0.5; } }
+
+@media (max-width: 640px) {
+  .ins-logo-view:not(.is-grid) { padding-bottom: 112px; }
+  .ins-logo-dock-item, .ins-logo-dock-all { width: 40px; height: 40px; }
+  .ins-logo-dock-track { gap: 8px; }
+  .ins-logo-grid-head { margin-bottom: 28px; }
+  .ins-logo-grid-search { padding: 0 12px; }
+  .ins-logo-view.is-grid .ins-logo-view-dialog { padding-top: 32px; }
+  .ins-logo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 14px; }
+  .ins-logo-grid-cell { --ins-logo-art-max: 88px; }
+  .ins-logo-grid-name { font-size: 13px; }
+}
+
+/* Status messages ("Logo copied as png") above the overlay, not under it. */
+body:has(.ins-logo-view) .ins-toast-host { z-index: 130; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-logo-trigger,
+  .ins-logo-trigger-hover,
+  .ins-masthead-brand .ins-rank,
+  .ins-logo-dock-item,
+  .ins-logo-dock-all,
+  .ins-logo-grid-art { transition: none; }
+  .ins-logo-dock, .ins-logo-grid, .ins-logo-grid-clear, .ins-logo-grid-skel, .ins-logo-grid-skel-name { animation: none; }
+  .ins-logo-dock-item:hover,
+  .ins-logo-dock-item:hover + .ins-logo-dock-item,
+  .ins-logo-dock-item:has(+ .ins-logo-dock-item:hover),
+  .ins-logo-dock-item[aria-current='true']:hover,
+  .ins-logo-grid-cell:hover .ins-logo-grid-art,
+  .ins-logo-grid-cell:hover .ins-logo-grid-actions { transform: translateX(-50%); }
+  .ins-logo-grid-cell:hover .ins-logo-grid-art { transform: none; }
+  .ins-logo-trigger:hover ~ .ins-rank,
+  .ins-logo-trigger:focus-visible ~ .ins-rank { transform: none; }
+  .ins-logo-trigger:hover,
+  .ins-logo-trigger:active { transform: none; }
+}
