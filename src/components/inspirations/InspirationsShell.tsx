@@ -9,6 +9,8 @@ import { GuestImageGuard } from './GuestImageGuard';
 import { Header } from './Header';
 import { ScreenPreviewOverlay } from './ScreenPreviewModal';
 import { ToastProvider } from './Toast';
+import { MoeiCompanion } from './moeis/MoeiCompanion';
+import { MoeiStudioHost } from './moeis/MoeiStudio';
 import { AdminDrawerOverlay } from './admin/AdminDrawer';
 import { AdminChatbot } from './admin/AdminChatbot';
 import { UserChatbot } from './UserChatbot';
@@ -53,6 +55,9 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
         <GuestDownloadNotice />
         {/* The Motvin-style "are you sure" box (askConfirm). Renders nothing until asked. */}
         <ConfirmHost />
+        {/* Motvin Moeis: the moei studio (opened from "My moei") and the moei itself, when it's out. */}
+        <MoeiStudioHost />
+        <MoeiCompanion />
         {/* For a guest, also stops the browser's own save / copy / drag of a
             screenshot or logo (see GuestImageGuard). Renders nothing. */}
         <GuestImageGuard />

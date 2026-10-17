@@ -10,6 +10,7 @@ import { useIsLibraryAdmin } from './useIsLibraryAdmin';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { ADMIN_PARAM } from './admin/AdminDrawer';
 import { RequestAppModal } from './RequestAppModal';
+import { openMoeiStudio } from '@/lib/inspirations/moei';
 import { useToast } from './Toast';
 import { useGoToLogin } from './useGoToLogin';
 
@@ -180,6 +181,22 @@ export function ProfileMenu() {
                     <img src={`${ICON}/profile-arrow.svg`} alt="" width={12} height={12} />
                   </Link>
                 )}
+                <button
+                  type="button"
+                  className="ins-pmenu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpen(false);
+                    openMoeiStudio();
+                  }}
+                >
+                  <span className="ins-pmenu-lead">
+                    <img src={`${ICON}/my-moei.svg`} alt="" width={18} height={18} />
+                    My moei
+                    <span className="ins-pmenu-new">New</span>
+                  </span>
+                  <img src={`${ICON}/profile-arrow.svg`} alt="" width={12} height={12} />
+                </button>
                 {(
                   <button
                     type="button"
@@ -193,7 +210,6 @@ export function ProfileMenu() {
                     <span className="ins-pmenu-lead">
                       <img src={`${ICON}/profile-app-request.svg`} alt="" width={18} height={18} />
                       Request apps
-                      <span className="ins-pmenu-new">New</span>
                     </span>
                     <img src={`${ICON}/profile-arrow.svg`} alt="" width={12} height={12} />
                   </button>
