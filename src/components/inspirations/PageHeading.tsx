@@ -9,13 +9,16 @@ export function PageHeading({
   title,
   eyebrow,
   actions,
+  keep = false,
 }: {
   title: ReactNode;
   eyebrow?: ReactNode;
   actions?: ReactNode;
+  /** Stays on narrower windows, where page headings are otherwise hidden (its actions are needed there). */
+  keep?: boolean;
 }) {
   return (
-    <header className="ins-pagehead">
+    <header className={`ins-pagehead${keep ? ' ins-pagehead--keep' : ''}`}>
       <div className="ins-pagehead-text">
         {eyebrow && <div className="ins-eyebrow">{eyebrow}</div>}
         <h1 className="ins-title">{title}</h1>

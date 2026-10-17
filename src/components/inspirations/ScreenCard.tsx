@@ -10,6 +10,7 @@ import { AppLogo } from './AppLogo';
 import { SCREEN_PARAM } from './ScreenPreviewModal';
 import { Screenshot } from './Screenshot';
 import { useScreenContextMenu } from './useScreenContextMenu';
+import { CloseIcon } from './Icons';
 
 /** A plain left-click with no modifier opens the preview modal in place;
  * anything else (middle-click, cmd/ctrl-click, shift-click) is the visitor
@@ -138,7 +139,7 @@ function ScreenCardImpl({
               onRemove();
             }}
           >
-            <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={16} height={16} />
+            <CloseIcon size={14} />
           </button>
         )}
         <div className="ins-card-inset" onContextMenu={shotMenu.onContextMenu}>

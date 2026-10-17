@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { App, Collection, SavedItemType } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
+import { askConfirm } from './ConfirmDialog';
 import { useLibrary } from './useLibrary';
 
 /**
@@ -26,14 +27,21 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
     (total, item) => ({ ...total, [item.type]: total[item.type] + 1 }),
     { screen: 0, app: 0, flow: 0, pattern: 0, component: 0, icon: 0 },
   );
+  // Apps, Screens and Flows always; UI elements and patterns once there are
+  // some, so nothing saved goes uncounted.
   const details = [
     `${counts.app} ${counts.app === 1 ? 'App' : 'Apps'}`,
     `${counts.screen} ${counts.screen === 1 ? 'Screen' : 'Screens'}`,
     `${counts.flow} ${counts.flow === 1 ? 'Flow' : 'Flows'}`,
+    ...(counts.component ? [`${counts.component} ${counts.component === 1 ? 'UI element' : 'UI elements'}`] : []),
+    ...(counts.pattern ? [`${counts.pattern} ${counts.pattern === 1 ? 'Pattern' : 'Patterns'}`] : []),
   ];
 
   const commit = () => {
-    renameCollection(collection.id, name);
+    if (!editing) return;
+    const next = name.trim();
+    if (next && next !== collection.name) renameCollection(collection.id, next);
+    else setName(collection.name);
     setEditing(false);
   };
 
@@ -51,22 +59,47 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
         <span className="ins-collection-cover-fade" />
       </Link>
       <div className="ins-collection-meta">
-        {editing ? (
-          <form
-            className="ins-collection-rename"
-            onSubmit={(e) => {
-              e.preventDefault();
-              commit();
-            }}
-          >
-            <input className="ins-input" value={name} onChange={(e) => setName(e.target.value)} autoFocus aria-label="Collection name" maxLength={48} onBlur={commit} />
-          </form>
-        ) : (
-          <div className="ins-collection-text">
-            <p className="ins-collection-name">{collection.name}</p>
-            <p className="ins-collection-sub">{details.join(' · ')}</p>
-          </div>
-        )}
+        {/* Renaming edits the name where it stands, in its own type: no box or
+            ring, the counts line kept under it. Enter or leaving it saves;
+            Escape puts the old name back. */}
+        <div className="ins-collection-text">
+          {editing ? (
+            <form
+              className="ins-collection-rename"
+              onSubmit={(e) => {
+                e.preventDefault();
+                commit();
+              }}
+            >
+              <input
+                className="ins-collection-name ins-collection-name-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onFocus={(e) => {
+                  // A blinking cursor after the name, nothing selected.
+                  const end = e.currentTarget.value.length;
+                  e.currentTarget.setSelectionRange(end, end);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setName(collection.name);
+                    setEditing(false);
+                  }
+                }}
+                autoFocus
+                aria-label="Collection name"
+                maxLength={48}
+                onBlur={commit}
+              />
+            </form>
+          ) : (
+            <p className="ins-collection-name" title={collection.name}>
+              {collection.name}
+            </p>
+          )}
+          <p className="ins-collection-sub">{details.join(' · ')}</p>
+        </div>
         <div className="ins-collection-actions">
           <button type="button" className="ins-iconbtn ins-iconbtn--plain" aria-label="Rename collection" onClick={() => setEditing(true)}>
             <img src="/ASSET/Icons/Motvin/colletion-edit.svg" alt="" width={20} height={20} />
@@ -76,7 +109,13 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
             className="ins-iconbtn ins-iconbtn--plain"
             aria-label="Delete collection"
             onClick={() => {
-              if (window.confirm(`Delete "${collection.name}"?`)) deleteCollection(collection.id);
+              void askConfirm({
+                title: `Delete “${collection.name}”?`,
+                description: 'This will permanently delete the collection and everything saved in it. This can’t be undone.',
+                confirmLabel: 'Delete collection',
+              }).then((ok) => {
+                if (ok) deleteCollection(collection.id);
+              });
             }}
           >
             <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={20} height={20} />

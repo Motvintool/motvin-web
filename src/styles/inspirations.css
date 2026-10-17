@@ -31,6 +31,13 @@
      type set at body tracking reads loose.
 */
 
+:root {
+  /* Behind every popup, panel and drawer: a plain dim, no blur. On :root,
+     as some overlays (the screen and flow previews) render outside
+     .ins-root and .ins-portal. */
+  --ins-backdrop: rgba(11, 12, 14, 0.32);
+}
+
 .ins-root {
   --ins-max: 1760px;
   --ins-gutter: clamp(20px, 3vw, 56px);
@@ -683,8 +690,9 @@ body {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.12);
-  backdrop-filter: blur(11px);
+  /* A plain dim, no blur: the same backdrop as the chat guide's
+     (.ins-guide-backdrop), so every popup sits on the page the same way. */
+  background: var(--ins-backdrop);
 }
 
 .ins-header-center .ins-search-modal,
@@ -4846,6 +4854,8 @@ select.ins-input {
   background: #f2f2f2;
   color: #000;
 }
+.ins-collections-create-ok:disabled { opacity: 0.35; cursor: default; }
+.ins-collections-create-ok:disabled:hover { opacity: 0.35; }
 
 .ins-collection-grid {
   display: grid;
@@ -4983,6 +4993,7 @@ select.ins-input {
 }
 
 .ins-collection-meta {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -4995,8 +5006,24 @@ select.ins-input {
 }
 
 .ins-collection-rename {
-  flex: 1;
+  margin: 0;
 }
+/* The name, editable in place: the same text, with nothing around it. */
+.ins-collection-name-input {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: inherit;
+  outline: none;
+  box-shadow: none;
+  caret-color: #121212;
+}
+.ins-collection-name-input:focus,
+.ins-collection-name-input:focus-visible { outline: none !important; box-shadow: none !important; }
 
 .ins-collection-name {
   color: #121212;
@@ -5016,9 +5043,18 @@ select.ins-input {
 }
 
 .ins-collection-actions {
+  /* Laid over the right end of the name row rather than beside it, so the
+     name uses the card's full width until the buttons show on hover. */
+  position: absolute;
+  top: 50%;
+  right: 12px;
   display: flex;
   gap: 8px;
+  padding-left: 28px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), #fff 28px);
   opacity: 0;
+  transform: translateY(-50%);
+  pointer-events: none;
   transition: opacity var(--ins-fast) var(--ins-ease);
 }
 
@@ -5033,7 +5069,10 @@ select.ins-input {
 .ins-collection-card:hover .ins-collection-actions,
 .ins-collection-card:focus-within .ins-collection-actions {
   opacity: 1;
+  pointer-events: auto;
 }
+/* While the name is being edited, the buttons stay beside it, not over it. */
+.ins-collection-meta:has(.ins-collection-rename) { padding-right: 116px; }
 
 .ins-starters {
   margin-top: 8px;
@@ -5578,7 +5617,6 @@ select.ins-input {
   position: fixed;
   inset: 0;
   background: rgba(8, 9, 12, 0.86);
-  backdrop-filter: blur(3px);
   animation: insFade 140ms var(--ins-ease);
 }
 
@@ -6059,29 +6097,75 @@ select.ins-input {
   right: 12px;
   width: 32px;
   height: 32px;
+  padding: 0;
+  border: none;
   border-radius: 100px;
-  background: rgba(0, 0, 0, 0.5);
+  /* A frosted white ×, the modals' own close in miniature, with a hairline
+     ring so it holds its edge on a light screenshot. It comes in on the
+     card's hover with a small rise. */
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 0 0 1px rgba(20, 20, 20, 0.06), 0 4px 12px rgba(20, 20, 20, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: #3a3a3a;
   opacity: 0;
-  transition: opacity var(--ins-fast) var(--ins-ease), background-color var(--ins-fast) var(--ins-ease);
+  transform: scale(0.8) rotate(-45deg);
+  transition:
+    opacity 180ms var(--ins-ease),
+    transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 160ms var(--ins-ease),
+    color 160ms var(--ins-ease),
+    box-shadow 160ms var(--ins-ease);
   z-index: 10;
   cursor: var(--ins-cursor-hand, pointer);
-  border: none;
+}
+.ins-card-remove-btn svg { width: 46%; height: 46%; stroke-width: 2.6; }
+/* On a card's screenshot, the × takes the select circle's spot (top left,
+   .ins-card-select-ring) at its size, so it sits on the phone's status bar
+   as the circle does in Explore. */
+.ins-card-shot > .ins-card-remove-btn {
+  top: clamp(8px, 2.36%, 16px);
+  right: auto;
+  left: clamp(8px, 4.6%, 16px);
+  width: clamp(24px, 9.83%, 34px);
+  height: auto;
+  aspect-ratio: 1;
+}
+/* Matching the circle's own offsets: further in on an app card (Explore's
+   AppCard grid), closer on a screen card in a shot panel. */
+.ins-app-grid .ins-card-shot > .ins-card-remove-btn {
+  top: clamp(10px, 4.75%, 32px);
+  left: clamp(10px, 9.25%, 32px);
+}
+.ins-shot-panel .ins-card-shot > .ins-card-remove-btn {
+  top: clamp(8px, 1.94%, 16px);
+  left: clamp(8px, 4.2%, 16px);
 }
 
 .ins-card:hover .ins-card-remove-btn,
 .ins-pattern-card:hover + .ins-card-remove-btn,
 .ins-flow-card:hover + .ins-card-remove-btn,
 .ins-element-row:hover + .ins-card-remove-btn,
-.ins-card-remove-btn:hover {
+.ins-card-remove-btn:hover,
+.ins-card-remove-btn:focus-visible {
   opacity: 1;
+  transform: scale(1);
 }
 
+/* On it: red, for removing; pressed, it sinks. */
 .ins-card-remove-btn:hover {
-  background-color: rgba(0, 0, 0, 0.8);
+  background-color: #e5484d;
+  color: #fff;
+  transform: scale(1.06);
+}
+.ins-card-remove-btn:active { transform: scale(0.94); transition-duration: 80ms; }
+.ins-card-remove-btn:focus-visible { outline: 2px solid #141414; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .ins-card-remove-btn { transition: opacity 150ms ease; transform: none; }
+  .ins-card-remove-btn:hover, .ins-card-remove-btn:active { transform: none; }
 }
 
 .ins-float-collection-item:hover {
@@ -6401,7 +6485,7 @@ select.ins-input {
 
 /* The library admin as a slide-over, opened from ProfileMenu's "Admin" item
    instead of a full page navigation — a tool you dip into from wherever you
-   are, not a place you go. Same dim/blur backdrop language as
+   are, not a place you go. Same dim backdrop as
    .ins-search-overlay, anchored to the right edge instead of centered. */
 .ins-admin-drawer-overlay {
   position: fixed;
@@ -6409,8 +6493,7 @@ select.ins-input {
   z-index: 100;
   display: flex;
   justify-content: flex-end;
-  background: rgba(0, 0, 0, 0.32);
-  backdrop-filter: blur(6px);
+  background: var(--ins-backdrop);
 }
 
 .ins-admin-drawer {
@@ -6480,8 +6563,7 @@ select.ins-input {
    drawer, so the shared controls elsewhere in Inspirations don't change. */
 .ins-admin-drawer-overlay {
   padding: 12px;
-  background: rgba(10, 10, 12, 0.28);
-  backdrop-filter: blur(10px);
+  background: var(--ins-backdrop);
 }
 
 .ins-admin-drawer {
@@ -7769,6 +7851,11 @@ select.ins-input {
   .ins-explore-taxonomy {
     display: none;
   }
+  /* Except Collections': its New collection button is the only way to make
+     a board there. */
+  .ins-pagehead.ins-pagehead--keep {
+    display: flex;
+  }
 }
 
 @media (max-width: 899px) {
@@ -7957,7 +8044,11 @@ select.ins-input {
   }
 
   .ins-collection-actions {
+    position: static;
     margin-left: auto;
+    padding-left: 0;
+    background: none;
+    transform: none;
   }
 
   .ins-title {
@@ -9658,7 +9749,7 @@ select.ins-input {
   position: fixed;
   inset: 0;
   z-index: 80;
-  background: rgba(11, 12, 14, 0.32);
+  background: var(--ins-backdrop);
   animation: insFadeIn 160ms var(--ins-ease);
 }
 
@@ -12060,7 +12151,7 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 
 /* Phones: the search is a full page, but the request popup stays a card. */
 @media (max-width: 759px) {
-  .ins-search-overlay:has(.ins-request) { padding: 20px; place-items: center; background: rgba(20, 20, 20, 0.28); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .ins-search-overlay:has(.ins-request) { padding: 20px; place-items: center; background: var(--ins-backdrop); }
   .ins-search-overlay .ins-search-modal.ins-request {
     display: block; width: 100%; max-width: 420px; height: auto; max-height: calc(100dvh - 40px); align-self: center;
     border-radius: 28px; overflow: visible;
@@ -13241,9 +13332,9 @@ button.ins-app-icon:hover .ins-app-icon-name,
 
 /* All logos: a home-screen grid of every app on the dark overlay, names in
    soft white under each, the shown one ringed. */
-/* A deeper, blurrier backdrop here: the page's own text behind a grid of
-   tiles read as clutter between them. */
-.ins-logo-view.is-grid .ins-lightbox-backdrop { background: rgba(8, 9, 12, 0.94); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+/* A deeper backdrop here: the page's own text behind a grid of tiles read
+   as clutter between them. */
+.ins-logo-view.is-grid .ins-lightbox-backdrop { background: rgba(8, 9, 12, 0.94); }
 /* As wide as the top bar: edge to edge with Back and Close, with some air
    between the bar and the title. */
 .ins-logo-view.is-grid .ins-logo-view-dialog {
@@ -13791,4 +13882,52 @@ html.ins-bat-on .ins-search-bat { display: block; }
   .ins-search-pile-art { transition: none; }
   .ins-search-pile-item:hover .ins-search-pile-art,
   .ins-search-pile-item.is-dragging .ins-search-pile-art { transform: none; }
+}
+
+
+/* =========================================================
+   CONFIRM (ConfirmDialog) — the "are you sure" box: a white card on the
+   frosted backdrop, question and detail left-aligned, the modals' floating ×
+   on its corner,
+   Cancel (outlined) beside a soft red confirm, bottom right.
+   ========================================================= */
+.ins-search-overlay .ins-search-modal.ins-confirm {
+  width: min(440px, calc(100vw - 40px));
+  height: auto;
+  overflow: visible;
+  padding: 26px 24px 20px 28px;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 20px 48px rgba(20, 20, 20, 0.08), 0 0 0 1px rgba(20, 20, 20, 0.03);
+  animation: insConfirmIn 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Near the top of the window rather than its middle: 160px down. */
+.ins-confirm-overlay { z-index: 140; place-items: start center; padding-top: 160px; animation: insFadeIn 160ms ease both; }
+.ins-confirm-title {
+  margin: 0;
+  padding-right: 12px;
+  color: #141414;
+  font: 700 22px/1.25 var(--font-outfit), var(--font-inter), sans-serif;
+  letter-spacing: var(--ins-tracking-display);
+  overflow-wrap: anywhere;
+}
+.ins-confirm-desc { margin: 10px 0 0; color: var(--ins-sub); font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.ins-confirm-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.ins-search-modal .ins-confirm-cancel,
+.ins-search-modal .ins-confirm-ok {
+  padding: 11px 22px;
+  border-radius: 100px;
+  font-size: 15px;
+  font-weight: 600;
+  transition: background 160ms, border-color 160ms, color 160ms;
+}
+.ins-search-modal .ins-confirm-cancel { border: 1px solid #e2e2e2; background: #fff; color: #141414; }
+.ins-search-modal .ins-confirm-cancel:hover { background: #f5f5f5; border-color: #d6d6d6; }
+.ins-search-modal .ins-confirm-ok { border: 1px solid transparent; background: #fdecec; color: #d93a3f; }
+.ins-search-modal .ins-confirm-ok:hover { background: #fadada; }
+.ins-search-modal .ins-confirm-cancel:focus-visible,
+.ins-search-modal .ins-confirm-ok:focus-visible { outline: 2px solid #141414; outline-offset: 2px; }
+@keyframes insConfirmIn { from { opacity: 0; transform: translateY(8px) scale(0.97); } }
+@media (prefers-reduced-motion: reduce) {
+  .ins-search-overlay .ins-search-modal.ins-confirm, .ins-confirm-overlay { animation: none; }
 }

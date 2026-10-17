@@ -3,6 +3,7 @@
 import { Suspense, type ReactNode } from 'react';
 import { FlowPreview } from './FlowPreview';
 import { GuestRequestsNotice } from './GuestRequestsNotice';
+import { ConfirmHost } from './ConfirmDialog';
 import { GuestDownloadNotice } from './GuestDownloadNotice';
 import { GuestImageGuard } from './GuestImageGuard';
 import { Header } from './Header';
@@ -54,6 +55,8 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
         <GuestRequestsNotice />
         {/* Tells a guest downloads need an account (see useDownloadGate). */}
         <GuestDownloadNotice />
+        {/* The Motvin-style "are you sure" box (askConfirm). Renders nothing until asked. */}
+        <ConfirmHost />
         {/* For a guest, also stops the browser's own save / copy / drag of a
             screenshot or logo (see GuestImageGuard). Renders nothing. */}
         <GuestImageGuard />

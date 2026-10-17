@@ -14,7 +14,8 @@ import { CollectionCard } from '../CollectionCard';
 import { EmptyState } from '../EmptyState';
 import { FlowCard } from '../FlowCard';
 import { FloatCollectionBar } from '../FloatCollectionBar';
-import { BookmarkIcon } from '../Icons';
+import { askConfirm } from '../ConfirmDialog';
+import { BookmarkIcon, CloseIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
 import { PatternCard } from '../PatternCard';
 import { ScreenGrid } from '../ScreenGrid';
@@ -130,6 +131,7 @@ export function SavedView() {
     return (
       <section>
         <PageHeading
+          keep
           title="Collections"
           actions={
             creatingBoard ? (
@@ -142,9 +144,27 @@ export function SavedView() {
                   autoFocus
                   aria-label="New collection name"
                   maxLength={48}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setNewBoardName('');
+                      setCreatingBoard(false);
+                    }
+                  }}
                 />
-                <button type="button" className="ins-collections-cancel" onClick={() => setCreatingBoard(false)}>
+                <button
+                  type="button"
+                  className="ins-collections-cancel"
+                  onClick={() => {
+                    setNewBoardName('');
+                    setCreatingBoard(false);
+                  }}
+                >
                   Cancel
+                </button>
+                {/* Enter works too; this makes the way to finish plain. */}
+                <button type="submit" className="ins-collections-new ins-collections-create-ok" disabled={!newBoardName.trim()}>
+                  Create
                 </button>
               </form>
             ) : (
@@ -198,10 +218,15 @@ export function SavedView() {
           type="button"
           className="ins-collection-remove"
           onClick={() => {
-            if (window.confirm(`Remove "${collection.name}"?`)) {
+            void askConfirm({
+              title: `Remove “${collection.name}”?`,
+              description: 'This will permanently remove the collection and everything saved in it. This can’t be undone.',
+              confirmLabel: 'Remove collection',
+            }).then((ok) => {
+              if (!ok) return;
               deleteCollection(collection.id);
               router.push(INSPIRATIONS_ROUTES.collections);
-            }
+            });
           }}
         >
           <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={20} height={20} />
@@ -227,6 +252,7 @@ export function SavedView() {
 
       {total === 0 ? (
         <EmptyState
+          play
           icon={<BookmarkIcon size={22} />}
           title="This collection is empty"
           description="Hover any screen and press Save, or add it to a collection."
@@ -242,11 +268,16 @@ export function SavedView() {
                 showApp={false}
                 showMeta={false}
                 onRemoveItem={(id) => {
-                  if (window.confirm('Remove this screen?')) {
-                    removeFromCollection(collection.id, { type: 'screen', id });
-                  }
+                  void askConfirm({ title: 'Remove this screen?', description: `It will be removed from “${collection.name}”.` }).then((ok) => {
+                    if (ok) removeFromCollection(collection.id, { type: 'screen', id });
+                  });
                 }}
-                empty={<EmptyState title="No saved screens" />}
+                empty={<EmptyState
+                    play
+                    title="No saved screens"
+                    description="Hover any screen and press Save to keep it here."
+                    action={{ label: 'Explore screens', href: INSPIRATIONS_ROUTES.screens }}
+                  />}
               />
             </section>
           )}
@@ -254,7 +285,12 @@ export function SavedView() {
           {tab === 'flows' && (
             <section className="ins-result-section">
               {(flows ?? []).length === 0 ? (
-                <EmptyState title="No saved flows" />
+                <EmptyState
+                  play
+                  title="No saved flows"
+                  description="Save a flow from any app to keep it here."
+                  action={{ label: 'Explore flows', href: INSPIRATIONS_ROUTES.flows }}
+                />
               ) : (
                 <div className="ins-flow-grid">
                   {(flows ?? []).map(({ flow, screens: flowScreens }) => (
@@ -267,12 +303,12 @@ export function SavedView() {
                         style={{ top: 12, right: 12, zIndex: 10 }}
                         onClick={(e) => {
                           e.preventDefault();
-                          if (window.confirm(`Remove "${flow.name}"?`)) {
-                            removeFromCollection(collection.id, { type: 'flow', id: flow.id });
-                          }
+                          void askConfirm({ title: `Remove “${flow.name}”?`, description: `It will be removed from “${collection.name}”.` }).then((ok) => {
+                            if (ok) removeFromCollection(collection.id, { type: 'flow', id: flow.id });
+                          });
                         }}
                       >
-                        <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={16} height={16} />
+                        <CloseIcon size={14} />
                       </button>
                     </div>
                   ))}
@@ -284,7 +320,12 @@ export function SavedView() {
           {tab === 'patterns' && (
             <section className="ins-result-section">
               {patterns.length === 0 ? (
-                <EmptyState title="No saved patterns" />
+                <EmptyState
+                  play
+                  title="No saved patterns"
+                  description="Save a pattern to keep its examples here."
+                  action={{ label: 'Explore patterns', href: INSPIRATIONS_ROUTES.patterns }}
+                />
               ) : (
                 <div className="ins-pattern-grid-wrap">
                   {patterns.map((p) => (
@@ -297,12 +338,12 @@ export function SavedView() {
                         style={{ top: 12, right: 12, zIndex: 10 }}
                         onClick={(e) => {
                           e.preventDefault();
-                          if (window.confirm(`Remove "${p.name}"?`)) {
-                            removeFromCollection(collection.id, { type: 'pattern', id: p.id });
-                          }
+                          void askConfirm({ title: `Remove “${p.name}”?`, description: `It will be removed from “${collection.name}”.` }).then((ok) => {
+                            if (ok) removeFromCollection(collection.id, { type: 'pattern', id: p.id });
+                          });
                         }}
                       >
-                        <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={16} height={16} />
+                        <CloseIcon size={14} />
                       </button>
                     </div>
                   ))}
@@ -314,7 +355,12 @@ export function SavedView() {
           {tab === 'components' && (
             <section className="ins-result-section">
               {components.length === 0 ? (
-                <EmptyState title="No saved components" />
+                <EmptyState
+                  play
+                  title="No saved components"
+                  description="Save a UI element from any screen to keep it here."
+                  action={{ label: 'Explore UI elements', href: INSPIRATIONS_ROUTES.uiElements }}
+                />
               ) : (
                 <div className="ins-element-list">
                   {components.map((c) => {
@@ -345,12 +391,12 @@ export function SavedView() {
                           style={{ top: '50%', right: 12, transform: 'translateY(-50%)', zIndex: 10, width: 28, height: 28 }}
                           onClick={(e) => {
                             e.preventDefault();
-                            if (window.confirm(`Remove UI Element "${elementLabel(kind)}"?`)) {
-                              removeFromCollection(collection.id, { type: 'component', id: c.id });
-                            }
+                            void askConfirm({ title: `Remove “${elementLabel(kind)}”?`, description: `This UI element will be removed from “${collection.name}”.` }).then((ok) => {
+                              if (ok) removeFromCollection(collection.id, { type: 'component', id: c.id });
+                            });
                           }}
                         >
-                          <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={14} height={14} />
+                          <CloseIcon size={14} />
                         </button>
                       </div>
                     );
@@ -363,24 +409,34 @@ export function SavedView() {
           {tab === 'apps' && (
             <section className="ins-result-section">
               {savedApps.length === 0 ? (
-                <EmptyState title="No saved apps" />
+                <EmptyState
+                  play
+                  title="No saved apps"
+                  description="Hover any app and press Save to keep it here."
+                  action={{ label: 'Explore apps', href: INSPIRATIONS_ROUTES.apps }}
+                />
               ) : appPreviewsLoading ? (
                 <div className="ins-grid" aria-busy="true" />
               ) : (
                 <>
-                  <div className="ins-grid" role="list">
-                    {savedApps.map((app) => (
-                      <AppCard
-                        key={app.id}
-                        app={app}
-                        previewScreens={appPreviews?.get(app.id)}
-                        onRemove={() => {
-                          if (window.confirm(`Remove "${app.name}"?`)) {
-                            removeFromCollection(collection.id, { type: 'app', id: app.id });
-                          }
-                        }}
-                      />
-                    ))}
+                  {/* Explore's app grid inside Explore's own scope (.ins-explore-view:
+                      no dim on hover, its offsets), so a saved app is the very
+                      card Explore shows, with the × in its select circle's spot. */}
+                  <div className="ins-explore-view">
+                    <div className="ins-grid ins-app-grid" role="list">
+                      {savedApps.map((app) => (
+                        <AppCard
+                          key={app.id}
+                          app={app}
+                          previewScreens={appPreviews?.get(app.id)}
+                          onRemove={() => {
+                            void askConfirm({ title: `Remove “${app.name}”?`, description: `It will be removed from “${collection.name}”.` }).then((ok) => {
+                              if (ok) removeFromCollection(collection.id, { type: 'app', id: app.id });
+                            });
+                          }}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </>
               )}

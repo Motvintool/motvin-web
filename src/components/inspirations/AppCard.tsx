@@ -13,6 +13,7 @@ import { useSiblingCycle } from './useSiblingCycle';
 import { useToast } from './Toast';
 import { useDownloadGate } from './useDownloadGate';
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { CloseIcon } from './Icons';
 
 const imgSaveRight = "/ASSET/Icons/Motvin/save-right.svg";
 const imgDownloadPng = "/ASSET/Icons/Motvin/download-png.svg";
@@ -260,7 +261,7 @@ export function AppCard({
               onRemove();
             }}
           >
-            <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={16} height={16} />
+            <CloseIcon size={14} />
           </button>
         )}
         <div className="ins-card-inset" onContextMenu={handleContextMenu}>
