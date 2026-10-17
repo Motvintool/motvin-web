@@ -21,7 +21,8 @@ import { FLOW_CATEGORY_PRESETS, isDesktopPlatform, type App, type Flow, type Pat
 /** A button: a link to go to, or (with `ask`) a follow-up question to send as if typed. */
 export type NavTarget = { label: string; hint: string; href: string; iconSrc?: string; ask?: string };
 /** A card under an answer: one thing's facts, or (with `columns`/`rows`) a side-by-side comparison. */
-export type NavCard = { title: string; iconSrc?: string; facts: string[]; href?: string; columns?: string[]; rows?: { label: string; values: string[] }[] };
+/** A comparison's apps head its columns; `lead` in a row is the column with the most, when one alone has it. */
+export type NavCard = { title: string; iconSrc?: string; facts: string[]; href?: string; columns?: string[]; apps?: { name: string; iconSrc?: string; href: string; subtitle: string }[]; rows?: { label: string; values: string[]; lead?: number }[] };
 /** Something the guide may do for the visitor, once they confirm it. */
 export type GuideAction = { kind: 'save'; item: { type: SavedItemType; id: string }; label: string } | { kind: 'copy'; href: string; label: string };
 export type ReplyKind = 'nav' | 'answer' | 'clarify' | 'fallback' | 'smalltalk' | 'error' | 'action';
@@ -250,26 +251,46 @@ function answerRanking(list: App[], ranking: Ranking, scopeLabel: string | null,
   return { text: sentence(`${lead}${tail}.`), targets: appResults(ordered.slice(0, 3)), app: first, results: appResults(ordered) };
 }
 
-/** Two or three apps side by side: the sentence the chat shows, and a card with the numbers lined up. */
+/**
+ * Two or three apps side by side: a sentence on who has more (the card has
+ * the numbers, so the sentence doesn't repeat them all), and a card with the
+ * apps heading the columns and the numbers lined up under them.
+ */
 function compareApps(list: App[]): NavReply {
   const shown = list.slice(0, 3);
-  const facts = (app: App) => `${app.name} has ${plural(app.screenCount, 'screen')} and ${plural(app.flowCount, 'flow')}`;
   const kind = (app: App) => INDUSTRY_LABEL[app.industry] ?? app.industry;
   const where = (app: App) => (app.platforms?.length ? app.platforms.map((platform) => PLATFORM_LABEL[platform]).join(', ') : '—');
-  const rating = (app: App) => (app.rating === null || app.rating === undefined ? '—' : app.rating.toFixed(1));
+  const rated = shown.some((app) => app.rating !== null && app.rating !== undefined);
+  // The one column with the highest number, or none when it's shared.
+  const leader = (values: number[]) => {
+    const top = Math.max(...values);
+    return values.filter((value) => value === top).length === 1 ? values.indexOf(top) : undefined;
+  };
+  const screens = shown.map((app) => app.screenCount);
+  const flows = shown.map((app) => app.flowCount);
+  const ratings = shown.map((app) => app.rating ?? -1);
+  const more = shown.length === 2 ? 'more' : 'the most';
+  const byScreens = leader(screens);
+  const byFlows = leader(flows);
+  const part = (lead: number | undefined, noun: string, values: number[]) =>
+    lead === undefined ? `they're level on ${noun} (${Math.max(...values).toLocaleString()})` : `${shown[lead].name} has ${more} ${noun} (${values[lead].toLocaleString()})`;
+  const text =
+    byScreens !== undefined && byScreens === byFlows
+      ? `${shown[byScreens].name} has ${more} screens (${screens[byScreens].toLocaleString()}) and flows (${flows[byFlows].toLocaleString()}).`
+      : `${part(byScreens, 'screens', screens).replace(/^t/, 'T')}, and ${part(byFlows, 'flows', flows)}.`;
   return {
-    text: shown.map((app) => `${facts(app)}.`).join(' '),
+    text,
     targets: appResults(shown),
     card: {
       title: 'Side by side',
       facts: [],
       columns: shown.map((app) => app.name),
+      apps: shown.map((app) => ({ name: app.name, iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined, href: INSPIRATIONS_ROUTES.app(app), subtitle: kind(app) })),
       rows: [
-        { label: 'Screens', values: shown.map((app) => app.screenCount.toLocaleString()) },
-        { label: 'Flows', values: shown.map((app) => app.flowCount.toLocaleString()) },
+        { label: 'Screens', values: screens.map((count) => count.toLocaleString()), lead: byScreens },
+        { label: 'Flows', values: flows.map((count) => count.toLocaleString()), lead: byFlows },
         { label: 'Platforms', values: shown.map(where) },
-        { label: 'Category', values: shown.map(kind) },
-        { label: 'Rating', values: shown.map(rating) },
+        ...(rated ? [{ label: 'Rating', values: shown.map((app) => (app.rating === null || app.rating === undefined ? '—' : `★ ${app.rating.toFixed(1)}`)), lead: leader(ratings) }] : []),
       ],
     },
     results: appResults(shown),
@@ -481,7 +502,7 @@ async function resolveWithNotes(text: string, context: NavContext | undefined): 
 }
 
 async function resolveInner(raw: string, context: NavContext | undefined, notes: string[]): Promise<NavReply> {
-  const original = stripChatter(raw.trim().slice(0, 200));
+  const original = stripChatter(raw.trim());
   if (APOLOGY.test(original)) return { text: 'No problem at all. Where would you like to go?', targets: QUICK_PAGES.slice(0, 4), kind: 'smalltalk' };
   if (GREETING.test(original)) return { text: pick(['Hi! Where would you like to go? Tell me an app or a page, or pick one below.', 'Hello! What are you looking for today? An app, a page, or a type of screen?', 'Hey there! Say an app or page and I’ll take you straight to it.']), targets: QUICK_PAGES, kind: 'smalltalk' };
   if (THANKS.test(original)) return { text: pick(['Anytime. Tell me where to go next.', 'Happy to help. Where to next?', 'You’re welcome. Anything else you’d like to see?']), targets: [], kind: 'smalltalk' };
@@ -1039,12 +1060,14 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
     if (sectionPage) return { text: `Opening ${sectionPage.label}.`, targets: [], go: sectionPage };
   }
 
-  const search: NavTarget = { label: `Search for “${searchQuery}”`, hint: 'Search', href: INSPIRATIONS_ROUTES.searchFor(searchQuery) };
+  // Quoted back short (a question has no length limit); the search itself uses all of it.
+  const quoted = searchQuery.length > 40 ? `${searchQuery.slice(0, 39).trimEnd()}…` : searchQuery;
+  const search: NavTarget = { label: `Search for “${quoted}”`, hint: 'Search', href: INSPIRATIONS_ROUTES.searchFor(searchQuery) };
   const sounded = /\?\s*$/.test(original) || searchQuery.split(' ').length >= 4;
   return {
     text: sounded
       ? 'I’m Motvin Buddy, here to help you get around Motvin, so I can’t answer that one. I can open an app or page, tell you how many screens an app has, or search the library.'
-      : `I couldn’t find a page called “${searchQuery}”. I can search the library for it.`,
+      : `I couldn’t find a page called “${quoted}”. I can search the library for it.`,
     targets: [search, ...QUICK_PAGES.slice(0, 3)],
     kind: 'fallback',
   };

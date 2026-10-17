@@ -7,8 +7,8 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { App, Flow, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { FlowSelectRing, useFlowSelection } from './FlowSelect';
+import { FlowStripShot } from './FlowStripShot';
 import { CloseIcon, PlayOutlineIcon } from './Icons';
-import { Screenshot } from './Screenshot';
 
 /**
  * Every flow in the library, one under another.
@@ -104,15 +104,14 @@ function FlowBlock({
 
       <div className="ins-flows-row-strip">
         {screens.map((screen, index) => (
-          <Link
+          <FlowStripShot
             key={screen.id}
+            flow={flow}
+            screen={screen}
+            app={app}
             href={previewHref}
-            scroll={false}
-            className="ins-flows-row-shot"
-            aria-label={`Step ${index + 1} of the ${flow.name} flow`}
-          >
-            <Screenshot screen={screen} />
-          </Link>
+            label={`Step ${index + 1} of the ${flow.name} flow`}
+          />
         ))}
         {screens.length === 0 && (
           <p className="ins-muted ins-flows-row-missing">

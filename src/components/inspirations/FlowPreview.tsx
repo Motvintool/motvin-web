@@ -25,7 +25,7 @@ import { useScreenContextMenu } from './useScreenContextMenu';
 /** Search-param name that opens the overlay — see SCREEN_PARAM in ScreenPreviewModal.tsx. */
 export const FLOW_PARAM = 'flow';
 /** Optional `&step=<screen id>`: open the flow on that step rather than the first. */
-const STEP_PARAM = 'step';
+export const STEP_PARAM = 'step';
 
 /** Present mode's control bar hides after the pointer has been still this long. */
 const PRESENT_HUD_MS = 2500;

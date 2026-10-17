@@ -48,6 +48,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const showing = useRef<number[]>([]);
   const held = useRef(false);
   const progress = useRef(new Set<number>());
+  // A toast whose button is being pressed ("Undo"): what that button says
+  // next ("Restored") takes its place, rather than a second card.
+  const pressing = useRef<number | null>(null);
 
   // Nothing left ticking once the page goes.
   useEffect(() => {
@@ -91,13 +94,30 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const show = useCallback(
     (message: string, options?: ToastAction | ToastOptions) => {
       const { action, tone = 'done' } = options && 'onClick' in options ? { action: options } : (options ?? {});
+      const lasts = action ? 4200 : tone === 'progress' ? PROGRESS_MAX_MS : tone === 'error' ? 3000 : 2200;
+      // Whatever was still "Preparing…" is done now. The latest one turns
+      // into this in place (its spinner becomes the tick), so one action
+      // shows one toast rather than a second card stacked on the first.
+      const pending = [...progress.current];
+      let reuse = pending.pop();
+      pending.forEach((id) => dismiss(id));
+      if (pressing.current !== null) {
+        if (reuse !== undefined) dismiss(reuse);
+        reuse = pressing.current;
+        pressing.current = null;
+      }
+      if (reuse !== undefined) {
+        progress.current.delete(reuse);
+        if (tone === 'progress') progress.current.add(reuse);
+        setToasts((list) => list.map((t) => (t.id === reuse ? { ...t, message, action, tone } : t)));
+        schedule(reuse, lasts);
+        return;
+      }
       const toast: Toast = { id: ++counter.current, message, action, tone };
-      // Whatever was still "Preparing…" is done now: this one takes its place.
-      [...progress.current].forEach((id) => dismiss(id));
       if (tone === 'progress') progress.current.add(toast.id);
       setToasts((list) => [...list, toast]);
       showing.current = [...showing.current, toast.id];
-      schedule(toast.id, action ? 4200 : tone === 'progress' ? PROGRESS_MAX_MS : tone === 'error' ? 3000 : 2200);
+      schedule(toast.id, lasts);
       // Three at most: the oldest still showing makes way.
       if (showing.current.length > 3) dismiss(showing.current[0]);
     },
@@ -137,8 +157,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 className="ins-toast-action"
                 style={{ marginLeft: '12px' }}
                 onClick={() => {
+                  pressing.current = t.id;
                   t.action?.onClick();
-                  dismiss(t.id);
+                  // Nothing said in its place: it just goes.
+                  if (pressing.current === t.id) {
+                    pressing.current = null;
+                    dismiss(t.id);
+                  }
                 }}
               >
                 {t.action.label}

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearLog, exportLog, LOG_KEY, MAX_ENTRIES, parseLog, readLog, recordFeedback, recordMiss, topMisses } from './guideTelemetry';
+import { clearFeedback, clearLog, exportLog, LOG_KEY, MAX_ENTRIES, parseLog, readLog, recordFeedback, recordMiss, topMisses } from './guideTelemetry';
 
 const store = new Map<string, string>();
 const fakeStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) };
@@ -23,6 +23,13 @@ describe('recording', () => {
     recordFeedback('q', 'a', 'up', 1);
     recordFeedback('q', 'a', 'down', 2);
     expect(readLog().feedback).toEqual([{ at: 2, question: 'q', answer: 'a', verdict: 'down' }]);
+  });
+
+  it('a verdict taken back leaves the answer unrated', () => {
+    recordFeedback('q', 'a', 'up', 1);
+    recordFeedback('other', 'b', 'down', 2);
+    clearFeedback('q', 'a');
+    expect(readLog().feedback).toEqual([{ at: 2, question: 'other', answer: 'b', verdict: 'down' }]);
   });
 
   it('never grows past the cap', () => {

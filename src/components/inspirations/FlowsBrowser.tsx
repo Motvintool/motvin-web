@@ -7,9 +7,9 @@ import { FLOW_PARAM } from './FlowPreview';
 import { flowActionPhrase, type App, type Flow, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { FlowSelectRing, useFlowSelection } from './FlowSelect';
+import { FlowStripShot } from './FlowStripShot';
 import { EmptyState } from './EmptyState';
 import { ChevronDownIcon, CloseIcon, PlayOutlineIcon, SearchIcon } from './Icons';
-import { Screenshot } from './Screenshot';
 
 /**
  * Browsing flows as journeys rather than as cards.
@@ -268,15 +268,14 @@ function FlowRow({
           const action = flow.steps?.find((step) => step.screenId === screen.id)?.action ?? null;
           const phrase = index > 0 ? flowActionPhrase(action) : '';
           return (
-            <Link
+            <FlowStripShot
               key={screen.id}
+              flow={flow}
+              screen={screen}
+              app={app}
               href={href}
-              scroll={false}
-              className="ins-flows-row-shot"
-              aria-label={`Step ${index + 1} of the ${flow.name} flow${phrase ? `, reached by ${phrase.toLowerCase()}` : ''}`}
-            >
-              <Screenshot screen={screen} />
-            </Link>
+              label={`Step ${index + 1} of the ${flow.name} flow${phrase ? `, reached by ${phrase.toLowerCase()}` : ''}`}
+            />
           );
         })}
         {screens.length === 0 && (

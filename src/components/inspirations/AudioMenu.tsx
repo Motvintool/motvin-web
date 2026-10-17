@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { CloseIcon, PlayIcon } from './Icons';
+import { PlayIcon } from './Icons';
 import { useToast } from './Toast';
 
 type IconProps = React.SVGProps<SVGSVGElement> & { size?: number };
@@ -47,19 +47,77 @@ const VolumeHighIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9.5a4 4 0 0 1 0 5"/><path d="M18.5 6.5a8 8 0 0 1 0 11"/></svg>
 );
 
+/**
+ * Each station is a long ambient or lofi YouTube video (all allow embedding),
+ * played sound-only by a hidden player: 11 hours of rainforest birds, 8 of
+ * rain on a window with thunder, 4 of office typing and pencils, and Lofi
+ * Girl's 3-hour "best of lofi hip hop".
+ */
 const STATIONS = [
-  { name: 'Rain Forest', listeners: '8334', Icon: TreeIcon, tint: '#3f9d73', src: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_514802c002.mp3?filename=rain-forest-birds-10145.mp3' },
-  { name: 'Monsoon Days', listeners: '7360', Icon: CloudRainIcon, tint: '#4b86c8', src: 'https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=heavy-rain-nature-sounds-8186.mp3' },
-  { name: 'Office Hours', listeners: '4218', Icon: BriefcaseIcon, tint: '#c98f3a', src: 'https://cdn.pixabay.com/download/audio/2022/11/26/audio_27ab08fca8.mp3?filename=office-ambience-6322.mp3' },
-  { name: 'Lo-Fi Focus', listeners: '6977', Icon: MusicIcon, tint: '#8a63c9', src: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf7f6.mp3?filename=lofi-study-112191.mp3' },
+  { name: 'Jungle Dawn', listeners: '5612', Icon: TreeIcon, tint: '#3f9d73', videoId: 'qQgNWg96Rls' },
+  { name: 'Rainy Window', listeners: '9147', Icon: CloudRainIcon, tint: '#4b86c8', videoId: 'mPZkdNFkNps' },
+  { name: 'Busy Desk', listeners: '3286', Icon: BriefcaseIcon, tint: '#c98f3a', videoId: 'eH-_GMhH-kk' },
+  { name: 'Midnight Beats', listeners: '11408', Icon: MusicIcon, tint: '#8a63c9', videoId: 'i43tkaTXtwI' },
 ];
+
+/** The bits of YouTube's IFrame Player API used here. */
+type YTPlayer = {
+  playVideo(): void;
+  pauseVideo(): void;
+  loadVideoById(id: string): void;
+  unMute(): void;
+  setVolume(volume: number): void;
+  destroy(): void;
+};
+type YTEvent = { target: YTPlayer; data: number };
+type YTNamespace = {
+  Player: new (el: HTMLElement, options: object) => YTPlayer;
+  PlayerState: { ENDED: number };
+};
+declare global {
+  interface Window {
+    YT?: YTNamespace;
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
+/** YouTube's player script, fetched the first time a station plays (or failing after 10s). */
+function loadYouTube(): Promise<YTNamespace> {
+  if (window.YT?.Player) return Promise.resolve(window.YT);
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error('YouTube player did not load')), 10_000);
+    const before = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      before?.();
+      window.clearTimeout(timer);
+      if (window.YT) resolve(window.YT);
+    };
+    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+      const script = document.createElement('script');
+      script.src = 'https://www.youtube.com/iframe_api';
+      script.onerror = () => {
+        window.clearTimeout(timer);
+        reject(new Error('YouTube player did not load'));
+      };
+      document.body.appendChild(script);
+    }
+  });
+}
 
 export function AudioMenu() {
   const [open, setOpen] = useState(false);
   const [playing, setPlaying] = useState<string | null>(null);
   const [volume, setVolume] = useState(0.7);
   const ref = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // The hidden YouTube player (made on the first play), where it lives, and
+  // the station asked for last: a slow load for an earlier pick is ignored.
+  const playerRef = useRef<YTPlayer | null>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const wantedRef = useRef<string | null>(null);
+  // Whether the player has connected: before that it can't be told anything,
+  // and the latest pick is played the moment it's ready.
+  const readyRef = useRef(false);
+  const volumeRef = useRef(volume);
   const { show } = useToast();
   
   useEffect(() => {
@@ -79,48 +137,97 @@ export function AudioMenu() {
   }, [open]);
 
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = volume;
+    volumeRef.current = volume;
+    if (readyRef.current) playerRef.current?.setVolume(Math.round(volume * 100));
   }, [volume]);
 
-  // Clean up audio on unmount
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-      }
-    };
-  }, []);
+  // The player goes with the header, and is forgotten with it: a destroyed
+  // player has no methods left (as after a hot reload), so the next pick makes a new one.
+  useEffect(
+    () => () => {
+      playerRef.current?.destroy();
+      playerRef.current = null;
+      readyRef.current = false;
+    },
+    [],
+  );
 
-  const toggleStation = (stationName: string, src: string, e: React.MouseEvent) => {
+  // A station that won't play (video gone, blocked, offline): back to idle, and say so.
+  const failCurrent = () => {
+    const name = wantedRef.current;
+    if (!name) return;
+    wantedRef.current = null;
+    setPlaying((current) => (current === name ? null : current));
+    show(`${name} isn't available right now`, { tone: 'error' });
+  };
+
+  const toggleStation = async (station: (typeof STATIONS)[number], e: React.MouseEvent) => {
     e.stopPropagation(); // prevent closing the menu or triggering parent actions if any
-    
-    if (playing === stationName) {
-      // Pause current
+
+    if (playing === station.name) {
       setPlaying(null);
-      if (audioRef.current) {
-        audioRef.current.pause();
+      wantedRef.current = null;
+      if (readyRef.current) playerRef.current?.pauseVideo();
+      return;
+    }
+
+    setPlaying(station.name);
+    wantedRef.current = station.name;
+    try {
+      const YT = await loadYouTube();
+      if (wantedRef.current !== station.name || !hostRef.current) return;
+      const player = playerRef.current;
+      if (player) {
+        // Still connecting: it starts on whatever was picked last, once ready.
+        if (!readyRef.current) return;
+        player.loadVideoById(station.videoId);
+        player.setVolume(Math.round(volumeRef.current * 100));
+        player.unMute();
+        return;
       }
-    } else {
-      // Play new
-      setPlaying(stationName);
-      if (audioRef.current) {
-        audioRef.current.src = src;
-        // A sound that won't load (or is blocked) shouldn't leave the button
-        // saying "Playing" over silence: back to idle, and say so.
-        audioRef.current.play().catch((err: unknown) => {
-          if (err instanceof DOMException && err.name === 'AbortError') return; // replaced by the next pick
-          setPlaying((current) => (current === stationName ? null : current));
-          show(`${stationName} isn't available right now`, { tone: 'error' });
-        });
-      }
+      // Started muted, as browsers allow, then unmuted once it's playing (as appshots does).
+      const mount = document.createElement('div');
+      hostRef.current.appendChild(mount);
+      playerRef.current = new YT.Player(mount, {
+        width: '0',
+        height: '0',
+        videoId: station.videoId,
+        playerVars: { autoplay: 1, mute: 1, controls: 0, playsinline: 1 },
+        events: {
+          onReady: (ev: YTEvent) => {
+            readyRef.current = true;
+            // Whatever was picked while it connected (or nothing, if stopped meanwhile).
+            const latest = STATIONS.find((s) => s.name === wantedRef.current);
+            if (!latest) return;
+            ev.target.setVolume(Math.round(volumeRef.current * 100));
+            if (latest.videoId === station.videoId) ev.target.playVideo();
+            else ev.target.loadVideoById(latest.videoId);
+            ev.target.unMute();
+          },
+          // A long video still ends: round again.
+          onStateChange: (ev: YTEvent) => {
+            if (ev.data === YT.PlayerState.ENDED && wantedRef.current) ev.target.playVideo();
+          },
+          onError: failCurrent,
+        },
+      });
+      // Never connected (blocked, offline): say so, and start afresh on the next pick.
+      const created = playerRef.current;
+      window.setTimeout(() => {
+        if (readyRef.current || playerRef.current !== created) return;
+        created.destroy();
+        playerRef.current = null;
+        failCurrent();
+      }, 15_000);
+    } catch {
+      failCurrent();
     }
   };
 
   return (
     <div className="ins-popwrap" ref={ref}>
-      {/* Hidden audio element for playback */}
-      <audio ref={audioRef} loop />
+      {/* Where the hidden YouTube player goes: sound only, nothing to see or click. */}
+      <div ref={hostRef} className="ins-tune-player" aria-hidden />
       
       <button
         type="button"
@@ -139,15 +246,18 @@ export function AudioMenu() {
       </button>
 
       {open && (
-        <div className="ins-popover ins-popover--right ins-tune" role="dialog" aria-label="Tune In">
+        <div
+          className="ins-popover ins-popover--right ins-tune"
+          role="dialog"
+          aria-label="Tune In"
+          // The playing station's colour, for the volume slider.
+          style={{ ['--tint' as string]: STATIONS.find((s) => s.name === playing)?.tint ?? '#141414' }}
+        >
           <div className="ins-tune-head">
             <div className="ins-tune-titles">
               <h3 className="ins-tune-title">Tune In</h3>
               <p className="ins-tune-sub">{playing ? `Playing ${playing}` : 'Ambient sound while you browse'}</p>
             </div>
-            <button type="button" className="ins-tune-close" aria-label="Close" onClick={() => setOpen(false)}>
-              <CloseIcon size={14} />
-            </button>
           </div>
 
           <ul className="ins-tune-list">
@@ -161,7 +271,7 @@ export function AudioMenu() {
                     style={{ ['--tint' as string]: station.tint }}
                     aria-pressed={isPlaying}
                     aria-label={`${isPlaying ? 'Pause' : 'Play'} ${station.name}`}
-                    onClick={(e) => toggleStation(station.name, station.src, e)}
+                    onClick={(e) => void toggleStation(station, e)}
                   >
                     <span className="ins-tune-art"><station.Icon size={22} /></span>
                     <span className="ins-tune-text">

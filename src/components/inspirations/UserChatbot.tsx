@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type WheelEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { askConfirm } from './ConfirmDialog';
 import { useToast } from './Toast';
@@ -10,13 +10,14 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { greetingFor } from '@/lib/inspirations/guide-chatbot/guideGreeting';
 import { nextNudge, nudgeMessages, readNudgeState, writeNudgeState } from '@/lib/inspirations/guide-chatbot/guideNudge';
 import { groupChats, newChatId, previewOf, readHistory, relativeTime, removeChat, upsertChat, writeHistory, type SavedChat, type SavedLine } from '@/lib/inspirations/guide-chatbot/guideHistory';
-import { recordFeedback, recordMiss, type Verdict } from '@/lib/inspirations/guide-chatbot/guideTelemetry';
+import { recordMiss } from '@/lib/inspirations/guide-chatbot/guideTelemetry';
 import { QUICK_PAGES, resolveNavigation, type GuideAction, type NavCard, type NavTarget, type ReplyKind } from '@/lib/inspirations/guide-chatbot/navAssistant';
 import { libraryStore } from '@/lib/inspirations/store';
 import type { App } from '@/lib/inspirations/types';
 import {
   ArrowRightIcon,
   CheckIcon,
+  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CloseIcon,
@@ -25,12 +26,10 @@ import {
   PencilIcon,
   RetryIcon,
   SearchIcon,
-  ThumbDownIcon,
-  ThumbUpIcon,
   TrashIcon,
 } from './Icons';
 
-type Line = { id: number; role: 'user' | 'assistant'; text: string; targets?: NavTarget[]; card?: NavCard; opened?: NavTarget; pending?: boolean; slow?: boolean; error?: boolean; kind?: ReplyKind; action?: GuideAction; verdict?: Verdict };
+type Line = { id: number; role: 'user' | 'assistant'; text: string; targets?: NavTarget[]; card?: NavCard; opened?: NavTarget; pending?: boolean; streaming?: boolean; full?: string; shown?: number; slow?: boolean; error?: boolean; kind?: ReplyKind; action?: GuideAction };
 
 /** Where the guide files what a visitor asks to keep. */
 const GUIDE_COLLECTION = 'Saved from the guide';
@@ -51,8 +50,155 @@ function chipIcon(target: NavTarget): ReactNode {
   return <span className="ins-chip-ai" />;
 }
 
+/** Ties a one-letter word ("I", "a") to the next, so a line never ends on it. */
+const keepShortWords = (text: string) => text.replace(/(^|\s)(I|a|A)\s+(?=\S)/g, '$1$2\u00a0');
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** What the guide says while it works: "Thinking…", then, when it's slow, what it's up to. */
+const THINKING_STEPS = ['Reading the library…', 'Connecting the dots…', 'Picking the best screens…', 'Almost there…'];
+
+/**
+ * The guide at work: a small glossy orb in the sent message's colours. Three
+ * lights drift round inside it at their own speeds and melt into each other,
+ * as the orb breathes in a soft glow (all CSS, see .ins-guide-orb).
+ */
+function ThinkingOrb() {
+  return (
+    <span className="ins-guide-orb" aria-hidden>
+      <i />
+      <i />
+      <i />
+    </span>
+  );
+}
+
+type CompareApp = { name: string; iconSrc?: string; href?: string; subtitle?: string };
+
+/** A value as a number, for the bars ("1,204" → 1204, "★ 4.5" → 4.5), or null when it isn't one. */
+const asNumber = (value: string) => (/^[★\s\d.,]+$/.test(value) && /\d/.test(value) ? Number(value.replace(/[^\d.]/g, '')) : null);
+
+/** An app at the head of a comparison: logo, name and category; it opens the app. */
+function CompareHead({ app, open, end }: { app: CompareApp; open: (app: CompareApp) => void; end?: boolean }) {
+  const body = (
+    <>
+      {app.iconSrc ? <img src={app.iconSrc} alt="" width={36} height={36} /> : <span className="ins-guide-compare-noicon" aria-hidden />}
+      <strong>{app.name}</strong>
+      {app.subtitle && <span>{app.subtitle}</span>}
+    </>
+  );
+  return app.href ? (
+    <button type="button" className={`ins-guide-compare-app ${end ? 'is-end' : ''}`} onClick={() => open(app)} title={`Open ${app.name}`}>
+      {body}
+    </button>
+  ) : (
+    <span className={`ins-guide-compare-app ${end ? 'is-end' : ''}`}>{body}</span>
+  );
+}
+
+/**
+ * Apps side by side. Two face each other ("vs" between them), and each number
+ * sits over a bar split by their shares, the bigger side dark, so who's ahead
+ * shows at a glance; a value both share is said once ("iOS · both"). Three
+ * line up in columns under their apps, the most in each row in bold.
+ */
+function CompareCard({ card, open }: { card: NavCard; open: (app: CompareApp) => void }) {
+  const apps: CompareApp[] = card.apps ?? (card.columns ?? []).map((name) => ({ name }));
+  const rows = card.rows ?? [];
+  if (apps.length === 2) {
+    return (
+      <div className="ins-guide-vs" role="group" aria-label={`${apps[0].name} and ${apps[1].name} side by side`}>
+        <div className="ins-guide-vs-head">
+          <CompareHead app={apps[0]} open={open} />
+          <span className="ins-guide-vs-badge" aria-hidden>
+            vs
+          </span>
+          <CompareHead app={apps[1]} open={open} end />
+        </div>
+        {rows.map((row) => {
+          const [a, b] = row.values;
+          if (a === b) {
+            return (
+              <div key={row.label} className="ins-guide-vs-row is-same">
+                <span className="ins-guide-vs-label">{row.label}</span>
+                <span className="ins-guide-vs-same">{a === '—' ? 'Not known' : `${a} · both`}</span>
+              </div>
+            );
+          }
+          const x = asNumber(a);
+          const y = asNumber(b);
+          const bars = x !== null && y !== null && x + y > 0;
+          return (
+            <div key={row.label} className="ins-guide-vs-row">
+              <div className="ins-guide-vs-line">
+                <span className={`ins-guide-vs-value ${row.lead === 0 ? 'is-lead' : ''}`}>{a}</span>
+                <span className="ins-guide-vs-label">{row.label}</span>
+                <span className={`ins-guide-vs-value ${row.lead === 1 ? 'is-lead' : ''}`}>{b}</span>
+              </div>
+              {bars && (
+                <div className="ins-guide-vs-bar" aria-hidden>
+                  <i className={row.lead === 0 ? 'is-lead' : ''} style={{ flexGrow: Math.max(x, (x + y) * 0.04) }} />
+                  <i className={row.lead === 1 ? 'is-lead' : ''} style={{ flexGrow: Math.max(y, (x + y) * 0.04) }} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  return (
+    <div className="ins-guide-compare" role="table" aria-label={card.title} style={{ ['--cols' as string]: apps.length }}>
+      <div className="ins-guide-compare-row is-head" role="row">
+        <span role="columnheader" />
+        {apps.map((app) => (
+          <span key={app.name} role="columnheader">
+            <CompareHead app={app} open={open} />
+          </span>
+        ))}
+      </div>
+      {rows.map((row) =>
+        row.values.every((value) => value === row.values[0]) ? (
+          <div key={row.label} className="ins-guide-compare-row" role="row">
+            <span role="rowheader">{row.label}</span>
+            <span role="cell" className="ins-guide-compare-all">
+              {row.values[0] === '—' ? 'Not known' : `${row.values[0]} · all`}
+            </span>
+          </div>
+        ) : (
+          <div key={row.label} className={`ins-guide-compare-row ${row.lead !== undefined ? 'has-lead' : ''}`} role="row">
+            <span role="rowheader">{row.label}</span>
+            {row.values.map((value, index) => (
+              <span key={`${row.label}-${index}`} role="cell" className={row.lead === index ? 'is-lead' : undefined}>
+                {value}
+              </span>
+            ))}
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
+/** "Thinking…", and once a reply is slow, a new line every so often on what it's doing. */
+function ThinkingStatus({ slow }: { slow?: boolean }) {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    if (!slow) return;
+    const timer = setInterval(() => setStep((n) => (n + 1) % THINKING_STEPS.length), 1600);
+    return () => clearInterval(timer);
+  }, [slow]);
+  const text = slow ? THINKING_STEPS[step] : 'Thinking…';
+  return (
+    <span className="ins-guide-thinking" role="status">
+      <ThinkingOrb />
+      <span key={text} className="ins-guide-thinking-text">
+        {text}
+      </span>
+    </span>
+  );
+}
 
 export function UserChatbot() {
   const router = useRouter();
@@ -67,6 +213,8 @@ export function UserChatbot() {
   const [lines, setLines] = useState<Line[]>([]);
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
+  // The message just sent: only its bubble plays the sent animation (not history, on reopening).
+  const [freshId, setFreshId] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   // The page behind is dimmed while the guide is a modal, and un-dimmed once it
   // has taken the visitor somewhere, so they can see where they landed.
@@ -87,7 +235,21 @@ export function UserChatbot() {
   const chatId = useRef<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const suggestRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // The box grows with what's typed, a line at a time, up to its max-height
+  // (in CSS), and scrolls after that.
+  useLayoutEffect(() => {
+    const field = inputRef.current;
+    if (!field) return;
+    // Measuring (height: auto) throws away the scroll to the caret, so keep
+    // it: typing or pasting at the end shows the end, elsewhere stays put.
+    const atEnd = field.selectionEnd === field.value.length;
+    const scrolled = field.scrollTop;
+    field.style.height = 'auto';
+    field.style.height = `${field.scrollHeight}px`;
+    field.scrollTop = atEnd ? field.scrollHeight : scrolled;
+  }, [question, open]);
   const pillRef = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
   const nextId = useRef(1);
@@ -103,9 +265,46 @@ export function UserChatbot() {
     };
   }, []);
 
+  // The thread follows a reply as it comes in only while it's read at the
+  // bottom: scrolled up (to read back, or regenerating an older answer), it
+  // stays put, and a "latest" button takes it down. Sending always goes down.
+  const stick = useRef(true);
+  const autoScrolling = useRef(false);
+  const autoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [away, setAway] = useState(false);
+  const [raised, setRaised] = useState(false);
+  const toLatest = () => {
+    const body = bodyRef.current;
+    if (!body) return;
+    stick.current = true;
+    setAway(false);
+    autoScrolling.current = true;
+    body.scrollTo({ top: body.scrollHeight, behavior: reducedMotion() ? 'auto' : 'smooth' });
+    clearTimeout(autoTimer.current);
+    autoTimer.current = setTimeout(() => (autoScrolling.current = false), 450);
+  };
+  const onThreadScroll = () => {
+    const body = bodyRef.current;
+    if (!body) return;
+    const fromBottom = body.scrollHeight - body.scrollTop - body.clientHeight;
+    // Its own smooth scroll passes through the middle; only the reader's own scrolling unsticks it.
+    if (!autoScrolling.current) stick.current = fromBottom < 60;
+    setAway(!stick.current && fromBottom > 160);
+    setRaised(body.scrollTop > 2);
+  };
+  // Scrolling up mid-reply wins over following it down.
+  const leaveBottom = (event: WheelEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if ('deltaY' in event && event.deltaY >= 0) return;
+    autoScrolling.current = false;
+  };
   useEffect(() => {
-    bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight, behavior: reducedMotion() ? 'auto' : 'smooth' });
-  }, [lines, open, view]);
+    if (stick.current) toLatest();
+  }, [lines]);
+  // Opened, or back from the history: at the latest.
+  useEffect(() => {
+    if (!open || view !== 'chat') return;
+    toLatest();
+  }, [open, view]);
 
   // Keep the conversation as it settles — never mid-reply — so a later visit can pick it up.
   useEffect(() => {
@@ -233,7 +432,14 @@ export function UserChatbot() {
     }
     const userId = nextId.current++;
     const replyId = nextId.current++;
+    setFreshId(userId);
+    stick.current = true;
     setLines((all) => [...all, { id: userId, role: 'user', text }, { id: replyId, role: 'assistant', text: '', pending: true }]);
+    await answer(text, replyId);
+  };
+
+  /** Works out the reply to a question and streams it into the reply line, from "Thinking…" to the last word. */
+  const answer = async (text: string, replyId: number) => {
     // A reply that is quick needs only the dots; one that drags says what it is doing.
     const slowTimer = setTimeout(() => patch(replyId, { slow: true }), SLOW_AFTER_MS);
     try {
@@ -246,16 +452,19 @@ export function UserChatbot() {
       if (reply.kind === 'fallback' || reply.kind === 'clarify' || reply.kind === 'error') recordMiss(text, reply.kind, reply.text);
       const calm = reducedMotion();
       if (!calm) await sleep(320 + Math.random() * 280);
+      reply.text = keepShortWords(reply.text);
       const words = reply.text.split(' ');
       for (let count = 1; count <= words.length && alive.current; count++) {
-        patch(replyId, { text: words.slice(0, count).join(' '), pending: false });
+        patch(replyId, { text: words.slice(0, count).join(' '), full: reply.text, shown: count, pending: false, streaming: true });
         if (!calm) await sleep(26);
       }
-      patch(replyId, { text: reply.text, pending: false, card: reply.card, targets: reply.targets, opened: reply.go, error: reply.error, kind: reply.kind, action: reply.action });
+      // The last words finish fading in before the answer settles.
+      if (!calm) await sleep(320);
+      patch(replyId, { text: reply.text, pending: false, streaming: false, card: reply.card, targets: reply.targets, opened: reply.go, error: reply.error, kind: reply.kind, action: reply.action });
       if (reply.go && alive.current) go(reply.go);
     } catch {
       // Never left on the dots: say it went wrong, so the question can be asked again.
-      patch(replyId, { text: 'Something went wrong on my side. Try asking that again.', pending: false, slow: false, error: true, kind: 'error' });
+      patch(replyId, { text: 'Something went wrong on my side. Try asking that again.', pending: false, streaming: false, slow: false, error: true, kind: 'error' });
     } finally {
       clearTimeout(slowTimer);
       if (alive.current) setBusy(false);
@@ -352,7 +561,8 @@ export function UserChatbot() {
 
   const copy = async (line: Line) => {
     try {
-      await navigator.clipboard.writeText(line.text);
+      // Plain spaces, not the no-break ones that keep "I can" on a line.
+      await navigator.clipboard.writeText(line.text.replace(/\u00a0/g, ' '));
       setCopiedId(line.id);
       setTimeout(() => setCopiedId((current) => (current === line.id ? null : current)), 1200);
       show('Copied');
@@ -373,13 +583,23 @@ export function UserChatbot() {
     return '';
   };
 
-  const rate = (line: Line, verdict: Verdict) => {
-    recordFeedback(questionFor(line), line.text, verdict);
-    patch(line.id, { verdict });
+  /** Answers the same question again, in the reply's place (back to "Thinking…", then the new reply). */
+  const regenerate = async (line: Line) => {
+    const asked = questionFor(line);
+    if (!asked || busy) return;
+    setBusy(true);
+    patch(line.id, { text: '', pending: true, streaming: false, slow: false, error: false, full: undefined, shown: undefined, card: undefined, targets: undefined, opened: undefined, kind: undefined, action: undefined });
+    await answer(asked, line.id);
   };
 
   /** ↑ in an empty composer brings back the last thing the visitor typed, to fix or resend. */
-  const onComposerKey = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+  const onComposerKey = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter sends; Shift+Enter starts a new line (and Enter while an IME is composing is left alone).
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      event.currentTarget.form?.requestSubmit();
+      return;
+    }
     if (event.key !== 'ArrowUp' || question.trim()) return;
     const last = [...lines].reverse().find((line) => line.role === 'user');
     if (!last) return;
@@ -509,7 +729,7 @@ export function UserChatbot() {
     <>
       {dimmed && <div className="ins-guide-backdrop" onClick={() => setOpen(false)} aria-hidden />}
       <aside ref={panelRef} className={`ins-guide ${dimmed ? '' : 'is-floating'}`} role="dialog" aria-modal={dimmed || undefined} aria-label="Motvin Buddy" onKeyDown={keepFocusInside}>
-        <div className="ins-guide-top">
+        <div className={`ins-guide-top ${raised && !inHistory && !welcome ? 'is-raised' : ''}`}>
           {inHistory ? (
             <button type="button" className="ins-guide-back" onClick={() => setView('chat')} title="Back to the chat">
               <span className="ins-guide-back-arrow" aria-hidden>
@@ -631,21 +851,26 @@ export function UserChatbot() {
             )}
           </div>
         ) : (
-          <div ref={bodyRef} className="ins-guide-thread" role="log" aria-live="polite">
+          <div ref={bodyRef} className="ins-guide-thread" role="log" aria-live="polite" onScroll={onThreadScroll} onWheel={leaveBottom} onTouchMove={leaveBottom}>
             {lines.map((line) => (
               <div key={line.id} className="ins-chat">
-                <div className={`ins-chat-msg ins-chat-msg--${line.role} ${line.pending ? 'is-typing' : ''} ${line.error ? 'is-error' : ''}`}>
+                <div className={`ins-chat-msg ins-chat-msg--${line.role} ${line.pending ? 'is-typing' : ''} ${line.error ? 'is-error' : ''} ${line.id === freshId ? 'is-fresh' : ''}`}>
                   {line.role === 'user' ? (
                     <span>{line.text}</span>
                   ) : line.pending ? (
-                    <>
-                      <span className="ins-typing" aria-label="Typing">
-                        <i />
-                        <i />
-                        <i />
-                      </span>
-                      {line.slow && <span className="ins-guide-slow">Looking that up…</span>}
-                    </>
+                    <ThinkingStatus slow={line.slow} />
+                  ) : line.streaming && line.full ? (
+                    // Each word fades in out of a blur as it arrives, as an AI answer
+                    // streams. The whole answer is laid out from the start (the words to
+                    // come unseen), so the bubble opens at its size rather than growing.
+                    <p className="ins-chat-line">
+                      {line.full.split(' ').map((word, index) => (
+                        <span key={index} className={`ins-guide-word ${index < (line.shown ?? 0) ? '' : 'is-unseen'}`}>
+                          {index > 0 ? ' ' : ''}
+                          {word}
+                        </span>
+                      ))}
+                    </p>
                   ) : (
                     <p className="ins-chat-line">{line.text}</p>
                   )}
@@ -656,28 +881,7 @@ export function UserChatbot() {
                       <ExternalIcon size={15} />
                     </button>
                   )}
-                  {line.card?.rows && line.card.columns && (
-                    <div className="ins-guide-compare" role="table" aria-label={line.card.title}>
-                      <div className="ins-guide-compare-row is-head" role="row">
-                        <span role="columnheader" />
-                        {line.card.columns.map((column) => (
-                          <span key={column} role="columnheader">
-                            {column}
-                          </span>
-                        ))}
-                      </div>
-                      {line.card.rows.map((row) => (
-                        <div key={row.label} className="ins-guide-compare-row" role="row">
-                          <span role="rowheader">{row.label}</span>
-                          {row.values.map((value, index) => (
-                            <span key={`${row.label}-${index}`} role="cell">
-                              {value}
-                            </span>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {line.card?.rows && line.card.columns && <CompareCard card={line.card} open={(app) => app.href && go({ label: app.name, hint: 'App', href: app.href })} />}
                   {line.card &&
                     !line.card.rows &&
                     (() => {
@@ -701,13 +905,14 @@ export function UserChatbot() {
                       );
                     })()}
                 </div>
-                {line.role === 'assistant' && !line.pending && line.kind !== 'smalltalk' && (
-                  <div className={`ins-guide-tools is-assistant ${line.verdict ? 'is-rated' : ''}`} role="toolbar" aria-label="Was this helpful?">
-                    <button type="button" onClick={() => rate(line, 'up')} aria-label="Helpful" aria-pressed={line.verdict === 'up'} title="Helpful">
-                      <ThumbUpIcon size={15} filled={line.verdict === 'up'} />
+                {/* Every finished reply can be copied, or answered again. */}
+                {line.role === 'assistant' && !line.pending && !line.streaming && (
+                  <div className="ins-guide-tools is-assistant" role="toolbar" aria-label="Answer actions">
+                    <button type="button" onClick={() => void copy(line)} aria-label="Copy this answer" title="Copy">
+                      {copiedId === line.id ? <CheckIcon size={15} /> : <CopyIcon size={15} />}
                     </button>
-                    <button type="button" onClick={() => rate(line, 'down')} aria-label="Not helpful" aria-pressed={line.verdict === 'down'} title="Not helpful">
-                      <ThumbDownIcon size={15} filled={line.verdict === 'down'} />
+                    <button type="button" onClick={() => void regenerate(line)} disabled={busy || !questionFor(line)} aria-label="Regenerate this answer" title="Regenerate">
+                      <RetryIcon size={15} />
                     </button>
                   </div>
                 )}
@@ -726,6 +931,13 @@ export function UserChatbot() {
                 )}
               </div>
             ))}
+            {away && (
+              <div className="ins-guide-jump-wrap">
+                <button type="button" className="ins-guide-jump" onClick={toLatest} aria-label="Jump to the latest message" title="Latest">
+                  <ChevronDownIcon size={18} />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -769,8 +981,8 @@ export function UserChatbot() {
           )}
         </div>
 
-        <form className="ins-guide-composer" onSubmit={submit}>
-          <input ref={inputRef} value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={onComposerKey} placeholder="Ask for an app or a page…" aria-label="Ask where to go" maxLength={200} />
+        <form className={`ins-guide-composer ${busy ? 'is-working' : ''}`} onSubmit={submit}>
+          <textarea ref={inputRef} rows={1} value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={onComposerKey} placeholder="Ask for an app or a page…" aria-label="Ask where to go" />
           <div className="ins-guide-composer-bar">
             <button type="button" className="ins-guide-esc" onClick={() => setOpen(false)} title="Close Motvin Buddy">
               <kbd>Esc</kbd>

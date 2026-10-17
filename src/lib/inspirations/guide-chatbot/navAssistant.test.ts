@@ -108,8 +108,18 @@ describe('an app plus a section or a question', () => {
   it('compares two apps without navigating', async () => {
     const reply = await ask('compare swiggy and zomato');
     expect(reply.go).toBeUndefined();
-    expect(reply.text).toContain('Swiggy has 262 screens and 39 flows.');
-    expect(reply.text).toContain('Zomato has 140 screens and 85 flows.');
+    // Who has more, not every number again (those are in the card).
+    expect(reply.text).toBe('Swiggy has more screens (262), and Zomato has more flows (85).');
+    expect(reply.card?.apps?.map((app) => [app.name, app.href, app.subtitle])).toEqual([
+      ['Swiggy', '/inspirations/app/swiggy', 'Food & drink'],
+      ['Zomato', '/inspirations/app/zomato', 'Food & drink'],
+    ]);
+    expect(reply.card?.rows?.map((row) => [row.label, row.lead])).toEqual([
+      ['Screens', 0],
+      ['Flows', 1],
+      ['Platforms', undefined],
+      ['Rating', 0],
+    ]);
   });
 
   it('asks which app when two are named without a comparison', async () => {
@@ -823,7 +833,7 @@ describe('picking from what was listed', () => {
     expect((await ask('open the last one', ctx(ranked.app, { results }))).go?.href).toBe('/inspirations/app/zoho');
     const both = await ask('both', ctx(ranked.app, { results }));
     expect(both.card?.columns).toEqual(['Swiggy', 'Zomato']);
-    expect(both.card?.rows?.[0]).toEqual({ label: 'Screens', values: ['262', '140'] });
+    expect(both.card?.rows?.[0]).toEqual({ label: 'Screens', values: ['262', '140'], lead: 0 });
     expect((await ask('all of them', ctx(ranked.app, { results }))).text).toBe('Here they all are — Swiggy, Zomato, Groww and Zoho Corporation.');
     const compared = await ask('compare swiggy and zomato');
     expect((await ask('the other one', ctx(SWIGGY, { results: compared.results }))).go?.href).toBe('/inspirations/app/zomato');

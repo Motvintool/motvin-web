@@ -6387,19 +6387,26 @@ select.ins-input {
    download from inside it still sees why nothing happened. */
 .ins-guest-download-host {
   z-index: 10000;
+  /* On a phone the host spans the width (16px in from each side): keep the
+     pill in its middle, as the toast deck's own centring does. */
+  justify-content: center;
 }
 
 /* While the screen preview is open, status messages (toasts and the guest
    notice) sit just above its bottom row of buttons, centred on the main
    panel, instead of on top of those buttons. The preview is 20px from the
    viewport's bottom and its button row 84px above its own bottom edge; the
-   main panel is the viewport less the 320px details panel, its 16px gap and
-   the 20px margins. Below 901px the panels stack and the default spot is
-   kept. */
+   main panel is the viewport less the 320px details panel, its 10px gap and
+   the 20px margins, so its middle is 165px left of the window's. A flow's
+   player has no details panel: there they stay
+   centred on the window. Below 901px the panels stack and the default spot
+   is kept. */
 @media (min-width: 901px) {
   body:has(.ins-screen-preview-modal) .ins-toast-host {
-    left: calc(50% - 168px);
     bottom: 116px;
+  }
+  body:has(.ins-screen-preview-modal .ins-screen-preview-details) .ins-toast-host {
+    left: calc(50% - 165px);
   }
 }
 
@@ -9557,20 +9564,21 @@ select.ins-input {
   scrollbar-width: none;
 }
 
-/* The row fades only on the side that has more to scroll to. */
+/* The row fades only on the side that has more to scroll to, and the chips
+   are gone by the arrow's middle, so none is seen cut off under it. */
 .ins-guide-suggest.fade-right {
-  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent);
-  mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent);
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 84px), transparent calc(100% - 28px));
+  mask-image: linear-gradient(90deg, #000 calc(100% - 84px), transparent calc(100% - 28px));
 }
 
 .ins-guide-suggest.fade-left {
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 44px);
-  mask-image: linear-gradient(90deg, transparent, #000 44px);
+  -webkit-mask-image: linear-gradient(90deg, transparent 28px, #000 84px);
+  mask-image: linear-gradient(90deg, transparent 28px, #000 84px);
 }
 
 .ins-guide-suggest.fade-left.fade-right {
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 44px, #000 calc(100% - 44px), transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 44px, #000 calc(100% - 44px), transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent 28px, #000 84px, #000 calc(100% - 84px), transparent calc(100% - 28px));
+  mask-image: linear-gradient(90deg, transparent 28px, #000 84px, #000 calc(100% - 84px), transparent calc(100% - 28px));
 }
 
 /* Arrows for mouse users, who can't swipe the row; touch screens swipe. */
@@ -9704,6 +9712,53 @@ select.ins-input {
   gap: 8px;
   flex: none;
   padding: 16px;
+  transition: box-shadow 160ms var(--ins-ease);
+}
+
+/* The chat scrolled under the header: a hairline keeps them apart. */
+.ins-guide-top.is-raised {
+  position: relative;
+  z-index: 30;
+  box-shadow: 0 1px 0 #eef0f2;
+}
+
+/* "Latest": the thread scrolled up, a round button over its bottom edge goes
+   back down. It rides at the foot of the scrolling thread (sticky, no height
+   of its own), so it never moves the messages. */
+.ins-guide-jump-wrap {
+  position: sticky;
+  bottom: 12px;
+  z-index: 25;
+  display: flex;
+  justify-content: center;
+  height: 0;
+  margin-top: -20px;
+  pointer-events: none;
+}
+.ins-guide-jump {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  color: #0b0c0e;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 6px 16px rgba(0, 0, 0, 0.12);
+  transform: translateY(-100%);
+  pointer-events: auto;
+  cursor: var(--ins-cursor-hand, pointer);
+  animation: insGuideJumpIn 200ms var(--ins-ease) both;
+}
+.ins-guide-jump:hover {
+  background: #f6f7f9;
+}
+@keyframes insGuideJumpIn {
+  from { opacity: 0; transform: translateY(-60%) scale(0.9); }
+  to { opacity: 1; transform: translateY(-100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-guide-jump { animation: none; }
 }
 
 .ins-guide-history-btn {
@@ -9940,8 +9995,17 @@ select.ins-input {
   line-height: 1.5;
 }
 
+/* A message has no length limit: a very long word (a pasted link, a key
+   mash) breaks inside its bubble instead of running out of it. */
+.ins-guide .ins-chat-msg--user,
+.ins-guide .ins-chat-msg--assistant {
+  overflow-wrap: anywhere;
+}
+
 .ins-guide .ins-chat-msg--assistant .ins-chat-line {
   margin: 0;
+  /* No lone word ("I") left hanging at a line's end or on a line of its own. */
+  text-wrap: pretty;
 }
 
 /* Room under a visitor's message for the hover toolbar that hangs below it. */
@@ -10115,6 +10179,28 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   line-height: 1.5;
 }
 
+/* Just sent: the bubble lights up as refero's does. It starts white (unseen
+   on the panel), and over 2s a band of colour (pink, orange, yellow,
+   lavender, blue, navy) runs through it as it darkens to the black bubble. */
+.ins-guide .ins-chat-msg--user.is-fresh {
+  animation: insGuideSent 2s ease;
+}
+@keyframes insGuideSent {
+  from {
+    background: linear-gradient(90deg in oklch, #000 0, #000 18.36%, #00166d 29.3%, #0af 40%, #e1e1fe 45%, #ffcb5c 50%, #f40 55%, #f384ff 60%, #fff 66.67%, #fff 100%);
+    background-position: 100% 50%;
+    background-size: 600% 100%;
+  }
+  to {
+    background: linear-gradient(90deg in oklch, #000 0, #000 18.36%, #00166d 29.3%, #0af 40%, #e1e1fe 45%, #ffcb5c 50%, #f40 55%, #f384ff 60%, #fff 66.67%, #fff 100%);
+    background-position: 0 50%;
+    background-size: 600% 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-guide .ins-chat-msg--user.is-fresh { animation: none; }
+}
+
 .ins-guide .ins-chat-msg.is-typing {
   padding: 12px 14px;
   border-radius: 12px;
@@ -10241,28 +10327,115 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   border-color: color-mix(in srgb, var(--ins-text) 10%, #e6e7ea);
 }
 
-.ins-guide-composer input {
+/* While Buddy works on the answer after a message is sent: a turning
+   rainbow ring round the box (pink, red-orange, amber, yellow, lavender,
+   blue) over a soft lavender-blue tint, as refero's composer does while it
+   answers — a loader. The ring is the ::before's 3.5px edge (the rest masked
+   away); it fades in and out. */
+@property --ins-guide-ring {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+.ins-guide-composer {
+  position: relative;
+  transition: background 240ms ease, border-color 240ms ease;
+}
+.ins-guide-composer::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: 2;
+  padding: 3.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--ins-guide-ring),
+    #e57ce6,
+    #f0582c,
+    #f2a14c,
+    #f5d062,
+    #e9dccb,
+    #d8d2f6,
+    #9bc6f6,
+    #4ba6f0,
+    #b3d4f7,
+    #e57ce6
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 240ms ease;
+}
+.ins-guide-composer.is-working {
+  /* The ring sits over the 1px border: nothing clipped away. */
+  overflow: visible;
+  border-color: transparent;
+  background: linear-gradient(120deg, #f8f4fb, #f3f4fa 45%, #eef3fb);
+}
+.ins-guide-composer.is-working::before {
+  opacity: 1;
+  animation: insGuideRing 1.6s linear infinite;
+}
+@keyframes insGuideRing {
+  to { --ins-guide-ring: 360deg; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-guide-composer.is-working::before { animation: none; }
+}
+
+/* A box that grows with what's typed, line by line (its height is set from
+   UserChatbot), to four lines, then scrolls. The space above and below is
+   margin, not padding, so it stays put while the text scrolls under it. */
+.ins-guide-composer textarea {
   display: block;
   width: 100%;
   box-sizing: border-box;
-  padding: 18px 20px 6px;
+  max-height: 96px;
+  margin: 18px 0 6px;
+  padding: 0 20px;
+  overflow-y: auto;
   border: 0;
   outline: 0;
+  resize: none;
   background: transparent;
   color: #0b0c0e;
   font: inherit;
   font-size: 16px;
+  line-height: 24px;
+  overflow-wrap: anywhere;
+}
+
+/* Its scrollbar, as the app's other scrolling menus have it: a slim light
+   thumb, its length the share of the text in view (the browser keeps it to
+   ~20px at least, so a very long message shows the same short thumb). */
+.ins-guide-composer textarea::-webkit-scrollbar {
+  width: 4px;
+}
+.ins-guide-composer textarea::-webkit-scrollbar-track {
+  margin-block: 2px;
+}
+.ins-guide-composer textarea::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+@supports not selector(::-webkit-scrollbar) {
+  .ins-guide-composer textarea {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+  }
 }
 
 /* Overrides the app-wide :focus-visible ring (inspirations.css:234) — the
    composer card's own border already shows where focus is. */
-.ins-guide-composer input:focus-visible {
+.ins-guide-composer textarea:focus-visible {
   outline: none;
   box-shadow: none;
   border-radius: 0;
 }
 
-.ins-guide-composer input::placeholder {
+.ins-guide-composer textarea::placeholder {
   color: #b3b6bd;
 }
 
@@ -10704,6 +10877,126 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
 
 .ins-guide-card.is-link:focus-visible {
   border-radius: 14px;
+}
+
+/* Waiting on a reply, as an AI does: no bubble, just the orb beside
+   "Thinking…" in slate, a light running through the words; a new line
+   slides up in its place when the reply is slow. */
+.ins-guide .ins-chat-msg.is-typing:has(.ins-guide-thinking) {
+  padding: 4px 0;
+  background: transparent;
+}
+.ins-guide-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+/* The orb: a lavender sphere with three coloured lights (blue, pink, orange)
+   circling inside it, each round its own off-centre point and blurred so they
+   melt together; a white sheen on top makes it glossy, and it breathes in a
+   soft glow of the same colours. */
+.ins-guide-orb {
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #e1e1fe;
+  isolation: isolate;
+  animation: insGuideOrbBreathe 2.4s ease-in-out infinite;
+}
+.ins-guide-orb i {
+  position: absolute;
+  width: 70%;
+  height: 70%;
+  border-radius: 50%;
+  filter: blur(4px);
+  mix-blend-mode: multiply;
+}
+.ins-guide-orb i:nth-child(1) {
+  top: -8%;
+  left: -6%;
+  background: #0af;
+  transform-origin: 85% 85%;
+  animation: insGuideOrbSpin 2.2s linear infinite;
+}
+.ins-guide-orb i:nth-child(2) {
+  right: -10%;
+  top: 10%;
+  background: #f384ff;
+  transform-origin: 15% 70%;
+  animation: insGuideOrbSpin 3s linear infinite reverse;
+}
+.ins-guide-orb i:nth-child(3) {
+  bottom: -12%;
+  left: 14%;
+  background: #f40;
+  opacity: 0.85;
+  transform-origin: 50% 0%;
+  animation: insGuideOrbSpin 2.6s linear infinite;
+}
+.ins-guide-orb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.9) 0, rgba(255, 255, 255, 0) 42%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+@keyframes insGuideOrbSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes insGuideOrbBreathe {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(243, 132, 255, 0), 0 2px 8px rgba(0, 170, 255, 0.25); }
+  50% { transform: scale(0.9); box-shadow: 0 0 0 4px rgba(243, 132, 255, 0.12), 0 2px 12px rgba(255, 68, 0, 0.3); }
+}
+.ins-guide-thinking-text {
+  background: linear-gradient(90deg, #6b6f86 0%, #6b6f86 40%, #c6c9d6 50%, #6b6f86 60%, #6b6f86 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  animation:
+    insGuideThinkIn 320ms ease-out both,
+    insGuideShimmer 1.8s linear infinite;
+}
+@keyframes insGuideThinkIn {
+  from { opacity: 0; transform: translateY(6px); filter: blur(3px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes insGuideShimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0% 0; }
+}
+
+/* A streaming answer: each word fades up out of a soft blur as it arrives;
+   the words still to come hold their place, unseen. */
+.ins-guide-word {
+  animation: insGuideWord 360ms ease-out both;
+}
+/* The line is a flex row elsewhere (an icon beside text); split into words,
+   it must wrap as plain text does, or the words run out of the bubble. */
+.ins-guide .ins-chat-line:has(.ins-guide-word) {
+  display: block;
+}
+.ins-guide-word.is-unseen {
+  opacity: 0;
+  animation: none;
+}
+@keyframes insGuideWord {
+  from { opacity: 0; filter: blur(4px); }
+  to { opacity: 1; filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-guide-thinking-text,
+  .ins-guide-orb,
+  .ins-guide-orb i,
+  .ins-guide-word { animation: none; }
+  .ins-guide-thinking-text { color: #6b6f86; background: none; }
 }
 
 /* The line beside the typing dots when a reply is slow to arrive. */
@@ -11589,12 +11882,29 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   right: auto;
   left: 12px;
   /* Hangs fully below the bubble, with a clear gap, instead of overlapping its corner. */
-  bottom: -42px;
+  bottom: -40px;
 }
 
-/* Room for that bar so it never lands on the suggestions below. */
+/* Room for that bar. Between messages it hangs in the gap on the left (the
+   next question sits on the right), so a question and its answer read as a
+   pair, 40px from the next; the last answer keeps the bar's full room, so it
+   never lands on the suggestions below. */
 .ins-guide .ins-chat:has(.ins-guide-tools.is-assistant) {
-  margin-bottom: 48px;
+  margin-bottom: 20px;
+}
+.ins-guide .ins-chat:has(.ins-guide-tools.is-assistant):last-child {
+  margin-bottom: 44px;
+}
+
+/* A bridge over the gap between an answer and its bar: the pointer stays on
+   the message on its way down, so the bar doesn't fade before it's reached. */
+.ins-guide .ins-chat:has(.ins-guide-tools.is-assistant)::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 160px;
+  height: 40px;
 }
 
 .ins-guide-tools.is-assistant.is-rated {
@@ -11607,43 +11917,198 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   background: rgba(255, 255, 255, 0.18);
 }
 
-/* Two or three apps side by side. */
+/* Two or three apps side by side: a white card, the apps heading its columns
+   (logo, name, category), then a row per number, the label on the left in
+   grey and the values lined up under their apps, the most in each in bold. */
+.ins-chat-msg--assistant:has(.ins-guide-compare),
+.ins-chat-msg--assistant:has(.ins-guide-vs) {
+  width: 90%;
+}
+
+/* Two apps face to face: logos at either side with "vs" between, then a
+   row per number: the two values at the ends, the label in the middle, and
+   under them one bar split by the apps' shares, the bigger side dark. */
+.ins-guide-vs {
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+  padding: 16px 16px 6px;
+  border-radius: 14px;
+  background: #fff;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.ins-guide-vs-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 14px;
+}
+.ins-guide-vs-badge {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  color: #8b8f99;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.ins-guide-vs-row {
+  padding: 12px 0;
+  border-top: 1px solid #f0f1f3;
+}
+.ins-guide-vs-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+}
+.ins-guide-vs-line .ins-guide-vs-value:last-child {
+  text-align: right;
+}
+.ins-guide-vs-label {
+  color: #8b8f99;
+  font-size: 12px;
+}
+.ins-guide-vs-value {
+  color: #6b6f7a;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.ins-guide-vs-value.is-lead {
+  color: #0b0c0e;
+  font-weight: 600;
+}
+.ins-guide-vs-bar {
+  display: flex;
+  gap: 3px;
+  margin-top: 8px;
+}
+.ins-guide-vs-bar i {
+  flex-basis: 0;
+  height: 6px;
+  border-radius: 3px;
+  background: #e4e6eb;
+}
+.ins-guide-vs-bar i.is-lead {
+  background: #0b0c0e;
+}
+/* A value both share, said once. */
+.ins-guide-vs-row.is-same {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ins-guide-vs-same {
+  color: #0b0c0e;
+}
 .ins-guide-compare {
   display: flex;
   flex-direction: column;
-  margin-top: 10px;
-  border-radius: 12px;
+  margin-top: 12px;
+  padding: 4px 14px;
+  border-radius: 14px;
   background: #fff;
-  overflow: hidden;
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.35;
 }
 
 .ins-guide-compare-row {
   display: grid;
-  grid-template-columns: 84px repeat(auto-fit, minmax(0, 1fr));
-  gap: 8px;
-  padding: 9px 12px;
+  grid-template-columns: 72px repeat(var(--cols, 2), minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px 0;
   align-items: baseline;
 }
 
 .ins-guide-compare-row + .ins-guide-compare-row {
-  border-top: 1px solid #eef0f2;
+  border-top: 1px solid #f0f1f3;
 }
 
 .ins-guide-compare-row.is-head {
-  background: #f6f7f9;
-  font-weight: 600;
+  align-items: start;
+  padding: 12px 0 14px;
 }
 
 .ins-guide-compare-row [role='rowheader'] {
-  color: #6b6f7a;
+  color: #8b8f99;
+  font-size: 13px;
 }
 
-.ins-guide-compare-row [role='cell'],
-.ins-guide-compare-row [role='columnheader'] {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.ins-guide-compare-row [role='cell'] {
+  color: #0b0c0e;
+  overflow-wrap: anywhere;
+}
+
+/* A number row: the most in bold, the rest quieter. */
+.ins-guide-compare-row.has-lead [role='cell'] {
+  color: #6b6f7a;
+  font-variant-numeric: tabular-nums;
+}
+.ins-guide-compare-row.has-lead [role='cell'].is-lead {
+  color: #0b0c0e;
+  font-weight: 600;
+}
+
+/* A value every app shares, said once across the columns. */
+.ins-guide-compare-row [role='cell'].ins-guide-compare-all {
+  grid-column: 2 / -1;
+}
+
+/* An app at the head of its column: logo over name over category; it opens the app. */
+.ins-guide-compare-app {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #0b0c0e;
+  font: inherit;
+  text-align: left;
+  cursor: var(--ins-cursor-hand, pointer);
+}
+.ins-guide-compare-app img,
+.ins-guide-compare-noicon {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 6px;
+  border-radius: 9px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+  object-fit: cover;
+}
+.ins-guide-compare-noicon {
+  display: block;
+  background: #eef0f3;
+}
+.ins-guide-compare-app strong {
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.ins-guide-compare-app span {
+  color: #8b8f99;
+  font-size: 12px;
+}
+/* The second of two faces the first: everything set to the right. */
+.ins-guide-compare-app.is-end {
+  align-items: flex-end;
+  justify-self: end;
+  text-align: right;
+}
+.ins-guide-compare-app:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .ins-guide-grouphead-actions {
@@ -11659,27 +12124,64 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 }
 
 /* ─── Tune In (AudioMenu) ─────────────────────────────── */
-.ins-tune { width: 340px; min-width: 340px; padding: 20px 20px 8px; }
-.ins-tune-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 0 0 18px; }
+/* In the moei studio's style: each station a soft grey card, its icon in a
+   tile tinted its colour (solid while it plays), a white floating play button
+   that fills with the colour while playing; the volume in the playing
+   station's colour (--tint on .ins-tune, set by AudioMenu). */
+.ins-tune { --tint: #141414; width: 340px; min-width: 340px; padding: 16px; border-radius: 24px 24px 40px 40px; }
+.ins-tune-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 0 0 16px; }
 .ins-tune-titles { min-width: 0; }
-.ins-tune-title { margin: 0; font: 600 18px/1.1 Outfit, Inter, sans-serif; color: #111; }
-.ins-tune-sub { margin: 8px 0 0; font: 400 12px/1.3 Inter, sans-serif; color: #8a857f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ins-tune-close { width: 28px; height: 28px; flex-shrink: 0; border: 0; border-radius: 50%; background: #F4F3F1; color: #6f6a64; display: grid; place-items: center; transition: background .15s, color .15s; }
-.ins-tune-close:hover { background: #111; color: #fff; }
-.ins-tune-list { list-style: none; margin: 0; padding: 0; }
-.ins-tune-list li + li { border-top: 1px solid #EFEEEC; }
-.ins-tune-row { --tint: #777; width: 100%; display: flex; align-items: center; gap: 16px; padding: 14px 0; border: 0; border-radius: 0; background: transparent; text-align: left; color: #111; }
-.ins-tune-art { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; color: var(--tint); background: color-mix(in srgb, var(--tint) 14%, #fff); transition: background .2s, color .2s; }
-.ins-tune-row.is-playing .ins-tune-art { background: var(--tint); color: #fff; }
-.ins-tune-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.ins-tune-name { font: 600 16px/1.2 Inter, sans-serif; color: #1d1d1f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ins-tune-meta { display: flex; align-items: center; gap: 6px; font: 400 12px/1.2 Inter, sans-serif; color: #6b7280; }
-.ins-tune-row.is-playing .ins-tune-meta { color: var(--tint); font-weight: 500; }
-.ins-tune-ctl { width: 44px; height: 44px; border-radius: 50%; background: #F3F3F4; color: #1d1d1f; display: grid; place-items: center; flex-shrink: 0; transition: background .2s, color .2s, transform .15s; }
-.ins-tune-row:hover .ins-tune-ctl { background: #1d1d1f; color: #fff; }
-.ins-tune-row:not(.is-playing):hover .ins-tune-art { background: color-mix(in srgb, var(--tint) 18%, #fff); }
-.ins-tune-row:active .ins-tune-ctl { transform: scale(.94); }
-.ins-tune-row.is-playing .ins-tune-ctl { background: #1d1d1f; color: #fff; }
+.ins-tune-title { margin: 0; color: #141414; font: 700 20px/1.2 var(--font-outfit), var(--font-inter), sans-serif; }
+.ins-tune-sub { margin: 4px 0 0; color: #6b6b6b; font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ins-tune-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ins-tune-row {
+  --tint: #777;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 10px 12px 10px 10px;
+  border: 0;
+  border-radius: 18px;
+  background: #f7f7f8;
+  color: #141414;
+  text-align: left;
+  transition: background 200ms, box-shadow 200ms;
+}
+.ins-tune-row:hover { background: color-mix(in srgb, var(--tint) 9%, #fff); }
+.ins-tune-row.is-playing { background: color-mix(in srgb, var(--tint) 13%, #fff); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--tint) 45%, transparent); }
+.ins-tune-art {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--tint) 18%, #fff);
+  color: var(--tint);
+  transition: background 220ms, color 220ms, transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ins-tune-row:hover .ins-tune-art { transform: rotate(-6deg) scale(1.05); }
+.ins-tune-row.is-playing .ins-tune-art { background: var(--tint); color: #fff; box-shadow: 0 4px 10px color-mix(in srgb, var(--tint) 40%, transparent); }
+.ins-tune-text { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
+.ins-tune-name { color: #141414; font: 600 15px/1.2 var(--font-outfit), var(--font-inter), sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ins-tune-meta { display: flex; align-items: center; gap: 6px; color: #8a8a8a; font-size: 12px; line-height: 1.2; }
+.ins-tune-row.is-playing .ins-tune-meta { color: color-mix(in srgb, var(--tint) 80%, #141414); font-weight: 600; }
+.ins-tune-ctl {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fff;
+  color: #141414;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: background 200ms, color 200ms, transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 200ms;
+}
+.ins-tune-row:hover .ins-tune-ctl { transform: scale(1.06); }
+.ins-tune-row:active .ins-tune-ctl { transform: scale(0.94); }
+.ins-tune-row.is-playing .ins-tune-ctl { background: var(--tint); color: #fff; box-shadow: 0 5px 14px color-mix(in srgb, var(--tint) 40%, transparent); }
 .ins-tune-eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 10px; }
 .ins-tune-eq i { width: 2px; background: currentColor; border-radius: 1px; animation: insTuneEq 900ms ease-in-out infinite; }
 .ins-tune-eq i:nth-child(1) { height: 40%; animation-delay: -.2s; }
@@ -11687,12 +12189,14 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 .ins-tune-eq i:nth-child(3) { height: 60%; animation-delay: -.4s; }
 .ins-tune-eq i:nth-child(4) { height: 80%; animation-delay: -.8s; }
 @keyframes insTuneEq { 0%,100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
-.ins-tune-vol-wrap { display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; padding: 12px 14px; border-radius: 14px; background: #F7F6F4; color: #8a857f; }
-.ins-tune-vol { --fill: 70%; flex: 1; min-width: 0; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; outline: none; background: linear-gradient(to right, #111 var(--fill), #E1DFDC var(--fill)); }
-.ins-tune-vol::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
-.ins-tune-vol::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
-.ins-tune-row:focus-visible, .ins-tune-close:focus-visible { outline: 2px solid #111; outline-offset: 1px; }
-@media (prefers-reduced-motion: reduce) { .ins-tune-eq i { animation: none; } .ins-tune-art { transition: none; } }
+.ins-tune-vol-wrap { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 14px 16px; border-radius: 18px; background: #f7f7f8; color: #8a8a8a; }
+.ins-tune-vol { --fill: 70%; flex: 1; min-width: 0; height: 6px; border-radius: 3px; outline: none; -webkit-appearance: none; appearance: none; background: linear-gradient(to right, var(--tint) var(--fill), #e4e4e6 var(--fill)); }
+.ins-tune-vol::-webkit-slider-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22); -webkit-appearance: none; }
+.ins-tune-vol::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22); }
+.ins-tune-row:focus-visible { outline: 2px solid #141414; outline-offset: 2px; }
+/* The hidden YouTube player's box: no size, off to the side, never in the way. */
+.ins-tune-player { position: fixed; left: -10px; top: -10px; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .ins-tune-eq i { animation: none; } .ins-tune-art, .ins-tune-ctl { transition: none; } .ins-tune-row:hover .ins-tune-art { transform: none; } }
 
 /* Header "now playing" wave: black bars that pulse */
 .ins-wave { display: inline-flex; align-items: center; justify-content: center; gap: 2px; color: #111; }

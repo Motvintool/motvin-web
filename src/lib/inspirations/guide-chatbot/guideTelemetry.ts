@@ -66,6 +66,12 @@ export function recordFeedback(question: string, answer: string, verdict: Verdic
   writeLog({ ...log, feedback: [...others, { at: now, question: clip(question, 200), answer: clip(answer, 200), verdict }].slice(-MAX_ENTRIES) });
 }
 
+/** A verdict taken back (the same thumb pressed again): the answer is left unrated. */
+export function clearFeedback(question: string, answer: string) {
+  const log = readLog();
+  writeLog({ ...log, feedback: log.feedback.filter((entry) => !(entry.question === clip(question, 200) && entry.answer === clip(answer, 200))) });
+}
+
 export function clearLog() {
   writeLog(EMPTY);
 }
