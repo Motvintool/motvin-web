@@ -6,6 +6,8 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { App, Collection, SavedItemType } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { askConfirm } from './ConfirmDialog';
+import { useToast } from './Toast';
+import { useDeleteCollection } from './useDeleteCollection';
 import { useLibrary } from './useLibrary';
 
 /**
@@ -13,7 +15,9 @@ import { useLibrary } from './useLibrary';
  * inline rename/delete. Opens the saved view filtered to the collection.
  */
 export function CollectionCard({ collection, apps }: { collection: Collection; apps: Map<string, App> }) {
-  const { renameCollection, deleteCollection } = useLibrary();
+  const { renameCollection } = useLibrary();
+  const deleteWithUndo = useDeleteCollection();
+  const { show } = useToast();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(collection.name);
   const coverApps = collection.items
@@ -40,8 +44,11 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
   const commit = () => {
     if (!editing) return;
     const next = name.trim();
-    if (next && next !== collection.name) renameCollection(collection.id, next);
-    else setName(collection.name);
+    if (next && next !== collection.name) {
+      const final = renameCollection(collection.id, next);
+      show(final && final !== next ? `Renamed to “${final}” — that name was taken` : 'Collection renamed');
+      if (final) setName(final);
+    } else setName(collection.name);
     setEditing(false);
   };
 
@@ -95,14 +102,17 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
             </form>
           ) : (
             <p className="ins-collection-name" title={collection.name}>
-              {collection.name}
+              {/* Opens it too, as the covers do; one tab stop is enough. */}
+              <Link href={`${INSPIRATIONS_ROUTES.collections}?collection=${collection.id}`} className="ins-collection-name-link" tabIndex={-1}>
+                {collection.name}
+              </Link>
             </p>
           )}
           <p className="ins-collection-sub">{details.join(' · ')}</p>
         </div>
         <div className="ins-collection-actions">
           <button type="button" className="ins-iconbtn ins-iconbtn--plain" aria-label="Rename collection" onClick={() => setEditing(true)}>
-            <img src="/ASSET/Icons/Motvin/colletion-edit.svg" alt="" width={20} height={20} />
+            <img src="/ASSET/Icons/Motvin/edit.svg" alt="" width={16} height={16} />
           </button>
           <button
             type="button"
@@ -111,14 +121,15 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
             onClick={() => {
               void askConfirm({
                 title: `Delete “${collection.name}”?`,
-                description: 'This will permanently delete the collection and everything saved in it. This can’t be undone.',
+                description: 'This will delete the collection and everything saved in it.',
                 confirmLabel: 'Delete collection',
               }).then((ok) => {
-                if (ok) deleteCollection(collection.id);
+                if (!ok) return;
+                deleteWithUndo(collection.id);
               });
             }}
           >
-            <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={20} height={20} />
+            <img src="/ASSET/Icons/Motvin/delete.svg" alt="" width={16} height={16} />
           </button>
         </div>
       </div>

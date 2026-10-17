@@ -90,7 +90,7 @@ export function AppRating({
       if (mounted.current) setSummary(next);
       show(`You rated ${appName} ${value} of ${MAX_RATING}`);
     } catch (error) {
-      show((error as Error).message || 'Could not save your rating');
+      show((error as Error).message || 'Could not save your rating', { tone: 'error' });
     } finally {
       if (mounted.current) setSaving(false);
     }

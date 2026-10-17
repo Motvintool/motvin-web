@@ -26,12 +26,12 @@ export function useDownloadAllScreens(app: App, screens: Screen[], zipBase = `${
       // Guests get the sign-in notice instead.
       if (!allow()) return;
       if (!list.length) {
-        show('These screens are view-only under their recorded licence');
+        show('These screens are view-only under their recorded licence', { tone: 'error' });
         return;
       }
 
       setBusy(true);
-      show(`Preparing ${list.length} screen${list.length === 1 ? '' : 's'}…`);
+      show(`Preparing ${list.length} screen${list.length === 1 ? '' : 's'}…`, { tone: 'progress' });
       try {
         const files: ZipFile[] = [];
         for (const screen of list) {
@@ -48,13 +48,13 @@ export function useDownloadAllScreens(app: App, screens: Screen[], zipBase = `${
           });
         }
         if (!files.length) {
-          show('None of the screens could be fetched');
+          show('None of the screens could be fetched', { tone: 'error' });
           return;
         }
         const count = downloadFiles(files, zipName);
         show(`Downloaded ${count} screen${count === 1 ? '' : 's'}`);
       } catch (error) {
-        show((error as Error).message || 'Download failed');
+        show((error as Error).message || 'Download failed', { tone: 'error' });
       } finally {
         setBusy(false);
       }

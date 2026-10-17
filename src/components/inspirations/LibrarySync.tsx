@@ -5,8 +5,13 @@ import { useAuth } from '@/components/shared/AuthProvider';
 import { libraryAvailable, readLibrary, writeLibrary, type RemoteLibrary } from '@/lib/firebase/library';
 import { libraryStore, type LibraryState } from '@/lib/inspirations/store';
 import type { Collection, SavedItem } from '@/lib/inspirations/types';
+import { useToast } from './Toast';
 
 /**
+ * NOT MOUNTED: collections are kept in this browser's localStorage only (they
+ * outgrow a single Firestore document), so nothing syncs them to an account.
+ * Kept so syncing can be put back by mounting it in InspirationsShell again.
+ *
  * Mounted once (InspirationsShell). Renders nothing — it keeps libraryStore
  * (localStorage-backed, see lib/inspirations/store.ts) in sync with the
  * signed-in user's Firestore library, so Save/Collections follow the
@@ -20,6 +25,9 @@ export function LibrarySync() {
   const { user, ready } = useAuth();
   const syncedUidRef = useRef<string | null>(null);
   const mergingRef = useRef(false);
+  // Said once when syncing starts failing, not on every change after.
+  const warnedRef = useRef(false);
+  const { show } = useToast();
 
   const uid = ready && user && !user.isAnonymous ? user.uid : null;
 
@@ -52,19 +60,24 @@ export function LibrarySync() {
     if (!uid || !libraryAvailable()) return;
     return libraryStore.subscribe(() => {
       if (mergingRef.current) return;
-      void writeLibrary(uid, libraryStore.getState()).catch(() => {
-        // Best-effort — the save stays intact locally either way, and the
-        // next local change (or the next sign-in) will retry the sync.
-      });
+      void writeLibrary(uid, libraryStore.getState())
+        .then(() => {
+          warnedRef.current = false;
+        })
+        .catch(() => {
+          // The save stays intact locally either way, and the next local
+          // change (or the next sign-in) retries the sync.
+          if (warnedRef.current) return;
+          warnedRef.current = true;
+          show('Couldn’t sync your collections — they’re kept on this device for now', { tone: 'error' });
+        });
     });
-  }, [uid]);
+  }, [uid, show]);
 
   return null;
 }
 
 function mergeLibraries(local: LibraryState, remote: RemoteLibrary): LibraryState {
-
-
   const collectionsById = new Map<string, Collection>();
   for (const collection of [...remote.collections, ...local.collections]) {
     const existing = collectionsById.get(collection.id);

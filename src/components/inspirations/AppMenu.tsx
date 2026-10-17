@@ -115,7 +115,7 @@ export function AppMenu({
       await navigator.clipboard.writeText(link ? link() : window.location.href);
       show('Link copied');
     } catch {
-      show('Could not copy the link');
+      show('Could not copy the link', { tone: 'error' });
     }
   };
 

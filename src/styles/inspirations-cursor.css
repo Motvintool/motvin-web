@@ -49,6 +49,6 @@ body [aria-disabled='true'] {
 
 /* Appshots' count cursor, over static count/stat labels only (not ones inside
    clickable controls, which keep the hand). */
-body :is(.ins-tab-count, .ins-chip-count, .ins-fmenu-count, .ins-element-count, .ins-examples-count, .ins-flowblock-count, .ins-popover-item-count, .mi-sort-tab-count, .community-count, .howitwork-statistic, .howitwork-statistic-main, .templates-slide-count):not(:is(a, button, label, [role='tab'], [role='button'], [role='menuitem'], [role='option']) *) {
+body :is(.ins-tab-count, .ins-chip-count, .ins-fmenu-count, .ins-flowblock-count, .mi-sort-tab-count, .community-count, .howitwork-statistic, .howitwork-statistic-main, .templates-slide-count):not(:is(a, button, label, [role='tab'], [role='button'], [role='menuitem'], [role='option']) *) {
   cursor: var(--ins-cursor-count);
 }

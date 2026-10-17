@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Inter, Outfit, Pacifico, Manrope, Sora, Plus_Jakarta_Sans } from 'next/font/google';
 import { AuthModalProvider } from '@/components/shared/AuthModal';
 import { AuthProvider } from '@/components/shared/AuthProvider';
+import { DevPerformanceGuard } from '@/components/shared/DevPerformanceGuard';
+import { InlineScript } from '@/components/shared/InlineScript';
 import { BANNER_RESERVE_SCRIPT } from '@/components/library/ProductBanner';
 import { THEME_INIT_SCRIPT } from '@/lib/theme';
 import '@/styles/auth-modal.css';
@@ -68,14 +70,15 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       <head>
         {/* Sets data-theme on <html> before first paint to avoid a flash of the
             wrong theme. Must stay blocking and must run before any stylesheet. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <InlineScript html={THEME_INIT_SCRIPT} />
         {/* Reserves the library banner's height before first paint, so the
             app shell doesn't jump down once the banner mounts. */}
-        <script dangerouslySetInnerHTML={{ __html: BANNER_RESERVE_SCRIPT }} />
+        <InlineScript html={BANNER_RESERVE_SCRIPT} />
       </head>
       {/* Extensions commonly add attributes to <body> before React
           hydrates; that mismatch is theirs, not ours. */}
       <body suppressHydrationWarning>
+        <DevPerformanceGuard />
         <AuthProvider>
           <AuthModalProvider>{children}</AuthModalProvider>
         </AuthProvider>

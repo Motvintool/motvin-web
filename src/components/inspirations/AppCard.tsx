@@ -123,8 +123,9 @@ export function AppCard({
         const urlToDownload = app.logo;
         if (!urlToDownload) throw new Error('No media to download');
         const src = inspirationsApi.mediaUrl(urlToDownload);
-        if (!src) return;
+        if (!src) throw new Error('No media to download');
         const response = await fetch(src);
+        if (!response.ok) throw new Error('Failed to download');
         const blob = await response.blob();
         const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -134,16 +135,20 @@ export function AppCard({
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(blobUrl);
+        showToast('Downloaded');
         return;
       }
 
+      showToast(`Preparing ${screensToDownload.length} screen${screensToDownload.length === 1 ? '' : 's'}…`, { tone: 'progress' });
       const zip = new JSZip();
       let hasFiles = false;
+      let count = 0;
 
       for (const s of screensToDownload) {
         const src = inspirationsApi.mediaUrl(s.url);
         if (!src) continue;
         const response = await fetch(src);
+        if (!response.ok) continue;
         const blob = await response.blob();
         const watermarkedBlob = await addWatermarkToBlob(
           blob, 
@@ -152,21 +157,25 @@ export function AppCard({
         );
         zip.file(`${s.name || app.name}-${s.id}.png`, watermarkedBlob);
         hasFiles = true;
+        count += 1;
       }
       
-      if (hasFiles) {
-        const zipBlob = await zip.generateAsync({ type: 'blob' });
-        const blobUrl = URL.createObjectURL(zipBlob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = `${app.name}-screens.zip`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
+      if (!hasFiles) {
+        showToast('None of the screens could be fetched', { tone: 'error' });
+        return;
       }
-    } catch (error) {
-      showToast('Failed to download');
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const blobUrl = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${app.name}-screens.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      showToast(`Downloaded ${count} screen${count === 1 ? '' : 's'}`);
+    } catch {
+      showToast('Failed to download', { tone: 'error' });
     }
   };
 
@@ -178,21 +187,24 @@ export function AppCard({
     if (!allowDownload()) return;
     try {
       const data = await inspirationsApi.getApp(app.slug);
-      if (!data) return;
+      if (!data) throw new Error('Failed to download');
       const versionScreens = data.screens.filter(s => s.version === versionId);
       
       if (versionScreens.length === 0) {
-        showToast('No screens found for this version');
+        showToast('No screens found for this version', { tone: 'error' });
         return;
       }
 
+      showToast(`Preparing ${versionScreens.length} screen${versionScreens.length === 1 ? '' : 's'}…`, { tone: 'progress' });
       const zip = new JSZip();
       let hasFiles = false;
+      let count = 0;
 
       for (const s of versionScreens) {
         const src = inspirationsApi.mediaUrl(s.url);
         if (!src) continue;
         const response = await fetch(src);
+        if (!response.ok) continue;
         const blob = await response.blob();
         const watermarkedBlob = await addWatermarkToBlob(
           blob, 
@@ -201,21 +213,25 @@ export function AppCard({
         );
         zip.file(`${s.name || app.name}-${s.id}.png`, watermarkedBlob);
         hasFiles = true;
+        count += 1;
       }
       
-      if (hasFiles) {
-        const zipBlob = await zip.generateAsync({ type: 'blob' });
-        const blobUrl = URL.createObjectURL(zipBlob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = `${app.name}-version-${versionId}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
+      if (!hasFiles) {
+        showToast('None of the screens could be fetched', { tone: 'error' });
+        return;
       }
-    } catch (error) {
-      showToast('Failed to download version screens');
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const blobUrl = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${app.name}-version-${versionId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      showToast(`Downloaded ${count} screen${count === 1 ? '' : 's'}`);
+    } catch {
+      showToast('Failed to download version screens', { tone: 'error' });
     }
   };
 
@@ -227,8 +243,8 @@ export function AppCard({
       const url = new URL(href, window.location.origin).toString();
       await navigator.clipboard.writeText(url);
       showToast('Link copied');
-    } catch (error) {
-      showToast('Failed to copy link');
+    } catch {
+      showToast('Failed to copy link', { tone: 'error' });
     }
   };
 

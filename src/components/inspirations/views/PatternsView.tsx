@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { browsedPlatforms } from '@/lib/inspirations/filters';
+import { screenItemId } from '@/lib/inspirations/savedItems';
 import type { Screen } from '@/lib/inspirations/types';
 import { EmptyState } from '../EmptyState';
 import { NavPill, ToolbarRow } from '../FilterToolbar';
@@ -77,6 +78,17 @@ export function PatternsView() {
     return out;
   })();
 
+  // Each screen's pattern category (the first picked one it's in), so a
+  // selection saves as patterns.
+  const categoryOf = (() => {
+    const map = new Map<string, string>();
+    for (const { pattern, screens: list } of entries) {
+      if (picked.length && !picked.includes(pattern.category)) continue;
+      for (const s of list) if (!map.has(s.id)) map.set(s.id, pattern.category);
+    }
+    return map;
+  })();
+
   // "Search text in screenshot": keeps the pattern screens whose text matches, with the words highlighted.
   const textQuery = params.get('text')?.trim() ?? '';
   const { data: textHits, loading: textLoading } = useAsync(
@@ -128,6 +140,7 @@ export function PatternsView() {
             screens={gridScreens.slice(0, shown)}
             showMeta={false}
             selectable
+            saveItem={(s) => ({ type: 'pattern', id: screenItemId(s.id, categoryOf.get(s.id) ?? '') })}
             textHighlights={textIds ? textHits?.textHighlights : undefined}
             hasMore={shown < gridScreens.length}
             onLoadMore={() => setShown((n) => n + PAGE)}

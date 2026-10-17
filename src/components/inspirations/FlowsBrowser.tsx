@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { FLOW_PARAM } from './FlowPreview';
 import { flowActionPhrase, type App, type Flow, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
+import { FlowSelectRing, useFlowSelection } from './FlowSelect';
 import { EmptyState } from './EmptyState';
 import { ChevronDownIcon, CloseIcon, PlayOutlineIcon, SearchIcon } from './Icons';
 import { Screenshot } from './Screenshot';
@@ -69,6 +70,7 @@ export function FlowsBrowser({ entries, apps }: { entries: Entry[]; apps: Map<st
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
+  const picking = useFlowSelection(entries.map((e) => e.flow), apps);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const searchRef = useRef<HTMLInputElement>(null);
   const params = useSearchParams();
@@ -188,6 +190,8 @@ export function FlowsBrowser({ entries, apps }: { entries: Entry[]; apps: Map<st
             parent={node.entry.flow.parentId ? entries.find((e) => e.flow.id === node.entry.flow.parentId)?.flow ?? null : null}
             app={apps.get(node.entry.flow.appId)}
             active={selected === node.entry.flow.id}
+            picked={picking.isSelected(node.entry.flow.id)}
+            onTogglePick={() => picking.toggle(node.entry.flow.id)}
             registerRef={(el) => {
               if (el) rowRefs.current.set(node.entry.flow.id, el);
               else rowRefs.current.delete(node.entry.flow.id);
@@ -195,6 +199,7 @@ export function FlowsBrowser({ entries, apps }: { entries: Entry[]; apps: Map<st
           />
         ))}
       </div>
+      {picking.bar}
     </div>
   );
 }
@@ -210,12 +215,16 @@ function FlowRow({
   parent,
   app,
   active,
+  picked,
+  onTogglePick,
   registerRef,
 }: {
   entry: Entry;
   parent: Flow | null;
   app?: App;
   active: boolean;
+  picked: boolean;
+  onTogglePick: () => void;
   registerRef: (node: HTMLDivElement | null) => void;
 }) {
   const params = useSearchParams();
@@ -228,7 +237,7 @@ function FlowRow({
   })();
 
   return (
-    <div ref={registerRef} className={`ins-flows-row ${active ? 'is-active' : ''}`}>
+    <div ref={registerRef} className={`ins-flows-row ${active ? 'is-active' : ''} ${picked ? 'is-selected' : ''}`}>
       <div className="ins-flows-row-meta">
         <Link href={href} scroll={false} className="ins-flows-row-title">
           <span className="ins-flows-row-play" aria-hidden>
@@ -245,7 +254,11 @@ function FlowRow({
             </span>
           </span>
         </Link>
-        {app && <AppLogo app={app} size={40} className="ins-flows-row-logo" />}
+        {/* The logo's corner: the select circle takes its place on hover. */}
+        <span className="ins-flows-row-corner">
+          {app && <AppLogo app={app} size={40} className="ins-flows-row-logo" />}
+          <FlowSelectRing flow={flow} selected={picked} onToggle={onTogglePick} />
+        </span>
       </div>
 
       <div className="ins-flows-row-strip">

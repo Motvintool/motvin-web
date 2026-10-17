@@ -10,6 +10,7 @@ import { useIsLibraryAdmin } from './useIsLibraryAdmin';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { ADMIN_PARAM } from './admin/AdminDrawer';
 import { RequestAppModal } from './RequestAppModal';
+import { useToast } from './Toast';
 import { useGoToLogin } from './useGoToLogin';
 
 /**
@@ -23,6 +24,7 @@ const INSTAGRAM_URL = 'https://www.instagram.com/siren.uix';
 
 export function ProfileMenu() {
   const { user: liveUser, signOut } = useAuth();
+  const { show } = useToast();
   const goToLogin = useGoToLogin();
   // The server always renders this menu signed out. This header hydrates
   // inside its own Suspense boundary, after AuthProvider has already swapped
@@ -216,7 +218,12 @@ export function ProfileMenu() {
                     role="menuitem"
                     onClick={async () => {
                       setOpen(false);
-                      await signOut();
+                      try {
+                        await signOut();
+                        show('Logged out');
+                      } catch {
+                        show('Couldn’t log out — please try again', { tone: 'error' });
+                      }
                     }}
                   >
                     <span>Log out</span>

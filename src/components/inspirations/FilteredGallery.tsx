@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { inspirationsApi, type Page, type ScreenSort } from '@/lib/inspirations/api';
 import { EMPTY_FILTERS, matchesFilters, parseFilters, serializeFilters, toggleValue, withDefaultPlatform, type ScreenFilters } from '@/lib/inspirations/filters';
+import { screenItemId } from '@/lib/inspirations/savedItems';
 import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type App, type ContentKind, type Industry, type LibraryCounts, type Screen } from '@/lib/inspirations/types';
 import { AppsGrid } from './AppsGrid';
@@ -286,6 +287,13 @@ export function FilteredGallery({
               hasMore={!textOn && ready && pages.next !== null}
               onLoadMore={loadMore}
               textHighlights={textOn ? textHits?.textHighlights : undefined}
+              // On UI Elements, a selection saves as UI elements: the one
+              // being browsed, else the screen's first.
+              saveItem={
+                active === 'ui-elements'
+                  ? (s) => ({ type: 'component', id: screenItemId(s.id, element ?? s.elements[0] ?? '') })
+                  : undefined
+              }
               empty={
                 libraryEmpty ? (
                   <EmptyState

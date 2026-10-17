@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { createPortal } from 'react-dom';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { screenItemId } from '@/lib/inspirations/savedItems';
 import { elementLabel, INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type App, type ElementKind, type Flow, type Pattern, type Screen } from '@/lib/inspirations/types';
 import { appPlatform, storeAction } from '@/lib/inspirations/storeAction';
@@ -18,6 +19,7 @@ import { StoreRankBadge } from '../StoreRankBadge';
 import { useDownloadAllScreens } from '../useDownloadAllScreens';
 import { useLibrary } from '../useLibrary';
 import { FloatCollectionBar } from '../FloatCollectionBar';
+import { sameItem, useRemoveWithUndo } from '../useRemoveWithUndo';
 import { EmptyState } from '../EmptyState';
 import {
   MENU_ITEM_SELECTOR,
@@ -405,9 +407,9 @@ export function AppDetailView({
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const { collectionsContaining, toggleInCollection, deleteCollection } = useLibrary();
+  const { collectionsContaining } = useLibrary();
   const [floatOpen, setFloatOpen] = useState(false);
-  const [floatRemovedOpen, setFloatRemovedOpen] = useState(false);
+  const removeWithUndo = useRemoveWithUndo();
   const [elementFilter, setElementFilter] = useState<ElementKind[]>([]);
   const [version, setVersion] = useState<string>(app.currentVersion ?? '');
   const [patternFilter, setPatternFilter] = useState<string[]>([]);
@@ -449,15 +451,8 @@ export function AppDetailView({
 
   const handleSaveClick = () => {
     if (saved) {
-      const collections = collectionsContaining('app', app.id);
-      collections.forEach(c => {
-        toggleInCollection(c.id, { type: 'app', id: app.id });
-        if (c.items.length === 1) {
-          deleteCollection(c.id);
-        }
-      });
-      setFloatRemovedOpen(true);
-      setTimeout(() => setFloatRemovedOpen(false), 1600);
+      // Out of every collection it's in; the collections themselves stay.
+      removeWithUndo(collectionsContaining('app', app.id).map((c) => ({ collectionId: c.id, match: sameItem('app', app.id) })));
     } else {
       setFloatOpen(true);
     }
@@ -538,6 +533,17 @@ export function AppDetailView({
   const patternScreenIds = new Set(categoryFilteredPatterns.flatMap((p) => p.screenIds));
   const patternScreens = versionScreens.filter((s) => patternScreenIds.has(s.id));
   const sortedPatternScreens = textFilter(patternScreens);
+  // A selection here saves as patterns, under the category it was found in
+  // (a picked one first); on UI Elements, as the element picked, else the
+  // screen's first.
+  const savePattern = (s: Screen) => ({
+    type: 'pattern' as const,
+    id: screenItemId(s.id, categoryFilteredPatterns.find((p) => p.screenIds.includes(s.id))?.category ?? ''),
+  });
+  const saveElement = (s: Screen) => ({
+    type: 'component' as const,
+    id: screenItemId(s.id, s.elements.find((e) => elementFilter.includes(e)) ?? s.elements[0] ?? ''),
+  });
   const versionPatternCount = patterns.filter((p) => p.screenIds.some((id) => versionScreenIds.has(id))).length;
 
   // The app's colours (from the shown version's screens), behind the
@@ -830,17 +836,6 @@ export function AppDetailView({
         />
       )}
 
-      {floatRemovedOpen && (
-        <div className="ins-float-collection" role="status" aria-live="polite">
-          <div className="ins-float-collection-success">
-            <span className="ins-float-collection-success-check" aria-hidden>
-              <span />
-            </span>
-            Removed from collection
-          </div>
-        </div>
-      )}
-
       <div ref={anchorRef} className="ins-ftoolbar-anchor">
         {renderTabbarRow()}
         {docked && headerContent && createPortal(renderTabbarRow(true), headerContent)}
@@ -905,6 +900,7 @@ export function AppDetailView({
               showApp={false}
               showMeta={false}
               selectable
+              saveItem={saveElement}
               textHighlights={textHighlights}
               empty={
                 <EmptyState play="inline" title={textActive ? 'No screens found' : 'No screens matched this element'} />
@@ -930,6 +926,7 @@ export function AppDetailView({
               showApp={false}
               showMeta={false}
               selectable
+              saveItem={savePattern}
               textHighlights={textHighlights}
               empty={
                 <EmptyState play="inline" title={textActive ? 'No screens found' : 'No screens matched this category'} />

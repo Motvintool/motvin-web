@@ -96,13 +96,13 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
       // Guests get the sign-in notice instead.
       if (!allow('copy')) return;
       if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
-        show('Copying not supported');
+        show('Copying not supported', { tone: 'error' });
         return;
       }
       // Fetching the full screenshot and stamping the watermark takes a
       // moment, so say so straight away instead of looking like nothing
       // happened.
-      show('Preparing PNG…');
+      show('Preparing PNG…', { tone: 'progress' });
       try {
         // The clipboard write starts now, inside the click, and is handed the
         // image once it's ready: browsers (Safari above all) refuse a write
@@ -111,19 +111,19 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
         show('Copied as PNG');
       } catch (error) {
         console.error('Failed to copy', error);
-        show('Failed to copy');
+        show('Failed to copy', { tone: 'error' });
       }
     },
     [allow, show, watermarked],
   );
 
   const downloadPng = useCallback(
-    async (e: MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+    async (e?: MouseEvent) => {
+      e?.preventDefault();
+      e?.stopPropagation();
       setPosition(null);
       if (!allow()) return;
-      show('Preparing download…');
+      show('Preparing download…', { tone: 'progress' });
       try {
         const blobUrl = URL.createObjectURL(await watermarked());
         const a = document.createElement('a');
@@ -133,8 +133,9 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(blobUrl);
+        show('Downloaded as PNG');
       } catch {
-        show('Failed to download');
+        show('Failed to download', { tone: 'error' });
       }
     },
     [allow, screen, show, watermarked],
@@ -149,7 +150,7 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
         await navigator.clipboard.writeText(link());
         show('Link copied');
       } catch {
-        show('Failed to copy link');
+        show('Failed to copy link', { tone: 'error' });
       }
     },
     [link, show],
@@ -202,5 +203,5 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
         )
       : null;
 
-  return { onContextMenu, copyPng, menu };
+  return { onContextMenu, copyPng, downloadPng, menu };
 }

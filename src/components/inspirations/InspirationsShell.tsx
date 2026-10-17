@@ -7,7 +7,6 @@ import { ConfirmHost } from './ConfirmDialog';
 import { GuestDownloadNotice } from './GuestDownloadNotice';
 import { GuestImageGuard } from './GuestImageGuard';
 import { Header } from './Header';
-import { LibrarySync } from './LibrarySync';
 import { ScreenPreviewOverlay } from './ScreenPreviewModal';
 import { ToastProvider } from './Toast';
 import { AdminDrawerOverlay } from './admin/AdminDrawer';
@@ -48,9 +47,6 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
         <Suspense fallback={<InspirationsHeaderSkeleton />}>
           <Header />
         </Suspense>
-        {/* Renders nothing — keeps Save/Collections synced to the signed-in
-            account. Reads useAuth(), which needs no Suspense boundary here. */}
-        <LibrarySync />
         {/* After a guest signs in: says their requests moved (or some didn't fit). Renders nothing. */}
         <GuestRequestsNotice />
         {/* Tells a guest downloads need an account (see useDownloadGate). */}

@@ -6,7 +6,8 @@ import { FLOW_PARAM } from './FlowPreview';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { App, Flow, Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
-import { PlayOutlineIcon } from './Icons';
+import { FlowSelectRing, useFlowSelection } from './FlowSelect';
+import { CloseIcon, PlayOutlineIcon } from './Icons';
 import { Screenshot } from './Screenshot';
 
 /**
@@ -22,17 +23,47 @@ import { Screenshot } from './Screenshot';
 
 type Entry = { flow: Flow; screens: Screen[] };
 
-export function FlowList({ entries, apps }: { entries: Entry[]; apps: Map<string, App> }) {
+export function FlowList({
+  entries,
+  apps,
+  onRemove,
+}: {
+  entries: Entry[];
+  apps: Map<string, App>;
+  /** In a collection: each row gets a × to take it out, in place of the select circle. */
+  onRemove?: (flow: Flow) => void;
+}) {
+  const selection = useFlowSelection(entries.map((e) => e.flow), apps);
   return (
     <div className="ins-flowlist">
       {entries.map((entry) => (
-        <FlowBlock key={entry.flow.id} entry={entry} app={apps.get(entry.flow.appId)} />
+        <FlowBlock
+          key={entry.flow.id}
+          entry={entry}
+          app={apps.get(entry.flow.appId)}
+          selected={selection.isSelected(entry.flow.id)}
+          onToggleSelect={() => selection.toggle(entry.flow.id)}
+          onRemove={onRemove ? () => onRemove(entry.flow) : undefined}
+        />
       ))}
+      {!onRemove && selection.bar}
     </div>
   );
 }
 
-function FlowBlock({ entry, app }: { entry: Entry; app?: App }) {
+function FlowBlock({
+  entry,
+  app,
+  selected,
+  onToggleSelect,
+  onRemove,
+}: {
+  entry: Entry;
+  app?: App;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onRemove?: () => void;
+}) {
   const params = useSearchParams();
   const { flow, screens } = entry;
   const steps = flow.screenIds.length;
@@ -44,7 +75,7 @@ function FlowBlock({ entry, app }: { entry: Entry; app?: App }) {
   })();
 
   return (
-    <div className="ins-flows-row">
+    <div className={`ins-flows-row ${selected ? 'is-selected' : ''}`}>
       <div className="ins-flows-row-meta">
         <Link href={previewHref} scroll={false} className="ins-flows-row-title">
           <span className="ins-flows-row-play" aria-hidden>
@@ -58,7 +89,17 @@ function FlowBlock({ entry, app }: { entry: Entry; app?: App }) {
             </span>
           </span>
         </Link>
-        {app && <AppLogo app={app} size={40} className="ins-flows-row-logo" />}
+        {/* The logo's corner: the select circle (or ×) takes its place on hover. */}
+        <span className="ins-flows-row-corner">
+          {app && <AppLogo app={app} size={40} className="ins-flows-row-logo" />}
+          {onRemove ? (
+            <button type="button" className="ins-card-remove-btn ins-flows-row-remove" aria-label={`Remove ${flow.name}`} onClick={onRemove}>
+              <CloseIcon size={14} />
+            </button>
+          ) : (
+            <FlowSelectRing flow={flow} selected={selected} onToggle={onToggleSelect} />
+          )}
+        </span>
       </div>
 
       <div className="ins-flows-row-strip">

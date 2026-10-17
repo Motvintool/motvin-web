@@ -4,27 +4,32 @@ import { appCardScreens } from '@/lib/inspirations/cover';
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, useSyncExternalStore, type FormEvent } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import { elementLabel } from '@/lib/inspirations/taxonomy';
+import { splitScreenItemId } from '@/lib/inspirations/savedItems';
 import type { App, CollectionItem, Screen } from '@/lib/inspirations/types';
 import { AppCard } from '../AppCard';
 import { CollectionCard } from '../CollectionCard';
 import { EmptyState } from '../EmptyState';
-import { FlowCard } from '../FlowCard';
+import { FlowList } from '../FlowList';
+import { FlowListSkeleton } from '../Skeletons';
 import { FloatCollectionBar } from '../FloatCollectionBar';
 import { askConfirm } from '../ConfirmDialog';
 import { BookmarkIcon, CloseIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
 import { PatternCard } from '../PatternCard';
 import { ScreenGrid } from '../ScreenGrid';
-import { SCREEN_PARAM } from '../ScreenPreviewModal';
 import { useApps } from '../useApps';
 import { useAsync } from '../useAsync';
+import { useToast } from '../Toast';
+import { useDeleteCollection } from '../useDeleteCollection';
 import { useLibrary } from '../useLibrary';
+import { sameItem, useRemoveWithUndo } from '../useRemoveWithUndo';
 import { useAppSelection } from '../useAppSelection';
 import { useScreensByIds } from '../useScreensByIds';
+
+const noSubscribe = () => () => {};
 
 type SavedTab = 'apps' | 'screens' | 'flows' | 'patterns' | 'components';
 
@@ -49,22 +54,35 @@ export function SavedView() {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const { collections, createCollection, deleteCollection, removeFromCollection } = useLibrary();
+  const { collections, createCollection, renameCollection } = useLibrary();
+  const deleteWithUndo = useDeleteCollection();
   const apps = useApps();
+  const { show } = useToast();
+  // Takes one thing out, and says so.
+  const removeWithUndo = useRemoveWithUndo();
+  // Takes one thing out, and says so, with an Undo.
+  const removeItem = (collectionId: string, item: { type: CollectionItem['type']; id: string }) =>
+    removeWithUndo([{ collectionId, match: sameItem(item.type, item.id) }]);
   const { selected, toggle, clear } = useAppSelection();
   const [creatingBoard, setCreatingBoard] = useState(false);
   const [newBoardName, setNewBoardName] = useState('');
+  const [renaming, setRenaming] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  // Collections live in this browser, so the server can't know them: until
+  // the page is up, show nothing rather than flash "Save what inspires you"
+  // (or the list, on a link to one collection).
+  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
 
   const collectionId = params.get('collection');
   const collection = collections.find((c) => c.id === collectionId);
 
   const rawTab = params.get('type');
-  const tab: SavedTab = COLLECTION_TABS.some((t) => t.id === rawTab) ? (rawTab as SavedTab) : 'apps';
 
   const onCreateBoard = (e: FormEvent) => {
     e.preventDefault();
     if (!newBoardName.trim()) return;
-    createCollection(newBoardName);
+    const created = createCollection(newBoardName);
+    show(`Created “${created.name}”`);
     setNewBoardName('');
     setCreatingBoard(false);
   };
@@ -83,11 +101,31 @@ export function SavedView() {
   }, [collection]);
 
   const screenIds = items.filter((i) => i.type === 'screen').map((i) => i.id);
-  const { screens: screenMap } = useScreensByIds(screenIds);
-  const screens = screenIds.map((id) => screenMap.get(id)).filter((s): s is Screen => Boolean(s));
+  // UI elements, and patterns saved from the Patterns page, are screens too
+  // (`<screenId>:<tag>`): shown as screen cards, each screen once.
+  const screensOf = (type: 'component' | 'pattern') => [
+    ...new Set(items.filter((i) => i.type === type).map((i) => splitScreenItemId(i.id)?.screenId).filter((id): id is string => Boolean(id))),
+  ];
+  const componentScreenIds = screensOf('component');
+  const patternScreenIds = screensOf('pattern');
+  const { screens: screenMap, loading: screensLoading } = useScreensByIds([...new Set([...screenIds, ...componentScreenIds, ...patternScreenIds])]);
+  const toScreens = (ids: string[]) => ids.map((id) => screenMap.get(id)).filter((s): s is Screen => Boolean(s));
+  const screens = toScreens(screenIds);
+  const componentScreens = toScreens(componentScreenIds);
+  const patternScreens = toScreens(patternScreenIds);
+  // Takes out every item of that type saved from this screen.
+  const removeScreenItems = (type: 'component' | 'pattern', screenId: string, what: string) => {
+    if (!collection) return;
+    void askConfirm({ title: `Remove this ${what}?`, description: `It will be removed from “${collection.name}”.` }).then((ok) => {
+      if (!ok) return;
+      removeWithUndo([
+        { collectionId: collection.id, match: (item) => item.type === type && splitScreenItemId(item.id)?.screenId === screenId },
+      ]);
+    });
+  };
 
   const flowIds = items.filter((i) => i.type === 'flow').map((i) => i.id);
-  const { data: flows } = useAsync(
+  const { data: flows, loading: flowsLoading } = useAsync(
     async () => {
       const found = await Promise.all(flowIds.map((id) => inspirationsApi.getFlow(id)));
       return found.filter(Boolean).map((f) => f!);
@@ -97,9 +135,9 @@ export function SavedView() {
 
   const patternIds = items.filter((i) => i.type === 'pattern').map((i) => i.id);
   const { data: allPatterns } = useAsync(() => inspirationsApi.listPatterns(), 'patterns');
+  // Patterns saved from their own page, by the pattern's plain id.
   const patterns = (allPatterns ?? []).filter((p) => patternIds.includes(p.id));
 
-  const components = items.filter((i) => i.type === 'component');
   const savedAppIds = items.filter((i) => i.type === 'app').map((i) => i.id);
   const savedApps = savedAppIds.map((id) => apps.get(id)).filter((app): app is App => Boolean(app));
   const { data: appPreviews, loading: appPreviewsLoading } = useAsync(async () => {
@@ -119,14 +157,39 @@ export function SavedView() {
         : t === 'flows'
           ? flowIds.length
           : t === 'patterns'
-            ? patternIds.length
-            : components.length;
+            ? patterns.length + patternScreenIds.length
+            : componentScreenIds.length;
 
   const total = items.length;
+  // No tab in the URL: the first one with something in it.
+  const tab: SavedTab = COLLECTION_TABS.some((t) => t.id === rawTab)
+    ? (rawTab as SavedTab)
+    : (COLLECTION_TABS.find((t) => count(t.id) > 0)?.id ?? 'apps');
+
+  // Renaming in place: Enter or leaving saves a real change; a blank name
+  // keeps the old one.
+  const startRename = () => {
+    if (!collection) return;
+    setDraftName(collection.name);
+    setRenaming(true);
+  };
+  const commitRename = () => {
+    if (!renaming || !collection) return;
+    const next = draftName.trim();
+    if (next && next !== collection.name) {
+      const final = renameCollection(collection.id, next);
+      show(final && final !== next ? `Renamed to “${final}” — that name was taken` : 'Collection renamed');
+    }
+    setRenaming(false);
+  };
 
   // --- Boards grid (no ?collection=): boards + create-board panel only. No
   // tab strip here — type-browsing lives inside a board, not duplicated at
   // this level too.
+  if (!hydrated) {
+    return <section aria-busy="true">{!collectionId && <PageHeading keep title="Collections" />}</section>;
+  }
+
   if (!collection) {
     return (
       <section>
@@ -138,7 +201,7 @@ export function SavedView() {
               <form className="ins-collections-create" onSubmit={onCreateBoard}>
                 <input
                   className="ins-collections-create-input"
-                  placeholder="Collection Name"
+                  placeholder="Collection name"
                   value={newBoardName}
                   onChange={(e) => setNewBoardName(e.target.value)}
                   autoFocus
@@ -212,26 +275,83 @@ export function SavedView() {
           <Link href={INSPIRATIONS_ROUTES.collections} className="ins-collections-back" aria-label="Back to collections">
             <img src="/ASSET/Icons/Motvin/colletion-back.svg" alt="" width={58} height={58} />
           </Link>
-          <h1 className="ins-title">{collection.name}</h1>
+          {renaming ? (
+            <form
+              className="ins-collection-title-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                commitRename();
+              }}
+            >
+              <input
+                className="ins-title ins-collection-title-input"
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                onFocus={(e) => {
+                  const end = e.currentTarget.value.length;
+                  e.currentTarget.setSelectionRange(end, end);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setRenaming(false);
+                  }
+                }}
+                onBlur={commitRename}
+                autoFocus
+                maxLength={48}
+                aria-label="Collection name"
+              />
+            </form>
+          ) : (
+            <h1
+              className="ins-title ins-collection-title-edit"
+              title="Click to rename"
+              tabIndex={0}
+              role="button"
+              aria-label={`${collection.name}, click to rename`}
+              onClick={startRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  startRename();
+                }
+              }}
+            >
+              {collection.name}
+            </h1>
+          )}
         </div>
-        <button
-          type="button"
-          className="ins-collection-remove"
-          onClick={() => {
-            void askConfirm({
-              title: `Remove “${collection.name}”?`,
-              description: 'This will permanently remove the collection and everything saved in it. This can’t be undone.',
-              confirmLabel: 'Remove collection',
-            }).then((ok) => {
-              if (!ok) return;
-              deleteCollection(collection.id);
-              router.push(INSPIRATIONS_ROUTES.collections);
-            });
-          }}
-        >
-          <img src="/ASSET/Icons/Motvin/colletion-delete.svg" alt="" width={20} height={20} />
-          Remove Collection
-        </button>
+        {/* Clicking the title renames it in place; the bin removes the
+            collection, after asking. */}
+        <div className="ins-masthead-actions">
+          <button
+            type="button"
+            className="ins-btn ins-btn--masthead-store ins-collection-remove"
+            onClick={() => {
+              void askConfirm({
+                title: `Remove “${collection.name}”?`,
+                description: 'This will delete the collection and everything saved in it.',
+                confirmLabel: 'Remove collection',
+              }).then((ok) => {
+                if (!ok) return;
+                deleteWithUndo(collection.id);
+                router.push(INSPIRATIONS_ROUTES.collections);
+              });
+            }}
+          >
+            {/* delete.svg, inline so it takes the text colour (red on hover). */}
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+              <path
+                fillRule="evenodd"
+                clipRule="evenodd"
+                d="M4.25 14.75C3.8375 14.75 3.4845 14.6032 3.191 14.3097C2.8975 14.0162 2.7505 13.663 2.75 13.25V3.5H2V2H5.75V1.25H10.25V2H14V3.5H13.25V13.25C13.25 13.6625 13.1032 14.0157 12.8097 14.3097C12.5162 14.6037 12.163 14.7505 11.75 14.75H4.25ZM11.75 3.5H4.25V13.25H11.75V3.5ZM5.75 11.75H7.25V5H5.75V11.75ZM8.75 11.75H10.25V5H8.75V11.75Z"
+                fill="currentColor"
+              />
+            </svg>
+            Remove collection
+          </button>
+        </div>
       </header>
 
       <div className="ins-tabbar ins-collection-detail-tabs" role="tablist" aria-label="Item type">
@@ -242,7 +362,7 @@ export function SavedView() {
             role="tab"
             aria-selected={tab === t.id}
             className={`ins-tab ${tab === t.id ? 'is-active' : ''}`}
-            onClick={() => setParam('type', t.id === 'apps' ? null : t.id)}
+            onClick={() => setParam('type', t.id)}
           >
             {t.label}
             {count(t.id) > 0 && <span className="ins-tab-count">{count(t.id)}</span>}
@@ -265,11 +385,12 @@ export function SavedView() {
               <ScreenGrid
                 screens={screens}
                 apps={apps}
+                loading={screensLoading}
                 showApp={false}
                 showMeta={false}
                 onRemoveItem={(id) => {
                   void askConfirm({ title: 'Remove this screen?', description: `It will be removed from “${collection.name}”.` }).then((ok) => {
-                    if (ok) removeFromCollection(collection.id, { type: 'screen', id });
+                    if (ok) removeItem(collection.id, { type: 'screen', id });
                   });
                 }}
                 empty={<EmptyState
@@ -284,125 +405,99 @@ export function SavedView() {
 
           {tab === 'flows' && (
             <section className="ins-result-section">
-              {(flows ?? []).length === 0 ? (
+              {flowIds.length > 0 && flowsLoading ? (
+                <FlowListSkeleton />
+              ) : (flows ?? []).length === 0 ? (
                 <EmptyState
                   play
                   title="No saved flows"
-                  description="Save a flow from any app to keep it here."
+                  description="Select flows and save them to keep them here."
                   action={{ label: 'Explore flows', href: INSPIRATIONS_ROUTES.flows }}
                 />
               ) : (
-                <div className="ins-flow-grid">
-                  {(flows ?? []).map(({ flow, screens: flowScreens }) => (
-                    <div key={flow.id} style={{ position: 'relative' }}>
-                      <FlowCard flow={flow} screens={flowScreens} app={apps.get(flow.appId)} />
-                      <button
-                        type="button"
-                        className="ins-card-remove-btn"
-                        aria-label={`Remove ${flow.name}`}
-                        style={{ top: 12, right: 12, zIndex: 10 }}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          void askConfirm({ title: `Remove “${flow.name}”?`, description: `It will be removed from “${collection.name}”.` }).then((ok) => {
-                            if (ok) removeFromCollection(collection.id, { type: 'flow', id: flow.id });
-                          });
-                        }}
-                      >
-                        <CloseIcon size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                <FlowList
+                  entries={flows ?? []}
+                  apps={apps}
+                  onRemove={(flow) => {
+                    void askConfirm({ title: `Remove “${flow.name}”?`, description: `It will be removed from “${collection.name}”.` }).then((ok) => {
+                      if (ok) removeItem(collection.id, { type: 'flow', id: flow.id });
+                    });
+                  }}
+                />
               )}
             </section>
           )}
 
           {tab === 'patterns' && (
             <section className="ins-result-section">
-              {patterns.length === 0 ? (
+              {patternScreenIds.length > 0 && screensLoading ? (
+                <div className="ins-shot-panel">
+                  <ScreenGrid screens={[]} loading showMeta={false} />
+                </div>
+              ) : patterns.length === 0 && patternScreens.length === 0 ? (
                 <EmptyState
                   play
                   title="No saved patterns"
-                  description="Save a pattern to keep its examples here."
+                  description="Select pattern screens and save them to keep them here."
                   action={{ label: 'Explore patterns', href: INSPIRATIONS_ROUTES.patterns }}
                 />
               ) : (
-                <div className="ins-pattern-grid-wrap">
-                  {patterns.map((p) => (
-                    <div key={p.id} style={{ position: 'relative' }}>
-                      <PatternCard pattern={p} />
-                      <button
-                        type="button"
-                        className="ins-card-remove-btn"
-                        aria-label={`Remove ${p.name}`}
-                        style={{ top: 12, right: 12, zIndex: 10 }}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          void askConfirm({ title: `Remove “${p.name}”?`, description: `It will be removed from “${collection.name}”.` }).then((ok) => {
-                            if (ok) removeFromCollection(collection.id, { type: 'pattern', id: p.id });
-                          });
-                        }}
-                      >
-                        <CloseIcon size={14} />
-                      </button>
+                <>
+                  {patterns.length > 0 && (
+                    <div className="ins-pattern-grid-wrap">
+                      {patterns.map((p) => (
+                        <div key={p.id} style={{ position: 'relative' }}>
+                          <PatternCard pattern={p} />
+                          <button
+                            type="button"
+                            className="ins-card-remove-btn"
+                            aria-label={`Remove ${p.name}`}
+                            style={{ top: 12, right: 12, zIndex: 10 }}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              void askConfirm({ title: `Remove “${p.name}”?`, description: `It will be removed from “${collection.name}”.` }).then((ok) => {
+                                if (ok) removeItem(collection.id, { type: 'pattern', id: p.id });
+                              });
+                            }}
+                          >
+                            <CloseIcon size={14} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                  {patternScreens.length > 0 && (
+                    <div className="ins-shot-panel">
+                      <ScreenGrid
+                        screens={patternScreens}
+                        apps={apps}
+                        showApp={false}
+                        showMeta={false}
+                        onRemoveItem={(id) => removeScreenItems('pattern', id, 'pattern')}
+                      />
+                    </div>
+                  )}
+                </>
               )}
             </section>
           )}
 
           {tab === 'components' && (
-            <section className="ins-result-section">
-              {components.length === 0 ? (
-                <EmptyState
-                  play
-                  title="No saved components"
-                  description="Save a UI element from any screen to keep it here."
-                  action={{ label: 'Explore UI elements', href: INSPIRATIONS_ROUTES.uiElements }}
-                />
-              ) : (
-                <div className="ins-element-list">
-                  {components.map((c) => {
-                    const [screenId, kind] = c.id.split(':');
-                    const screen = screenMap.get(screenId);
-                    return (
-                      <div key={c.id} style={{ position: 'relative' }}>
-                        <Link
-                          href={
-                            screen
-                              ? (() => {
-                                  const sp = new URLSearchParams(params.toString());
-                                  sp.set(SCREEN_PARAM, screen.id);
-                                  return `${pathname}?${sp.toString()}`;
-                                })()
-                              : `${INSPIRATIONS_ROUTES.uiElements}?kind=${kind}`
-                          }
-                          scroll={false}
-                          className="ins-element-row"
-                        >
-                          <span className="ins-element-name">{elementLabel(kind)}</span>
-                          <span className="ins-element-count">{screen ? screen.name : ''}</span>
-                        </Link>
-                        <button
-                          type="button"
-                          className="ins-card-remove-btn"
-                          aria-label={`Remove ${elementLabel(kind)}`}
-                          style={{ top: '50%', right: 12, transform: 'translateY(-50%)', zIndex: 10, width: 28, height: 28 }}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            void askConfirm({ title: `Remove “${elementLabel(kind)}”?`, description: `This UI element will be removed from “${collection.name}”.` }).then((ok) => {
-                              if (ok) removeFromCollection(collection.id, { type: 'component', id: c.id });
-                            });
-                          }}
-                        >
-                          <CloseIcon size={14} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+            <section className="ins-result-section ins-shot-panel">
+              <ScreenGrid
+                screens={componentScreens}
+                apps={apps}
+                loading={screensLoading}
+                showApp={false}
+                showMeta={false}
+                onRemoveItem={(id) => removeScreenItems('component', id, 'UI element')}
+                empty={<EmptyState
+                    play
+                    title="No saved UI elements"
+                    description="Select screens on UI Elements and save them to keep them here."
+                    action={{ label: 'Explore UI elements', href: INSPIRATIONS_ROUTES.uiElements }}
+                  />}
+              />
             </section>
           )}
 
@@ -431,7 +526,7 @@ export function SavedView() {
                           previewScreens={appPreviews?.get(app.id)}
                           onRemove={() => {
                             void askConfirm({ title: `Remove “${app.name}”?`, description: `It will be removed from “${collection.name}”.` }).then((ok) => {
-                              if (ok) removeFromCollection(collection.id, { type: 'app', id: app.id });
+                              if (ok) removeItem(collection.id, { type: 'app', id: app.id });
                             });
                           }}
                         />

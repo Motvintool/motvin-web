@@ -364,11 +364,6 @@ function appOnPage(context: NavContext | undefined, index: LibraryIndex): App | 
   return match ? (index.appBySlug.get(decodeURIComponent(match[1])) ?? null) : null;
 }
 
-function patternOnPage(context: NavContext | undefined, index: LibraryIndex): Pattern | null {
-  const match = /^\/inspirations\/pattern\/([^/?#]+)/.exec(context?.page?.pathname ?? '');
-  return match ? (index.patterns.find((pattern) => pattern.slug === decodeURIComponent(match[1])) ?? null) : null;
-}
-
 /** The apps the last answer listed, in the order they were shown. */
 function listedApps(context: NavContext | undefined, index: LibraryIndex): App[] {
   return (context?.results ?? [])
@@ -587,12 +582,10 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
     };
   }
 
-  // Where the visitor is: the app or pattern page they have open is a subject too.
+  // Where the visitor is: the app page they have open is a subject too.
   const pageApp = appOnPage(context, index);
-  const pagePattern = patternOnPage(context, index);
   if (WHERE_AM_I.test(lower)) {
     if (pageApp) return { ...describeApp(pageApp), text: `You’re looking at ${pageApp.name}. ${describeApp(pageApp).text}` };
-    if (pagePattern) return { text: `You’re looking at the “${pagePattern.name}” pattern (${pagePattern.category}).`, targets: [patternTarget(pagePattern), ...appsUsingPattern(index, pagePattern).slice(0, 3).map((app) => appTarget(app))], card: patternCard(pagePattern, index) };
     const where = PAGES.find((entry) => entry.target.href === (context?.page?.pathname ?? '').replace(/\/$/, ''));
     return { text: where ? `You’re on the ${where.target.label} page.` : 'You’re in Motvin Inspirations. Tell me an app or a page and I’ll take you there.', targets: QUICK_PAGES.slice(0, 4) };
   }
@@ -660,7 +653,7 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   // On a pattern page, "this" / "it" is that pattern.
   const foundPatterns = findPatterns(working, patterns);
   const scoped = Boolean(industryHit || platformHit) && (states.length > 0 || Boolean(screenType)) && !/\bpatterns?\b/.test(lower);
-  const namedPatterns = scoped ? [] : foundPatterns.length ? foundPatterns : pagePattern && !findApps(lower, apps).length && (REFERS_BACK.test(lower) || /\bpattern\b/.test(lower)) ? [pagePattern] : [];
+  const namedPatterns = scoped ? [] : foundPatterns.length ? foundPatterns : [];
   const flowCategory = findFlowCategory(working, flowCategories);
   const askedFlowCategory = findFlowCategory(working, [...FLOW_CATEGORY_PRESETS]);
   const numberFilter = findNumberFilter(lower);
@@ -697,7 +690,6 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   // Save and copy: small, safe, and always confirmed by the visitor first.
   if (SAVE.test(lower) || COPY.test(lower)) {
     const target = mentioned[0] ?? subject;
-    if (!target && pagePattern && SAVE.test(lower)) return { text: `Save the “${pagePattern.name}” pattern to a collection?`, targets: [], action: { kind: 'save', item: { type: 'pattern', id: pagePattern.id }, label: pagePattern.name }, kind: 'action' };
     if (!target) return { text: 'Which app would you like to save or share? Name it, or open it first.', targets: appResults([...apps].sort((a, b) => b.screenCount - a.screenCount).slice(0, 4)), kind: 'clarify' };
     if (COPY.test(lower)) {
       const href = INSPIRATIONS_ROUTES.app(target);

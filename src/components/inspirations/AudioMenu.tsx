@@ -111,7 +111,7 @@ export function AudioMenu() {
         audioRef.current.play().catch((err: unknown) => {
           if (err instanceof DOMException && err.name === 'AbortError') return; // replaced by the next pick
           setPlaying((current) => (current === stationName ? null : current));
-          show(`${stationName} isn't available right now`);
+          show(`${stationName} isn't available right now`, { tone: 'error' });
         });
       }
     }

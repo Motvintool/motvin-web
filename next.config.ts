@@ -123,6 +123,9 @@ const nextConfig: NextConfig = {
       // flat list); any surviving link to the old URL lands there, with its
       // query string (e.g. ?collection=id) carried over automatically.
       { source: '/inspirations/saved', destination: '/inspirations/collections', permanent: true },
+      // The old one-pattern page is gone: patterns are browsed on the
+      // Patterns page, by category. A surviving link or bookmark lands there.
+      { source: '/inspirations/pattern/:slug*', destination: '/inspirations/patterns', permanent: true },
     ];
   },
 

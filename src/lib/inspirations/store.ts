@@ -71,21 +71,23 @@ function newId(prefix: string) {
 }
 
 /**
- * The given name, suffixed " 2", " 3", … if it collides with an existing
- * board's name — two boards named identically are indistinguishable in the
- * grid, so an intentionally-NEW board (createCollection, renameCollection)
- * never reuses a name silently; only `getOrCreateCollectionByName`'s "same
- * name = same board" merge is allowed to match exactly. `excludeId` skips one
- * collection's own current name when renaming, so renaming "Foo" to "Foo"
- * isn't treated as a collision with itself.
+ * The given name, or "<name> copy", "<name> copy 2", … when another board
+ * already has it (letter case aside) — two boards named alike are
+ * indistinguishable in the grid, so an intentionally-NEW or renamed board
+ * (createCollection, renameCollection) never reuses a name; only
+ * `getOrCreateCollectionByName`'s "same name = same board" merge matches an
+ * existing one. `excludeId` skips one collection's own current name when
+ * renaming, so renaming "Foo" to "Foo" isn't a collision with itself.
  */
 function uniqueCollectionName(name: string, excludeId?: string): string {
   const base = name.trim() || 'Untitled';
-  const taken = new Set(state.collections.filter((c) => c.id !== excludeId).map((c) => c.name));
-  if (!taken.has(base)) return base;
+  const taken = new Set(state.collections.filter((c) => c.id !== excludeId).map((c) => c.name.trim().toLowerCase()));
+  const free = (candidate: string) => !taken.has(candidate.toLowerCase());
+  if (free(base)) return base;
+  if (free(`${base} copy`)) return `${base} copy`;
   let n = 2;
-  while (taken.has(`${base} ${n}`)) n += 1;
-  return `${base} ${n}`;
+  while (!free(`${base} copy ${n}`)) n += 1;
+  return `${base} copy ${n}`;
 }
 
 /**
@@ -171,21 +173,64 @@ export const libraryStore = {
     return collection;
   },
 
-  renameCollection(id: string, name: string) {
+  /** Returns the name it ended up with ("Foo copy" when "Foo" was taken). */
+  renameCollection(id: string, name: string): string | undefined {
     hydrate();
     const trimmed = name.trim();
+    let finalName: string | undefined;
     state = {
       ...state,
-      collections: state.collections.map((c) =>
-        c.id === id ? { ...c, name: trimmed ? uniqueCollectionName(trimmed, id) : c.name } : c,
-      ),
+      collections: state.collections.map((c) => {
+        if (c.id !== id) return c;
+        finalName = trimmed ? uniqueCollectionName(trimmed, id) : c.name;
+        return { ...c, name: finalName };
+      }),
     };
     emit();
+    return finalName;
   },
 
   deleteCollection(id: string) {
     hydrate();
     state = { ...state, collections: state.collections.filter((c) => c.id !== id) };
+    emit();
+  },
+
+  /**
+   * Undo for removing items: each goes back into its collection at the place
+   * it had, with its original save date. One already back, or whose
+   * collection has since gone, is skipped.
+   */
+  restoreItems(entries: { collectionId: string; item: CollectionItem; index: number }[]) {
+    hydrate();
+    let changed = false;
+    state = {
+      ...state,
+      collections: state.collections.map((c) => {
+        const mine = entries.filter((e) => e.collectionId === c.id).sort((a, b) => a.index - b.index);
+        if (!mine.length) return c;
+        const items = [...c.items];
+        for (const { item, index } of mine) {
+          if (items.some((i) => i.type === item.type && i.id === item.id)) continue;
+          items.splice(Math.min(index, items.length), 0, item);
+          changed = true;
+        }
+        return { ...c, items };
+      }),
+    };
+    if (changed) emit();
+  },
+
+  /**
+   * Undo for deleteCollection: puts the very collection back, everything in
+   * it, at the place it had in the list. Nothing happens if it's back already.
+   */
+  restoreCollection(collection: Collection, index: number) {
+    hydrate();
+    if (state.collections.some((c) => c.id === collection.id)) return;
+    const collections = [...state.collections];
+    collections.splice(Math.max(0, Math.min(index, collections.length)), 0, collection);
+    state = { ...state, collections };
     emit();
   },
 

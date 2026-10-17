@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation';
 import { forwardRef, type MouseEvent, useState } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { App, SavedItemType } from '@/lib/inspirations/types';
-import { useToast } from './Toast';
 import { useLibrary } from './useLibrary';
+import { sameItem, useRemoveWithUndo } from './useRemoveWithUndo';
 import { FloatCollectionBar } from './FloatCollectionBar';
 
 /**
@@ -35,11 +35,10 @@ export const SaveButton = forwardRef<HTMLButtonElement, {
   label,
   app,
 }, ref) {
-  const { collectionsContaining, toggleInCollection, deleteCollection } = useLibrary();
-  const { show } = useToast();
+  const { collectionsContaining } = useLibrary();
   const router = useRouter();
   const [floatOpen, setFloatOpen] = useState(false);
-  const [floatRemovedOpen, setFloatRemovedOpen] = useState(false);
+  const removeWithUndo = useRemoveWithUndo();
   const saved = collectionsContaining(type, id).length > 0;
 
   const onClick = (e: MouseEvent) => {
@@ -47,13 +46,9 @@ export const SaveButton = forwardRef<HTMLButtonElement, {
     e.stopPropagation();
     
     if (saved) {
-      const collections = collectionsContaining(type, id);
-      collections.forEach(c => {
-        toggleInCollection(c.id, { type, id });
-        if (c.items.length === 1) deleteCollection(c.id);
-      });
-      setFloatRemovedOpen(true);
-      setTimeout(() => setFloatRemovedOpen(false), 1600);
+      // Out of every collection it's in; the collections themselves stay,
+      // even if this was the last thing in one.
+      removeWithUndo(collectionsContaining(type, id).map((c) => ({ collectionId: c.id, match: sameItem(type, id) })));
     } else {
       setFloatOpen(true);
     }
@@ -70,16 +65,6 @@ export const SaveButton = forwardRef<HTMLButtonElement, {
           onClose={() => setFloatOpen(false)}
           onSaved={() => setFloatOpen(false)}
         />
-      )}
-      {floatRemovedOpen && (
-        <div className="ins-float-collection" role="status" aria-live="polite">
-          <div className="ins-float-collection-success">
-            <span className="ins-float-collection-success-check" aria-hidden>
-              <span />
-            </span>
-            Removed from collection
-          </div>
-        </div>
       )}
     </>
   );

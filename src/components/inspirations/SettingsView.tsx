@@ -11,6 +11,7 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import { PlusIcon, TrashIcon } from './Icons';
 import { RequestAppModal } from './RequestAppModal';
+import { useToast } from './Toast';
 
 /**
  * /inspirations/settings — the signed-in person's own page: who they are, and the apps they have
@@ -207,6 +208,7 @@ function Row({ label, value, action }: { label: string; value: React.ReactNode; 
 
 function AccountSection() {
   const { user, signOut, sendPasswordReset } = useAuth();
+  const { show } = useToast();
   const router = useRouter();
   const [name, setName] = useState<string | null>(null); // null = not editing
   const [shownName, setShownName] = useState<string | null>(null);
@@ -275,6 +277,7 @@ function AccountSection() {
       const mine = await listMyRequests(user.uid);
       await Promise.all(mine.map((r) => deleteMyRequest(r.id)));
       await deleteUser(auth.currentUser);
+      show('Your account was deleted');
       router.replace(INSPIRATIONS_ROUTES.explore);
     } catch (failure) {
       const code = (failure as { code?: string })?.code;
@@ -348,8 +351,13 @@ function AccountSection() {
             <button
               type="button"
               onClick={async () => {
-                await signOut();
-                router.replace(INSPIRATIONS_ROUTES.explore);
+                try {
+                  await signOut();
+                  show('Logged out');
+                  router.replace(INSPIRATIONS_ROUTES.explore);
+                } catch {
+                  show('Couldn’t log out — please try again', { tone: 'error' });
+                }
               }}
             >
               Log out
@@ -385,6 +393,7 @@ function RequestsSection({ uid, onCount }: { uid: string; onCount: (count: numbe
   const [editing, setEditing] = useState<MyRequest | null>(null);
   const [adding, setAdding] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const { show } = useToast();
 
   const load = useCallback(async () => {
     try {
@@ -419,6 +428,7 @@ function RequestsSection({ uid, onCount }: { uid: string; onCount: (count: numbe
         if (next) onCount(next.filter((r) => usesSpot(r.id)).length);
         return next;
       });
+      show('Request deleted');
     } catch {
       setError('We couldn’t delete that just now — please try again.');
     } finally {

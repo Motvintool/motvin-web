@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { App, Screen } from '@/lib/inspirations/types';
+import type { App, SavedItemType, Screen } from '@/lib/inspirations/types';
 import { FloatCollectionBar } from './FloatCollectionBar';
+import { registerSaveAs, unregisterSaveAs } from './previewSaveAs';
 import { ScreenCard } from './ScreenCard';
 import { WebScreenCard } from './WebScreenCard';
 
@@ -34,6 +35,7 @@ export function ScreenGrid({
   onRemoveItem,
   webLayout = false,
   webGrid = false,
+  saveItem,
 }: {
   screens: Screen[];
   /** Overrides the shared app lookup; omit and the grid fetches it itself. */
@@ -49,6 +51,12 @@ export function ScreenGrid({
   onRemoveItem?: (id: string) => void;
   webLayout?: boolean;
   webGrid?: boolean;
+  /**
+   * What a selected screen is saved as. Plain screens by default; the UI
+   * Elements and Patterns pages save theirs as a UI element or a pattern, so
+   * they land in those tabs of the collection.
+   */
+  saveItem?: (screen: Screen) => { type: SavedItemType; id: string };
 }) {
   const fetchedApps = useApps();
   const apps = appsOverride ?? fetchedApps;
@@ -67,6 +75,14 @@ export function ScreenGrid({
   const clearSelection = () => setSelectedIds(new Set());
   const selectedScreens = screens.filter((screen) => selectedIds.has(screen.id));
   const selectedApp = selectedScreens.length ? apps.get(selectedScreens[0].appId) : undefined;
+
+  // The screen preview's Save saves these the same way (previewSaveAs.ts).
+  useEffect(() => {
+    if (!saveItem) return;
+    const key = Symbol('screen-grid');
+    registerSaveAs(key, screens.map((s) => s.id), saveItem);
+    return () => unregisterSaveAs(key);
+  }, [saveItem, screens]);
 
   useEffect(() => {
     if (!hasMore || !onLoadMore || loading) return;
@@ -128,6 +144,7 @@ export function ScreenGrid({
         <FloatCollectionBar
           screens={selectedScreens}
           screenApp={selectedApp}
+          items={saveItem ? selectedScreens.map(saveItem) : undefined}
           onClose={clearSelection}
           onSaved={clearSelection}
         />

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { browsedPlatforms, matchesFilters, parseFilters, serializeFilters, toggleValue, type ScreenFilters } from '@/lib/inspirations/filters';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
+import { screenItemId } from '@/lib/inspirations/savedItems';
 import { elementLabel, formatCount, INDUSTRY_LABEL, screenStateLabel, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type App, type Industry, type Screen, type ScreenState, type ScreenType, type Style } from '@/lib/inspirations/types';
 import { AppsGrid } from '../AppsGrid';
@@ -396,7 +397,7 @@ export function SearchView() {
 
           {kind === 'screens' && data.screens.length > 0 && (
             <section className="ins-result-section ins-shot-panel">
-              <ScreenGrid screens={data.screens} showMeta={false} textHighlights={textSearch || textQuery ? data.textHighlights : undefined} />
+              <ScreenGrid screens={data.screens} showMeta={false} selectable textHighlights={textSearch || textQuery ? data.textHighlights : undefined} />
               {hasMoreScreens && <LoadMore loading={loadingMore} shown={raw?.screens.length ?? 0} total={screenTotalAll} onMore={loadMoreScreens} />}
             </section>
           )}
@@ -407,6 +408,7 @@ export function SearchView() {
                 screens={componentScreens}
                 showMeta={false}
                 selectable
+                saveItem={(s) => ({ type: 'component', id: screenItemId(s.id, s.elements.find((e) => elementFilter.includes(e)) ?? s.elements[0] ?? '') })}
                 textHighlights={textSearch || textQuery ? data.textHighlights : undefined}
               />
               {hasMoreScreens && <LoadMore loading={loadingMore} shown={raw?.screens.length ?? 0} total={screenTotalAll} onMore={loadMoreScreens} />}
@@ -434,6 +436,7 @@ export function SearchView() {
                   screens={patternScreens}
                   showMeta={false}
                   selectable
+                  saveItem={(s) => ({ type: 'pattern', id: screenItemId(s.id, pickedPatterns.find((p) => p.screenIds.includes(s.id))?.category ?? '') })}
                   textHighlights={textQuery ? data.textHighlights : undefined}
                   empty={anyFilter ? filteredEmpty : <EmptyState play title="No pattern screens matched" />}
                 />

@@ -76,7 +76,7 @@ export function ScreenColours({ screen }: { screen: Screen }) {
       await navigator.clipboard.writeText(hex);
       show(`Copied ${hex}`);
     } catch {
-      show('Copy not available');
+      show('Copy not available', { tone: 'error' });
     }
   };
 

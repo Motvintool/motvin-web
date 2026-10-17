@@ -12,10 +12,10 @@ import { isDesktopPlatform, type Flow, type Screen } from '@/lib/inspirations/ty
 import { AppLogo } from './AppLogo';
 import { CompareShortcut, ScreenColours } from './ScreenDetailsExtras';
 import { SaveButton } from './SaveButton';
+import { saveItemFor } from './previewSaveAs';
 import { Screenshot } from './Screenshot';
 import { ScreenLightbox } from './ScreenLightbox';
 import { useToast } from './Toast';
-import { useDownloadGate } from './useDownloadGate';
 import { useScreenContextMenu } from './useScreenContextMenu';
 import { useAsync } from './useAsync';
 
@@ -59,7 +59,6 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const filmRef = useRef<HTMLDivElement>(null);
   const { show } = useToast();
-  const { allow: allowDownload } = useDownloadGate();
 
   const { data, loading } = useAsync(() => inspirationsApi.getScreen(screenId), `screen-preview:${screenId}`);
   const screen = data?.screen ?? null;
@@ -263,7 +262,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
       await navigator.clipboard.writeText(`${window.location.origin}${pathname}?${SCREEN_PARAM}=${currentScreen.id}`);
       show('Link copied');
     } catch {
-      show('Copy not available');
+      show('Copy not available', { tone: 'error' });
     }
   }, [currentScreen, pathname, show]);
   // C copies the PNG, L the link, ? shows the shortcuts card (S, ←/→ and Esc
@@ -407,7 +406,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
       await navigator.clipboard.writeText(`${window.location.origin}${pathname}?${SCREEN_PARAM}=${view.id}`);
       show('Link copied');
     } catch {
-      show('Copy not available');
+      show('Copy not available', { tone: 'error' });
     }
     setMoreOpen(false);
   };
@@ -526,8 +525,9 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               <div className="ins-screen-preview-foot-primary">
                 <SaveButton
                   ref={saveBtnRef}
-                  type="screen"
-                  id={view.id}
+                  // A UI element or pattern when opened from those grids.
+                  type={saveItemFor(view).type}
+                  id={saveItemFor(view).id}
                   variant="button"
                   app={app ?? undefined}
                   className="ins-screen-preview-foot-btn ins-screen-preview-foot-btn--save"
@@ -595,21 +595,20 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                         <MenuIcon src={ICON_COPY_PNG} /> <span>Copy PNG</span>
                       </button>
                       {view.downloadable && (
-                        <a
+                        // The same watermarked PNG the card's menu downloads, made
+                        // here: a link to the API is on another origin, where the
+                        // browser ignores `download` and opens the image instead.
+                        <button
+                          type="button"
                           className="ins-popover-item"
                           role="menuitem"
-                          href={inspirationsApi.downloadUrl(view)}
-                          download
-                          // Guests get the sign-in notice instead of the file.
-                          onClick={(e) => {
-                            if (!allowDownload()) {
-                              e.preventDefault();
-                              setMoreOpen(false);
-                            }
+                          onClick={() => {
+                            setMoreOpen(false);
+                            void currentShot.downloadPng();
                           }}
                         >
                           <MenuIcon src={ICON_DOWNLOAD} /> <span>Download</span>
-                        </a>
+                        </button>
                       )}
                       <div className="ins-popover-divider" role="separator" />
                       <button type="button" className="ins-popover-item" role="menuitem" onClick={() => void copyLink()}>

@@ -3,6 +3,8 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
+import { askConfirm } from './ConfirmDialog';
+import { useToast } from './Toast';
 import { useIsLibraryAdmin } from './useIsLibraryAdmin';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { greetingFor } from '@/lib/inspirations/guide-chatbot/guideGreeting';
@@ -55,6 +57,7 @@ const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia('
 export function UserChatbot() {
   const router = useRouter();
   const pathname = usePathname();
+  const { show } = useToast();
   const { user, ready } = useAuth();
   const signedIn = ready && Boolean(user && !user.isAnonymous);
   const libraryAdmin = useIsLibraryAdmin();
@@ -250,6 +253,9 @@ export function UserChatbot() {
       }
       patch(replyId, { text: reply.text, pending: false, card: reply.card, targets: reply.targets, opened: reply.go, error: reply.error, kind: reply.kind, action: reply.action });
       if (reply.go && alive.current) go(reply.go);
+    } catch {
+      // Never left on the dots: say it went wrong, so the question can be asked again.
+      patch(replyId, { text: 'Something went wrong on my side. Try asking that again.', pending: false, slow: false, error: true, kind: 'error' });
     } finally {
       clearTimeout(slowTimer);
       if (alive.current) setBusy(false);
@@ -326,12 +332,22 @@ export function UserChatbot() {
     setHistory(next);
     writeHistory(next);
     if (chatId.current === id) resetConversation();
+    show('Chat deleted');
   };
 
+  // Every past chat at once, so it asks first.
   const clearHistory = () => {
-    setHistory([]);
-    writeHistory([]);
-    resetConversation();
+    void askConfirm({
+      title: 'Clear chat history?',
+      description: 'Every past chat with the guide will be removed. This can’t be undone.',
+      confirmLabel: 'Clear history',
+    }).then((ok) => {
+      if (!ok) return;
+      setHistory([]);
+      writeHistory([]);
+      resetConversation();
+      show('Chat history cleared');
+    });
   };
 
   const copy = async (line: Line) => {
@@ -339,8 +355,9 @@ export function UserChatbot() {
       await navigator.clipboard.writeText(line.text);
       setCopiedId(line.id);
       setTimeout(() => setCopiedId((current) => (current === line.id ? null : current)), 1200);
+      show('Copied');
     } catch {
-      // Clipboard blocked — nothing to confirm.
+      show('Couldn’t copy that', { tone: 'error' });
     }
   };
 

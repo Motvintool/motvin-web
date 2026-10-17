@@ -214,7 +214,7 @@ function PalettePanel({
         copiedTimer.current = window.setTimeout(() => setCopied(null), 1400);
       }
     } catch {
-      show('Copy not available');
+      show('Copy not available', { tone: 'error' });
     }
   };
 

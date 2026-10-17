@@ -2,9 +2,9 @@ import { EmptyState } from '@/components/inspirations/EmptyState';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 
 /**
- * Inspirations' own 404, inside its shell (header, search): an app or
- * pattern that doesn't exist (`notFound()` in app/[slug] and
- * pattern/[slug]) or any unknown address under /inspirations (the
+ * Inspirations' own 404, inside its shell (header, search): an app that
+ * doesn't exist (`notFound()` in app/[slug]) or any unknown address under
+ * /inspirations (the
  * [...missing] catch-all). The playful empty state, so the balls still lead
  * back into the library.
  */

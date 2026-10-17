@@ -17,7 +17,6 @@ import '@/styles/profile-menu.css';
  *   /inspirations/patterns        Pattern library
  *   /inspirations/search?q=       Natural-language search
  *   /inspirations/app/[slug]      App detail
- *   /inspirations/pattern/[slug]  Pattern examples
  *   /inspirations/collections     Saved items — everything bookmarked
  *                                 (?type=all) and organized boards
  *                                 (?type=boards, the default), one board's

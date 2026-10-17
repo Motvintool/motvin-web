@@ -29,6 +29,8 @@ export function useLibrary() {
     getOrCreateCollectionByName: libraryStore.getOrCreateCollectionByName,
     renameCollection: libraryStore.renameCollection,
     deleteCollection: libraryStore.deleteCollection,
+    restoreCollection: libraryStore.restoreCollection,
+    restoreItems: libraryStore.restoreItems,
     toggleInCollection: libraryStore.toggleInCollection,
     addToCollection: libraryStore.addToCollection,
     removeFromCollection: libraryStore.removeFromCollection,

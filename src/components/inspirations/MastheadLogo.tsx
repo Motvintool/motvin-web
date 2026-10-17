@@ -199,11 +199,14 @@ function LogoLightbox({ app, onClose }: { app: App; onClose: () => void }) {
   // tile's own from the grid.
   const copyPng = async (a: App) => {
     const logo = inspirationsApi.mediaUrl(a.logo);
-    if (!logo) return;
     // Guests get the sign-in notice instead.
     if (!allow('copy', 'logos')) return;
+    if (!logo) {
+      show('This logo isn’t available', { tone: 'error' });
+      return;
+    }
     if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
-      show('Copying not supported');
+      show('Copying not supported', { tone: 'error' });
       return;
     }
     try {
@@ -213,14 +216,17 @@ function LogoLightbox({ app, onClose }: { app: App; onClose: () => void }) {
       show('Logo copied as PNG');
     } catch (error) {
       console.error('Failed to copy', error);
-      show('Failed to copy');
+      show('Failed to copy', { tone: 'error' });
     }
   };
 
   const downloadPng = async (a: App) => {
     const logo = inspirationsApi.mediaUrl(a.logo);
-    if (!logo) return;
     if (!allow('download', 'logos')) return;
+    if (!logo) {
+      show('This logo isn’t available', { tone: 'error' });
+      return;
+    }
     try {
       const blobUrl = URL.createObjectURL(await logoPng(logo));
       const link = document.createElement('a');
@@ -230,8 +236,9 @@ function LogoLightbox({ app, onClose }: { app: App; onClose: () => void }) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(blobUrl);
+      show('Logo downloaded');
     } catch {
-      show('Failed to download');
+      show('Failed to download', { tone: 'error' });
     }
   };
 
