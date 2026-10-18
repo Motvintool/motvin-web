@@ -467,10 +467,15 @@ function PlatformSwitch({ platform, onPick }: { platform: string; onPick: (param
             aria-checked={on}
             data-platform={o.value}
             className={`ins-segmented-item ${on ? 'is-active' : ''}`}
+            aria-label={o.label}
+            title={o.label}
             onClick={() => !on && onPick(o.param)}
           >
-            {o.label}
-            {on && <o.Icon size={16} />}
+            {/* A desktop shows the names, with the chosen one's icon; a phone shows the icons alone. */}
+            <span className="ins-segmented-label">{o.label}</span>
+            <span className="ins-segmented-icon" aria-hidden>
+              <o.Icon size={16} />
+            </span>
           </button>
         );
       })}

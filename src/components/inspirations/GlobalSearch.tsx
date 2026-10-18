@@ -15,6 +15,7 @@ import { RequestAppModal } from './RequestAppModal';
 import { FLOW_PARAM } from './FlowPreview';
 import { AppleIcon, ChevronDownIcon, CloseIcon, SearchIcon, WebAppIcon, WebIcon } from './Icons';
 import { SCREEN_PARAM } from './ScreenPreviewModal';
+import { SHEET_QUERY, useMediaQuery } from './useSheet';
 
 const FIGMA_APP_ART = '/ASSET/search-modal/figma-02.png';
 /** Lives under the shared Motvin icon set (`/ASSET/Icons/Motvin/`), not
@@ -94,6 +95,8 @@ function loadRecentSearches(): RecentSearch[] {
  * navigation, ⌘K / Ctrl K to focus from anywhere, Enter to run the query.
  */
 export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?: boolean; className?: string }) {
+  // A phone's search field is too narrow for the whole line: the short one there.
+  const placeholder = useMediaQuery(SHEET_QUERY) ? 'Search apps…' : 'Search apps, flows & screens';
   const router = useRouter();
   const params = useSearchParams();
   const pathname = usePathname();
@@ -586,7 +589,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
           ref={inputRef}
           type="search"
           className="ins-search-input"
-          placeholder="Search apps, flows & screens"
+          placeholder={placeholder}
           value={value}
           autoFocus={autoFocus}
           autoComplete="off"
@@ -651,7 +654,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                 ref={modalInputRef}
                 type="search"
                 value={value}
-                placeholder="Search apps, flows & screens"
+                placeholder={placeholder}
                 autoComplete="off"
                 spellCheck={false}
                 aria-label="Search apps, flows and screens"

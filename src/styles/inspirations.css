@@ -7963,9 +7963,38 @@ select.ins-input {
   }
 
   .ins-app-grid,
-  .ins-pattern-grid-wrap,
-  .ins-collection-grid {
+  .ins-pattern-grid-wrap {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Collections are one wide card per row on a phone. */
+  .ins-collection-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* The new-collection form fills the row: the name field gives way
+     so Cancel and Create stay on screen. */
+  .ins-collections-create {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 4px;
+  }
+
+  .ins-collections-create-input {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    padding-inline: 20px;
+  }
+
+  .ins-collections-cancel,
+  .ins-collections-create-ok {
+    flex: none;
+    padding-inline: 16px;
+  }
+
+  .ins-collections-create-ok {
+    padding-inline: 20px;
   }
 
   /* Screens stay two-up on a phone instead of one giant
@@ -8006,6 +8035,16 @@ select.ins-input {
   .ins-card-hover-controls {
     height: auto;
     padding: 12px;
+  }
+
+  /* On an app card the dots sit centred on the screenshot's bottom edge,
+     half over it: the grey strip below is the frame's padding, min(36px,
+     10.4% of the width), which is 5.34% of the frame's height, and the
+     24px pill rises 12px above it. */
+  .ins-card-shot > .ins-card-hover-controls {
+    bottom: calc(min(36px, 5.34%) - 12px);
+    height: 24px;
+    padding: 0;
   }
 
   .ins-card-hover-controls::before,
@@ -8145,6 +8184,24 @@ select.ins-input {
     font-size: 15px;
   }
 
+  /* The row scrolls sideways on a phone: a fade at its right edge says so,
+     pinned there (sticky) while there's more, settling on the empty space
+     after the last pill at the end. Kept off the row's own mask, which
+     would also cut off its menus. */
+  .ins-ftoolbar::after {
+    content: '';
+    position: sticky;
+    /* -8px: sticky stops at the row's padding; this reaches its real edge,
+       so no sliver of pill shows past the fade. */
+    right: -8px;
+    flex: none;
+    align-self: stretch;
+    width: 40px;
+    margin-left: -8px;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0), #fff 75%);
+    pointer-events: none;
+  }
+
   /* The "text in screenshots" button, and the field it opens into, at the
      pills' 38px too (36px and 44px on a desktop). */
   .ins-text-search-trigger {
@@ -8166,6 +8223,34 @@ select.ins-input {
     height: 30px;
     padding: 0 14px;
     font-size: 15px;
+  }
+
+  /* On a phone, icons alone (the names stay as each option's label and
+     tooltip), each in a circle: the chosen one on a black disc. */
+  .ins-segmented.ins-segmented--toolbar .ins-segmented-label {
+    display: none;
+  }
+  /* The chosen one on a short black pill, a little wider than it is tall;
+     the others narrower, so the bare icons sit as close to each other as
+     the first does to the pill's edge (evenly spaced centres read uneven
+     beside the pill). */
+  .ins-segmented.ins-segmented--toolbar {
+    gap: 2px;
+  }
+  .ins-segmented.ins-segmented--toolbar .ins-segmented-item {
+    justify-content: center;
+    width: 32px;
+    padding: 0;
+    border-radius: 999px;
+  }
+  .ins-segmented.ins-segmented--toolbar .ins-segmented-item.is-active {
+    width: 40px;
+  }
+  .ins-segmented.ins-segmented--toolbar .ins-segmented-item .ins-segmented-icon {
+    display: inline-flex;
+  }
+  .ins-segmented.ins-segmented--toolbar .ins-segmented-item[data-platform='ios'] svg {
+    top: -1px;
   }
 
   .ins-fpill,
@@ -8291,6 +8376,39 @@ select.ins-input {
   .ins-grid.ins-app-grid,
   .ins-shot-panel .ins-grid.ins-app-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The full-width card's corners: in proportion to the card (19.65% /
+     12.41%) they grew past 60px here and read as a pill; a phone's own
+     screen corner is nearer 24px, and the frame keeps a calmer 52px. */
+  .ins-grid.ins-app-grid .ins-card-shot {
+    border-radius: 52px;
+  }
+  .ins-grid.ins-app-grid .ins-card-inset,
+  .ins-shot-panel .ins-grid.ins-app-grid .ins-card-shot,
+  .ins-shot-panel .ins-grid.ins-app-grid .ins-card-shot::before {
+    border-radius: 24px;
+  }
+
+  /* The app row under a full-width card: the half-width card's small type
+     (15 / 12px, a 38px logo) has room to grow here. */
+  .ins-grid.ins-app-grid .ins-card-meta {
+    padding: 14px 4px 18px;
+    gap: 12px;
+  }
+  .ins-grid.ins-app-grid .ins-card-meta .ins-app-logo,
+  .ins-grid.ins-app-grid .ins-card--skeleton .ins-skel--app-icon {
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 10px;
+  }
+  .ins-grid.ins-app-grid .ins-card-app {
+    font-size: 17px;
+    line-height: 1.3;
+  }
+  .ins-grid.ins-app-grid .ins-card-tagline {
+    font-size: 14px;
+    line-height: 1.4;
   }
 }
 
@@ -11331,6 +11449,39 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   }
 }
 
+/* On a phone the guide is a sheet, as the modals are (useSheet): up from
+   the bottom, full width, rounded at the top, nearly the screen's height (a
+   chat needs room), the page dimmed above it; its handle drags it up to
+   fill the screen or down to close. The handle's strip is its top space. */
+@media (max-width: 759px) {
+  .ins-guide.ins-sheet {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    height: calc(100dvh - 40px);
+    padding-bottom: env(safe-area-inset-bottom);
+    border-radius: 24px 24px 0 0;
+    box-shadow: 0 -8px 32px rgba(20, 20, 20, 0.12);
+    animation: insSheetUp 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    transition: height 280ms cubic-bezier(0.22, 1, 0.36, 1), transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .ins-guide.ins-sheet.is-expanded {
+    height: calc(100dvh - 12px);
+  }
+  .ins-guide.ins-sheet.is-dragging {
+    transition: none;
+    user-select: none;
+  }
+  .ins-guide.ins-sheet > .ins-guide-top {
+    padding-top: 2px;
+  }
+}
+@media (max-width: 759px) and (prefers-reduced-motion: reduce) {
+  .ins-guide.ins-sheet { animation: none; transition: none; }
+}
+
 /* The visitor's guide. For the owner it sits beside the admin assistant, and
    steps further left whenever the admin dock is open so the two never overlap. */
 .ins-dock-user.is-beside-admin.ins-dock-pill {
@@ -12992,6 +13143,15 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   flex: none;
 }
 
+/* The names, with an icon only beside the chosen one (a phone shows every icon, without the names). */
+.ins-segmented--toolbar .ins-segmented-icon {
+  display: inline-flex;
+  flex: none;
+}
+.ins-segmented-item:not(.is-active) > .ins-segmented-icon {
+  display: none;
+}
+
 /* The Apple glyph sits a touch low against the text, so lift it. */
 .ins-segmented--toolbar .ins-segmented-item[data-platform='ios'] svg {
   position: relative;
@@ -14353,6 +14513,12 @@ body:has(.ins-logo-dock) .ins-toast-host { top: clamp(12px, 3vw, 28px); bottom: 
     transform: none;
   }
 
+  .ins-card-shot > .ins-card-hover-controls {
+    bottom: calc(min(36px, 5.34%) - 12px);
+    height: 24px;
+    padding: 0;
+  }
+
   .ins-card-hover-controls::before,
   .ins-card-hover-controls .ins-card-control {
     display: none;
@@ -15171,6 +15337,26 @@ html.ins-bat-on .ins-search-bat { display: block; }
     background: #f2f2f2;
     box-shadow: none;
     color: #141414;
+  }
+  /* The request form as a sheet: the sheet scrolls it (not the form
+     itself), and its footer sits at the sheet's foot, however tall the
+     sheet is dragged, staying in view while a long step scrolls. */
+  .ins-sheet-overlay .ins-request.ins-sheet {
+    display: flex;
+    flex-direction: column;
+  }
+  .ins-sheet .ins-request-form {
+    flex: 1 0 auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .ins-sheet .ins-request-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    margin-top: auto;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    background: #fbfbfb;
   }
 }
 @keyframes insSheetUp {

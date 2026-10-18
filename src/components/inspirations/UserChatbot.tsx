@@ -1,10 +1,11 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type WheelEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { askConfirm } from './ConfirmDialog';
 import { useToast } from './Toast';
+import { useSheet } from './useSheet';
 import { useIsLibraryAdmin } from './useIsLibraryAdmin';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { greetingFor } from '@/lib/inspirations/guide-chatbot/guideGreeting';
@@ -222,6 +223,15 @@ export function UserChatbot() {
   const [nudge, setNudge] = useState<{ text: string; key: number } | null>(null);
   const topAppName = useRef<string | null>(null);
   const panelRef = useRef<HTMLElement>(null);
+  // On a phone the guide is a sheet, as the modals are: its top drags up to fill the screen, down to settle or close.
+  const { ref: sheetRef, className: sheetClass, dragProps: sheetDrag, handle: sheetHandle } = useSheet(() => setOpen(false));
+  const setPanel = useCallback(
+    (node: HTMLElement | null) => {
+      panelRef.current = node;
+      sheetRef(node as HTMLDivElement | null);
+    },
+    [sheetRef],
+  );
   const [canLeft, setCanLeft] = useState(false);
   const [canRight, setCanRight] = useState(false);
   // Past conversations, kept in this browser, and which screen the panel shows.
@@ -728,7 +738,16 @@ export function UserChatbot() {
   return (
     <>
       {dimmed && <div className="ins-guide-backdrop" onClick={() => setOpen(false)} aria-hidden />}
-      <aside ref={panelRef} className={`ins-guide ${dimmed ? '' : 'is-floating'}`} role="dialog" aria-modal={dimmed || undefined} aria-label="Motvin Buddy" onKeyDown={keepFocusInside}>
+      <aside
+        ref={setPanel}
+        className={`ins-guide ${dimmed ? '' : 'is-floating'} ${sheetClass}`}
+        role="dialog"
+        aria-modal={dimmed || undefined}
+        aria-label="Motvin Buddy"
+        onKeyDown={keepFocusInside}
+        {...sheetDrag}
+      >
+        {sheetHandle}
         <div className={`ins-guide-top ${raised && !inHistory && !welcome ? 'is-raised' : ''}`}>
           {inHistory ? (
             <button type="button" className="ins-guide-back" onClick={() => setView('chat')} title="Back to the chat">
