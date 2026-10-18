@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
+import { useSheet } from '../useSheet';
 import {
   DEFAULT_MOEI,
   MOEI_ACCESSORIES,
@@ -80,6 +81,9 @@ function MoeiStudio({ onClose }: { onClose: () => void }) {
   const swipeFrom = useRef<number | null>(null);
   const [rolls, setRolls] = useState(0);
 
+  // On a phone, a sheet: its top drags up to fill the screen, down to settle or close.
+  const { ref: sheetRef, className: sheetClass, dragProps, handle } = useSheet(onClose);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
@@ -103,19 +107,22 @@ function MoeiStudio({ onClose }: { onClose: () => void }) {
   };
   const sendHome = () => {
     moeiStore.update({ out: false });
-    show(`${moei.name} went home. Bring them back from “My moei”.`);
+    show(`${moei.name} went home`, { label: 'Undo', onClick: () => moeiStore.update({ out: true }) });
     onClose();
   };
 
   return createPortal(
-    <div className="ins-portal ins-search-overlay ins-moei-overlay" onClick={onClose}>
+    <div className="ins-portal ins-search-overlay ins-moei-overlay ins-sheet-overlay" onClick={onClose}>
       <div
-        className="ins-search-modal ins-moei-studio"
+        ref={sheetRef}
+        className={`ins-search-modal ins-moei-studio ${sheetClass}`}
+        {...dragProps}
         role="dialog"
         aria-modal="true"
         aria-labelledby="ins-moei-title"
         onClick={(e) => e.stopPropagation()}
       >
+        {handle}
         <button type="button" className="ins-request-close" aria-label="Close" onClick={onClose}>
           <CloseIcon size={18} />
         </button>

@@ -12,6 +12,78 @@ const ICON_COPY_PNG = '/ASSET/Icons/Motvin/copy-png.svg';
 const ICON_DOWNLOAD_PNG = '/ASSET/Icons/Motvin/download-png.svg';
 const ICON_COPY_LINK = '/ASSET/Icons/Motvin/copy-link.svg';
 
+/** Where a screenshot has the menu below (a card, a flow strip's shot, a preview or comparison). */
+const SCREENSHOT_SCOPE = '.ins-card-inset, .ins-flows-row-shot, .ins-screen-preview-modal, .ins-compare-modal';
+/** How long a finger rests on a screenshot before its menu opens, and how far it may wander. */
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SLOP = 10;
+
+/**
+ * The screenshot menu on a touch screen. A right-click is a long-press there,
+ * but only some browsers say so: Android Chrome fires a contextmenu, iOS
+ * Safari never does (it shows its own image callout instead). So a finger
+ * resting still on a screenshot for half a second fires one itself, at the
+ * finger, which every screenshot's onContextMenu already answers; if the
+ * browser fires its own first, that one does instead. The tap that ends a
+ * long-press doesn't also open the screenshot. Mounted once, in the shell.
+ */
+export function LongPressScreenMenus() {
+  useEffect(() => {
+    if (!window.matchMedia('(hover: none)').matches) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let press: { x: number; y: number; target: Element } | null = null;
+    let fired = false;
+    let native = false;
+    const cancel = () => {
+      clearTimeout(timer);
+      press = null;
+    };
+    const onStart = (e: TouchEvent) => {
+      cancel();
+      fired = false;
+      native = false;
+      const target = e.target as Element;
+      // The flow player's bar has its own long-press (the step preview).
+      if (e.touches.length !== 1 || !target.closest?.(SCREENSHOT_SCOPE) || target.closest('.ins-flow-steps')) return;
+      const { clientX: x, clientY: y } = e.touches[0];
+      press = { x, y, target };
+      timer = setTimeout(() => {
+        if (!press || native) return;
+        fired = true;
+        navigator.vibrate?.(10);
+        press.target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: press.x, clientY: press.y, view: window }));
+      }, LONG_PRESS_MS);
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!press) return;
+      const t = e.touches[0];
+      if (Math.hypot(t.clientX - press.x, t.clientY - press.y) > LONG_PRESS_SLOP) cancel();
+    };
+    const onEnd = (e: TouchEvent) => {
+      // After a long-press, lifting the finger isn't a tap on the screenshot.
+      if (fired && e.cancelable) e.preventDefault();
+      cancel();
+    };
+    const onNative = (e: Event) => {
+      if (e.isTrusted && press) native = true;
+    };
+    document.addEventListener('touchstart', onStart, { passive: true });
+    document.addEventListener('touchmove', onMove, { passive: true });
+    document.addEventListener('touchend', onEnd, { passive: false });
+    document.addEventListener('touchcancel', cancel);
+    document.addEventListener('contextmenu', onNative, true);
+    return () => {
+      cancel();
+      document.removeEventListener('touchstart', onStart);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+      document.removeEventListener('touchcancel', cancel);
+      document.removeEventListener('contextmenu', onNative, true);
+    };
+  }, []);
+  return null;
+}
+
 /**
  * The right-click menu for a screenshot — Copy PNG, Download PNG, Copy link —
  * shared by the grid's screen cards (ScreenCard) and the image in the screen
@@ -50,7 +122,9 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
     if (!position) return;
     const close = () => setPosition(null);
     const onPointerDown = (e: PointerEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) close();
+      const target = e.target;
+      // (A press on the window itself, not a node in it, is a press elsewhere too.)
+      if (!(target instanceof Node && menuRef.current?.contains(target))) close();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;

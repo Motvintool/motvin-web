@@ -14,6 +14,7 @@ import { SCREEN_PARAM } from './ScreenPreviewModal';
 import { Screenshot } from './Screenshot';
 import { useAsync } from './useAsync';
 import { useScreenContextMenu } from './useScreenContextMenu';
+import { useSheet } from './useSheet';
 
 /** `?compare=<screen type>` opens the compare view on an app page; `&with=<app slug>` picks the other app. */
 export const COMPARE_PARAM = 'compare';
@@ -257,6 +258,8 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
     };
   }, [mounted, left, right, pairKey, ownScreens.length, otherScreens.length]);
 
+  // On a phone, a sheet: its top drags up to fill the screen, down to settle or close.
+  const { ref: sheetRef, className: sheetClass, dragProps: sheetDrag, handle: sheetHandle } = useSheet(close);
   if (!mounted) return null;
   const label = screenTypeLabel(type);
 
@@ -264,9 +267,11 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
   const swapHref = other ? `${INSPIRATIONS_ROUTES.app(other.app)}?${COMPARE_PARAM}=${encodeURIComponent(type)}&${COMPARE_WITH_PARAM}=${encodeURIComponent(app.slug)}` : null;
 
   return createPortal(
-    <div className="ins-search-overlay" role="presentation" onClick={close}>
+    <div className="ins-search-overlay ins-sheet-overlay" role="presentation" onClick={close}>
       <div
-        className="ins-screen-preview-modal ins-compare-modal"
+        ref={sheetRef}
+        className={`ins-screen-preview-modal ins-compare-modal ins-sheet--tall ${sheetClass}`}
+        {...sheetDrag}
         role="dialog"
         aria-modal="true"
         aria-label={`Compare ${label} screens`}
@@ -275,6 +280,7 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
           if (menu && !(e.target as HTMLElement).closest('.ins-compare-pick')) setMenu(null);
         }}
       >
+        {sheetHandle}
         <div className="ins-screen-preview-main ins-compare-main">
           {/* The flow / screen preview's own header: logos, then breadcrumbs. */}
           <div className="ins-screen-preview-head">

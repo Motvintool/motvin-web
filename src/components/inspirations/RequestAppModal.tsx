@@ -9,6 +9,7 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { Platform } from '@/lib/inspirations/types';
 import { AppleIcon, CheckIcon, CloseIcon, WebAppIcon, WebIcon } from './Icons';
+import { useSheet } from './useSheet';
 
 /**
  * "Request an app": the popup behind the search modal's "Request app" link. It looks like the
@@ -139,11 +140,14 @@ export function RequestAppModal({
     }
   };
 
+  // On a phone, a sheet: its top drags up to fill the screen, down to settle or close.
+  const { ref: sheetRef, className: sheetClass, dragProps: sheetDrag, handle: sheetHandle } = useSheet(onClose);
   if (!mounted) return null;
 
   return createPortal(
-    <div className="ins-portal ins-search-overlay" onClick={onClose}>
-      <div className="ins-search-modal ins-request" role="dialog" aria-modal="true" aria-label="Request an app" onClick={(e) => e.stopPropagation()}>
+    <div className="ins-portal ins-search-overlay ins-sheet-overlay" onClick={onClose}>
+      <div ref={sheetRef} className={`ins-search-modal ins-request ${sheetClass}`} {...sheetDrag} role="dialog" aria-modal="true" aria-label="Request an app" onClick={(e) => e.stopPropagation()}>
+        {sheetHandle}
         <button type="button" className="ins-request-close" aria-label="Close" onClick={onClose}>
           <CloseIcon size={18} />
         </button>

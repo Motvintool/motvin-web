@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useStoredValue, writeStoredValue } from '@/hooks/useStoredValue';
 import { inspirationsApi } from '@/lib/inspirations/api';
@@ -21,6 +21,8 @@ import { SCREEN_PARAM } from './ScreenPreviewModal';
 import { useAsync } from './useAsync';
 import { useDownloadAllScreens } from './useDownloadAllScreens';
 import { useScreenContextMenu } from './useScreenContextMenu';
+import { useSheet } from './useSheet';
+import { useSwipeStep } from './useSwipeStep';
 
 /** Search-param name that opens the overlay — see SCREEN_PARAM in ScreenPreviewModal.tsx. */
 export const FLOW_PARAM = 'flow';
@@ -133,6 +135,85 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     const x = r.left + r.width / 2 - el.getBoundingClientRect().left;
     setStepPeek((p) => ({ bar, i, x, on: true, glide: Boolean(p?.on && p.bar === bar) }));
   };
+  // On a touch screen there's no hover to peek with: a long-press on the bar
+  // brings the preview up at that step, a drag along the bar moves it step to
+  // step, and letting go goes to the step under the finger. A quick tap is
+  // still a tap on its step; a finger that moves off before the press holds
+  // is a scroll, and nothing happens.
+  const scrub = useRef<{ timer: number; x: number; y: number; on: boolean; i: number } | null>(null);
+  // Set as a scrub ends: the tap that ends it isn't a tap on the step it started on.
+  const scrubbed = useRef(false);
+  const SCRUB_HOLD_MS = 300;
+  const stepUnder = (barEl: HTMLElement, clientX: number) => {
+    const steps = [...barEl.querySelectorAll<HTMLElement>('.ins-flow-step')];
+    let at = 0;
+    steps.forEach((step, i) => {
+      if (clientX >= step.getBoundingClientRect().left) at = i;
+    });
+    return { i: at, el: steps[at] };
+  };
+  const scrubProps = (bar: string) => ({
+    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === 'mouse') return;
+      const barEl = e.currentTarget;
+      const pointerId = e.pointerId;
+      const press = { timer: 0, x: e.clientX, y: e.clientY, on: false, i: -1 };
+      press.timer = window.setTimeout(() => {
+        press.on = true;
+        navigator.vibrate?.(8);
+        try {
+          barEl.setPointerCapture(pointerId);
+        } catch {
+          // The finger's already gone.
+        }
+        const { i, el } = stepUnder(barEl, press.x);
+        press.i = i;
+        if (el) showStepPeek(bar, i, el);
+      }, SCRUB_HOLD_MS);
+      scrub.current = press;
+    },
+    onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => {
+      const press = scrub.current;
+      if (!press) return;
+      if (!press.on) {
+        if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) {
+          window.clearTimeout(press.timer);
+          scrub.current = null;
+        }
+        return;
+      }
+      press.x = e.clientX;
+      const { i, el } = stepUnder(e.currentTarget, e.clientX);
+      if (i !== press.i && el) {
+        press.i = i;
+        showStepPeek(bar, i, el);
+      }
+    },
+    onPointerUp: () => {
+      const press = scrub.current;
+      scrub.current = null;
+      if (!press) return;
+      window.clearTimeout(press.timer);
+      if (!press.on) return;
+      scrubbed.current = true;
+      window.setTimeout(() => (scrubbed.current = false), 0);
+      if (press.i >= 0) setActiveIndex(press.i);
+      hideStepPeek();
+    },
+    onClickCapture: (e: ReactPointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>) => {
+      if (!scrubbed.current) return;
+      scrubbed.current = false;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    onPointerCancel: () => {
+      const press = scrub.current;
+      scrub.current = null;
+      if (!press) return;
+      window.clearTimeout(press.timer);
+      if (press.on) hideStepPeek();
+    },
+  });
   // The player: steps through the flow on its own, one step every STEP_MS ÷ speed.
   const [playing, setPlaying] = useState(false);
   const [speed, refreshSpeed] = useStoredValue(SPEED_KEY, 1, parseSpeed);
@@ -339,7 +420,11 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
 
   const scrollByStep = (dir: 1 | -1) => filmRef.current?.scrollBy({ left: dir * 284, behavior: 'smooth' });
   const stepSingle = (dir: 1 | -1) => setActiveIndex((i) => Math.min(Math.max(i + dir, 0), screens.length - 1));
+  // On a phone the step on show is swiped to the next, as the cards' screens are.
+  const { moverRef: shotRef, swipeProps: shotSwipe } = useSwipeStep({ canPrev: activeIndex > 0, canNext: activeIndex < screens.length - 1, onStep: stepSingle });
 
+  // On a phone, a sheet: its top drags up to fill the screen, down to settle or close.
+  const { ref: sheetRef, className: sheetClass, dragProps: sheetDrag, handle: sheetHandle } = useSheet(close);
   if (!mounted) return null;
 
   if (loading || !flow) {
@@ -349,14 +434,17 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
       return null;
     }
     return createPortal(
-      <div className="ins-search-overlay" role="presentation" onClick={close}>
+      <div className="ins-search-overlay ins-sheet-overlay" role="presentation" onClick={close}>
         <div
-          className="ins-screen-preview-modal ins-screen-preview-modal--loading"
+          ref={sheetRef}
+          className={`ins-screen-preview-modal ins-screen-preview-modal--loading ins-sheet--tall ${sheetClass}`}
+          {...sheetDrag}
           role="dialog"
           aria-modal="true"
           aria-label="Loading flow"
           onClick={(e) => e.stopPropagation()}
         >
+          {sheetHandle}
           {/* The loaded player's own layout in placeholder shapes (one wide
               pane: header, the step's screenshot, and the footer's tags,
               player bar, Save and Nearby screens on the same classes), so the
@@ -422,7 +510,8 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
         role="group"
         aria-label="Flow steps"
         style={{ '--ins-flow-step-ms': `${stepMs}ms` } as CSSProperties}
-        onPointerLeave={hideStepPeek}
+        onPointerLeave={(e) => e.pointerType === 'mouse' && hideStepPeek()}
+        {...scrubProps(bar)}
       >
         {screens.map((s, i) => (
           <button
@@ -465,14 +554,17 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
 
   return createPortal(
     <>
-      <div className="ins-search-overlay" role="presentation" onClick={close}>
+      <div className="ins-search-overlay ins-sheet-overlay" role="presentation" onClick={close}>
         <div
-          className="ins-screen-preview-modal"
+          ref={sheetRef}
+          className={`ins-screen-preview-modal ins-sheet--tall ${sheetClass}`}
+          {...sheetDrag}
           role="dialog"
           aria-modal="true"
           aria-label={`${flow.name}${app ? ` — ${app.name}` : ''}`}
           onClick={(e) => e.stopPropagation()}
         >
+          {sheetHandle}
           <div className="ins-screen-preview-main">
             <div className="ins-screen-preview-head">
               <div className="ins-screen-preview-head-app">
@@ -532,8 +624,10 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                 <div
                   className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--single"
                   onContextMenu={active ? onShotContextMenu(active) : undefined}
+                  {...shotSwipe}
                 >
                   <div
+                    ref={shotRef}
                     className={`ins-screen-preview-shot ${isDesktopPlatform(active?.platform) ? 'ins-screen-preview-shot--web' : ''}`}
                     data-screen-id={active?.id}
                     onClick={() => active && setZoomScreen(active)}

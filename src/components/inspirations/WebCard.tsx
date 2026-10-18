@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { App, Screen } from '@/lib/inspirations/types';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { AppLogo } from './AppLogo';
+import { CardShots } from './CardShots';
 import { Screenshot } from './Screenshot';
 import { useSiblingCycle } from './useSiblingCycle';
 
@@ -24,13 +25,13 @@ export function WebCard({
   onToggleSelect?: () => void;
 }) {
   const href = INSPIRATIONS_ROUTES.app(app);
-  const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step } = useSiblingCycle(
+  const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step, cardRef, swipe, trackRef, swipeProps } = useSiblingCycle(
     preview ?? presetScreens?.[0] ?? null,
     { preset: presetScreens, preferredIds: app.cardScreens },
   );
 
   return (
-    <article className="ins-web-card" data-id={app.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
+    <article ref={cardRef} className="ins-web-card" data-id={app.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
       <div className="ins-web-card-shot">
         {selectable && (
           <button
@@ -47,9 +48,15 @@ export function WebCard({
             {selected && <span className="ins-card-select-check" aria-hidden />}
           </button>
         )}
-        <div className="ins-web-card-inset">
+        <div className="ins-web-card-inset" {...swipeProps}>
           <Link href={href} className="ins-web-card-link" aria-label={app.name}>
-            {activeScreen ? <Screenshot screen={activeScreen} /> : <AppLogo app={app} size={96} />}
+            {swipe && previewScreens && dotCount > 1 ? (
+              <CardShots screens={previewScreens} activeIndex={activeIndex} trackRef={trackRef} />
+            ) : activeScreen ? (
+              <Screenshot screen={activeScreen} />
+            ) : (
+              <AppLogo app={app} size={96} />
+            )}
           </Link>
         </div>
         {dotCount > 1 && (

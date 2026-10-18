@@ -1,6 +1,16 @@
-import { useState, useRef, useEffect } from 'react';
-import { PlayIcon } from './Icons';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { CloseIcon, PlayIcon } from './Icons';
 import { useToast } from './Toast';
+import { SHEET_QUERY, useMediaQuery, useSheet } from './useSheet';
+
+/** Opens Tune In from elsewhere: the profile menu, where the header's button is hidden. */
+export const TUNE_IN_EVENT = 'motvin:tune-in';
+export function openTuneIn() {
+  window.dispatchEvent(new Event(TUNE_IN_EVENT));
+}
+/** Below this the header hides its Tune In button (the compact header), and the profile menu offers it. */
+const COMPACT_QUERY = '(max-width: 1139px)';
 
 type IconProps = React.SVGProps<SVGSVGElement> & { size?: number };
 
@@ -119,11 +129,25 @@ export function AudioMenu() {
   const readyRef = useRef(false);
   const volumeRef = useRef(volume);
   const { show } = useToast();
-  
+  // With the header's button hidden, Tune In opens from the profile menu: over
+  // the page, under the header at the right, and on a phone as a sheet.
+  const compact = useMediaQuery(COMPACT_QUERY);
+  const phone = useMediaQuery(SHEET_QUERY);
+  const close = useCallback(() => setOpen(false), []);
+  const { ref: sheetRef, className: sheetClass, dragProps, handle } = useSheet(close);
+
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener(TUNE_IN_EVENT, onOpen);
+    return () => window.removeEventListener(TUNE_IN_EVENT, onOpen);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      // Out in <body> when opened from the profile menu, but still Tune In.
+      const target = e.target as Element;
+      if (!ref.current?.contains(target) && !target.closest?.('.ins-tune-floating')) setOpen(false);
     };
     document.addEventListener('pointerdown', onDown);
     return () => document.removeEventListener('pointerdown', onDown);
@@ -224,6 +248,71 @@ export function AudioMenu() {
     }
   };
 
+  // The playing station's colour, for the volume slider (and the rows' tints).
+  const tintStyle = { ['--tint' as string]: STATIONS.find((s) => s.name === playing)?.tint ?? '#141414' };
+  // The panel: the stations, and the volume while one plays.
+  const panel = (
+    <>
+      <div className="ins-tune-head">
+        <div className="ins-tune-titles">
+          <h3 className="ins-tune-title">Tune In</h3>
+          <p className="ins-tune-sub">{playing ? `Playing ${playing}` : 'Ambient sound while you browse'}</p>
+        </div>
+      </div>
+
+      <ul className="ins-tune-list">
+        {STATIONS.map((station) => {
+          const isPlaying = playing === station.name;
+          return (
+            <li key={station.name}>
+              <button
+                type="button"
+                className={`ins-tune-row ${isPlaying ? 'is-playing' : ''}`}
+                style={{ ['--tint' as string]: station.tint }}
+                aria-pressed={isPlaying}
+                aria-label={`${isPlaying ? 'Pause' : 'Play'} ${station.name}`}
+                onClick={(e) => void toggleStation(station, e)}
+              >
+                <span className="ins-tune-art"><station.Icon size={22} /></span>
+                <span className="ins-tune-text">
+                  <span className="ins-tune-name">{station.name}</span>
+                  <span className="ins-tune-meta">
+                    {isPlaying ? (
+                      <><span className="ins-tune-eq" aria-hidden><i /><i /><i /><i /></span>Playing now</>
+                    ) : (
+                      `${Number(station.listeners).toLocaleString('en-US')} active listeners`
+                    )}
+                  </span>
+                </span>
+                <span className="ins-tune-ctl" aria-hidden>
+                  {isPlaying ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      {playing && (
+        <div className="ins-tune-vol-wrap">
+          <VolumeLowIcon size={14} />
+          <input
+            type="range"
+            className="ins-tune-vol"
+            min={0}
+            max={1}
+            step={0.01}
+            value={volume}
+            aria-label="Volume"
+            onChange={(e) => setVolume(Number(e.target.value))}
+            style={{ ['--fill' as string]: `${Math.round(volume * 100)}%` }}
+          />
+          <VolumeHighIcon size={14} />
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div className="ins-popwrap" ref={ref}>
       {/* Where the hidden YouTube player goes: sound only, nothing to see or click. */}
@@ -245,73 +334,36 @@ export function AudioMenu() {
         )}
       </button>
 
-      {open && (
+      {open && !compact && (
         <div
           className="ins-popover ins-popover--right ins-tune"
           role="dialog"
           aria-label="Tune In"
-          // The playing station's colour, for the volume slider.
-          style={{ ['--tint' as string]: STATIONS.find((s) => s.name === playing)?.tint ?? '#141414' }}
+          style={tintStyle}
         >
-          <div className="ins-tune-head">
-            <div className="ins-tune-titles">
-              <h3 className="ins-tune-title">Tune In</h3>
-              <p className="ins-tune-sub">{playing ? `Playing ${playing}` : 'Ambient sound while you browse'}</p>
-            </div>
-          </div>
-
-          <ul className="ins-tune-list">
-            {STATIONS.map((station) => {
-              const isPlaying = playing === station.name;
-              return (
-                <li key={station.name}>
-                  <button
-                    type="button"
-                    className={`ins-tune-row ${isPlaying ? 'is-playing' : ''}`}
-                    style={{ ['--tint' as string]: station.tint }}
-                    aria-pressed={isPlaying}
-                    aria-label={`${isPlaying ? 'Pause' : 'Play'} ${station.name}`}
-                    onClick={(e) => void toggleStation(station, e)}
-                  >
-                    <span className="ins-tune-art"><station.Icon size={22} /></span>
-                    <span className="ins-tune-text">
-                      <span className="ins-tune-name">{station.name}</span>
-                      <span className="ins-tune-meta">
-                        {isPlaying ? (
-                          <><span className="ins-tune-eq" aria-hidden><i /><i /><i /><i /></span>Playing now</>
-                        ) : (
-                          `${Number(station.listeners).toLocaleString('en-US')} active listeners`
-                        )}
-                      </span>
-                    </span>
-                    <span className="ins-tune-ctl" aria-hidden>
-                      {isPlaying ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-
-          {playing && (
-            <div className="ins-tune-vol-wrap">
-              <VolumeLowIcon size={14} />
-              <input
-                type="range"
-                className="ins-tune-vol"
-                min={0}
-                max={1}
-                step={0.01}
-                value={volume}
-                aria-label="Volume"
-                onChange={(e) => setVolume(Number(e.target.value))}
-                style={{ ['--fill' as string]: `${Math.round(volume * 100)}%` }}
-              />
-              <VolumeHighIcon size={14} />
-            </div>
-          )}
+          {panel}
         </div>
       )}
+      {open &&
+        compact &&
+        createPortal(
+          phone ? (
+            <div className="ins-portal ins-search-overlay ins-sheet-overlay">
+              <div ref={sheetRef} className={`ins-tune ins-tune-floating ins-tune-sheet ${sheetClass}`} {...dragProps} role="dialog" aria-modal="true" aria-label="Tune In" style={tintStyle}>
+                {handle}
+                <button type="button" className="ins-request-close" aria-label="Close" onClick={close}>
+                  <CloseIcon size={18} />
+                </button>
+                {panel}
+              </div>
+            </div>
+          ) : (
+            <div className="ins-popover ins-tune ins-tune-floating" role="dialog" aria-label="Tune In" style={tintStyle}>
+              {panel}
+            </div>
+          ),
+          document.body,
+        )}
     </div>
   );
 }

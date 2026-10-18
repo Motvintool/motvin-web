@@ -8,6 +8,7 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { App, Screen } from '@/lib/inspirations/types';
 import { addWatermarkToBlob } from '@/lib/inspirations/watermark';
 import { AppLogo } from './AppLogo';
+import { CardShots } from './CardShots';
 import { Screenshot } from './Screenshot';
 import { useSiblingCycle } from './useSiblingCycle';
 import { useToast } from './Toast';
@@ -57,7 +58,7 @@ export function AppCard({
   onRemove?: () => void;
 }) {
   const href = INSPIRATIONS_ROUTES.app(app);
-  const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step } = useSiblingCycle(
+  const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step, cardRef, swipe, trackRef, swipeProps } = useSiblingCycle(
     preview ?? presetScreens?.[0] ?? null,
     { preset: presetScreens, preferredIds: app.cardScreens },
   );
@@ -249,7 +250,7 @@ export function AppCard({
   };
 
   return (
-    <article className="ins-card" data-id={app.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
+    <article ref={cardRef} className="ins-card" data-id={app.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
       <div className="ins-card-shot">
         {selectable && (
           <button
@@ -280,9 +281,16 @@ export function AppCard({
             <CloseIcon size={14} />
           </button>
         )}
-        <div className="ins-card-inset" onContextMenu={handleContextMenu}>
+        <div className="ins-card-inset" onContextMenu={handleContextMenu} {...swipeProps}>
           <Link href={href} className="ins-card-link" aria-label={app.name}>
-            {activeScreen ? <Screenshot screen={activeScreen} /> : <AppLogo app={app} size={96} />}
+            {/* On a phone the screens are swiped, side by side; elsewhere the arrows step one at a time. */}
+            {swipe && previewScreens && dotCount > 1 ? (
+              <CardShots screens={previewScreens} activeIndex={activeIndex} trackRef={trackRef} />
+            ) : activeScreen ? (
+              <Screenshot screen={activeScreen} />
+            ) : (
+              <AppLogo app={app} size={96} />
+            )}
           </Link>
         </div>
         {dotCount > 1 && (

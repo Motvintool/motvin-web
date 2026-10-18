@@ -2610,6 +2610,40 @@ select.ins-input {
   overflow: hidden;
 }
 
+/* A card's screens side by side for swiping (CardShots): the track shows
+   the active one (--i) and slides to the next, following a drag (--drag,
+   set while a finger is on it, without easing). */
+.ins-card-track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  transform: translateX(calc(var(--i, 0) * -100% + var(--drag, 0px)));
+  transition: transform 340ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-card-track.is-dragging {
+  transition: none;
+}
+.ins-card-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+  height: 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-card-track { transition: none; }
+}
+/* Where cards swipe: sideways drags are the card's, up and down the page's,
+   and a dragged image isn't picked up to drop elsewhere. */
+@media (max-width: 759px), (hover: none) {
+  .ins-card-inset,
+  .ins-web-card-inset {
+    touch-action: pan-y;
+  }
+  .ins-card-inset img,
+  .ins-web-card-inset img {
+    -webkit-user-drag: none;
+  }
+}
+
 .ins-card-link::after {
   content: '';
   position: absolute;
@@ -5287,6 +5321,59 @@ select.ins-input {
   width: 264px;
 }
 
+/* A menu tied to its button (below) that fits neither lined up with the
+   button's left edge nor its right (a wide menu from a button mid-row) is
+   kept on screen instead: against the screen's right edge, or its left. */
+/* A menu tied to its button (below) that fits neither from the button's
+   left edge nor its right (a wide menu from a button mid-row) spans the
+   screen's width on that side instead, centred. */
+@supports (anchor-name: --a) {
+  @position-try --ins-wide {
+    position-area: block-end span-all;
+    justify-self: center;
+    margin: 8px 12px;
+  }
+}
+
+/* On a phone the "…" isn't at the page's right edge (the masthead wraps; it
+   can sit at the left), so hanging the menu from its right side put it off
+   screen. Tied to the button instead (anchor positioning), over the page: it
+   drops from the button's left edge and flips up or across when there's no
+   room. Without anchors it opens from the left edge, which stays on screen. */
+@media (max-width: 759px) {
+  @supports (anchor-name: --a) {
+    .ins-appmenu {
+      anchor-name: --ins-appmenu;
+      anchor-scope: --ins-appmenu;
+    }
+    /* In an area beside the button, as the toolbar's menus: the side with
+       more room, its height capped at that room (scrolling inside). */
+    .ins-appmenu-layer {
+      position: fixed;
+      position-anchor: --ins-appmenu;
+      inset: auto;
+      position-area: block-end span-inline-end;
+      max-width: calc(100vw - 24px);
+      /* The room on its side, but never more than 420px (60% of a short screen): a long list scrolls. */
+      max-height: min(calc(100% - 20px), 420px, 60dvh);
+      margin: 8px 0;
+      overflow-y: auto;
+      z-index: 210;
+      position-try-order: most-height;
+      position-try-fallbacks: flip-inline, --ins-wide, flip-block, flip-block flip-inline, flip-block --ins-wide;
+    }
+    .ins-appmenu-layer--up {
+      position-area: block-start span-inline-end;
+    }
+  }
+  @supports not (anchor-name: --a) {
+    .ins-appmenu-layer {
+      right: auto;
+      left: 0;
+    }
+  }
+}
+
 .ins-appmenu-row {
   width: 100%;
 }
@@ -7913,6 +8000,19 @@ select.ins-input {
     height: 40px;
   }
 
+  /* A phone: the card's screens are swiped (useSiblingCycle), so no
+     arrows, just the dots saying which one is showing, and no strip over
+     the screenshot's foot (it was there to set the arrows off). */
+  .ins-card-hover-controls {
+    height: auto;
+    padding: 12px;
+  }
+
+  .ins-card-hover-controls::before,
+  .ins-card-hover-controls .ins-card-control {
+    display: none;
+  }
+
   .ins-card-hover-footer .ins-btn-save,
   .ins-card-hover-footer .ins-btn-copy {
     pointer-events: auto;
@@ -8045,11 +8145,24 @@ select.ins-input {
     font-size: 15px;
   }
 
-  .ins-segmented--toolbar {
+  /* The "text in screenshots" button, and the field it opens into, at the
+     pills' 38px too (36px and 44px on a desktop). */
+  .ins-text-search-trigger {
+    width: 38px;
     height: 38px;
   }
 
-  .ins-segmented--toolbar .ins-segmented-item {
+  .ins-text-search {
+    height: 38px;
+  }
+
+  /* Level with the 38px pills beside it. (Doubled classes: the switch's own
+     44px rules come later in the file and would otherwise win.) */
+  .ins-segmented.ins-segmented--toolbar {
+    height: 38px;
+  }
+
+  .ins-segmented.ins-segmented--toolbar .ins-segmented-item {
     height: 30px;
     padding: 0 14px;
     font-size: 15px;
@@ -8072,22 +8185,83 @@ select.ins-input {
   }
 
   /* Filter/sort menus can't hang off a pill inside a scroll strip (the
-     strip would clip them) — they open as a bottom sheet instead. */
-  .ins-popwrap .ins-popover,
-  .ins-popwrap .ins-popover.ins-fmenu,
-  .ins-popwrap .ins-popover--right,
-  .ins-popwrap .ins-popover--left,
-  .ins-screen-preview-foot .ins-popover {
-    position: fixed;
-    top: auto;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    min-width: 0;
-    max-height: min(420px, 60vh);
-    overflow-y: auto;
-    z-index: 210;
-    box-shadow: 0 -8px 60px rgba(0, 0, 0, 0.2);
+     strip would clip them). Each is tied to its own button instead (CSS
+     anchor positioning) and laid over the page, fixed: it drops below the
+     button as on a desktop, lined up with its edge, and flips up or across
+     when there's no room. A browser without anchors opens them as a bottom
+     sheet. */
+  @supports (anchor-name: --a) {
+    .ins-popwrap {
+      anchor-name: --ins-pop;
+      anchor-scope: --ins-pop;
+    }
+    /* Set in an area beside the button (position-area), not at offsets:
+       below it from its left edge, and its height capped at the room that
+       area has (max-height is a share of the area). It takes whichever side
+       has more room (most-height), flips across when too wide, and spans
+       the screen's width when it fits neither way. */
+    .ins-popwrap .ins-popover,
+    .ins-popwrap .ins-popover.ins-fmenu,
+    .ins-popwrap .ins-popover--left,
+    .ins-popwrap .ins-uielements-menu,
+    .ins-screen-preview-foot .ins-popover {
+      position: fixed;
+      position-anchor: --ins-pop;
+      inset: auto;
+      position-area: block-end span-inline-end;
+      width: max-content;
+      min-width: min(220px, calc(100vw - 24px));
+      max-width: calc(100vw - 24px);
+      /* The room on its side, but never more than 420px (60% of a short screen): a long list scrolls. */
+      max-height: min(calc(100% - 20px), 420px, 60dvh);
+      margin: 8px 0;
+      overflow-y: auto;
+      z-index: 210;
+      transform: none;
+      position-try-order: most-height;
+      position-try-fallbacks: flip-inline, --ins-wide, flip-block, flip-block flip-inline, flip-block --ins-wide;
+    }
+    /* A menu set to the button's right edge stays set to it. */
+    .ins-popwrap .ins-popover--right,
+    .ins-popwrap .ins-popover.ins-popover--right,
+    .ins-tabbar-row .ins-ftoolbar-right .ins-uielements-menu {
+      position-area: block-end span-inline-start;
+    }
+    /* Menus with a fixed head (a search field) and a list: the list takes
+       what's left of the capped height and scrolls, rather than its own
+       desktop cap pushing the menu past the screen. */
+    .ins-popwrap .ins-uielements-menu,
+    .ins-popwrap .ins-popover.ins-fpanel {
+      overflow: hidden;
+    }
+    /* Its own width (long names end in "…"), not as wide as its longest name. */
+    .ins-popwrap .ins-uielements-menu {
+      width: 280px;
+    }
+    .ins-popwrap .ins-uielements-menu .ins-uielements-options,
+    .ins-popwrap .ins-fpanel .ins-fpanel-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: none;
+    }
+  }
+  @supports not (anchor-name: --a) {
+    .ins-popwrap .ins-popover,
+    .ins-popwrap .ins-popover.ins-fmenu,
+    .ins-popwrap .ins-popover--right,
+    .ins-popwrap .ins-popover--left,
+    .ins-screen-preview-foot .ins-popover {
+      position: fixed;
+      top: auto;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      min-width: 0;
+      max-height: min(420px, 60vh);
+      overflow-y: auto;
+      z-index: 210;
+      box-shadow: 0 -8px 60px rgba(0, 0, 0, 0.2);
+    }
   }
 
   /* No hover on touch, so the selection ring needs to be reachable without
@@ -12123,12 +12297,25 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   gap: 5px;
 }
 
+/* Tune In in the profile menu: only where the header hides its own button. */
+@media (min-width: 1140px) {
+  .ins-pmenu-item.ins-pmenu-item--compact { display: none; }
+}
+
 /* ─── Tune In (AudioMenu) ─────────────────────────────── */
 /* In the moei studio's style: each station a soft grey card, its icon in a
    tile tinted its colour (solid while it plays), a white floating play button
    that fills with the colour while playing; the volume in the playing
    station's colour (--tint on .ins-tune, set by AudioMenu). */
 .ins-tune { --tint: #141414; width: 340px; min-width: 340px; padding: 16px; border-radius: 24px 24px 40px 40px; }
+/* Opened from the profile menu (the header's button hidden): over the page,
+   under the header at the right, where that menu was; on a phone, a sheet. */
+.ins-tune.ins-tune-floating { position: fixed; top: 76px; right: 16px; z-index: 210; }
+@media (max-width: 759px) {
+  .ins-tune.ins-tune-sheet { top: auto; right: auto; display: flex; flex-direction: column; width: auto; min-width: 0; padding: 0 16px calc(20px + env(safe-area-inset-bottom)); border: 0; border-radius: 24px 24px 0 0; background: #fff; }
+  .ins-tune-sheet .ins-tune-head { padding: 4px 44px 16px 0; }
+  .ins-tune-sheet .ins-tune-sub { white-space: normal; }
+}
 .ins-tune-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 0 0 16px; }
 .ins-tune-titles { min-width: 0; }
 .ins-tune-title { margin: 0; color: #141414; font: 700 20px/1.2 var(--font-outfit), var(--font-inter), sans-serif; }
@@ -12232,7 +12419,9 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
    click copies the hex), then one line of counts. */
 /* The Palette button sits in the masthead with the App Store button's look
    (.ins-btn--masthead-store); open, it keeps the hover border. */
+/* Save's padding, not the App Store button's taller 16px: level with Save and the "…" beside it (49.2px). */
 .ins-palette-pill { cursor: var(--ins-cursor-hand, pointer); }
+.ins-btn--masthead-store.ins-palette-pill { padding: 12px 24px !important; }
 .ins-palette-pill:disabled { cursor: default; }
 .ins-palette-pill.is-open { border-color: var(--ins-border-strong) !important; }
 .ins-palette-pill:focus-visible { outline: 2px solid #111; outline-offset: 2px; }
@@ -12322,6 +12511,14 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   .ins-palette-role { margin: 0; }
   .ins-palette-seg-icon, .ins-palette-brand { display: none; }
 }
+/* On a phone the palette is a sheet (useSheet, the modals' sheet): the card
+   lies flat in it, no drop-down frame, the HEX / RGB switch kept clear of
+   the close. */
+.ins-palette-sheet { display: flex; flex-direction: column; background: #fff; }
+/* No layer of its own (its drop-down z-index would still apply as a flex item, over the close). */
+.ins-palette-pop.is-sheet { position: static; z-index: auto; width: auto; visibility: visible; opacity: 1; translate: none; scale: none; pointer-events: auto; transition: none; }
+.ins-palette-pop.is-sheet .ins-palette-card { padding: 4px 16px calc(20px + env(safe-area-inset-bottom)); border: 0; border-radius: 0; box-shadow: none; }
+.ins-palette-pop.is-sheet .ins-palette-head { padding-right: 44px; }
 @media (prefers-reduced-motion: reduce) {
   .ins-palette-pop, .ins-palette-seg, .ins-palette-dots span { transition: none; }
   .ins-palette-dots.is-loading span, .ins-palette-band--loading { animation: none; }
@@ -14132,6 +14329,36 @@ body:has(.ins-logo-dock) .ins-toast-host { top: clamp(12px, 3vw, 28px); bottom: 
    as .ins-context-menu-divider does in the right-click menus. */
 .ins-popover-divider { height: 1px; margin: 4px 6px; background: #f0f0f0; }
 
+/* On a touch screen a long-press on a screenshot opens Motvin's own menu
+   (LongPressScreenMenus), so the browser's callout ("Save image", link
+   preview) and text selection stay off there. */
+@media (hover: none) {
+  .ins-card-inset,
+  .ins-flows-row-shot,
+  .ins-screen-preview-modal img,
+  .ins-compare-modal img {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* A touch tablet (wider than the phone layout) swipes its cards too, so the
+   same: dots only, always showing. */
+@media (hover: none) and (min-width: 760px) {
+  .ins-card-hover-controls {
+    height: auto;
+    padding: 12px;
+    opacity: 1;
+    transform: none;
+  }
+
+  .ins-card-hover-controls::before,
+  .ins-card-hover-controls .ins-card-control {
+    display: none;
+  }
+}
+
 /* Guests (GuestImageGuard sets html.ins-guest): no iOS long-press "Save
    image", drag-out or selection on the library's screenshots and logos. */
 html.ins-guest img[src*="/api/inspirations/screens/"],
@@ -14157,6 +14384,10 @@ html.ins-guest img[src*="/api/inspirations/logos/"] {
   min-height: 300px;
   padding-top: clamp(40px, 8vh, 96px);
   text-align: center;
+  /* The message's turning glow reaches past it; on a phone, past the screen
+     (the page scrolled sideways). Clipped here, not scrolled: the pile is
+     fixed to the window, so it isn't cut. */
+  overflow-x: clip;
 }
 .ins-search-empty-copy {
   position: relative;
@@ -14831,6 +15062,240 @@ html.ins-bat-on .ins-search-bat { display: block; }
   .ins-search-overlay .ins-search-modal.ins-moei-studio .ins-request-close { top: 14px; right: 14px; }
   .ins-search-modal .ins-moei-arrow--prev { left: -24px; }
   .ins-search-modal .ins-moei-arrow--next { right: -24px; }
+}
+/* ─── Sheets (useSheet) ───────────────────────────────── */
+/* On a phone a modal is a sheet, as mobbin's are: up from the bottom, full
+   width, the dimmed page showing above it, rounded at the top, with a handle
+   to drag it up to fill the screen or down to settle or close. Its content
+   scrolls inside it. A viewer (screen, flow, compare) is a tall sheet; a
+   form or a question is as tall as it needs. (The search's own phone page,
+   ≤759px, is full-screen white; a sheet's overlay isn't.) */
+.ins-sheet-handle { display: none; }
+@media (max-width: 759px) {
+  .ins-search-overlay.ins-sheet-overlay {
+    padding: 0;
+    place-items: end stretch;
+    background: var(--ins-backdrop);
+  }
+  .ins-sheet-overlay .ins-sheet.ins-sheet {
+    position: relative;
+    box-sizing: border-box;
+    align-self: end;
+    width: 100vw;
+    min-width: 0;
+    max-width: none;
+    height: auto;
+    max-height: calc(100dvh - 48px);
+    margin: 0;
+    /* The handle's strip is the top space; content starts below it. */
+    padding-top: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 24px 24px 0 0;
+    box-shadow: 0 -8px 32px rgba(20, 20, 20, 0.12);
+    /* backwards, not both: a held end state would override the drag's own transform. */
+    animation: insSheetUp 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    transition: height 280ms cubic-bezier(0.22, 1, 0.36, 1), transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* A viewer: nearly the whole screen from the start. */
+  .ins-sheet-overlay .ins-sheet.ins-sheet--tall {
+    height: calc(100dvh - 40px);
+    max-height: calc(100dvh - 40px);
+  }
+  /* Dragged up to fill the screen (all but a sliver at the top). */
+  .ins-sheet-overlay .ins-sheet.ins-sheet.is-expanded {
+    height: calc(100dvh - 12px);
+    max-height: calc(100dvh - 12px);
+  }
+  /* Under a finger: it follows exactly, no easing, no text selected. */
+  .ins-sheet-overlay .ins-sheet.ins-sheet.is-dragging {
+    transition: none;
+    user-select: none;
+  }
+  /* The handle: a short grey pill in a 28px strip across the top (the
+     sheet's top space, in place of its padding), staying there on white as
+     the sheet scrolls. */
+  .ins-sheet .ins-sheet-handle {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    display: flex;
+    flex: none;
+    align-self: stretch;
+    justify-content: center;
+    box-sizing: border-box;
+    height: 28px;
+    padding-top: 10px;
+    background: #fff;
+    touch-action: none;
+    cursor: grab;
+  }
+  /* In a sheet with side padding, the strip still runs edge to edge. */
+  .ins-sheet-overlay .ins-search-modal.ins-sheet .ins-sheet-handle {
+    margin-inline: calc(-1 * var(--sheet-pad-x, 0px));
+  }
+  .ins-sheet .ins-sheet-handle::before {
+    content: '';
+    width: 40px;
+    height: 5px;
+    border-radius: 3px;
+    background: #d9d9d9;
+  }
+  .ins-sheet .ins-sheet-handle:focus-visible {
+    outline: none;
+  }
+  .ins-sheet .ins-sheet-handle:focus-visible::before {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px #141414;
+  }
+  .ins-sheet.is-dragging,
+  .ins-sheet.is-dragging .ins-sheet-handle {
+    cursor: grabbing;
+  }
+  /* The modals' floating close, as a sheet's: a round grey button, top right. */
+  .ins-sheet-overlay .ins-sheet .ins-request-close {
+    /* Complete in itself: a sheet that isn't a search-modal (the palette) has no other close style. */
+    position: absolute;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border-radius: 50%;
+    cursor: var(--ins-cursor-hand, pointer);
+    /* Over the handle's white strip, which it reaches into. */
+    z-index: 7;
+    top: 22px;
+    right: 14px;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    background: #f2f2f2;
+    box-shadow: none;
+    color: #141414;
+  }
+}
+@keyframes insSheetUp {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-sheet-overlay .ins-sheet.ins-sheet { animation: none; transition: none; }
+}
+
+/* The flow player's bar on a touch screen: a long-press and drag scrubs
+   the step preview along it (FlowPreview), so the bar keeps the finger
+   (no scroll, no text selection or callout starting under it). */
+@media (hover: none) {
+  .ins-flow-steps {
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* A preview showing one screen at a time, on a phone or a touch screen:
+   swiped to the next (useSwipeStep), so sideways drags are its own (up and
+   down still scroll the sheet), the image isn't picked up when dragged, and
+   no arrows over it. (The "Nearby screens" strip keeps its arrows.) */
+@media (max-width: 759px), (hover: none) {
+  .ins-screen-preview-filmstrip--single {
+    touch-action: pan-y;
+  }
+  .ins-screen-preview-filmstrip--single img {
+    -webkit-user-drag: none;
+  }
+  .ins-screen-preview-filmstrip--single ~ .ins-screen-preview-nav {
+    display: none;
+  }
+}
+
+/* A viewer (screen, flow, compare) as a sheet: on a desktop its panels are
+   separate white cards on a clear frame; in a sheet the sheet is the white,
+   the panels run on as one, a hairline between them, and it all scrolls. */
+@media (max-width: 759px) {
+  .ins-sheet-overlay .ins-screen-preview-modal.ins-sheet {
+    gap: 0;
+    background: #fff;
+  }
+  /* The screen (and its strip, which takes what's left of it) fills the
+     sheet as it opens; the details follow below, a scroll away. */
+  .ins-sheet .ins-screen-preview-main {
+    flex: none;
+    height: calc(100dvh - 40px);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .ins-sheet .ins-screen-preview-details {
+    flex: none;
+    /* The desktop's 320px side pane, now the sheet's full width. */
+    width: auto;
+    max-width: none;
+    overflow: visible;
+    border-top: 1px solid #f0f0f0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  /* Its own scroller on a desktop; in a sheet, its full height, scrolled with the rest. */
+  .ins-sheet .ins-screen-preview-details-body {
+    flex: none;
+    overflow: visible;
+  }
+}
+
+/* The studio as a sheet: its title centred with the close beside it, both
+   staying put as the rest scrolls under them; the actions centred at its foot. */
+@media (max-width: 759px) {
+  .ins-search-overlay .ins-search-modal.ins-moei-studio {
+    --sheet-pad-x: 16px;
+    padding: 0 16px;
+  }
+  /* The close rides at the top right as it scrolls, over the title's row. */
+  .ins-search-overlay .ins-search-modal.ins-moei-studio .ins-request-close {
+    position: sticky;
+    top: 22px;
+    z-index: 7;
+    flex: none;
+    align-self: flex-end;
+    margin: -6px -4px -30px 0;
+  }
+  .ins-moei-studio-head {
+    position: sticky;
+    top: 28px;
+    z-index: 3;
+    flex: none;
+    margin: 0 -16px;
+    padding: 0 60px 14px;
+    background: #fff;
+    text-align: center;
+  }
+  .ins-moei-studio-title {
+    font-size: 19px;
+  }
+  .ins-moei-studio-sub {
+    display: none;
+  }
+  .ins-search-modal .ins-moei-arrow {
+    display: none;
+  }
+  /* Colours, hats and faces: rows centred in the sheet, not left with a gap on the right. */
+  .ins-moei-studio .ins-moei-tiles {
+    justify-content: center;
+  }
+  .ins-moei-studio-foot {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    justify-content: center;
+    margin: 20px -16px 0;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    border-radius: 0;
+  }
+  .ins-search-modal .ins-moei-studio-foot .ins-moei-secondary,
+  .ins-search-modal .ins-moei-studio-foot .ins-moei-primary {
+    padding: 12px 22px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .ins-moei-slide-figure, .ins-search-overlay .ins-search-modal.ins-moei-studio, .ins-moei-overlay { animation: none !important; }

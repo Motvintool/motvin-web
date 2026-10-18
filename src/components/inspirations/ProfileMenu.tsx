@@ -11,6 +11,7 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { ADMIN_PARAM } from './admin/AdminDrawer';
 import { RequestAppModal } from './RequestAppModal';
 import { openMoeiStudio } from '@/lib/inspirations/moei';
+import { openTuneIn } from './AudioMenu';
 import { useToast } from './Toast';
 import { useGoToLogin } from './useGoToLogin';
 
@@ -194,6 +195,22 @@ export function ProfileMenu() {
                     <img src={`${ICON}/my-moei.svg`} alt="" width={18} height={18} />
                     My moei
                     <span className="ins-pmenu-new">New</span>
+                  </span>
+                  <img src={`${ICON}/profile-arrow.svg`} alt="" width={12} height={12} />
+                </button>
+                {/* Tune In, where the header's own button is hidden (the compact header): only there. */}
+                <button
+                  type="button"
+                  className="ins-pmenu-item ins-pmenu-item--compact"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpen(false);
+                    openTuneIn();
+                  }}
+                >
+                  <span className="ins-pmenu-lead">
+                    <img src={`${ICON}/music.svg`} alt="" width={18} height={18} />
+                    Tune In
                   </span>
                   <img src={`${ICON}/profile-arrow.svg`} alt="" width={12} height={12} />
                 </button>

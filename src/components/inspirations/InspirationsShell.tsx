@@ -14,6 +14,7 @@ import { MoeiStudioHost } from './moeis/MoeiStudio';
 import { AdminDrawerOverlay } from './admin/AdminDrawer';
 import { AdminChatbot } from './admin/AdminChatbot';
 import { UserChatbot } from './UserChatbot';
+import { LongPressScreenMenus } from './useScreenContextMenu';
 
 function InspirationsHeaderSkeleton() {
   return (
@@ -55,6 +56,7 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
         <GuestDownloadNotice />
         {/* The Motvin-style "are you sure" box (askConfirm). Renders nothing until asked. */}
         <ConfirmHost />
+        <LongPressScreenMenus />
         {/* Motvin Moeis: the moei studio (opened from "My moei") and the moei itself, when it's out. */}
         <MoeiStudioHost />
         <MoeiCompanion />

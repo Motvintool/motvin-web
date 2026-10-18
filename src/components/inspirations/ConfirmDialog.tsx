@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CloseIcon } from './Icons';
+import { useSheet } from './useSheet';
 
 /** What to ask: a short question, an optional line under it, and the confirm button's word. */
 export type ConfirmOptions = {
@@ -72,18 +73,23 @@ export function ConfirmHost() {
     return () => window.removeEventListener('keydown', onKey, true);
   }, [request]);
 
+  // On a phone, a sheet: its top drags up to fill the screen, down to settle or close.
+  const { ref: sheetRef, className: sheetClass, dragProps: sheetDrag, handle: sheetHandle } = useSheet(() => answer(false));
   if (!request) return null;
 
   return createPortal(
-    <div className="ins-portal ins-search-overlay ins-confirm-overlay" onClick={() => answer(false)}>
+    <div className="ins-portal ins-search-overlay ins-confirm-overlay ins-sheet-overlay" onClick={() => answer(false)}>
       <div
-        className="ins-search-modal ins-confirm"
+        ref={sheetRef}
+        className={`ins-search-modal ins-confirm ${sheetClass}`}
+        {...sheetDrag}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="ins-confirm-title"
         aria-describedby={request.description ? 'ins-confirm-desc' : undefined}
         onClick={(e) => e.stopPropagation()}
       >
+        {sheetHandle}
         {/* The modals' own floating close, on the card's corner. */}
         <button type="button" className="ins-request-close" aria-label="Close" onClick={() => answer(false)}>
           <CloseIcon size={18} />

@@ -18,6 +18,8 @@ import { ScreenLightbox } from './ScreenLightbox';
 import { useToast } from './Toast';
 import { useScreenContextMenu } from './useScreenContextMenu';
 import { useAsync } from './useAsync';
+import { useSheet } from './useSheet';
+import { useSwipeStep } from './useSwipeStep';
 
 /** Search-param name that opens the overlay — see FLOW_PARAM in FlowPreview.tsx. */
 export const SCREEN_PARAM = 'screen';
@@ -237,6 +239,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     const next = screens[Math.min(Math.max(activeIndex + dir, 0), screens.length - 1)];
     if (next) setActiveId(next.id);
   };
+  // On a phone the one screen on show is swiped to the next, as the cards' are.
+  const { moverRef: shotRef, swipeProps: shotSwipe } = useSwipeStep({ canPrev: activeIndex > 0, canNext: activeIndex < screens.length - 1, onStep: stepSingle });
 
   // Right-click on a screenshot: the grid card's menu (Copy PNG, Download PNG,
   // Copy link) for whichever screenshot was clicked, in place of the
@@ -289,6 +293,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [zoomScreen, copyCurrentPng, copyCurrentLink]);
 
+  // On a phone, a sheet: its top drags up to fill the screen, down to settle or close.
+  const { ref: sheetRef, className: sheetClass, dragProps: sheetDrag, handle: sheetHandle } = useSheet(close);
   if (!mounted) return null;
 
   if (loading || !screen) {
@@ -301,14 +307,17 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
       return null;
     }
     return createPortal(
-      <div className="ins-search-overlay" role="presentation" onClick={close}>
+      <div className="ins-search-overlay ins-sheet-overlay" role="presentation" onClick={close}>
         <div
-          className="ins-screen-preview-modal ins-screen-preview-modal--loading"
+          ref={sheetRef}
+          className={`ins-screen-preview-modal ins-screen-preview-modal--loading ins-sheet--tall ${sheetClass}`}
+          {...sheetDrag}
           role="dialog"
           aria-modal="true"
           aria-label="Loading screen"
           onClick={(e) => e.stopPropagation()}
         >
+          {sheetHandle}
           {/* The loaded modal's own layout in placeholder shapes (its panels,
               header, screenshot, footer and Details rows, on the same classes),
               so the content lands in place instead of replacing a spinner. */}
@@ -418,14 +427,17 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
 
   return createPortal(
     <>
-      <div className="ins-search-overlay" role="presentation" onClick={close}>
+      <div className="ins-search-overlay ins-sheet-overlay" role="presentation" onClick={close}>
         <div
-          className="ins-screen-preview-modal"
+          ref={sheetRef}
+          className={`ins-screen-preview-modal ins-sheet--tall ${sheetClass}`}
+          {...sheetDrag}
           role="dialog"
           aria-modal="true"
           aria-label={`${view.name}${app ? ` — ${app.name}` : ''}`}
           onClick={(e) => e.stopPropagation()}
         >
+          {sheetHandle}
           <div className="ins-screen-preview-main">
             <div className="ins-screen-preview-head">
               <div className="ins-screen-preview-head-app">
@@ -482,8 +494,9 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               ) : (
                 // Right-click anywhere on this strip (not only on the screenshot):
                 // the same menu, for the screen being viewed.
-                <div className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--single" onContextMenu={onShotContextMenu(view)}>
+                <div className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--single" onContextMenu={onShotContextMenu(view)} {...shotSwipe}>
                   <div
+                    ref={shotRef}
                     className={`ins-screen-preview-shot ${isDesktopPlatform((screens[activeIndex] ?? screen).platform) ? 'ins-screen-preview-shot--web' : ''}`}
                     data-screen-id={screens[activeIndex]?.id ?? view.id}
                     onClick={() => setZoomScreen(screens[activeIndex] ?? screen)}

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import {
   extractPalette,
@@ -11,7 +12,9 @@ import {
   type PaletteColor,
 } from '@/lib/inspirations/palette';
 import type { App, Screen } from '@/lib/inspirations/types';
+import { CloseIcon } from './Icons';
 import { useToast } from './Toast';
+import { SHEET_QUERY, useMediaQuery, useSheet } from './useSheet';
 
 /**
  * The app's colours, worked out from its screenshots (see palette.ts) and
@@ -71,11 +74,18 @@ export function AppPaletteMenu({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  // On a phone the palette, like the modals, opens as a sheet rather than dropping down.
+  const phone = useMediaQuery(SHEET_QUERY);
+  const close = useCallback(() => setOpen(false), []);
+  // On a phone, a sheet: its top drags up to fill the screen, down to settle or close.
+  const { ref: sheetRef, className: sheetClass, dragProps, handle } = useSheet(close);
 
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      // The sheet is out in <body>, not inside the menu, but it's still the palette.
+      const target = e.target as Element;
+      if (!rootRef.current?.contains(target) && !target.closest?.('.ins-palette-sheet')) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
@@ -92,14 +102,23 @@ export function AppPaletteMenu({
   return (
     <div className="ins-palette-menu" ref={rootRef}>
       <PalettePill colors={colors} open={open} onToggle={() => setOpen((o) => !o)} />
-      <PalettePanel
-        app={app}
-        colors={colors}
-        open={open}
-        screens={screens}
-        flowCount={flowCount}
-        patternCount={patternCount}
-      />
+      {phone ? (
+        open &&
+        createPortal(
+          <div className="ins-portal ins-search-overlay ins-sheet-overlay">
+            <div ref={sheetRef} className={`ins-palette-sheet ${sheetClass}`} {...dragProps} role="dialog" aria-modal="true" aria-label={`${app.name} brand palette`}>
+              {handle}
+              <button type="button" className="ins-request-close" aria-label="Close" onClick={close}>
+                <CloseIcon size={18} />
+              </button>
+              <PalettePanel app={app} colors={colors} open screens={screens} flowCount={flowCount} patternCount={patternCount} sheet />
+            </div>
+          </div>,
+          document.body,
+        )
+      ) : (
+        <PalettePanel app={app} colors={colors} open={open} screens={screens} flowCount={flowCount} patternCount={patternCount} />
+      )}
     </div>
   );
 }
@@ -184,6 +203,7 @@ function PalettePanel({
   screens,
   flowCount,
   patternCount,
+  sheet = false,
 }: {
   app: App;
   colors: PaletteColor[] | null;
@@ -191,6 +211,8 @@ function PalettePanel({
   screens: Screen[];
   flowCount: number;
   patternCount: number;
+  /** Inside the phone's sheet (which is the dialog), not dropping down. */
+  sheet?: boolean;
 }) {
   const { show } = useToast();
   const [format, setFormat] = useState<ColorFormat>('hex');
@@ -228,8 +250,8 @@ function PalettePanel({
   ].filter(Boolean);
 
   return (
-    <div id="ins-app-palette" className={`ins-palette-pop ${open ? 'is-open' : ''}`} aria-hidden={!open}>
-        <section className="ins-palette-card" role="dialog" aria-label={`${app.name} brand palette`}>
+    <div id="ins-app-palette" className={`ins-palette-pop ${open ? 'is-open' : ''} ${sheet ? 'is-sheet' : ''}`} aria-hidden={!open}>
+        <section className="ins-palette-card" role={sheet ? undefined : 'dialog'} aria-label={sheet ? undefined : `${app.name} brand palette`}>
           <div className="ins-palette-head">
             <div className="ins-palette-heading">
               <h2 className="ins-palette-title">Brand palette</h2>
