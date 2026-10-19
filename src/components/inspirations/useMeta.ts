@@ -4,8 +4,11 @@ import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { EMPTY_META, inspirationsApi } from '@/lib/inspirations/api';
 import { browsedPlatforms } from '@/lib/inspirations/filters';
-import type { LibraryMeta } from '@/lib/inspirations/types';
+import { DEFAULT_FRESHNESS } from '@/lib/inspirations/appFreshness';
+import type { LibraryMeta, LibrarySettings } from '@/lib/inspirations/types';
 import { useAsync } from './useAsync';
+
+const DEFAULT_SETTINGS: LibrarySettings = { freshness: DEFAULT_FRESHNESS };
 
 /**
  * Counts and the taxonomy present in the store *for the platform being
@@ -41,4 +44,15 @@ export function usePlatformMeta(): { meta: LibraryMeta; loading: boolean } {
  */
 export function useMeta(): LibraryMeta {
   return usePlatformMeta().meta;
+}
+
+/**
+ * The library's general settings (the admin's Settings tab). They are the same
+ * for every platform, so this asks without one and doesn't read the URL —
+ * any card can call it. Defaults until the answer arrives, or from an older
+ * backend.
+ */
+export function useLibrarySettings(): LibrarySettings {
+  const { data } = useAsync(() => inspirationsApi.getMeta(), 'meta:settings');
+  return data?.settings ?? DEFAULT_SETTINGS;
 }

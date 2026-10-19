@@ -1,14 +1,15 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { adminApi, type AdminAppRecord, type AdminScreenFile } from '@/lib/inspirations/admin';
+import { useEffect, useRef, useState } from 'react';
+import { adminApi, type AdminAppRecord, type AdminFlowRecord, type AdminScreenFile } from '@/lib/inspirations/admin';
 import { splitScreenFile } from '@/lib/inspirations/screenPaths';
 import { localDateString } from '@/lib/inspirations/dates';
-import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
-import type { Platform } from '@/lib/inspirations/types';
+import { PLATFORM_LABEL, SCREEN_TYPE_LABEL } from '@/lib/inspirations/taxonomy';
+import type { Platform, ScreenType } from '@/lib/inspirations/types';
 import { CheckIcon, PlusIcon, TrashIcon, UploadIcon } from '../Icons';
 import { screenLabel, thumbUrl } from './screenFiles';
 import { AdminImageLightbox } from './AdminImageLightbox';
+import { describeAddedScreens } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 
 /**
  * Per-app, per-version screen management, inline in the Apps tab.
@@ -25,11 +26,17 @@ import { AdminImageLightbox } from './AdminImageLightbox';
 export function AppVersionScreens({
   app,
   files,
+  flows,
+  screenTypes,
   busy,
   run,
 }: {
   app: AdminAppRecord;
   files: AdminScreenFile[];
+  /** This app's flows: added screens can join one. */
+  flows: AdminFlowRecord[];
+  /** The library's screen types: added screens can be filed under one. */
+  screenTypes: ScreenType[];
   busy: boolean;
   run: (action: () => Promise<unknown>, onDone?: () => void) => Promise<boolean>;
 }) {
@@ -54,6 +61,59 @@ export function AppVersionScreens({
   const [picked, setPicked] = useState<Set<string>>(new Set());
   // Asking "delete this whole version?" inline, instead of in a browser dialog.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Image files being dragged over the screens: they drop into this version.
+  const [dropping, setDropping] = useState(false);
+  // Reorder mode: the version's screen ids in the order being arranged (null when not reordering),
+  // and the one being dragged into place.
+  const [ordering, setOrdering] = useState<string[] | null>(null);
+  // How screens added next are filed: a type ('' = worked out from the file name, as before) and a flow
+  // to append them to ('' = none).
+  const [addType, setAddType] = useState<ScreenType | ''>('');
+  const [addFlow, setAddFlow] = useState('');
+  // After adding: whether the new screens are being described (named, typed, tagged) or why they couldn't be.
+  const [describeNote, setDescribeNote] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const managerRef = useRef<HTMLDivElement>(null);
+
+  // Dragging a screen near the top or bottom of what's scrolling the grid
+  // (the admin drawer, or the page) scrolls it, faster the nearer the edge,
+  // so a screen can be carried to a place that's out of view.
+  useEffect(() => {
+    if (!dragId) return;
+    let scroller: HTMLElement | null = managerRef.current?.parentElement ?? null;
+    while (scroller && !(/(auto|scroll)/.test(getComputedStyle(scroller).overflowY) && scroller.scrollHeight > scroller.clientHeight)) {
+      scroller = scroller.parentElement;
+    }
+    const EDGE = 90;
+    const MAX_STEP = 22;
+    let speed = 0;
+    let raf = 0;
+    const tick = () => {
+      if (speed) {
+        if (scroller) scroller.scrollBy(0, speed);
+        else window.scrollBy(0, speed);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    const onDragOver = (e: DragEvent) => {
+      const box = scroller ? scroller.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+      const fromTop = e.clientY - box.top;
+      const fromBottom = box.bottom - e.clientY;
+      speed =
+        fromTop < EDGE ? -Math.ceil(((EDGE - Math.max(0, fromTop)) / EDGE) * MAX_STEP) : fromBottom < EDGE ? Math.ceil(((EDGE - Math.max(0, fromBottom)) / EDGE) * MAX_STEP) : 0;
+    };
+    const stop = () => {
+      speed = 0;
+    };
+    document.addEventListener('dragover', onDragOver);
+    document.addEventListener('drop', stop);
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      document.removeEventListener('dragover', onDragOver);
+      document.removeEventListener('drop', stop);
+    };
+  }, [dragId]);
 
   const platforms = Array.from(new Set(files.map((f) => f.platform)));
   const [platform, setPlatform] = useState<Platform>((platforms[0] as Platform) ?? 'ios');
@@ -87,6 +147,7 @@ export function AppVersionScreens({
     });
 
   const pickExisting = (id: string) => {
+    setOrdering(null);
     setSelecting(false);
     setPicked(new Set());
     setConfirmingDelete(false);
@@ -150,18 +211,82 @@ export function AppVersionScreens({
     );
   };
 
+  // This version's flows: the ones with a screen in it (a flow id names its version, but the record doesn't).
+  const versionIds = new Set(screensInVersion.map((f) => f.id));
+  const versionFlows = flows.filter((f) => f.screenIds.some((id) => versionIds.has(id)));
+  const joinFlow = versionFlows.some((f) => f.id === addFlow) ? addFlow : '';
+
   const addScreens = (fileList: FileList) => {
     if (collision) return;
     const picked = Array.from(fileList);
     if (!picked.length) return;
     const wasStagingNew = draftVersion !== null;
+    const options = { screenType: addType || undefined, addToFlow: joinFlow || undefined };
+    // One after another, so they join the flow in the order they were picked
+    // (and each upload's rebuild doesn't race the next).
     void run(
-      () => Promise.all(picked.map((f) => adminApi.uploadScreen(platform, app.id, f.name, f, false, target))),
+      async () => {
+        const added: string[] = [];
+        for (const f of picked) {
+          const result = await adminApi.uploadScreen(platform, app.id, f.name, f, false, target, undefined, options);
+          added.push(result.file.replace(`${platform}/${app.id}/`, ''));
+        }
+        // Then filled in like recorded screens — a name, states, UI elements, style (and the type, unless picked) —
+        // as a run the dock shows. The screens are in either way; this only says when it couldn't start.
+        try {
+          await describeAddedScreens(app.id, platform, added, app.name);
+          setDescribeNote(`Describing ${added.length} new screen${added.length === 1 ? '' : 's'} — names and details appear when the run ends.`);
+        } catch (error) {
+          setDescribeNote(`Added, but not described yet: ${(error as Error).message}`);
+        }
+      },
       // Its first screen just landed, so it is a real version now — switch
       // back to the normal tab list, on the version that was just staged.
       wasStagingNew ? () => pickExisting(target) : undefined,
     );
   };
+
+  const pickFiles = () => inputRef.current?.click();
+  const canAdd = !busy && !collision && !selecting && !ordering;
+
+  // Reordering: drag a tile onto another to put it there, or nudge it with its arrows; Save writes the lot.
+  const startOrdering = () => setOrdering(screensInVersion.map((f) => f.id));
+  const moveTo = (id: string, targetId: string, after: boolean) =>
+    setOrdering((list) => {
+      if (!list || id === targetId) return list;
+      const rest = list.filter((x) => x !== id);
+      const at = rest.indexOf(targetId) + (after ? 1 : 0);
+      return [...rest.slice(0, at), id, ...rest.slice(at)];
+    });
+  const nudge = (id: string, by: number) =>
+    setOrdering((list) => {
+      if (!list) return list;
+      const from = list.indexOf(id);
+      const to = Math.max(0, Math.min(list.length - 1, from + by));
+      if (from === to) return list;
+      const next = list.slice();
+      next.splice(from, 1);
+      next.splice(to, 0, id);
+      return next;
+    });
+  const saveOrder = () => {
+    if (!ordering) return;
+    const byId = new Map(screensInVersion.map((f) => [f.id, f]));
+    const screens = ordering
+      .map((id) => byId.get(id))
+      .filter((f): f is AdminScreenFile => Boolean(f))
+      .map((f) => {
+        const { name, flow } = splitScreenFile(f.file, f.version);
+        return { platform: f.platform as Platform, file: name, ...(flow ? { flow } : {}) };
+      });
+    void run(() => adminApi.saveVersionOrder(app.id, target, screens), () => setOrdering(null));
+  };
+  // While reordering, the tiles follow the order being arranged.
+  const shownFiles = ordering
+    ? ordering.map((id) => screensInVersion.find((f) => f.id === id)).filter((f): f is AdminScreenFile => Boolean(f))
+    : screensInVersion;
+  // Only image files count as a drop; anything else is left to the page.
+  const draggingImages = (e: React.DragEvent) => Array.from(e.dataTransfer.items).some((i) => i.kind === 'file' && i.type.startsWith('image/'));
 
   const removeVersion = () => {
     if (versions.length <= 1 || !activeVersion) return;
@@ -170,7 +295,7 @@ export function AppVersionScreens({
   };
 
   return (
-    <div className="ins-admin-versions-manager">
+    <div ref={managerRef} className="ins-admin-versions-manager">
       <p className="ins-admin-form-title">{app.name}&rsquo;s versions</p>
       <div className="ins-admin-versions-tabs" role="tablist" aria-label={`${app.name} versions`}>
         {versions.map((v) => (
@@ -224,6 +349,16 @@ export function AppVersionScreens({
                 Cancel
               </button>
             </>
+          ) : ordering ? (
+            <>
+              <span className="ins-muted">Drag screens into place, or use their arrows</span>
+              <button type="button" className="ins-linkbtn" disabled={busy} onClick={saveOrder}>
+                Save order
+              </button>
+              <button type="button" className="ins-linkbtn" disabled={busy} onClick={() => setOrdering(null)}>
+                Cancel
+              </button>
+            </>
           ) : selecting ? (
             <>
               <span className="ins-muted">
@@ -269,8 +404,14 @@ export function AppVersionScreens({
               <span className="ins-muted">
                 {screensInVersion.length} screen{screensInVersion.length === 1 ? '' : 's'}
               </span>
+              <button type="button" className="ins-linkbtn" disabled={busy} onClick={pickFiles}>
+                Add screens
+              </button>
               <button type="button" className="ins-linkbtn" disabled={busy} onClick={startEditDate}>
                 Edit date
+              </button>
+              <button type="button" className="ins-linkbtn" disabled={busy || screensInVersion.length < 2} onClick={startOrdering}>
+                Reorder
               </button>
               <button type="button" className="ins-linkbtn" disabled={busy || screensInVersion.length === 0} onClick={toggleSelecting}>
                 Select screens
@@ -290,18 +431,93 @@ export function AppVersionScreens({
         )}
       </div>
 
+      {describeNote && <p className="ins-muted ins-admin-status">{describeNote}</p>}
+
+      {/* How the next screens added are filed: a type, and a flow to join (at its end). */}
+      {!collision && !selecting && !ordering && (
+        <div className="ins-admin-actions ins-admin-actions--tight ins-admin-add-options">
+          <span className="ins-muted">Add new screens as</span>
+          <select className="ins-input" aria-label="Screen type for added screens" value={addType} onChange={(e) => setAddType(e.target.value as ScreenType | '')}>
+            <option value="">Type from file name</option>
+            {screenTypes.map((t) => (
+              <option key={t} value={t}>
+                {SCREEN_TYPE_LABEL[t] ?? t}
+              </option>
+            ))}
+          </select>
+          <span className="ins-muted">in</span>
+          <select className="ins-input" aria-label="Flow for added screens" value={joinFlow} onChange={(e) => setAddFlow(e.target.value)}>
+            <option value="">No flow</option>
+            {versionFlows.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name} ({f.screenIds.length})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* The same portrait tiles as the flow builder's pool and the card
           picker, so a screen looks the same in every admin tab — these used
           to be square 84px crops, which cut every phone screen to its top
           third and lined up with nothing else on the page. */}
-      <div className="ins-flowbuild-pool ins-flowbuild-pool--full">
-        {!collision && screensInVersion.map((file) => {
+      {/* Image files dropped anywhere on the screens go into this version, as "Add screens" would. */}
+      <div
+        className={`ins-flowbuild-pool ins-flowbuild-pool--full ${dropping ? 'is-dropping' : ''}`}
+        onDragOver={(e) => {
+          if (!canAdd || !draggingImages(e)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+          setDropping(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false);
+        }}
+        onDrop={(e) => {
+          if (!canAdd) return;
+          e.preventDefault();
+          setDropping(false);
+          if (e.dataTransfer.files.length) addScreens(e.dataTransfer.files);
+        }}
+      >
+        {/* The first tile: add screens here, by picking or dropping image files. */}
+        {!collision && !selecting && !ordering && (
+          <button type="button" className="ins-flowbuild-tile ins-admin-add-tile" disabled={busy} onClick={pickFiles}>
+            <span className="ins-flowbuild-tile-shot ins-admin-add-tile-shot">
+              <PlusIcon size={20} />
+              <span>{dropping ? 'Drop to add' : 'Add screens'}</span>
+            </span>
+            <span className="ins-flowbuild-tile-name">or drop files</span>
+          </button>
+        )}
+        {!collision && shownFiles.map((file, position) => {
           const url = thumbUrl(file);
           return (
-            <div key={file.id} className={`ins-flowbuild-tile ins-admin-thumb-card ${selecting && picked.has(file.id) ? 'is-selected' : ''}`} title={file.file}>
+            <div
+              key={file.id}
+              className={`ins-flowbuild-tile ins-admin-thumb-card ${selecting && picked.has(file.id) ? 'is-selected' : ''} ${ordering ? 'is-ordering' : ''} ${dragId === file.id ? 'is-dragging' : ''}`}
+              title={file.file}
+              {...(ordering && {
+                draggable: true,
+                onDragStart: (e: React.DragEvent) => {
+                  e.dataTransfer.effectAllowed = 'move';
+                  setDragId(file.id);
+                },
+                onDragOver: (e: React.DragEvent) => {
+                  if (!dragId) return;
+                  e.preventDefault();
+                  const box = e.currentTarget.getBoundingClientRect();
+                  moveTo(dragId, file.id, e.clientX > box.left + box.width / 2);
+                },
+                onDrop: (e: React.DragEvent) => e.preventDefault(),
+                onDragEnd: () => setDragId(null),
+              })}
+            >
               <span
-                className={`ins-flowbuild-tile-shot ${url || selecting ? 'is-previewable' : ''}`}
-                {...(selecting
+                className={`ins-flowbuild-tile-shot ${(url || selecting) && !ordering ? 'is-previewable' : ''}`}
+                {...(ordering
+                  ? {}
+                  : selecting
                   ? {
                       role: 'checkbox',
                       tabIndex: 0,
@@ -330,13 +546,15 @@ export function AppVersionScreens({
                       }
                     : {})}
               >
-                {url ? <img src={url} alt="" loading="lazy" /> : <span className="ins-flowbuild-noshot" aria-hidden />}
+                {url ? <img src={url} alt="" loading="lazy" draggable={false} /> : <span className="ins-flowbuild-noshot" aria-hidden />}
                 {selecting && (
                   <span className={`ins-admin-thumb-check ${picked.has(file.id) ? 'is-on' : ''}`} aria-hidden>
                     {picked.has(file.id) && <CheckIcon size={12} />}
                   </span>
                 )}
-                {!selecting && (
+                {/* Its place in the order, while reordering. */}
+                {ordering && <span className="ins-admin-thumb-order">{position + 1}</span>}
+                {!selecting && !ordering && (
                 <button
                   type="button"
                   className="ins-admin-thumb-remove"
@@ -351,11 +569,26 @@ export function AppVersionScreens({
                 </button>
                 )}
               </span>
-              <span className="ins-flowbuild-tile-name">{screenLabel(file)}</span>
+              {ordering ? (
+                <span className="ins-admin-thumb-nudge">
+                  <button type="button" aria-label={`Move ${screenLabel(file)} earlier`} disabled={busy || position === 0} onClick={() => nudge(file.id, -1)}>
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Move ${screenLabel(file)} later`}
+                    disabled={busy || position === shownFiles.length - 1}
+                    onClick={() => nudge(file.id, 1)}
+                  >
+                    →
+                  </button>
+                </span>
+              ) : (
+                <span className="ins-flowbuild-tile-name">{screenLabel(file)}</span>
+              )}
             </div>
           );
         })}
-        {!collision && screensInVersion.length === 0 && <p className="ins-muted">No screens in this version yet.</p>}
       </div>
 
       {preview && <AdminImageLightbox url={preview.url} label={preview.label} onClose={() => setPreview(null)} />}

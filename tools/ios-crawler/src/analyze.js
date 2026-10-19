@@ -425,7 +425,7 @@ async function callApiMulti(imagePaths, system, text) {
  */
 export async function complete(backend, request) {
   if (backend === 'ai') {
-    return aiChat({ system: request.system, blocks: request.blocks, maxTokens: request.maxTokens ?? 3000, model: request.model });
+    return aiChat({ system: request.system, blocks: request.blocks, maxTokens: request.maxTokens ?? 3000, model: request.model, json: request.json });
   }
   if (backend === 'api') {
     const response = await fetch(API_URL, {

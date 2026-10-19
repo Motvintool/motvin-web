@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { freshFirst } from '@/lib/inspirations/appFreshness';
 import { DEFAULT_PLATFORM } from '@/lib/inspirations/filters';
 import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
 import { PLATFORMS, isDesktopPlatform, type Industry, type Platform } from '@/lib/inspirations/types';
@@ -9,7 +10,7 @@ import { AppsGrid } from '../AppsGrid';
 import { FilterPill, NavPill, SortPill, ToolbarRow, type SortOption } from '../FilterToolbar';
 import { PageHeading } from '../PageHeading';
 import { useAsync } from '../useAsync';
-import { useMeta } from '../useMeta';
+import { useLibrarySettings, useMeta } from '../useMeta';
 
 /**
  * "Curated" is the backend's default order (no sort param sent) — the
@@ -63,7 +64,10 @@ export function AppsView() {
     `apps:${industry ?? 'all'}:${sort}`,
   );
 
-  const visible = (apps ?? []).filter((app) => app.platforms.includes(platform));
+  // In the default order, newly added apps lead, then updated ones; a sort the visitor picks is kept as is.
+  const freshness = useLibrarySettings().freshness;
+  const onPlatform = (apps ?? []).filter((app) => app.platforms.includes(platform));
+  const visible = sort === 'curated' ? freshFirst(onPlatform, freshness) : onPlatform;
 
   return (
     <>

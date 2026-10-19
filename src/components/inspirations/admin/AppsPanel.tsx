@@ -329,7 +329,14 @@ export function AppsPanel({
                 </div>
               </div>
               {isOpen(app.id, 'versions') && (
-                <AppVersionScreens app={app} files={screens} busy={busy} run={run} />
+                <AppVersionScreens
+                  app={app}
+                  files={screens}
+                  flows={state.flows.filter((f) => f.appId === app.id)}
+                  screenTypes={state.vocabulary.screenTypes}
+                  busy={busy}
+                  run={run}
+                />
               )}
               {isOpen(app.id, 'card') && (
                 <AppCardScreens key={`${app.id}:${(app.cardScreens ?? []).join(',')}`} app={app} files={screens} busy={busy} run={run} />

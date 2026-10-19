@@ -40,6 +40,8 @@
 
 .ins-root {
   --ins-max: 1760px;
+  /* Left and right padding of every page, its header, and a toolbar docked into the header. */
+  --ins-page-pad: 65px;
   --ins-gutter: clamp(20px, 3vw, 56px);
   --ins-gap: 24px;
   --ins-header-h: 82px;
@@ -306,7 +308,7 @@ body {
 .ins-header-content {
   height: 100%;
   width: 100%;
-  padding: 0 78px;
+  padding: 0 var(--ins-page-pad);
   display: grid;
   grid-template-columns: 1fr minmax(0, 560px) 1fr;
   align-items: center;
@@ -957,7 +959,7 @@ body {
   width: 100%;
   max-width: var(--ins-max);
   margin: 0 auto;
-  padding: 24px 70px 32px 70px;
+  padding: 24px var(--ins-page-pad) 32px;
 }
 
 /* App detail page only (AppDetailView's outer element is .ins-masthead) —
@@ -971,7 +973,7 @@ body {
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding: 0px 8px;
+  padding: 0;
   margin-top: 16px;
   margin-bottom: 38px;
 }
@@ -1068,7 +1070,7 @@ body {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
   gap: 0 clamp(24px, 3vw, 48px);
-  padding: 0px 8px;
+  padding: 0;
   margin-bottom: 62px;
 }
 
@@ -1507,7 +1509,7 @@ body {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 0px 8px;
+  padding: 0;
   margin: 0;
 }
 
@@ -1530,7 +1532,7 @@ body {
   z-index: 1;
   height: var(--ins-header-h, 82px);
   margin: 0;
-  padding: 0 70px;
+  padding: 0 var(--ins-page-pad);
   flex-wrap: nowrap;
   /* The header's own glass, carried by the bar itself so the blur is present
      even where it overhangs the header. */
@@ -2938,6 +2940,29 @@ select.ins-input {
   background: #e5e5e5;
 }
 
+/* App cards are narrower at five across, and the 64px discs with 48px gaps
+   (~285px in all) spilled past the frame. Sized from the card's own width
+   instead: full size on a wide card, scaling down to fit a narrow one. */
+@media (min-width: 760px) {
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-shot {
+    container-type: inline-size;
+  }
+
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-hover-controls {
+    gap: clamp(12px, 10cqi, 48px);
+  }
+
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-control {
+    width: clamp(44px, 21cqi, 64px);
+    height: clamp(44px, 21cqi, 64px);
+  }
+
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-control img {
+    width: clamp(18px, 9cqi, 24px);
+    height: auto;
+  }
+}
+
 .ins-card-dots {
   display: inline-flex;
   align-items: center;
@@ -3736,6 +3761,28 @@ select.ins-input {
    pill, saying a click plays the app's flow rather than this one screen.
    It steps right of the select ring whenever that shows in the same corner
    (hovered, selecting, or always on a touch screen). */
+/* An app card's "Latest" / "Updated" tag (appFreshness.ts): the
+   "Prototype" badge's grey glass, in the frame's top-right corner (the
+   select circle and the remove button hold the top-left). */
+.ins-card-fresh-badge {
+  position: absolute;
+  top: clamp(10px, 4.75%, 32px);
+  right: clamp(10px, 9.25%, 32px);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  /* Sized for five cards across, so it sits on the status bar without crowding it. */
+  padding: 6px 9px;
+  border-radius: 9px;
+  background: rgba(110, 110, 110, 0.6);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font: 600 13px/1 var(--font-manrope), Inter, sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .ins-card-proto-badge {
   position: absolute;
   top: clamp(8px, 2.6%, 14px);
@@ -4454,10 +4501,13 @@ select.ins-input {
    APP / FLOW / PATTERN / COLLECTION CARDS
    ========================================================= */
 
+/* Five app cards across on a wide screen; 4, 3 and 2 as it narrows (see RESPONSIVE). */
 .ins-app-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--ins-gap);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* Tighter across than down, so five frames read as one row. */
+  column-gap: 16px;
+  row-gap: 20px;
 }
 
 /* AppCard reuses .ins-card wholesale — same shot, badge, actions and meta row
@@ -5769,7 +5819,7 @@ select.ins-input {
   z-index: 1;
   height: var(--ins-header-h, 82px);
   margin: 0;
-  padding: 0 70px;
+  padding: 0 var(--ins-page-pad);
   background: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(16px);
   animation: insDockGlass 240ms ease both;
@@ -7941,6 +7991,67 @@ select.ins-input {
   gap: 6px;
 }
 
+/* "Add new screens as [type] in [flow]": two compact pickers in a row, over the screens. */
+.ins-admin-add-options { flex-wrap: wrap; align-items: center; }
+.ins-admin-add-options .ins-input { width: auto; min-width: 150px; max-width: 260px; }
+
+/* Reordering a version's screens: each tile picks up to be dragged (fading
+   where it was while it travels), shows its place, and has arrows to nudge it. */
+.ins-admin-thumb-card.is-ordering { cursor: grab; user-select: none; }
+.ins-admin-thumb-card.is-ordering:active { cursor: grabbing; }
+.ins-admin-thumb-card.is-dragging { opacity: 0.35; }
+.ins-admin-thumb-order {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 1;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 100px;
+  background: rgba(20, 20, 20, 0.78);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+}
+.ins-admin-thumb-nudge { display: flex; gap: 4px; }
+.ins-admin-thumb-nudge button {
+  flex: 1;
+  height: 26px;
+  border: 1px solid var(--ins-border);
+  border-radius: 8px;
+  background: var(--ins-card);
+  color: var(--ins-text);
+  font-size: 14px;
+  cursor: var(--ins-cursor-hand, pointer);
+}
+.ins-admin-thumb-nudge button:not(:disabled):hover { border-color: var(--ins-border-strong); }
+.ins-admin-thumb-nudge button:disabled { opacity: 0.35; cursor: var(--ins-cursor-arrow, default); }
+
+/* "Add screens", the first tile among a version's screens: the same size,
+   dashed, a plus and its label in the middle. While image files are dragged
+   over the screens, the whole grid is outlined to say they'll drop in here. */
+.ins-admin-add-tile { cursor: var(--ins-cursor-hand, pointer); }
+.ins-admin-add-tile:disabled { cursor: var(--ins-cursor-arrow, default); opacity: 0.6; }
+.ins-admin-add-tile .ins-admin-add-tile-shot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1.5px dashed var(--ins-border-strong);
+  background: transparent;
+  color: var(--ins-text);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease);
+}
+.ins-admin-add-tile:not(:disabled):hover .ins-admin-add-tile-shot,
+.ins-flowbuild-pool.is-dropping .ins-admin-add-tile-shot { border-color: var(--ins-text); background: var(--ins-card-alt); }
+.ins-flowbuild-pool.is-dropping { border-radius: var(--ins-radius); outline: 2px dashed var(--ins-text); outline-offset: 6px; }
+
 /* A version's screens are .ins-flowbuild-tile's (see FlowsPanel) — the one
    thing added is the delete control in the tile's top-right corner. */
 .ins-admin-thumb-card {
@@ -8277,12 +8388,20 @@ select.ins-input {
    ========================================================= */
 
 @media (max-width: 1499px) {
-  .ins-app-grid,
   .ins-pattern-grid-wrap,
   .ins-collection-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .ins-app-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1139px) {
+  .ins-app-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 1139px) {
@@ -8301,9 +8420,11 @@ select.ins-input {
     display: none;
   }
 
+  /* Same 40px as the page below it, so the logo and the menu line up with
+     the content's edges rather than sitting 16px closer to the window. */
   .ins-header-content,
   .ins-ftoolbar.is-docked {
-    padding-inline: 24px;
+    padding-inline: 40px;
   }
 
 }
@@ -8872,6 +8993,11 @@ select.ins-input {
   .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-remove-btn {
     top: 14px;
     left: 14px;
+  }
+  /* Its "Latest" / "Updated" tag, level with it in the other corner. */
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-fresh-badge {
+    top: 15px;
+    right: 14px;
   }
   /* Always showing here (no hover), so it's quieter: smaller, a hairline
      ring on frosted white, until it's ticked. Its press area stays 44px. */
@@ -13906,7 +14032,7 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
 .ins-loadmore-btn:disabled { opacity: 0.6; cursor: default; }
 
 /* Search page: the line under the tabs that names the filters in force. */
-.ins-filtersum { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -8px 0 24px; padding: 0 8px; font-size: 14px; color: #6b6f76; }
+.ins-filtersum { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -8px 0 24px; padding: 0; font-size: 14px; color: #6b6f76; }
 .ins-filtersum-count { margin-right: 4px; }
 .ins-filtersum-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 6px 0 12px; border-radius: 9999px; background: #f1f1f1; color: #323232; font-weight: 500; }
 .ins-filtersum-chip button { display: inline-grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #6b6f76; cursor: var(--ins-cursor-hand, pointer); }
@@ -16356,4 +16482,24 @@ html.ins-bat-on .ins-search-bat { display: block; }
   .ins-search-modal .ins-moei-slide, .ins-search-modal .ins-moei-dot, .ins-search-modal .ins-moei-switch::after { transition: none; }
   .ins-moei-panel > *, .ins-search-modal .ins-moei-gumdrop.is-active, .ins-search-modal .ins-moei-tile.is-active, .ins-moei-tile:hover > * { animation: none; }
   .ins-moei-dice, .ins-moei-dice.is-rolling { transition: none; animation: none; }
+}
+
+/* Admin Settings: a days count with its unit beside it, kept narrow. */
+.ins-settings-field {
+  flex: 0 1 240px;
+}
+
+.ins-settings-days {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ins-settings-days .ins-input {
+  width: 96px;
+}
+
+.ins-settings-unit {
+  font-size: 16px;
+  color: var(--ins-muted);
 }

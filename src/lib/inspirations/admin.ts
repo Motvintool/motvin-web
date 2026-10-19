@@ -1,5 +1,5 @@
 import { getIdToken } from '@/lib/firebase/auth';
-import type { Industry, Platform, ScreenType, Style } from './types';
+import type { Industry, LibrarySettings, Platform, ScreenType, Style } from './types';
 
 /**
  * Client for the Inspirations admin API.
@@ -154,6 +154,8 @@ export type AdminState = {
   files: AdminScreenFile[];
   logos: string[];
   counts: Record<string, number>;
+  /** Absent from a backend that predates settings. */
+  settings?: LibrarySettings;
   generatedAt: string | null;
   vocabulary: {
     platforms: Platform[];
@@ -231,12 +233,16 @@ export const adminApi = {
     version?: string,
     /** The flow folder to file it under, when it belongs in one; omit for a loose screen. */
     flow?: string,
+    /** Filed as this screen type, and appended to the end of this flow (by id) of the same app. */
+    options: { screenType?: string; addToFlow?: string } = {},
   ): Promise<{ id: string; file: string; width: number; height: number; report: BuildReport }> {
     const name = safeFileName(fileName);
     const params = new URLSearchParams();
     if (overwrite) params.set('overwrite', '1');
     if (version !== undefined) params.set('version', version);
     if (flow) params.set('flow', flow);
+    if (options.screenType) params.set('type', options.screenType);
+    if (options.addToFlow) params.set('addToFlow', options.addToFlow);
     const qs = params.toString();
     const res = await fetch(`${baseUrl()}/screens/${platform}/${appId}/${name}${qs ? `?${qs}` : ''}`, {
       method: 'POST',
@@ -348,6 +354,33 @@ export const adminApi = {
       method: 'PUT',
       headers: await authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ versionId: newVersionId }),
+    });
+    return unwrap(res);
+  },
+
+  /**
+   * Sets the order a version's screens show in, first to last — each named by
+   * its platform, leaf file name and flow folder (if any). One rebuild for the lot.
+   */
+  /** Saves the library's general settings; only the fields sent change. */
+  async saveSettings(settings: Partial<LibrarySettings>): Promise<{ settings: LibrarySettings; report: BuildReport }> {
+    const res = await fetch(`${baseUrl()}/settings`, {
+      method: 'PUT',
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(settings),
+    });
+    return unwrap(res);
+  },
+
+  async saveVersionOrder(
+    appId: string,
+    versionId: string,
+    screens: { platform: Platform; file: string; flow?: string }[],
+  ): Promise<{ report: BuildReport }> {
+    const res = await fetch(`${baseUrl()}/apps/${appId}/versions/${versionId}/order`, {
+      method: 'PUT',
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ screens }),
     });
     return unwrap(res);
   },

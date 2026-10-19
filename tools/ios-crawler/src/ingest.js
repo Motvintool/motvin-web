@@ -33,7 +33,7 @@ import { extractFramesAt, extractThumbs } from './frames.js';
 import { dominantColors, fingerprint, fingerprintFromThumb, jaccard, THUMB } from './hash.js';
 import { ScreenGraph } from './graph.js';
 import { segmentRecording, skeletonLike } from './segment.js';
-import { analyseScreen, complete, encodeForModel, groupIntoFlows, identifyApp, pickBackend } from './analyze.js';
+import { analyseScreen, complete, encodeForModel, groupIntoFlows, identifyApp, pickBackend, probeAnalyzer, resolveBackend } from './analyze.js';
 import { resolveIndustry } from './category.js';
 import { researchTree } from './researcher.js';
 import { extractJson } from './analyze.js';
@@ -1707,6 +1707,182 @@ export async function researchStored(options) {
   }
   if (!options.dryRun) writeFileSync(join(dataDir, 'flows.json'), `${JSON.stringify(flowsDoc, null, 2)}\n`);
   return { dataDir, flowsChanged, screensChanged, outcome };
+}
+
+// ─── describe ────────────────────────────────────────────────────────────────
+
+/**
+ * How a single added screenshot is named: the researcher's naming rules, for
+ * one screen with no journey around it. Kept short on purpose — under the
+ * researcher's full brief a small model (qwen3-vl:2b) reasons until its
+ * reply runs out and answers nothing.
+ */
+const DESCRIBE_RULES = `You are a UX researcher naming one app screen for a design-reference library.
+You are given one screenshot of an app, with the text read off it and a machine guess at its type. Return JSON only — no prose, no markdown fence — in exactly this shape:
+{ "name": "...", "purpose": "...", "primaryAction": "..." }
+
+The name is a short plain noun a designer would file the screen under — "Splash screen", "Phone number entry", "Restaurant detail", "Filter sheet", "Order placed" — never the marketing line or a fragment of visible text, a product, dish or brand name. A purpose is one short sentence (under 15 words) on what the screen is for. The primary action is the one thing the person mostly does there, as a short imperative — "Enter mobile number", "Add to cart" — or "" when there is none (a splash, a loading state). Only say what the screenshot supports. Every field is one line.`;
+
+/**
+ * Fills in what a screenshot added by hand (the admin's "Add screens") is
+ * missing, the way a recording's screens get it: the on-device rules read
+ * its text and decide its type, states, UI elements, style and tags, and —
+ * when a model is set up — the model names it and writes its purpose and
+ * primary action. A type the admin picked when adding it is kept; so are its
+ * place in the order and anything else already in its sidecar.
+ *
+ * `files` are paths under the app's folder, at any depth — a dated version's
+ * screens live under `versions/<date>/` (and a flow folder), which the older
+ * `classifyStored` walk doesn't reach.
+ *
+ * @param {{appId: string, platform?: string, files: string[], dataDir?: string, backend?: string, dryRun?: boolean}} options
+ */
+export async function describeStored(options) {
+  const dataDir = resolveDataDir(options.dataDir);
+  const platform = options.platform || 'ios';
+  const appDir = join(dataDir, 'screens', platform, options.appId);
+  if (!existsSync(appDir)) throw new Error(`no screens stored at ${appDir}`);
+  const files = (options.files ?? []).map((file) => String(file).replace(/^\/+/, ''));
+  for (const file of files) {
+    if (file.split('/').includes('..') || !READABLE.includes(extname(file).toLowerCase())) throw new Error(`not a stored screenshot: ${file}`);
+    if (!existsSync(join(appDir, file))) throw new Error(`no such screen: ${platform}/${options.appId}/${file}`);
+  }
+  if (!files.length) throw new Error('no screens given — pass --files');
+
+  // The rules always run; the model writes the words when one answers.
+  const backend = await resolveBackend(options.backend);
+  const probe = backend === 'local' ? { usable: false } : await probeAnalyzer(backend);
+  const modelBackend = probe.usable ? backend : null;
+  const analyzer = new Analyzer(modelBackend ?? 'local');
+  const appsDoc = existsSync(join(dataDir, 'apps.json')) ? JSON.parse(readFileSync(join(dataDir, 'apps.json'), 'utf-8')) : { apps: [] };
+  const app = (appsDoc.apps || []).find((entry) => entry.id === options.appId) ?? { id: options.appId, name: options.appId };
+  log.info(modelBackend ? `naming with ${probe.provider ?? modelBackend} / ${probe.model ?? ''}`.trim() : 'naming from the on-device rules (no model answering)');
+
+  const analysisDir = join(dataDir, 'analysis');
+  const staging = mkdtempSync(join(tmpdir(), 'motvin-describe-'));
+  const results = [];
+  try {
+    if (!options.dryRun) mkdirSync(analysisDir, { recursive: true });
+    log.heading(`Describing ${files.length} added screen(s) of ${app.name}`);
+    for (const [index, file] of files.entries()) {
+      const withoutExt = file.slice(0, file.length - extname(file).length);
+      const sidecarPath = join(appDir, `${withoutExt}.json`);
+      const screenId = `${options.appId}-${platform}-${withoutExt.split('/').join('-')}`;
+      const existing = existsSync(sidecarPath) ? JSON.parse(readFileSync(sidecarPath, 'utf-8')) : {};
+      const folder = join(appDir, file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '');
+      const staged = await stage(folder, basename(file), staging);
+      const analysis = await analyzer.analyse(staged, titleFrom(basename(file)), { context: { index, total: files.length, isFirst: false } });
+      if (analysis.unclassified) {
+        results.push({ screenId, failed: true });
+        continue;
+      }
+
+      // The admin's pick wins over the rules' guess.
+      const chosenType = existing.screenType && existing.screenType !== 'other' ? existing.screenType : null;
+      const publishedType = chosenType ?? publishedTypeFor(analysis.screenType);
+      const fineType = chosenType ? (existing.fineType ?? chosenType) : analysis.screenType;
+      const states = [...new Set([...(analysis.states ?? []), stateFor(fineType)].filter(Boolean))];
+
+      // Its name if it has one (given by hand, or a run before this one); else the rules' — for the type they guessed,
+      // so under a type the admin chose instead, that type's label is the better stand-in.
+      const overruled = Boolean(chosenType) && publishedTypeFor(analysis.screenType) !== chosenType;
+      let name = existing.name || (overruled ? labelFor(chosenType) : analysis.name);
+      let purpose = existing.purpose ?? null;
+      let primaryAction = existing.primaryAction ?? null;
+      if (modelBackend) {
+        try {
+          const lines = (analysis.lines ?? []).map((line) => line.text).filter(Boolean).slice(0, 30).join(' · ');
+          // A Qwen3 model reasons first whatever the API says, and can spend the whole reply on it: `/no_think` (its own
+          // switch) and room to spare are what get an answer back. The prompt is kept to the facts — even an app's
+          // tagline was enough to send qwen3-vl:2b off reasoning.
+          const noThink = /qwen3/i.test(probe.model ?? '') ? '\n/no_think' : '';
+          const image = await encodeForModel(staged);
+          const facts = `App: ${app.name}\nType: ${fineType.replace(/_/g, ' ')}\nGuessed name: "${name}"`;
+          const ask = (text, maxTokens, json = true) =>
+            complete(modelBackend, { system: DESCRIBE_RULES, blocks: [{ type: 'image', base64: image }, { type: 'text', text: `${text}${noThink}` }], maxTokens, json });
+          // How long it reasons varies a lot run to run (qwen3-vl:2b: 4k–11k characters for the same screen), so: room to
+          // spare, then once without Ollama's JSON mode (which it reasons longer under), then the most room.
+          const reply = await ask(`${facts}\nText on the screen: ${lines.slice(0, 700) || '(none)'}`, 6000)
+            .catch(() => ask(facts, 6000, false))
+            .catch(() => ask(facts, 8000));
+          const proposal = extractJson(reply) ?? {};
+          const tidy = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max).trim();
+          const proposedName = tidy(proposal.name, 48);
+          if (proposedName && !/^(screen|image|screenshot|untitled)$/i.test(proposedName)) name = proposedName;
+          purpose = tidy(proposal.purpose, 200) || purpose;
+          primaryAction = tidy(proposal.primaryAction, 60) || primaryAction;
+        } catch (error) {
+          log.warn(`${withoutExt}: the model could not name it (${error.message.split('\n')[0]}) — keeping the rules' name`);
+        }
+      }
+
+      // Its own style first; a dark/light tag already there (the store tags one on upload) isn't contradicted by the rules'.
+      const ownStyle = Array.isArray(existing.style) ? existing.style : [];
+      const toned = ownStyle.some((tag) => tag === 'dark' || tag === 'light');
+      const style = [...new Set([...ownStyle, ...filterStyles(analysis.style).filter((tag) => !(toned && (tag === 'dark' || tag === 'light')))])];
+      const sidecar = {
+        ...existing,
+        name,
+        screenType: publishedType,
+        fineType,
+        states,
+        // The rules describe the type they guessed ("Other screen. Dark theme."): under a chosen type, said as that type.
+        description:
+          existing.description ||
+          (overruled ? (analysis.description || '').replace(/^[^.]*\bscreen\./i, `${labelFor(chosenType)} screen.`) : analysis.description) ||
+          '',
+        ...(purpose ? { purpose } : {}),
+        ...(primaryAction ? { primaryAction } : {}),
+        tags: [
+          ...new Set([
+            ...(analysis.tags || []).filter((tag) => !(overruled && (tag === analysis.screenType.replace(/_/g, '-') || tag === publishedTypeFor(analysis.screenType)))),
+            fineType.replace(/_/g, '-'),
+            ...states,
+            platform,
+          ]),
+        ].slice(0, 14),
+        elements: analysis.elements,
+        style,
+        capturedAt: existing.capturedAt || localDateString(),
+      };
+      const verdict = isBlockingScreen({ screenType: fineType, name, description: sidecar.description, blocked: analysis.blocked, blockedReason: analysis.blockedReason, labels: [] });
+      const record = {
+        screenId,
+        screen_id: screenId,
+        analyzer: modelBackend ? `${probe.provider ?? modelBackend}/${probe.model ?? ''} + on-device rules` : 'motvin on-device (Vision OCR + rules)',
+        analyzedAt: new Date().toISOString(),
+        screen_type: fineType,
+        published_as: publishedType,
+        states,
+        category: analysis.category,
+        flow: analysis.flow,
+        name,
+        description: sidecar.description,
+        purpose,
+        primary_action: primaryAction,
+        tags: sidecar.tags,
+        elements: analysis.elements,
+        style,
+        sections: (await import('./heuristics.js')).buildSections({ analysis, capture: existing.capture ?? null, flow: null }),
+        palette: [],
+        signals: analysis.signals ?? null,
+        blocked: verdict.blocked,
+        blocked_reason: verdict.reason,
+        capturedAt: sidecar.capturedAt,
+        capturedBy: 'motvin-ios-crawler/describe',
+      };
+      if (!options.dryRun) {
+        writeFileSync(sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+        writeFileSync(join(analysisDir, `${screenId}.json`), `${JSON.stringify(record, null, 2)}\n`);
+      }
+      log.ok(`${withoutExt} → ${publishedType}${chosenType ? dim(' (as chosen)') : ''} — ${name}${purpose ? dim(` · ${purpose}`) : ''}`);
+      results.push({ screenId, screenType: publishedType, name });
+    }
+    const described = results.filter((result) => !result.failed).length;
+    return { dataDir, described, failed: results.length - described, results, named: Boolean(modelBackend) };
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
+  }
 }
 
 /** A stored screen's analysis, from its sidecar and freshly read text. */

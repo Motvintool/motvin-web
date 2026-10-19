@@ -22,7 +22,7 @@ import { Simulator } from './src/device.js';
 import { Crawler, DEFAULTS } from './src/crawler.js';
 import { assertAuthorized } from './src/safety.js';
 import { localDateString, publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
-import { classifyStored, ingestFolder, researchStored, resumeIngest } from './src/ingest.js';
+import { classifyStored, describeStored, ingestFolder, researchStored, resumeIngest } from './src/ingest.js';
 import { extractJson, pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
 import { AI_PROVIDERS, aiChat, aiChatStream, aiConfig, aiStatus, canStream, readAiSettings, writeAiSettings } from './src/ai.js';
 
@@ -49,6 +49,9 @@ ${bold('Commands')}
   ask                       one question to the AI, JSON on stdin             ${dim('used by the admin assistant')}
   research --app-id <id>    rewrite an app's flow names, summaries and screen   ${dim('--only journeys|screens')}
                             content with the AI, from what is already stored ${dim('needs a model')}
+  describe --app-id <id> --files <a,b>
+                            fill in screenshots added by hand: type, states,  ${dim('--platform ios')}
+                            elements and style from the rules, the name from the AI when one answers
 
 ${bold('run options')}
   --app <file>              app config JSON (see apps/example.json)          ${dim('required')}
@@ -698,6 +701,30 @@ async function runResearch(flags) {
   return 0;
 }
 
+/** Fills in screenshots the admin added by hand (see describeStored). */
+async function runDescribe(flags) {
+  const files = String(flags.files ?? '')
+    .split(',')
+    .map((file) => file.trim())
+    .filter(Boolean);
+  if (!flags.appId || !files.length) {
+    log.error('--app-id and --files are required. See `node crawl.js` for usage.');
+    return 1;
+  }
+  const result = await describeStored({
+    appId: flags.appId,
+    platform: flags.platform,
+    files,
+    dataDir: flags.dataDir,
+    backend: flags.backend,
+    dryRun: flags.dryRun === true,
+  });
+  log.raw('');
+  log.info(`${result.described} screen(s) described${result.named ? '' : dim(' (names from the on-device rules — no model answered)')}`);
+  if (result.described && !flags.dryRun) await rebuildManifest(result.dataDir);
+  return result.failed ? 1 : 0;
+}
+
 function reportGate() {
   log.raw('');
   log.ok('Published — the screens are live in the gallery.');
@@ -749,6 +776,8 @@ async function main() {
         return await runClassify(flags);
       case 'research':
         return await runResearch(flags);
+      case 'describe':
+        return await runDescribe(flags);
       case 'ai':
         return await runAi(flags);
       case 'ask':

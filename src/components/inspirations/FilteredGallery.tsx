@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { inspirationsApi, type Page, type ScreenSort } from '@/lib/inspirations/api';
+import { freshFirst } from '@/lib/inspirations/appFreshness';
 import { EMPTY_FILTERS, matchesFilters, parseFilters, serializeFilters, toggleValue, withDefaultPlatform, type ScreenFilters } from '@/lib/inspirations/filters';
 import { screenItemId } from '@/lib/inspirations/savedItems';
 import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
@@ -15,7 +16,7 @@ import { ScreenGrid } from './ScreenGrid';
 import { ScreenshotTextSearch } from './ScreenshotTextSearch';
 import { useAsync } from './useAsync';
 import { useExploreFilters } from './useExploreFilters';
-import { useMeta } from './useMeta';
+import { useLibrarySettings, useMeta } from './useMeta';
 
 /**
  * Explore browses apps, not raw screens, as an app feed. These
@@ -218,7 +219,10 @@ export function FilteredGallery({
     () => (exploreMode ? inspirationsApi.listApps(undefined, sort === 'curated' ? undefined : sort) : Promise.resolve([])),
     `filtered-gallery-apps:${exploreMode}:${sort}`,
   );
-  const apps = allApps?.filter((a) => appMatchesFilters(a, withDefaultPlatform(filters))) ?? [];
+  // In the default order, newly added apps lead, then updated ones; a sort the visitor picks is kept as is.
+  const freshness = useLibrarySettings().freshness;
+  const matchingApps = allApps?.filter((a) => appMatchesFilters(a, withDefaultPlatform(filters))) ?? [];
+  const apps = sort === 'curated' ? freshFirst(matchingApps, freshness) : matchingApps;
   const appsLibraryEmpty = meta.counts.apps === 0;
 
   // The only ScreenFilters dimensions an app feed can't honor.

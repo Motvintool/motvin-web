@@ -55,9 +55,9 @@ export function AppsGrid({
 
   if (loading || previewsLoading) {
     // On the cards' own grid (and web layout), one placeholder per app being
-    // loaded — six while the list itself is still on its way — so neither the
-    // columns nor the count jump when the cards land.
-    return <ScreenGridSkeleton count={Math.min(apps.length || 6, 6)} apps web={webLayout} />;
+    // loaded — a row of five while the list itself is still on its way — so
+    // neither the columns nor the count jump when the cards land.
+    return <ScreenGridSkeleton count={Math.min(apps.length || 5, 10)} apps web={webLayout} />;
   }
 
   if (!loading && !previewsLoading && apps.length === 0) {

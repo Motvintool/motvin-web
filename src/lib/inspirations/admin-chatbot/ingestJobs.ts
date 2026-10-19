@@ -293,6 +293,23 @@ export function useIngestJobs(admin: boolean): Snapshot {
 }
 
 /** Forces a read now — after starting or dismissing a run. */
+/**
+ * Has the crawler fill in screenshots just added by hand (POST /api/crawler/describe): type (unless one was picked),
+ * states, UI elements, style, and an AI-written name and purpose. `files` are each screen's path under its app's
+ * folder, as an upload returns it after `<platform>/<app>/`. Starts a job the dock shows; throws with the server's
+ * reason when it can't (another run in progress, say).
+ */
+export async function describeAddedScreens(appId: string, platform: string, files: string[], name?: string): Promise<void> {
+  if (!files.length) return;
+  const res = await fetch('/api/crawler/describe', {
+    method: 'POST',
+    headers: await authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ appId, platform, files, name }),
+  });
+  if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { message?: string }).message ?? `Could not describe the new screens (${res.status}).`);
+  void refreshIngestJobs();
+}
+
 export function refreshIngestJobs(): Promise<void> {
   return fetchJobs().then(schedule);
 }
@@ -1212,7 +1229,9 @@ export async function performAction(action: ConfirmAction, image?: File | null):
       }
       case 'add-screen': {
         const file = image ?? heldFile!;
-        await adminApi.uploadScreen(op.platform as Platform, op.appId, file.name, file, false, op.versionId);
+        const added = await adminApi.uploadScreen(op.platform as Platform, op.appId, file.name, file, false, op.versionId);
+        // Typed, named and described like a recorded screen, in the background (never failing the add itself).
+        void describeAddedScreens(op.appId, op.platform, [added.file.replace(`${op.platform}/${op.appId}/`, '')], op.name).catch(() => undefined);
         inverse = { kind: 'delete-screen', platform: op.platform, appId: op.appId, file: file.name, version: op.versionId, name: file.name.replace(/\.[^.]+$/, '') };
         releaseImage();
         done = `“${file.name}” is now a screen of ${op.name}${op.versionLabel ? ` (${op.versionLabel})` : ''}.`;

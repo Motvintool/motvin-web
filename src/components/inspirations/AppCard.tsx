@@ -15,6 +15,8 @@ import { useToast } from './Toast';
 import { useDownloadGate } from './useDownloadGate';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { CloseIcon } from './Icons';
+import { APP_FRESHNESS_LABEL, appFreshness } from '@/lib/inspirations/appFreshness';
+import { useLibrarySettings } from './useMeta';
 
 const imgSaveRight = "/ASSET/Icons/Motvin/save-right.svg";
 const imgDownloadPng = "/ASSET/Icons/Motvin/download-png.svg";
@@ -249,9 +251,17 @@ export function AppCard({
     }
   };
 
+  // "Latest" or "Updated", from its dated versions and how long the admin's Settings keep each tag.
+  const freshness = appFreshness(app, useLibrarySettings().freshness);
+
   return (
     <article ref={cardRef} className="ins-card" data-id={app.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
       <div className="ins-card-shot">
+        {freshness && (
+          <span className={`ins-card-fresh-badge is-${freshness}`} aria-label={`${APP_FRESHNESS_LABEL[freshness]} app`}>
+            {APP_FRESHNESS_LABEL[freshness]}
+          </span>
+        )}
         {selectable && (
           <button
             type="button"

@@ -354,7 +354,15 @@ export type LibraryMeta = {
     industries: Record<string, number>;
     flowCategories: Record<string, number>;
   };
+  /** The library's general settings, set in the admin's Settings tab. Absent from an older backend. */
+  settings?: LibrarySettings;
   generatedAt: string;
+};
+
+/** General settings for the whole library. */
+export type LibrarySettings = {
+  /** How many days an app card shows "Latest" after its first version, and "Updated" after a newer one. */
+  freshness: { newDays: number; updatedDays: number };
 };
 
 /** Real analysis output, when an analyzer has stored some for a screen. */
