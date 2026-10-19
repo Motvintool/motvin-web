@@ -4,6 +4,23 @@ export type MoeiMood = 'idle' | 'happy' | 'sleep';
 
 const INK = '#18181b';
 
+/** A five-point star's path, centred on (cx, cy), `r` to its points. */
+function starPath(cx: number, cy: number, r: number): string {
+  return (
+    Array.from({ length: 10 }, (_, i) => {
+      const a = ((i * 36 - 90) * Math.PI) / 180;
+      const d = i % 2 ? r * 0.45 : r;
+      return `${i ? 'L' : 'M'}${(cx + Math.cos(a) * d).toFixed(2)} ${(cy + Math.sin(a) * d).toFixed(2)}`;
+    }).join(' ') + ' Z'
+  );
+}
+
+/** A four-point sparkle's path, centred on (cx, cy), `r` to its points. */
+function sparklePath(cx: number, cy: number, r: number): string {
+  const k = r * 0.28;
+  return `M${cx} ${cy - r} Q${cx + k} ${cy - k} ${cx + r} ${cy} Q${cx + k} ${cy + k} ${cx} ${cy + r} Q${cx - k} ${cy + k} ${cx - r} ${cy} Q${cx - k} ${cy - k} ${cx} ${cy - r} Z`;
+}
+
 /** The colour a shade darker, for feet and inner shapes. */
 function shade(hex: string, amount = 0.22): string {
   const n = parseInt(hex.slice(1), 16);
@@ -16,12 +33,31 @@ function shade(hex: string, amount = 0.22): string {
  * spacing, the point an accessory sits on, and whether it has rosy cheeks
  * (a frog's eyes sit up on bumps, where cheeks would land on the outline).
  */
-const LAYOUT: Record<MoeiKind, { eyeY: number; eyeL: number; eyeR: number; top: number; feet: boolean; cheeks: boolean }> = {
+const LAYOUT: Record<
+  MoeiKind,
+  {
+    eyeY: number;
+    eyeL: number;
+    eyeR: number;
+    top: number;
+    feet: boolean;
+    cheeks: boolean;
+    /** A hat raised this much further on this kind (one deep enough to cover its eyes otherwise). */
+    lift?: Partial<Record<MoeiAccessory, number>>;
+  }
+> = {
   blob: { eyeY: 35, eyeL: 25, eyeR: 39, top: 17, feet: true, cheeks: true },
   cat: { eyeY: 36, eyeL: 25, eyeR: 39, top: 18, feet: true, cheeks: true },
   ghost: { eyeY: 32, eyeL: 25, eyeR: 39, top: 14, feet: false, cheeks: true },
-  bird: { eyeY: 34, eyeL: 28, eyeR: 39, top: 20, feet: true, cheeks: true },
-  frog: { eyeY: 27, eyeL: 21, eyeR: 43, top: 22, feet: true, cheeks: false },
+  // Its halo floats higher, clear of the tuft on its head.
+  bird: { eyeY: 34, eyeL: 28, eyeR: 39, top: 20, feet: true, cheeks: true, lift: { halo: 6 } },
+  // A frog's hat sits up on its eye bumps (their tops at 19.5), not between them, where it covered its eyes.
+  frog: { eyeY: 27, eyeL: 21, eyeR: 43, top: 17, feet: true, cheeks: false, lift: { beanie: 5 } },
+  bear: { eyeY: 32, eyeL: 25, eyeR: 39, top: 17, feet: true, cheeks: true },
+  penguin: { eyeY: 28, eyeL: 26, eyeR: 38, top: 15, feet: true, cheeks: true },
+  axolotl: { eyeY: 36, eyeL: 23, eyeR: 41, top: 22, feet: true, cheeks: true },
+  // Its face on the stem, under the cap; a hat sits on the cap.
+  mushroom: { eyeY: 41, eyeL: 27, eyeR: 37, top: 16, feet: true, cheeks: true },
 };
 
 function Body({ kind, fill }: { kind: MoeiKind; fill: string }) {
@@ -42,8 +78,9 @@ function Body({ kind, fill }: { kind: MoeiKind; fill: string }) {
       return (
         <>
           <path d="M31 20 C30 15 33 12 36 13" fill="none" stroke={INK} strokeWidth={2.4} strokeLinecap="round" />
+          {/* The beak, behind the body: its base tucked in, so only the point shows, outlined into the body's own line. */}
+          <path d="M44 33 L59 38.5 L44 44 Z" fill="#FFB84D" stroke={INK} strokeWidth={2.2} strokeLinejoin="round" />
           <circle cx="32" cy="38" r="18" {...s} />
-          <path d="M48 35 L57 38.5 L48 42 Z" fill="#FFB84D" stroke={INK} strokeWidth={2.2} strokeLinejoin="round" />
           <path d="M18 40 C22 46 28 47 31 44" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
         </>
       );
@@ -53,6 +90,65 @@ function Body({ kind, fill }: { kind: MoeiKind; fill: string }) {
           <ellipse cx="32" cy="43" rx="23" ry="14" {...s} />
           <circle cx="21" cy="27" r="7.5" {...s} />
           <circle cx="43" cy="27" r="7.5" {...s} />
+        </>
+      );
+    case 'bear':
+      // Round ears (their insides a shade darker), and a pale muzzle with a little nose.
+      return (
+        <>
+          {[18, 46].map((cx) => (
+            <g key={cx}>
+              <circle cx={cx} cy="21" r="6.5" {...s} />
+              <circle cx={cx} cy="21" r="3" fill={shade(fill, 0.14)} />
+            </g>
+          ))}
+          <path d="M32 16 C46 16 54 26 54 38 C54 50 46 56 32 56 C18 56 10 50 10 38 C10 26 18 16 32 16 Z" {...s} />
+          <ellipse cx="32" cy="39" rx="8" ry="5.8" fill="#fff" opacity={0.55} />
+          <ellipse cx="32" cy="36.4" rx="2" ry="1.4" fill={INK} />
+        </>
+      );
+    case 'penguin':
+      // A white belly, little flippers in a shade darker, and an orange beak over its smile.
+      return (
+        <>
+          <path d="M14 33 C8 37 8 44 13 46" {...s} fill={shade(fill)} strokeWidth={2.2} />
+          <path d="M50 33 C56 37 56 44 51 46" {...s} fill={shade(fill)} strokeWidth={2.2} />
+          <rect x="13" y="14" width="38" height="42" rx="18" {...s} />
+          <ellipse cx="32" cy="41" rx="12.5" ry="13" fill="#fff" />
+          <path d="M29.4 30.6 L34.6 30.6 L32 33.4 Z" fill="#FFA94D" stroke={INK} strokeWidth={1.4} strokeLinejoin="round" />
+        </>
+      );
+    case 'axolotl':
+      // Three frilly gills each side, pink, behind a wide head.
+      return (
+        <>
+          {[-1, 1].map((side) => (
+            <g key={side} fill="#FF9EBB" stroke={INK} strokeWidth={1.8} strokeLinejoin="round">
+              {[
+                [27, -32],
+                [36, 0],
+                [45, 32],
+              ].map(([cy, tilt]) => {
+                const cx = 32 + side * 20;
+                return <ellipse key={cy} cx={cx} cy={cy} rx="5.2" ry="2.6" transform={`rotate(${side * tilt} ${cx} ${cy})`} />;
+              })}
+            </g>
+          ))}
+          <ellipse cx="32" cy="38" rx="20" ry="16" {...s} />
+        </>
+      );
+    case 'mushroom':
+      // A cream stem with its face, under a cap in its colour, dotted white.
+      return (
+        <>
+          <rect x="18.5" y="28" width="27" height="28" rx="11" fill="#FFF4E6" stroke={INK} strokeWidth={2.4} strokeLinejoin="round" />
+          <path d="M9 31 C9 13 55 13 55 31 C55 34.5 51 35.5 47 35.5 H17 C13 35.5 9 34.5 9 31 Z" {...s} />
+          <g fill="#fff">
+            <circle cx="22" cy="24" r="3" />
+            <circle cx="34" cy="20" r="2.4" />
+            <circle cx="44" cy="27" r="3.4" />
+            <circle cx="31" cy="30" r="1.6" />
+          </g>
         </>
       );
     default:
@@ -88,7 +184,7 @@ function Eyes({ x1, x2, y, mood }: { x1: number; x2: number; y: number; mood: Mo
   );
 }
 
-function Accessory({ accessory, top }: { accessory: MoeiAccessory; top: number }) {
+function Accessory({ accessory, top, kind }: { accessory: MoeiAccessory; top: number; kind?: MoeiKind }) {
   const t = top;
   const line = { stroke: INK, strokeWidth: 2.2, strokeLinejoin: 'round' as const, strokeLinecap: 'round' as const };
   switch (accessory) {
@@ -111,6 +207,16 @@ function Accessory({ accessory, top }: { accessory: MoeiAccessory; top: number }
     case 'crown':
       return <path d={`M22 ${t + 3} L23 ${t - 8} L28 ${t - 2} L32 ${t - 10} L36 ${t - 2} L41 ${t - 8} L42 ${t + 3} Z`} fill="#FFD43B" {...line} />;
     case 'headphones':
+      // A frog's head is its two eye bumps: the band arches clear over both, the cups against their outer sides.
+      if (kind === 'frog') {
+        return (
+          <g>
+            <path d="M10 30 C10 4 54 4 54 30" fill="none" {...line} strokeWidth={3} />
+            <rect x="5" y="22" width="8" height="12" rx="4" fill="#343A40" {...line} />
+            <rect x="51" y="22" width="8" height="12" rx="4" fill="#343A40" {...line} />
+          </g>
+        );
+      }
       return (
         <g>
           <path d={`M13 ${t + 18} C13 ${t - 6} 51 ${t - 6} 51 ${t + 18}`} fill="none" {...line} strokeWidth={3} />
@@ -161,6 +267,58 @@ function Accessory({ accessory, top }: { accessory: MoeiAccessory; top: number }
           <ellipse cx="32" cy={t - 8} rx="11" ry="3.2" stroke="#FFD43B" strokeWidth={2.2} />
         </g>
       );
+    case 'wizard':
+      return (
+        <g>
+          <path d={`M22 ${t + 3} L35 ${t - 17} L42 ${t + 3} Z`} fill="#7950F2" {...line} />
+          <ellipse cx="32" cy={t + 3} rx="13" ry="3" fill="#7950F2" {...line} />
+          <path d={starPath(33, t - 4, 3)} fill="#FFD43B" stroke={INK} strokeWidth={1.2} strokeLinejoin="round" />
+        </g>
+      );
+    case 'tophat':
+      return (
+        <g>
+          <rect x="23" y={t - 12} width="18" height="14" rx="2" fill="#343A40" {...line} />
+          <rect x="23" y={t - 3.5} width="18" height="3" fill="#FA5252" />
+          <rect x="18" y={t + 0.5} width="28" height="4" rx="2" fill="#343A40" {...line} />
+        </g>
+      );
+    case 'bunny':
+      return (
+        <g>
+          {[
+            [25, -12],
+            [39, 12],
+          ].map(([cx, tilt]) => (
+            <g key={cx} transform={`rotate(${tilt} ${cx} ${t + 1})`}>
+              <ellipse cx={cx} cy={t - 7} rx="4" ry="9" fill="#fff" {...line} />
+              <ellipse cx={cx} cy={t - 6.5} rx="1.8" ry="5.8" fill="#FFB3C6" />
+            </g>
+          ))}
+        </g>
+      );
+    case 'cherry':
+      return (
+        <g>
+          <path d={`M31 ${t - 11} Q29 ${t - 4} 27 ${t + 0.5} M31 ${t - 11} Q34 ${t - 5} 35.5 ${t + 0.5}`} fill="none" stroke="#2B8A3E" strokeWidth={1.6} strokeLinecap="round" />
+          <path d={`M31 ${t - 11} C34 ${t - 14} 38 ${t - 13} 39 ${t - 11} C36 ${t - 9} 33 ${t - 9} 31 ${t - 11} Z`} fill="#51CF66" stroke={INK} strokeWidth={1.3} strokeLinejoin="round" />
+          {[27, 35.5].map((cx) => (
+            <g key={cx}>
+              <circle cx={cx} cy={t + 2} r="3.3" fill="#FA5252" stroke={INK} strokeWidth={1.6} />
+              <circle cx={cx - 1.1} cy={t + 0.9} r="0.9" fill="#fff" opacity={0.85} />
+            </g>
+          ))}
+        </g>
+      );
+    case 'chef':
+      return (
+        <g>
+          <circle cx="25.5" cy={t - 6} r="5" fill="#fff" {...line} />
+          <circle cx="38.5" cy={t - 6} r="5" fill="#fff" {...line} />
+          <circle cx="32" cy={t - 9} r="6.2" fill="#fff" {...line} />
+          <rect x="22.5" y={t - 4} width="19" height="7.5" rx="2.2" fill="#fff" {...line} />
+        </g>
+      );
     default:
       return null;
   }
@@ -177,8 +335,9 @@ function Face({ face, l, r, y }: { face: MoeiFace; l: number; r: number; y: numb
       const dark = face === 'shades';
       return (
         <g stroke={INK} strokeWidth={1.8} strokeLinecap="round">
-          <circle cx={l} cy={y} r={lens} fill={dark ? '#212529' : 'rgba(255, 255, 255, 0.35)'} />
-          <circle cx={r} cy={y} r={lens} fill={dark ? '#212529' : 'rgba(255, 255, 255, 0.35)'} />
+          {/* Clear lenses (the eyes show through as they are); dark ones for shades. */}
+          <circle cx={l} cy={y} r={lens} fill={dark ? '#212529' : 'none'} />
+          <circle cx={r} cy={y} r={lens} fill={dark ? '#212529' : 'none'} />
           <path d={`M${l + lens} ${y} Q${mx} ${y - 2.2} ${r - lens} ${y}`} fill="none" strokeWidth={1.6} />
           {dark && (
             <g stroke="#fff" strokeWidth={1.1} opacity={0.8}>
@@ -192,7 +351,7 @@ function Face({ face, l, r, y }: { face: MoeiFace; l: number; r: number; y: numb
     case 'monocle':
       return (
         <g fill="none" strokeLinecap="round">
-          <circle cx={r} cy={y} r={lens + 0.4} fill="rgba(255, 255, 255, 0.35)" stroke={INK} strokeWidth={1.8} />
+          <circle cx={r} cy={y} r={lens + 0.4} fill="none" stroke={INK} strokeWidth={1.8} />
           {/* Its little gold chain. */}
           <path d={`M${r} ${y + lens + 0.4} q2 6 -3 10`} stroke="#F59F00" strokeWidth={1.2} />
         </g>
@@ -271,6 +430,52 @@ function Face({ face, l, r, y }: { face: MoeiFace; l: number; r: number; y: numb
           })}
         </g>
       );
+    case 'stars':
+      // Starry-eyed: a gold star over each eye.
+      return (
+        <g fill="#FFD43B" stroke={INK} strokeWidth={1.2} strokeLinejoin="round">
+          <path d={starPath(l, y, lens)} />
+          <path d={starPath(r, y, lens)} />
+        </g>
+      );
+    case 'sparkles':
+      return (
+        <g fill="#FCC419" stroke={INK} strokeWidth={0.9} strokeLinejoin="round">
+          <path d={sparklePath(l - 6, y - 6, 3)} />
+          <path d={sparklePath(r + 6.5, y - 7, 3.6)} />
+          <path d={sparklePath(r + 9, y - 1.5, 1.8)} />
+        </g>
+      );
+    case 'blush':
+      // Shy: little pink lines over each cheek.
+      return (
+        <g stroke="#E64980" strokeWidth={1.2} strokeLinecap="round">
+          {[l - 4, r + 4].map((cx) => (
+            <g key={cx}>
+              {[-2, 0, 2].map((dx) => (
+                <path key={dx} d={`M${cx + dx - 0.8} ${y + 7.4} l1.6 -3`} />
+              ))}
+            </g>
+          ))}
+        </g>
+      );
+    case 'sweat':
+      return (
+        <g>
+          <path d={`M${r + 7} ${y - 9} C${r + 9.8} ${y - 5.2} ${r + 9.8} ${y - 2.4} ${r + 7} ${y - 2.4} C${r + 4.2} ${y - 2.4} ${r + 4.2} ${y - 5.2} ${r + 7} ${y - 9} Z`} fill="#A5D8FF" stroke={INK} strokeWidth={1.2} strokeLinejoin="round" />
+          <circle cx={r + 6.1} cy={y - 4.3} r="0.7" fill="#fff" />
+        </g>
+      );
+    case 'blep':
+      // A tongue poking out under its smile.
+      return <path d={`M${mx - 2.2} ${y + 7.6} V${y + 9.6} A2.2 2.2 0 0 0 ${mx + 2.2} ${y + 9.6} V${y + 7.6} Z`} fill="#FF8FAB" stroke={INK} strokeWidth={1.2} strokeLinejoin="round" />;
+    case 'fangs':
+      return (
+        <g fill="#fff" stroke={INK} strokeWidth={1} strokeLinejoin="round">
+          <path d={`M${mx - 3} ${y + 7.1} L${mx - 2} ${y + 9.8} L${mx - 1} ${y + 7.6} Z`} />
+          <path d={`M${mx + 1} ${y + 7.6} L${mx + 2} ${y + 9.8} L${mx + 3} ${y + 7.1} Z`} />
+        </g>
+      );
     case 'plaster':
       return (
         <g transform={`rotate(-28 ${r + 4} ${y + 6})`}>
@@ -294,6 +499,11 @@ const ICON_FRAME: Record<Exclude<MoeiAccessory, 'none'>, [cx: number, cy: number
   beanie: [32, 19, 34],
   flower: [41, 21, 18],
   halo: [32, 12, 28],
+  wizard: [32, 13.5, 30],
+  tophat: [32, 16, 30],
+  bunny: [32, 12.5, 28],
+  cherry: [31, 15.5, 22],
+  chef: [32, 15, 26],
 };
 
 /** "None", for either picker: a crossed-out circle. */
@@ -320,8 +530,8 @@ export function MoeiAccessoryIcon({ accessory, size = 28 }: { accessory: MoeiAcc
 /** A face item as a picker icon: worn by a pair of eyes, so it reads as a face. */
 export function MoeiFaceIcon({ face, size = 28 }: { face: MoeiFace; size?: number }) {
   if (face === 'none') return <NoneIcon size={size} />;
-  // Whiskers reach out past the cheeks: frame a little wider for them.
-  const frame = face === 'whiskers' ? '13 18 38 38' : '17 21 31 31';
+  // Whiskers, sparkles and a sweat drop reach out past the eyes: frame a little wider for them.
+  const frame = face === 'whiskers' || face === 'sparkles' || face === 'sweat' ? '13 18 38 38' : '17 21 31 31';
   return (
     <svg width={size} height={size} viewBox={frame} aria-hidden>
       <circle cx="25" cy="32" r="2.9" fill={INK} />
@@ -388,7 +598,7 @@ export function MoeiSprite({
           <path d={`M${(layout.eyeL + layout.eyeR) / 2 - 3} ${layout.eyeY + 5.5} Q${(layout.eyeL + layout.eyeR) / 2} ${layout.eyeY + 8.5} ${(layout.eyeL + layout.eyeR) / 2 + 3} ${layout.eyeY + 5.5}`} fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
         )}
         <Face face={face} l={layout.eyeL} r={layout.eyeR} y={layout.eyeY} />
-        <Accessory accessory={accessory} top={layout.top} />
+        <Accessory accessory={accessory} top={layout.top - (layout.lift?.[accessory] ?? 0)} kind={kind} />
       </g>
     </svg>
   );

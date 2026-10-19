@@ -15597,7 +15597,17 @@ html.ins-bat-on .ins-search-bat { display: block; }
 }
 .ins-moei-studio-title { margin: 0; color: #141414; font: 700 24px/1.25 var(--font-outfit), var(--font-inter), sans-serif; }
 .ins-moei-studio-sub { margin: 6px 0 0; color: var(--ins-sub, #6b6b6b); font-size: 15px; line-height: 1.5; }
-/* The stage: a soft glow in the moei's colour, with the kinds as a carousel. */
+/* The stage: a soft glow in the moei's colour over a faint dotted backdrop, with the kinds as a carousel. */
+.ins-moei-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(20, 20, 20, 0.07) 1px, transparent 1.5px) 0 0 / 16px 16px;
+  -webkit-mask-image: radial-gradient(ellipse 60% 55% at 50% 45%, #000, transparent);
+  mask-image: radial-gradient(ellipse 60% 55% at 50% 45%, #000, transparent);
+  pointer-events: none;
+}
 .ins-moei-stage {
   position: relative;
   display: flex;
@@ -15612,7 +15622,6 @@ html.ins-bat-on .ins-search-bat { display: block; }
     radial-gradient(52% 62% at 50% 40%, color-mix(in srgb, var(--moei-tint) 26%, transparent), transparent 72%),
     #f6f6f6;
 }
-.ins-moei-fed,
 .ins-search-modal .ins-moei-shuffle {
   position: absolute;
   top: 14px;
@@ -15629,7 +15638,6 @@ html.ins-bat-on .ins-search-bat { display: block; }
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
-.ins-moei-fed { left: 14px; color: #3a3a3a; }
 /* "Surprise me": a solid black pill, so it reads as something to press. */
 .ins-search-modal .ins-moei-shuffle {
   right: 14px;
@@ -15696,9 +15704,18 @@ html.ins-bat-on .ins-search-bat { display: block; }
 }
 .ins-search-modal .ins-moei-slide[data-pos='0'] { z-index: 1; opacity: 1; transform: none; cursor: default; }
 .ins-search-modal .ins-moei-slide[data-pos='2'] { opacity: 0.28; transform: translateX(calc(var(--o) * 165px)) scale(0.4); }
+/* Further round the loop (with nine kinds): out of sight, off past the neighbours. */
+.ins-search-modal .ins-moei-slide:is([data-pos='3'], [data-pos='4']) { opacity: 0; pointer-events: none; transform: translateX(calc(var(--o) * 165px)) scale(0.3); }
 .ins-search-modal .ins-moei-slide:not([data-pos='0']):hover { opacity: 0.85; }
 .ins-moei-slide-figure { display: block; transform-origin: 50% 100%; }
 .ins-moei-slide[data-pos='0'] .ins-moei-slide-figure { animation: insMoeiBreathe 2.6s ease-in-out infinite; }
+/* The moei on stage, cheering: a hop when its look changes or it's clicked (it can be — a pointer says so). */
+.ins-moei-cheer { display: block; transform-origin: 50% 100%; }
+.ins-moei-cheer.is-cheering { animation: insMoeiSnack 560ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.ins-search-modal .ins-moei-slide[data-pos='0'] { cursor: var(--ins-cursor-hand, pointer); }
+@media (prefers-reduced-motion: reduce) {
+  .ins-moei-cheer.is-cheering { animation: none; }
+}
 
 /* The arrows: white and floating like the close button, centred on the
    card's side edges (the stage sits 32px inside them), halfway down the stage. */
@@ -15749,6 +15766,25 @@ html.ins-bat-on .ins-search-bat { display: block; }
 .ins-moei-name-input::placeholder { color: #a3a3a3; }
 .ins-moei-name-input:hover { background: rgba(255, 255, 255, 0.6); }
 .ins-moei-name-input:focus { background: transparent; box-shadow: 0 0 0 1.5px #141414; }
+/* The kind it is: a soft glass pill in the stage's top-left corner, opposite "Surprise me". */
+.ins-moei-kind {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  /* As tall as "Surprise me", so the two corners line up. */
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 15px;
+  border-radius: 100px;
+  background: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #3a3a3a;
+  font-size: 13px;
+  font-weight: 600;
+}
 .ins-moei-dots { display: flex; gap: 6px; margin-top: 12px; }
 .ins-search-modal .ins-moei-dot {
   width: 6px;
@@ -15786,6 +15822,29 @@ html.ins-bat-on .ins-search-bat { display: block; }
   box-shadow: 0 2px 8px color-mix(in srgb, var(--moei-tint) 40%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--moei-tint) 60%, transparent);
 }
 .ins-moei-tab-swatch { flex: none; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 1.5px #fff, 0 0 0 2.5px rgba(20, 20, 20, 0.1); }
+/* The whole look at a glance (side by side only), at the panel's foot: a
+   chip for each part, tinted when hovered, opening its tab. */
+.ins-moei-recap { display: none; flex-direction: column; gap: 10px; margin-top: auto; padding-top: 16px; border-top: 1px solid rgba(0, 0, 0, 0.06); }
+.ins-moei-recap-title { color: #8a8a8a; font: 700 11px/1 var(--font-manrope), Manrope, system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; }
+.ins-moei-recap-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ins-search-modal .ins-moei-recap-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 100px;
+  background: #f3f3f4;
+  color: #141414;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 200ms, transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ins-search-modal .ins-moei-recap-chip:hover { background: color-mix(in srgb, var(--moei-tint) 24%, #fff); }
+.ins-search-modal .ins-moei-recap-chip:active { transform: scale(0.95); }
+.ins-moei-recap-chip svg { flex: none; }
 .ins-moei-panel { display: flex; align-items: center; min-height: 56px; }
 .ins-moei-panel > * { animation: insMoeiPanelIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes insMoeiPanelIn { from { opacity: 0; transform: translateY(6px); } }
@@ -15951,15 +16010,83 @@ html.ins-bat-on .ins-search-bat { display: block; }
 /* A window too short for the whole studio at its full height (the Behaviour
    tab's two rows): the stage gives up the empty headroom over the moeis, so
    the foot (Save, Send home) stays inside the card. Shorter still, it scrolls (below). */
-@media (min-height: 701px) and (max-height: 880px) {
-  .ins-moei-carousel { height: 184px; }
-  .ins-moei-stage { padding-bottom: 26px; }
+@media (max-width: 899px) and (min-height: 701px) and (max-height: 880px) {
+  .ins-moei-carousel { height: 176px; }
+  .ins-moei-stage { padding-bottom: 22px; }
+}
+
+/* A wide window: side by side — the moei on its stage on the left, always
+   in view, and what to change on the right, the tabs across its top and the
+   chosen tab's choices as a grid (or its settings as a stack) beneath. */
+@media (min-width: 900px) {
+  .ins-search-overlay .ins-search-modal.ins-moei-studio {
+    display: grid;
+    grid-template:
+      'head head' auto
+      'stage custom' minmax(0, 1fr)
+      'foot foot' auto
+      / minmax(0, 1.3fr) minmax(0, 1fr);
+    column-gap: 28px;
+    width: min(1160px, calc(100vw - 40px));
+    height: min(700px, calc(100vh - 40px));
+  }
+  .ins-moei-studio-head { grid-area: head; }
+  .ins-moei-stage { grid-area: stage; min-height: 0; margin-top: 24px; }
+  .ins-moei-custom { grid-area: custom; min-height: 0; gap: 16px; margin-top: 24px; }
+  .ins-moei-studio-foot { grid-area: foot; margin-top: 28px; }
+
+  /* The stage: its arrows centred on its side edges, half off the grey (the right one in the gap
+     before the panel); the next-but-one kinds left out, for room. */
+  .ins-search-modal .ins-moei-arrow { width: 40px; height: 40px; margin-top: -20px; }
+  .ins-search-modal .ins-moei-arrow--prev { left: -20px; }
+  .ins-search-modal .ins-moei-arrow--next { right: -20px; }
+  .ins-search-modal .ins-moei-slide { transform: translateX(calc(var(--o) * 180px)) scale(0.5); }
+  .ins-search-modal .ins-moei-slide[data-pos='2'] { opacity: 0; pointer-events: none; transform: translateX(calc(var(--o) * 180px)) scale(0.3); }
+
+  /* The tabs share the panel's width. */
+  .ins-moei-tabs { display: flex; align-self: stretch; }
+  .ins-search-modal .ins-moei-tabs.ins-moei-pills .ins-segmented-item { flex: 1; justify-content: center; }
+  /* The choices right under the tabs. */
+  .ins-moei-panel { align-items: flex-start; }
+
+  /* Choices in a grid: hats and faces six across as big squircles, colours five across. */
+  .ins-moei-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; width: 100%; }
+  /* Colours: five across, the outer ones flush with the panel's edges. */
+  .ins-moei-tiles:has(.ins-moei-gumdrop) { grid-template-columns: repeat(5, auto); justify-content: space-between; row-gap: 14px; }
+
+  .ins-search-modal .ins-moei-tile { width: 100%; height: auto; aspect-ratio: 1; border-radius: 20px; }
+  .ins-search-modal .ins-moei-gumdrop { width: 52px; height: 52px; }
+
+  /* The look's recap at the panel's foot. */
+  .ins-moei-recap { display: flex; }
+  .ins-search-modal .ins-moei-gumdrop { width: 56px; height: 56px; }
+
+  /* Behaviour: one setting to a row, a touch more compact to fit the four. */
+  .ins-moei-behaviour { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .ins-moei-setting { min-height: 58px; padding-block: 8px; }
+  .ins-moei-setting--mode,
+  .ins-moei-behaviour:has(.ins-moei-setting--sound) .ins-moei-setting--mode { grid-column: auto; }
+  .ins-moei-behaviour:has(.ins-moei-setting--mode) .ins-moei-setting--sound { grid-row: auto; grid-column: auto; }
 }
 @media (max-height: 700px) {
   .ins-search-overlay .ins-search-modal.ins-moei-studio { height: auto; max-height: calc(100vh - 40px); overflow-y: auto; }
   .ins-search-overlay .ins-search-modal.ins-moei-studio .ins-request-close { top: 14px; right: 14px; }
+}
+@media (max-width: 899px) and (max-height: 700px) {
   .ins-search-modal .ins-moei-arrow--prev { left: -24px; }
   .ins-search-modal .ins-moei-arrow--next { right: -24px; }
+}
+/* Side by side on a short window, still: as tall as its content (scrolling
+   inside if even that won't fit), a little tighter all round, the moei on
+   stage a touch smaller. */
+@media (min-width: 900px) and (max-height: 700px) {
+  .ins-search-overlay .ins-search-modal.ins-moei-studio { grid-template-rows: auto auto auto; padding: 24px 28px; }
+  .ins-moei-stage,
+  .ins-moei-custom { margin-top: 16px; }
+  .ins-moei-studio-foot { margin: 20px -28px -24px; padding: 12px 28px; }
+  .ins-moei-carousel { height: 176px; }
+  .ins-moei-stage { padding-bottom: 20px; }
+  .ins-search-modal .ins-moei-slide[data-pos='0'] { transform: scale(0.85); }
 }
 /* ─── Sheets (useSheet) ───────────────────────────────── */
 /* On a phone a modal is a sheet, as mobbin's are: up from the bottom, full

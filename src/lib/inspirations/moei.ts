@@ -6,7 +6,7 @@
  * read the same snapshot (useSyncExternalStore).
  */
 
-export const MOEI_KINDS = ['blob', 'cat', 'ghost', 'bird', 'frog'] as const;
+export const MOEI_KINDS = ['blob', 'cat', 'ghost', 'bird', 'frog', 'bear', 'penguin', 'axolotl', 'mushroom'] as const;
 export type MoeiKind = (typeof MOEI_KINDS)[number];
 
 export const MOEI_KIND_LABEL: Record<MoeiKind, string> = {
@@ -15,24 +15,50 @@ export const MOEI_KIND_LABEL: Record<MoeiKind, string> = {
   ghost: 'Ghost',
   bird: 'Bird',
   frog: 'Frog',
+  bear: 'Bear',
+  penguin: 'Penguin',
+  axolotl: 'Axolotl',
+  mushroom: 'Mushroom',
 };
 
+/** In order round the colour wheel, so the picker reads as a spectrum; `pale` ones take a grey tick. */
 export const MOEI_COLORS = [
   { id: 'pink', label: 'Pink', hex: '#FF9EBB' },
+  { id: 'berry', label: 'Berry', hex: '#F06595' },
   { id: 'coral', label: 'Coral', hex: '#FF8787' },
+  { id: 'peach', label: 'Peach', hex: '#FFC09F' },
   { id: 'orange', label: 'Orange', hex: '#FFA94D' },
   { id: 'yellow', label: 'Yellow', hex: '#FFD43B' },
   { id: 'lime', label: 'Lime', hex: '#A9E34B' },
   { id: 'green', label: 'Green', hex: '#69DB7C' },
   { id: 'mint', label: 'Mint', hex: '#63E6BE' },
+  { id: 'aqua', label: 'Aqua', hex: '#66D9E8' },
   { id: 'blue', label: 'Blue', hex: '#74C0FC' },
   { id: 'purple', label: 'Purple', hex: '#B197FC' },
-  { id: 'cloud', label: 'Cloud', hex: '#DEE2E6' },
+  { id: 'lilac', label: 'Lilac', hex: '#E5DBFF', pale: true },
+  { id: 'cocoa', label: 'Cocoa', hex: '#C9A27E' },
+  { id: 'cloud', label: 'Cloud', hex: '#DEE2E6', pale: true },
 ] as const;
 export type MoeiColor = (typeof MOEI_COLORS)[number]['id'];
 
 /** What it wears on its head. */
-export const MOEI_ACCESSORIES = ['none', 'cap', 'bow', 'crown', 'headphones', 'sprout', 'party', 'beanie', 'flower', 'halo'] as const;
+export const MOEI_ACCESSORIES = [
+  'none',
+  'cap',
+  'bow',
+  'crown',
+  'headphones',
+  'sprout',
+  'party',
+  'beanie',
+  'flower',
+  'halo',
+  'wizard',
+  'tophat',
+  'bunny',
+  'cherry',
+  'chef',
+] as const;
 export type MoeiAccessory = (typeof MOEI_ACCESSORIES)[number];
 
 export const MOEI_ACCESSORY_LABEL: Record<MoeiAccessory, string> = {
@@ -46,6 +72,11 @@ export const MOEI_ACCESSORY_LABEL: Record<MoeiAccessory, string> = {
   beanie: 'Beanie',
   flower: 'Flower',
   halo: 'Halo',
+  wizard: 'Wizard hat',
+  tophat: 'Top hat',
+  bunny: 'Bunny ears',
+  cherry: 'Cherries',
+  chef: 'Chef hat',
 };
 
 /** What it wears on its face. */
@@ -62,6 +93,12 @@ export const MOEI_FACES = [
   'hearts',
   'freckles',
   'plaster',
+  'stars',
+  'sparkles',
+  'blush',
+  'sweat',
+  'blep',
+  'fangs',
 ] as const;
 export type MoeiFace = (typeof MOEI_FACES)[number];
 
@@ -78,6 +115,12 @@ export const MOEI_FACE_LABEL: Record<MoeiFace, string> = {
   hearts: 'Heart eyes',
   freckles: 'Freckles',
   plaster: 'Plaster',
+  stars: 'Star eyes',
+  sparkles: 'Sparkles',
+  blush: 'Blush',
+  sweat: 'Sweat drop',
+  blep: 'Tongue out',
+  fangs: 'Fangs',
 };
 
 /** How quickly it follows the cursor about. */

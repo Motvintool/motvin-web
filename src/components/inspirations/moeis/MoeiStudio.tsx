@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useMediaQuery, useSheet } from '../useSheet';
 import { SWIPE_QUERY } from '../useSiblingCycle';
@@ -40,6 +40,11 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number]['id'];
 
+/** What each tab's panel is for, said over its choices. */
+/** What the moei on stage says when it's clicked (if its sounds are on). */
+const STAGE_SOUNDS = ['hello', 'hop', 'wiggle', 'boop'] as const;
+
+
 /** Where kind `i` sits on the looping carousel when `at` is in the middle: -2…2. */
 function slot(i: number, at: number): number {
   const n = MOEI_KINDS.length;
@@ -72,7 +77,34 @@ function MoeiStudio({ onClose }: { onClose: () => void }) {
   // A phone has no cursor: there it's always Auto, so the choice isn't offered.
   const touch = useMediaQuery(SWIPE_QUERY);
   const [tab, setTab] = useState<Tab>('colour');
-  const set = (patch: Partial<Look>) => setLook((current) => ({ ...current, ...patch }));
+  // Hovering (or focusing) a colour, hat or face tries it on the moei on stage, until the pointer moves off.
+  const [preview, setPreview] = useState<Partial<Pick<Look, 'color' | 'accessory' | 'face'>> | null>(null);
+  const shown = { ...look, ...preview };
+  // The moei on stage cheers when its look changes or it's clicked: a hop and a happy face, re-keyed to play again.
+  const [cheer, setCheer] = useState(0);
+  const [happy, setHappy] = useState(false);
+  const happyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(happyTimer.current), []);
+  const celebrate = () => {
+    setCheer((n) => n + 1);
+    setHappy(true);
+    clearTimeout(happyTimer.current);
+    happyTimer.current = setTimeout(() => setHappy(false), 900);
+  };
+  const set = (patch: Partial<Look>) => {
+    setLook((current) => ({ ...current, ...patch }));
+    if ('color' in patch || 'accessory' in patch || 'face' in patch) {
+      setPreview(null);
+      celebrate();
+    }
+  };
+  /** Props that make a choice preview itself on the stage while it's pointed at or focused. */
+  const tryOn = (patch: NonNullable<typeof preview>) => ({
+    onPointerEnter: (e: ReactPointerEvent) => e.pointerType === 'mouse' && setPreview(patch),
+    onPointerLeave: () => setPreview(null),
+    onFocus: () => setPreview(patch),
+    onBlur: () => setPreview(null),
+  });
   const name = look.name.trim() || 'Moei';
   const index = MOEI_KINDS.indexOf(look.kind);
   // The kind shown before this one: a kind that wraps round to the other
@@ -138,16 +170,13 @@ function MoeiStudio({ onClose }: { onClose: () => void }) {
             {moei.adopted ? 'Your moei' : 'Adopt a moei'}
           </h2>
           <p className="ins-moei-studio-sub">
-            A little buddy that keeps you company while you browse. Save something and it gets a snack.
+            A little buddy that keeps you company while you browse.
           </p>
         </div>
 
-        <div className="ins-moei-stage" style={{ '--moei-tint': moeiHex(look.color) } as CSSProperties}>
-          {moei.adopted && moei.fed > 0 && (
-            <span className="ins-moei-fed">
-              {moei.fed} {moei.fed === 1 ? 'snack' : 'snacks'}
-            </span>
-          )}
+        <div className="ins-moei-stage" style={{ '--moei-tint': moeiHex(shown.color) } as CSSProperties}>
+          {/* The kind it is, in the stage's corner opposite "Surprise me". */}
+          <span className="ins-moei-kind">{MOEI_KIND_LABEL[look.kind]}</span>
           <button
             type="button"
             className="ins-moei-shuffle"
@@ -222,17 +251,25 @@ function MoeiStudio({ onClose }: { onClose: () => void }) {
                   style={{ '--o': offset, ...(wrapped ? { transition: 'none' } : null) } as CSSProperties}
                   tabIndex={-1}
                   aria-hidden={offset !== 0}
-                  onClick={() => pick(kind)}
+                  onClick={() => {
+                    if (offset !== 0) return pick(kind);
+                    // The one in the middle, clicked: it's pleased to see you.
+                    celebrate();
+                    if (look.sound) playMoeiSound(STAGE_SOUNDS[Math.floor(Math.random() * STAGE_SOUNDS.length)]);
+                  }}
                 >
                   <span className="ins-moei-slide-figure">
-                    <MoeiSprite
-                      kind={kind}
-                      color={moeiHex(look.color)}
-                      accessory={look.accessory}
-                      face={look.face}
-                      size={160}
-                      title={offset === 0 ? `${name}, your moei` : undefined}
-                    />
+                    <span key={offset === 0 ? cheer : 0} className={`ins-moei-cheer ${offset === 0 && cheer ? 'is-cheering' : ''}`}>
+                      <MoeiSprite
+                        kind={kind}
+                        color={moeiHex(shown.color)}
+                        accessory={shown.accessory}
+                        face={shown.face}
+                        mood={offset === 0 && happy ? 'happy' : 'idle'}
+                        size={160}
+                        title={offset === 0 ? `${name}, your moei` : undefined}
+                      />
+                    </span>
                   </span>
                 </button>
               );
@@ -292,7 +329,10 @@ function MoeiStudio({ onClose }: { onClose: () => void }) {
                 aria-controls="ins-moei-panel"
                 tabIndex={tab === t.id ? 0 : -1}
                 className={`ins-segmented-item ${tab === t.id ? 'is-active' : ''}`}
-                onClick={() => setTab(t.id)}
+                onClick={() => {
+                  setTab(t.id);
+                  setPreview(null);
+                }}
               >
                 {/* The colour chosen, at a glance. */}
                 {t.id === 'colour' && <span className="ins-moei-tab-swatch" style={{ background: moeiHex(look.color) }} />}
@@ -314,8 +354,9 @@ function MoeiStudio({ onClose }: { onClose: () => void }) {
                     title={c.label}
                     className={`ins-moei-gumdrop ${look.color === c.id ? 'is-active' : ''}`}
                     style={{ '--c': c.hex } as CSSProperties}
-                    data-pale={c.id === 'cloud' || undefined}
+                    data-pale={('pale' in c && c.pale) || undefined}
                     onClick={() => set({ color: c.id })}
+                    {...tryOn({ color: c.id })}
                   >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                       <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
@@ -337,6 +378,7 @@ function MoeiStudio({ onClose }: { onClose: () => void }) {
                     title={MOEI_ACCESSORY_LABEL[a]}
                     className={`ins-moei-tile ${look.accessory === a ? 'is-active' : ''}`}
                     onClick={() => set({ accessory: a })}
+                    {...tryOn({ accessory: a })}
                   >
                     <MoeiAccessoryIcon accessory={a} size={a === 'none' ? 22 : 30} />
                   </button>
@@ -356,6 +398,7 @@ function MoeiStudio({ onClose }: { onClose: () => void }) {
                     title={MOEI_FACE_LABEL[f]}
                     className={`ins-moei-tile ${look.face === f ? 'is-active' : ''}`}
                     onClick={() => set({ face: f })}
+                    {...tryOn({ face: f })}
                   >
                     <MoeiFaceIcon face={f} size={f === 'none' ? 22 : 40} />
                   </button>
@@ -447,6 +490,28 @@ function MoeiStudio({ onClose }: { onClose: () => void }) {
                 )}
               </div>
             )}
+          </div>
+
+          {/* The whole look at a glance (side by side only): each part a chip that opens its tab. */}
+          <div className="ins-moei-recap">
+            <span className="ins-moei-recap-title">Your look</span>
+            <div className="ins-moei-recap-chips">
+              <button type="button" className="ins-moei-recap-chip" onClick={() => setTab('colour')}>
+                <span className="ins-moei-tab-swatch" style={{ background: moeiHex(look.color) }} />
+                {MOEI_COLORS.find((c) => c.id === look.color)?.label}
+              </button>
+              <button type="button" className="ins-moei-recap-chip" onClick={() => setTab('hat')}>
+                {look.accessory !== 'none' && <MoeiAccessoryIcon accessory={look.accessory} size={18} />}
+                {look.accessory === 'none' ? 'No hat' : MOEI_ACCESSORY_LABEL[look.accessory]}
+              </button>
+              <button type="button" className="ins-moei-recap-chip" onClick={() => setTab('face')}>
+                {look.face !== 'none' && <MoeiFaceIcon face={look.face} size={20} />}
+                {look.face === 'none' ? 'Plain face' : MOEI_FACE_LABEL[look.face]}
+              </button>
+              <button type="button" className="ins-moei-recap-chip" onClick={() => setTab('behaviour')}>
+                {touch || look.mode === 'auto' ? 'Wanders' : 'Follows you'} · {MOEI_SPEED_LABEL[look.speed]}
+              </button>
+            </div>
           </div>
         </div>
 
