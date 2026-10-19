@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { createPortal } from 'react-dom';
 import { useStoredValue, writeStoredValue } from '@/hooks/useStoredValue';
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
 import { flowCategoryLabel, PLATFORM_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
@@ -21,7 +22,8 @@ import { SCREEN_PARAM } from './ScreenPreviewModal';
 import { useAsync } from './useAsync';
 import { useDownloadAllScreens } from './useDownloadAllScreens';
 import { useScreenContextMenu } from './useScreenContextMenu';
-import { useSheet } from './useSheet';
+import { SHEET_QUERY, useMediaQuery, useSheet } from './useSheet';
+import { useLibrary } from './useLibrary';
 import { useSwipeStep } from './useSwipeStep';
 
 /** Search-param name that opens the overlay — see SCREEN_PARAM in ScreenPreviewModal.tsx. */
@@ -83,6 +85,9 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
 
   const closeRef = useRef<HTMLButtonElement>(null);
   const saveBtnRef = useRef<HTMLButtonElement>(null);
+  // A phone's footer is the player and More: Save and Nearby screens move into More.
+  const phone = useMediaQuery(SHEET_QUERY);
+  const { collectionsContaining } = useLibrary();
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const filmRef = useRef<HTMLDivElement>(null);
 
@@ -249,7 +254,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   // runs before either on a fresh page load.
   const flowReady = Boolean(flow) && !loading;
   useEffect(() => {
-    if (mounted) closeRef.current?.focus({ preventScroll: true });
+    if (mounted) focusOnOpen(closeRef.current);
   }, [mounted, flowReady]);
 
   const close = useCallback(() => {
@@ -402,7 +407,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    closeRef.current?.focus();
+    focusOnOpen(closeRef.current);
     return () => {
       document.body.style.overflow = previousOverflow;
       restoreFocusRef.current?.focus?.();
@@ -548,9 +553,49 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   };
   // The player belongs to the one-step view; the filmstrip already shows every step.
   const showPlayer = !multiScreen && screens.length > 1;
+  // A phone with the player: its footer is the player and More, which takes
+  // Save and Nearby screens at its top. (In Nearby screens' view the footer
+  // has room, and keeps its own Save and "Individual screen" to come back.)
+  const phoneFoot = phone && showPlayer;
+  // A phone in Nearby screens' view: Save, the store link and More in one
+  // row, More holding "Individual screen" (back to the player).
+  const phoneMulti = phone && multiScreen && screens.length > 1;
+  const flowSaved = collectionsContaining('flow', flow.id).length > 0;
+  const menuLeading = [
+    {
+      label: flowSaved ? 'Remove from saved' : 'Save',
+      // (saved.svg and unsaved.svg are drawn white, for the black Save button
+      // and the footer's filtered one: on the white menu, the black outline
+      // bookmark, and a bin to say "remove".)
+      icon: `/ASSET/Icons/Motvin/${flowSaved ? 'delete.svg' : 'save.svg'}`,
+      onSelect: () => saveBtnRef.current?.click(),
+    },
+    {
+      label: 'Nearby screens',
+      icon: '/ASSET/Icons/Motvin/show-all-screens.svg',
+      onSelect: () => setMultiScreen(true),
+    },
+  ];
 
   const store = storeAction(flow.platform, app?.website);
 
+  const flowMenu = app ? (
+    <FlowMenu
+      app={app}
+      flowName={flow.name}
+      screens={screens}
+      store={store}
+      platform={flow.platform}
+      link={`${window.location.origin}${pathname}?${FLOW_PARAM}=${flow.id}`}
+      leading={
+        phoneFoot
+          ? menuLeading
+          : phoneMulti
+            ? [{ label: 'Individual screen', icon: '/ASSET/Icons/Motvin/indiviudal-screen.svg', onSelect: () => setMultiScreen(false) }]
+            : undefined
+      }
+    />
+  ) : null;
 
   return createPortal(
     <>
@@ -707,7 +752,9 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                   </button>
                 </div>
               )}
-              <div className="ins-screen-preview-foot-primary">
+              {/* On a phone with the player, Save is in More (the button stays,
+                  hidden, for More's Save and the S key to press). */}
+              <div className={`ins-screen-preview-foot-primary ${phoneFoot ? 'is-in-menu' : ''}`}>
                 <SaveButton
                   ref={saveBtnRef}
                   type="flow"
@@ -727,9 +774,12 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                 {!showPlayer && store && app && (
                   <StoreLinkButton name={app.name} platform={flow.platform} action={store} className="ins-screen-preview-foot-btn" />
                 )}
+                {/* A phone's all-screens view: one row, as the screen preview's — More here, holding "Individual screen". */}
+                {phoneMulti && flowMenu}
               </div>
+              {!phoneMulti && (
               <div className="ins-screen-preview-foot-secondary">
-                {screens.length > 1 && (
+                {screens.length > 1 && !phoneFoot && (
                   <button
                     type="button"
                     className="ins-screen-preview-foot-btn"
@@ -744,10 +794,9 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                     {multiScreen ? 'Individual screen' : 'Nearby screens'}
                   </button>
                 )}
-                {app ? (
-                  <FlowMenu app={app} flowName={flow.name} screens={screens} store={store} platform={flow.platform} link={`${window.location.origin}${pathname}?${FLOW_PARAM}=${flow.id}`} />
-                ) : null}
+                {flowMenu}
               </div>
+              )}
             </div>
           </div>
         </div>
@@ -824,6 +873,7 @@ function FlowMenu({
   store,
   platform,
   link,
+  leading,
 }: {
   app: App;
   flowName: string;
@@ -831,6 +881,7 @@ function FlowMenu({
   store: StoreAction | null;
   platform: Platform;
   link: string;
+  leading?: { label: string; icon: string; onSelect: () => void }[];
 }) {
   // "spotify-onboarding.zip"
   const flowPart = flowName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'flow';
@@ -846,6 +897,7 @@ function FlowMenu({
       link={() => link}
       triggerClassName="ins-screen-preview-foot-more"
       opensUp
+      leading={leading}
     />
   );
 }

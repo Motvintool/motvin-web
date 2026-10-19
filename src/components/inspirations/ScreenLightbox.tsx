@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { isDesktopPlatform, type Screen } from '@/lib/inspirations/types';
+import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { CloseIcon } from './Icons';
 import { Screenshot } from './Screenshot';
 
@@ -52,7 +53,7 @@ export function ScreenLightbox({ screen, onClose }: { screen: Screen; onClose: (
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    closeRef.current?.focus();
+    focusOnOpen(closeRef.current);
     return () => {
       document.body.style.overflow = previousOverflow;
       restoreFocusRef.current?.focus?.();

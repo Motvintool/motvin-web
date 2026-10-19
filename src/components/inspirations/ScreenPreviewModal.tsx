@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
 import { INDUSTRY_LABEL, PLATFORM_LABEL, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
@@ -18,7 +19,7 @@ import { ScreenLightbox } from './ScreenLightbox';
 import { useToast } from './Toast';
 import { useScreenContextMenu } from './useScreenContextMenu';
 import { useAsync } from './useAsync';
-import { useSheet } from './useSheet';
+import { SHEET_QUERY, useMediaQuery, useSheet } from './useSheet';
 import { useSwipeStep } from './useSwipeStep';
 
 /** Search-param name that opens the overlay — see FLOW_PARAM in FlowPreview.tsx. */
@@ -130,7 +131,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   // below runs before either on a fresh page load, when nothing is drawn yet.
   const contentReady = Boolean(screen) && !loading;
   useEffect(() => {
-    if (mounted) closeRef.current?.focus({ preventScroll: true });
+    if (mounted) focusOnOpen(closeRef.current);
   }, [mounted, contentReady]);
 
   const close = useCallback(() => {
@@ -209,7 +210,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    closeRef.current?.focus();
+    focusOnOpen(closeRef.current);
     return () => {
       document.body.style.overflow = previousOverflow;
       restoreFocusRef.current?.focus?.();
@@ -295,6 +296,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
 
   // On a phone, a sheet: its top drags up to fill the screen, down to settle or close.
   const { ref: sheetRef, className: sheetClass, dragProps: sheetDrag, handle: sheetHandle } = useSheet(close);
+  const phone = useMediaQuery(SHEET_QUERY);
   if (!mounted) return null;
 
   if (loading || !screen) {
@@ -422,6 +424,94 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
 
   const store = storeAction(view.platform, app?.website);
 
+  // The footer's More menu. On a phone the footer is one row (Save, the
+  // store, More), so the flow and Nearby screens move in here, at its top.
+  const moreMenu = (
+    <div className="ins-popwrap">
+      <button
+        type="button"
+        className="ins-screen-preview-foot-more"
+        aria-label="More actions"
+        aria-expanded={moreOpen}
+        aria-haspopup="menu"
+        onClick={() => setMoreOpen((o) => !o)}
+      >
+        <img src="/ASSET/Icons/Motvin/detail-menu.svg" alt="" width={16} height={16} />
+      </button>
+      {moreOpen && (
+        <div className="ins-popover ins-popover--right" role="menu" onMouseLeave={() => setMoreOpen(false)}>
+          {phone && (flowHref && viewFlow || screens.length > 1) && (
+            <>
+              {flowHref && viewFlow && (
+                <Link className="ins-popover-item" role="menuitem" href={flowHref} scroll={false} onClick={() => setMoreOpen(false)}>
+                  <MenuIcon src="/ASSET/Icons/Motvin/flow.svg" /> <span>Prototype</span>
+                </Link>
+              )}
+              {screens.length > 1 && (
+                <button
+                  type="button"
+                  className="ins-popover-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setMultiScreen((v) => !v);
+                  }}
+                >
+                  <MenuIcon src={multiScreen ? '/ASSET/Icons/Motvin/indiviudal-screen.svg' : '/ASSET/Icons/Motvin/show-all-screens.svg'} />{' '}
+                  <span>{multiScreen ? 'Individual screen' : 'Nearby screens'}</span>
+                </button>
+              )}
+              <div className="ins-popover-divider" role="separator" />
+            </>
+          )}
+          {/* The image (copy, download), then the rest (link, compare),
+              split by a divider so the list scans at a glance. */}
+          <button
+            type="button"
+            className="ins-popover-item"
+            role="menuitem"
+            onClick={() => {
+              setMoreOpen(false);
+              void currentShot.copyPng();
+            }}
+          >
+            <MenuIcon src={ICON_COPY_PNG} /> <span>Copy PNG</span>
+          </button>
+          {view.downloadable && (
+            // The same watermarked PNG the card's menu downloads, made
+            // here: a link to the API is on another origin, where the
+            // browser ignores `download` and opens the image instead.
+            <button
+              type="button"
+              className="ins-popover-item"
+              role="menuitem"
+              onClick={() => {
+                setMoreOpen(false);
+                void currentShot.downloadPng();
+              }}
+            >
+              <MenuIcon src={ICON_DOWNLOAD} /> <span>Download</span>
+            </button>
+          )}
+          <div className="ins-popover-divider" role="separator" />
+          <button type="button" className="ins-popover-item" role="menuitem" onClick={() => void copyLink()}>
+            <MenuIcon src={ICON_COPY_LINK} /> <span>Copy link</span>
+          </button>
+          {/* This screen's type, beside another app's (CompareScreens on the app page). */}
+          {app && view.screenType && view.screenType !== 'other' && (
+            <Link
+              className="ins-popover-item"
+              role="menuitem"
+              href={`${INSPIRATIONS_ROUTES.app(app)}?compare=${encodeURIComponent(view.screenType)}`}
+              onClick={() => setMoreOpen(false)}
+            >
+              <MenuIcon src={ICON_COMPARE} /> <span>Compare {screenTypeLabel(view.screenType).toLowerCase()}</span>
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   const credit = view.source.attribution || null;
 
@@ -551,7 +641,10 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                     {store.label}
                   </a>
                 )}
+                {/* A phone: More sits in this row, holding the flow and Nearby screens too. */}
+                {phone && moreMenu}
               </div>
+              {!phone && (
               <div className="ins-screen-preview-foot-secondary">
                 {flowHref && viewFlow && (
                   <Link
@@ -574,74 +667,16 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                     onClick={() => setMultiScreen((v) => !v)}
                   >
                     {multiScreen ? (
-                      <img src="/ASSET/Icons/Motvin/indiviudal-view.svg" alt="" width={20} height={20} />
+                      <img src="/ASSET/Icons/Motvin/indiviudal-screen.svg" alt="" width={20} height={20} />
                     ) : (
                       <img src="/ASSET/Icons/Motvin/show-all-screens.svg" alt="" width={20} height={20} />
                     )}
                     {multiScreen ? 'Individual screen' : 'Nearby screens'}
                   </button>
                 )}
-                <div className="ins-popwrap">
-                  <button
-                    type="button"
-                    className="ins-screen-preview-foot-more"
-                    aria-label="More actions"
-                    aria-expanded={moreOpen}
-                    aria-haspopup="menu"
-                    onClick={() => setMoreOpen((o) => !o)}
-                  >
-                    <img src="/ASSET/Icons/Motvin/detail-menu.svg" alt="" width={16} height={16} />
-                  </button>
-                  {moreOpen && (
-                    <div className="ins-popover ins-popover--right" role="menu" onMouseLeave={() => setMoreOpen(false)}>
-                      {/* The image (copy, download), then the rest (link, compare),
-                          split by a divider so the list scans at a glance. */}
-                      <button
-                        type="button"
-                        className="ins-popover-item"
-                        role="menuitem"
-                        onClick={() => {
-                          setMoreOpen(false);
-                          void currentShot.copyPng();
-                        }}
-                      >
-                        <MenuIcon src={ICON_COPY_PNG} /> <span>Copy PNG</span>
-                      </button>
-                      {view.downloadable && (
-                        // The same watermarked PNG the card's menu downloads, made
-                        // here: a link to the API is on another origin, where the
-                        // browser ignores `download` and opens the image instead.
-                        <button
-                          type="button"
-                          className="ins-popover-item"
-                          role="menuitem"
-                          onClick={() => {
-                            setMoreOpen(false);
-                            void currentShot.downloadPng();
-                          }}
-                        >
-                          <MenuIcon src={ICON_DOWNLOAD} /> <span>Download</span>
-                        </button>
-                      )}
-                      <div className="ins-popover-divider" role="separator" />
-                      <button type="button" className="ins-popover-item" role="menuitem" onClick={() => void copyLink()}>
-                        <MenuIcon src={ICON_COPY_LINK} /> <span>Copy link</span>
-                      </button>
-                      {/* This screen's type, beside another app's (CompareScreens on the app page). */}
-                      {app && view.screenType && view.screenType !== 'other' && (
-                        <Link
-                          className="ins-popover-item"
-                          role="menuitem"
-                          href={`${INSPIRATIONS_ROUTES.app(app)}?compare=${encodeURIComponent(view.screenType)}`}
-                          onClick={() => setMoreOpen(false)}
-                        >
-                          <MenuIcon src={ICON_COMPARE} /> <span>Compare {screenTypeLabel(view.screenType).toLowerCase()}</span>
-                        </Link>
-                      )}
-                    </div>
-                  )}
-                </div>
+                {moreMenu}
               </div>
+              )}
             </div>
 
             {/* The keyboard shortcuts, on ? (or the header's Shortcuts): a small

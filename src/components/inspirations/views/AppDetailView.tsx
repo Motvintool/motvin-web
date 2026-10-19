@@ -36,6 +36,7 @@ import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, CloseIcon, ExternalIcon, Sea
 import { ScreenGrid } from '../ScreenGrid';
 import { ScreenGridSkeleton } from '../Skeletons';
 import { useAsync } from '../useAsync';
+import { SHEET_QUERY, useMediaQuery } from '../useSheet';
 
 type AppTab = 'screens' | 'flows' | 'ui-elements' | 'patterns';
 
@@ -416,6 +417,8 @@ export function AppDetailView({
   const [flowFilter, setFlowFilter] = useState<string[]>([]);
   const [textSearchOpen, setTextSearchOpen] = useState(false);
   const [textQuery, setTextQuery] = useState('');
+  // A phone's field is narrow (it shares a line with the version picker).
+  const textPlaceholder = useMediaQuery(SHEET_QUERY) ? 'Search text…' : 'Search text in screenshot...';
   const [debouncedTextQuery, setDebouncedTextQuery] = useState('');
   const textSearchRef = useRef<HTMLDivElement>(null);
   const saved = collectionsContaining('app', app.id).length > 0;
@@ -687,7 +690,7 @@ export function AppDetailView({
                   autoFocus
                   value={textQuery}
                   onChange={(e) => setTextQuery(e.target.value)}
-                  placeholder="Search text in screenshot..."
+                  placeholder={textPlaceholder}
                   aria-label="Search text in screenshot"
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') {

@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { PLATFORM_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type App, type Screen } from '@/lib/inspirations/types';
@@ -163,7 +164,7 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    closeRef.current?.focus();
+    focusOnOpen(closeRef.current);
     return () => {
       document.body.style.overflow = previousOverflow;
     };

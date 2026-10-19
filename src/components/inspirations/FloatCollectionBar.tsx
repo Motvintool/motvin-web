@@ -9,6 +9,7 @@ import { askConfirm } from './ConfirmDialog';
 import { useToast } from './Toast';
 import { useDeleteCollection } from './useDeleteCollection';
 import { useLibrary } from './useLibrary';
+import { SHEET_QUERY, useMediaQuery } from './useSheet';
 import { ChevronDownIcon } from './Icons';
 
 /** The stack only has room to show a few faces before they'd be unreadable. */
@@ -47,6 +48,8 @@ export function FloatCollectionBar({
   const { collections, createCollection, getOrCreateCollectionByName, addToCollection, renameCollection } = useLibrary();
   const deleteWithUndo = useDeleteCollection();
   const { show } = useToast();
+  // A phone's bar has room for one short word beside Save.
+  const pickLabel = useMediaQuery(SHEET_QUERY) ? 'Collections' : 'Select Collections';
   const [uiState, setUiState] = useState<'default' | 'expand' | 'add-new-collection'>('default');
   const [name, setName] = useState(DEFAULT_COLLECTION_NAME);
   // Support multi-select, defaulting to no collections selected
@@ -169,9 +172,9 @@ export function FloatCollectionBar({
 
   const allSelected = collections.length > 0 && collections.every((c) => selectedIds.includes(c.id));
 
-  let selectorText = 'Select Collections';
+  let selectorText = pickLabel;
   if (selectedIds.length === 1) {
-    selectorText = collections.find(c => c.id === selectedIds[0])?.name || 'Select Collections';
+    selectorText = collections.find(c => c.id === selectedIds[0])?.name || pickLabel;
   } else if (selectedIds.length > 1) {
     selectorText = `${selectedIds.length} Selected`;
   }

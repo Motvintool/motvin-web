@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { copyText } from '@/lib/inspirations/copyText';
 import {
   extractPalette,
   isLightColor,
@@ -227,16 +228,15 @@ function PalettePanel({
   const shownOf = (c: PaletteColor) => (format === 'hex' ? c.hex : rgbOf(c.hex).slice(4, -1));
 
   const copy = async (text: string, message: string, hex?: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      show(message);
-      if (hex) {
-        setCopied(hex);
-        window.clearTimeout(copiedTimer.current);
-        copiedTimer.current = window.setTimeout(() => setCopied(null), 1400);
-      }
-    } catch {
+    if (!(await copyText(text))) {
       show('Copy not available', { tone: 'error' });
+      return;
+    }
+    show(message);
+    if (hex) {
+      setCopied(hex);
+      window.clearTimeout(copiedTimer.current);
+      copiedTimer.current = window.setTimeout(() => setCopied(null), 1400);
     }
   };
 

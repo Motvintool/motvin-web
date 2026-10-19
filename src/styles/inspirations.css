@@ -610,6 +610,8 @@ body {
   color: var(--ins-text);
   -webkit-appearance: none;
   appearance: none;
+  /* A narrow phone cuts the placeholder with "…", not mid-word. */
+  text-overflow: ellipsis;
 }
 
 .ins-search-input::placeholder {
@@ -926,7 +928,9 @@ body {
   .ins-search-modal-body.has-nav { display: grid; grid-template-columns: 1fr; }
   /* The section tabs become the dropdown pill in .ins-search-subbar. */
   .ins-search-modal-nav { display: none; }
-  .ins-search-modal-results { padding: 16px; overflow-x: hidden; }
+  /* border-box: its 100% height includes its padding, so the list ends at
+     the screen's foot (32px of it ran on past, the last result cut off). */
+  .ins-search-modal-results { box-sizing: border-box; padding: 16px; overflow-x: hidden; }
   /* Two-up Top Rated screens (the featured tile then fills a row) instead of
      four slivers. */
   .ins-search-top-screens { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -3358,6 +3362,11 @@ select.ins-input {
   .ins-flow-present-open { width: 32px; padding: 0; justify-content: center; }
   .ins-flow-present-open span { display: none; }
 }
+/* A phone has no keyboard to use them with (and icon-only, the "?" went too,
+   leaving a blank circle): the screen preview's Shortcuts button goes. */
+@media (max-width: 759px) {
+  .ins-flow-present-open[aria-label="Keyboard shortcuts"] { display: none; }
+}
 
 /* Present mode (FlowPreview.tsx): the flow full screen on a dark stage, the
    screenshot as tall as fits, a thin white step bar across the top and a
@@ -3441,16 +3450,26 @@ select.ins-input {
   .ins-flow-foot .ins-screen-preview-foot-primary { grid-column: 3; justify-self: auto; left: 0; }
   .ins-flow-foot .ins-screen-preview-foot-secondary { grid-column: 4; }
 }
-@media (max-width: 640px) {
+@media (max-width: 900px) {
   /* The tags get a row, then the player and Save share one, as on
-     desktop; Nearby screens / … take the row below. */
+     desktop; Nearby screens / … take the row below. From 900px down (a
+     tablet, the panes stacked): in the four columns above the player's
+     column was squeezed until its controls ran into Save and Nearby. */
   .ins-screen-preview-foot.ins-flow-foot { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 16px 12px; padding: 20px; }
   .ins-flow-foot .ins-screen-preview-foot-tags { order: 0; flex: 1 0 100%; }
   .ins-flow-foot .ins-flow-player { order: 1; flex: 1 1 0; }
   .ins-flow-foot .ins-screen-preview-foot-primary { order: 2; flex: none; left: 0; }
   .ins-flow-foot .ins-screen-preview-foot-secondary { order: 3; flex: 1 0 100%; flex-wrap: nowrap; }
+}
+@media (max-width: 640px) {
   .ins-flow-head-step { display: none; }
 }
+/* A phone with the player: Save and Nearby screens live in More, so the
+   footer is the tags, then the player with More beside it. (Save's button
+   stays in the page, hidden, for More's Save and the S key to press.) */
+.ins-flow-foot .ins-screen-preview-foot-primary.is-in-menu { display: contents; }
+.ins-flow-foot .ins-screen-preview-foot-primary.is-in-menu > .ins-flow-save { display: none; }
+.ins-flow-foot:has(.is-in-menu) .ins-screen-preview-foot-secondary { flex: none; }
 @media (prefers-reduced-motion: reduce) {
   .ins-flow-steps.is-playing .ins-flow-step.is-current span { width: 100%; animation: none; }
 }
@@ -3510,8 +3529,11 @@ select.ins-input {
    row instead; narrower, the tags go (the Details panel beside says both);
    narrower still, the groups wrap onto two centred rows. Sized on the main
    panel itself (a container query), not the window. The flow and compare
-   footers (.ins-flow-foot) have their own layouts. */
-@media (min-width: 901px) {
+   footers (.ins-flow-foot) have their own layouts. From 641px up: a tablet
+   or a narrow window (the panes stacked, the panel the full width) runs
+   just as narrow, and without it the pinned groups overlapped the buttons;
+   below that the phone footer's own stacked layout takes over. */
+@media (min-width: 641px) {
   .ins-screen-preview-main { container: ins-preview / inline-size; }
 
   @container ins-preview (max-width: 1100px) {
@@ -3570,10 +3592,15 @@ select.ins-input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* A circle wherever it sits (it was 50×49, a hair oval): square box,
+     its ratio held, never stretched or squeezed by the row around it. */
+  box-sizing: border-box;
   width: 50px;
-  height: 49px;
+  height: 50px;
+  aspect-ratio: 1;
   flex: none;
-  border-radius: 100px;
+  padding: 0;
+  border-radius: 50%;
   border: 1px solid #ccc;
   background: transparent;
   color: #141414;
@@ -3750,6 +3777,51 @@ select.ins-input {
   .ins-screen-preview-foot-primary .ins-screen-preview-foot-btn {
     flex: 1 1 auto;
     padding: 12px 16px;
+    font-size: 15px;
+  }
+}
+
+/* A phone: one row, Save and the store link sharing it and More (which
+   holds the flow and Nearby screens here) at its end. */
+@media (max-width: 759px) {
+  /* One group here (the rest is in More), so centred at every width —
+     the narrow-panel rule's space-between left it hugging the left edge
+     from 721px up. */
+  .ins-screen-preview-foot:not(.ins-flow-foot) {
+    justify-content: center;
+  }
+
+  .ins-screen-preview-foot:not(.ins-flow-foot) .ins-screen-preview-foot-primary {
+    flex-wrap: nowrap;
+    gap: 12px;
+  }
+
+  /* The desktop's own padding and size (14px 24px, 16px) wherever the row
+     has room for them; a small phone's tighter below. */
+  .ins-screen-preview-foot:not(.ins-flow-foot) .ins-screen-preview-foot-primary .ins-screen-preview-foot-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 14px 24px;
+    font-size: 16px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* Save keeps its word; on the narrowest phones only the store link ends in "…". */
+  .ins-screen-preview-foot:not(.ins-flow-foot) .ins-screen-preview-foot-primary .ins-screen-preview-foot-btn--save,
+  .ins-screen-preview-foot:not(.ins-flow-foot) .ins-screen-preview-foot-primary .ins-popwrap,
+  .ins-screen-preview-foot:not(.ins-flow-foot) .ins-screen-preview-foot-primary .ins-appmenu {
+    flex: none;
+  }
+}
+@media (max-width: 480px) {
+  .ins-screen-preview-foot:not(.ins-flow-foot) .ins-screen-preview-foot-primary {
+    gap: 8px;
+  }
+
+  .ins-screen-preview-foot:not(.ins-flow-foot) .ins-screen-preview-foot-primary .ins-screen-preview-foot-btn {
+    padding: 12px;
     font-size: 15px;
   }
 }
@@ -3993,6 +4065,31 @@ select.ins-input {
   .ins-screen-preview-details {
     max-width: none;
     flex: none;
+  }
+
+  /* The panes stacked: the screen fills the modal as it opens and the
+     details follow below at full width, a scroll away (both used to be
+     squeezed into one window's height, the details a 320px, 100px-tall
+     scrap in the corner). */
+  .ins-screen-preview-modal {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .ins-screen-preview-modal > .ins-screen-preview-main {
+    flex: none;
+    height: 100%;
+  }
+
+  .ins-screen-preview-modal > .ins-screen-preview-details {
+    width: auto;
+    overflow: visible;
+  }
+
+  /* Its own scroller beside the screen; stacked, its full height, scrolled with the rest. */
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-screen-preview-details-body {
+    flex: none;
+    overflow: visible;
   }
 }
 
@@ -4795,6 +4892,19 @@ select.ins-input {
   min-width: 0;
 }
 
+/* A phone: the back arrow and title have the row (the name no longer
+   squeezed into a word per line by the button), Remove drops below it. */
+@media (max-width: 759px) {
+  .ins-collection-detail-head {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+
+  .ins-collection-detail-title {
+    flex: 1 1 100%;
+  }
+}
+
 /* The title renames on click: a text cursor says it's editable. */
 .ins-collection-title-edit { cursor: text !important; border-radius: 8px; }
 .ins-collection-title-edit:focus-visible { outline: 2px solid #141414; outline-offset: 4px; }
@@ -5495,8 +5605,60 @@ select.ins-input {
     min-width: 100%;
   }
 
+  /* Docked, the tabs share the logo's line (scrolling sideways when they
+     don't fit), and only the filters wrap beneath. */
+  .ins-tabbar-row.is-docked .ins-tabbar--counted {
+    /* The rest of the line after the logo (36px + its 10px gap). */
+    flex: 1 1 calc(100% - 46px);
+    min-width: 0;
+  }
+
   .ins-tabbar-logo {
     margin-right: 10px;
+  }
+
+  /* The text search and sort take whatever the filters' line has left (a
+     small basis: it always fits beside the category pill, never beside the
+     full-width tabs); opened, the text field grows into that space in place
+     instead of dropping below. */
+  .ins-tabbar-row .ins-ftoolbar-right {
+    flex: 1 1 120px;
+    min-width: 0;
+    justify-content: flex-end;
+  }
+
+  .ins-tabbar-row .ins-text-search {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* While it's open the field has the filters' line to itself, but for the
+     version picker: the category pill steps aside until it's closed. */
+  .ins-tabbar-row:has(.ins-text-search) > :not(.ins-tabbar):not(.ins-tabbar-logo-btn):not(.ins-ftoolbar-right) {
+    display: none;
+  }
+
+  .ins-tabbar-row .ins-text-search input {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    /* 16px: iOS zooms the page into any smaller field it focuses. */
+    font-size: 16px;
+  }
+
+  /* The divider between the tabs and the filters starts the filters' own
+     line once they wrap, dividing nothing. */
+  .ins-tabbar-row > .ins-ftoolbar-divider {
+    display: none;
+  }
+
+  /* A wrapped docked row hangs below the header's own 82/68px. Inside the
+     header's glass (its backdrop-filter), the part below went unpainted and
+     the page showed through, so while a row is docked the row alone is the
+     header's glass: it covers the header's box and frosts the page itself. */
+  body.ins-toolbar-docked .ins-header {
+    background: none;
+    backdrop-filter: none;
   }
 }
 
@@ -5966,7 +6128,9 @@ select.ins-input {
 .ins-toast-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ins-toast-deck .ins-toast-card { max-width: calc(100vw - 32px); }
 @media (max-width: 560px) {
-  .ins-toast-deck .ins-toast-card { padding: 14px 20px 14px 14px; border-radius: 28px; }
+  /* 32px: a one-line toast (56–64px tall, by font) is a full pill, round at
+     both ends; a wrapped one a rounded card rather than a long lozenge. */
+  .ins-toast-deck .ins-toast-card { padding: 14px 20px 14px 14px; border-radius: 32px; }
   .ins-toast-text { white-space: normal; line-height: 1.35; }
 }
 @keyframes insToastDeckIn {
@@ -6159,8 +6323,8 @@ select.ins-input {
      card's hover with a small rise. */
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 0 0 1px rgba(20, 20, 20, 0.06), 0 4px 12px rgba(20, 20, 20, 0.12);
-  backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6367,6 +6531,16 @@ select.ins-input {
   cursor: var(--ins-cursor-hand, pointer);
 }
 
+/* Its label on one line, cut with "…" when a long collection name doesn't
+   fit (the markup's utility classes have no styles here, so it wrapped). */
+.ins-float-collection-selector > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .ins-float-collection-input {
   flex: 1 1 0;
   min-width: 0;
@@ -6554,6 +6728,16 @@ select.ins-input {
   .ins-float-collection-input {
     flex: 1 1 auto;
     width: auto;
+  }
+
+  /* Narrower insets and gap so its label fits beside Save on one line. */
+  .ins-float-collection-main {
+    gap: 8px;
+  }
+
+  .ins-float-collection-selector {
+    gap: 4px;
+    padding: 17px 12px 17px 16px;
   }
 }
 
@@ -7173,6 +7357,19 @@ select.ins-input {
   gap: 10px;
   flex-wrap: wrap;
   margin-bottom: 20px;
+}
+
+/* A phone: the counts in two even columns, not tiles sized by their numbers
+   (ragged rows); anything else in the strip (the build stamp) spans both. */
+@media (max-width: 759px) {
+  .ins-admin-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ins-admin-summary > :not(.ins-admin-stat) {
+    grid-column: 1 / -1;
+  }
 }
 
 .ins-admin-stat {
@@ -7962,6 +8159,26 @@ select.ins-input {
     height: 40px;
   }
 
+  /* A phone's header is 68px (not the desktop 82px); the search and the
+     profile pill are 44px so they keep 12px clear above and below. */
+  .ins-root {
+    --ins-header-h: 68px;
+  }
+
+  .ins-header-center .ins-search-form {
+    height: 44px;
+    padding: 0 12px 0 16px;
+  }
+
+  .ins-header-profile {
+    height: 44px;
+    padding: 2px 2px 2px 0;
+  }
+
+  .ins-header-profile .ins-profile-pill {
+    padding: 0;
+  }
+
   .ins-app-grid,
   .ins-pattern-grid-wrap {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -8163,6 +8380,8 @@ select.ins-input {
     overscroll-behavior-x: contain;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+    /* A pill scrolled into view (RevealPressedPills) stops clear of the fade at the right edge. */
+    scroll-padding-inline: 16px 40px;
   }
 
   .ins-ftoolbar::-webkit-scrollbar {
@@ -8200,6 +8419,12 @@ select.ins-input {
     margin-left: -8px;
     background: linear-gradient(to right, rgba(255, 255, 255, 0), #fff 75%);
     pointer-events: none;
+  }
+
+  /* Docked into the header the row's padding is 16px, so the fade reaches
+     that much further to meet the screen's edge. */
+  .ins-ftoolbar.is-docked::after {
+    right: -16px;
   }
 
   /* The "text in screenshots" button, and the field it opens into, at the
@@ -8383,6 +8608,59 @@ select.ins-input {
      screen corner is nearer 24px, and the frame keeps a calmer 52px. */
   .ins-grid.ins-app-grid .ins-card-shot {
     border-radius: 52px;
+  }
+
+  /* As mobbin's: a full-width card doesn't blow the screenshot up to the
+     card's width (a card taller than the screen, its foot cut off). The
+     frame is a 4:5 mat and the whole screenshot stands centred in it, 40px
+     clear top and bottom, at a phone screen's own shape. */
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot {
+    display: flex;
+    justify-content: center;
+    aspect-ratio: 4 / 5;
+    padding: 40px 0;
+    border-radius: 32px;
+  }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-inset {
+    flex: none;
+    width: auto;
+    height: 100%;
+    aspect-ratio: 390 / 844;
+  }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-hover-controls {
+    bottom: 28px;
+  }
+  /* Its loading placeholder the same phone-shaped panel, centred, so
+     nothing changes shape when the card lands. */
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card--skeleton .ins-card-shot {
+    padding: 40px 0;
+  }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card--skeleton .ins-skel--shot {
+    flex: none;
+    width: auto;
+    height: 100%;
+    aspect-ratio: 390 / 844;
+    border-radius: 24px;
+  }
+  /* The select ring (or remove button) tucks into the frame's corner. */
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring,
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-remove-btn {
+    top: 14px;
+    left: 14px;
+  }
+  /* Always showing here (no hover), so it's quieter: smaller, a hairline
+     ring on frosted white, until it's ticked. Its press area stays 44px. */
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring {
+    width: 28px;
+  }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring:not(.is-selected) {
+    border: 1.5px solid rgba(0, 0, 0, 0.18);
+    background: rgba(255, 255, 255, 0.85);
+  }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
   }
   .ins-grid.ins-app-grid .ins-card-inset,
   .ins-shot-panel .ins-grid.ins-app-grid .ins-card-shot,
@@ -9482,6 +9760,15 @@ select.ins-input {
   .ins-ai--right .ins-ai-pop {
     left: 0;
     right: auto;
+  }
+}
+
+/* A phone picking cards to save: the save bar spans the screen's foot, so
+   the assistant pills step aside (they'd sit on its close) until it's gone. */
+@media (max-width: 759px) {
+  .ins-root:has(.ins-float-collection-bar) .ins-dock-pill {
+    opacity: 0;
+    pointer-events: none;
   }
 }
 
@@ -12660,7 +12947,14 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   .ins-palette-seg:hover, .ins-palette-seg:focus-visible { flex-grow: 0; }
   .ins-palette-seg-label { top: 0; right: 14px; bottom: 0; left: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .ins-palette-role { margin: 0; }
-  .ins-palette-seg-icon, .ins-palette-brand { display: none; }
+  .ins-palette-brand { display: none; }
+  /* No hover to reveal it: the copy icon stays at each row's end, so a tap
+     plainly copies, and turns to a tick once it has (the role reads
+     "Copied" beside it). The row dips under the finger. */
+  .ins-palette-seg-label { right: 48px; }
+  .ins-palette-seg-icon { top: 11px; right: 12px; opacity: .75; scale: 1; }
+  .ins-palette-seg.is-copied .ins-palette-seg-icon { opacity: 1; }
+  .ins-palette-seg:active { filter: brightness(.94); }
 }
 /* On a phone the palette is a sheet (useSheet, the modals' sheet): the card
    lies flat in it, no drop-down frame, the HEX / RGB switch kept clear of
@@ -12757,6 +13051,12 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 .ins-ranktip-text em { margin-top: 5px; padding: 5px 11px; border-radius: 100px; font-style: normal; font-weight: 700; font-size: 12.5px; color: #111; background: rgb(var(--rb-glow) / .2); }
 @keyframes insTipWiggle { 0%, 100% { transform: rotate(0) scale(1); } 30% { transform: rotate(-12deg) scale(1.08); } 60% { transform: rotate(10deg) scale(1.08); } }
 @media (prefers-reduced-motion: reduce) { .ins-ranktip { transition: opacity .15s; transform: none; } .ins-ranktip-cup { animation: none; } }
+/* A phone: no wider than the room right of the badge (it sits ~56px in),
+   its words wrapping if need be. Hidden or not, its 300px used to stretch a
+   320px page sideways. */
+@media (max-width: 759px) {
+  .ins-ranktip { min-width: 0; width: max-content; max-width: calc(100vw - 72px); white-space: normal; }
+}
 
 /* A version's screens at their full height — the shared tile's 3:4 crop cut every
    phone screen to its top, so these show the whole image and click through to a
@@ -13744,15 +14044,34 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
   .ins-compare-seam > .ins-compare-swap svg { width: 18px; height: 18px; }
 }
 @media (max-width: 640px) {
-  .ins-compare-crumbs > span:first-child, .ins-compare-crumbs-vs { display: none; }
+  /* The title keeps both apps ("Spotify vs Duolingo"), as on a desktop —
+     with only the picked one it didn't say which screen was which; a long
+     first name gives way with "…", the picker keeps its word. */
+  .ins-compare-crumbs { min-width: 0; }
+  .ins-compare-crumbs > span:first-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .ins-compare-crumbs-vs { flex: none; margin: 0 6px; }
+  .ins-compare-crumbs .ins-compare-pick { flex: none; }
+}
+/* A phone: the logos smaller (32px, overlapping a little more), so they
+   fit beside both names; only on the narrowest, where the names need every
+   pixel, do they go. (!important: AppLogo sizes itself inline.) */
+@media (max-width: 640px) {
+  .ins-compare-crumbs { font-size: inherit; }
+  .ins-screen-preview-head-app:has(> .ins-compare-logos) { gap: 10px; }
+  .ins-compare-logos > .ins-screen-preview-head-logo,
+  .ins-compare-logos > .ins-compare-skel-logo { width: 32px !important; height: 32px !important; border-radius: 8px; }
+  .ins-compare-logos > * + * { margin-left: -10px; }
+}
+@media (max-width: 340px) {
+  .ins-compare-logos { display: none; }
+}
+@media (max-width: 640px) {
   .ins-screen-preview-filmstrip-wrap.ins-compare-stage { grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr); padding: 0 10px; }
   .ins-compare-seam > .ins-compare-swap { display: none; }
   .ins-compare-foot-swap { display: inline-flex; }
   /* The picker starts its row here: its menu opens from its left edge. */
   .ins-compare-menu.ins-compare-menu--up.ins-context-menu { left: 0; right: auto; }
   .ins-compare-shot img { border-radius: 18px; }
-  /* The title needs the room: the logos go (the picker names the app). */
-  .ins-compare-logos { display: none; }
   /* Screens are width-bound here: each column is only as tall as its
      screen, the pair centred in the stage, the arrows in a row under it. */
   .ins-compare-side { justify-content: center; padding-bottom: 0; }
@@ -13772,8 +14091,10 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
   .ins-compare-strip.has-before { --ins-fade-l: 40px; }
   .ins-compare-strip.has-after { --ins-fade-r: 40px; }
   .ins-compare-thumb.is-current { border-radius: 3px; }
-  .ins-compare-foot .ins-screen-preview-foot-tags { order: 0; }
-  .ins-compare-foot .ins-screen-preview-foot-secondary { order: 2; }
+  /* The type's tag repeats the picker below it ("Splash" twice): the tags
+     go, and the picker with Swap is centred under the centred strips. */
+  .ins-compare-foot .ins-screen-preview-foot-tags { display: none; }
+  .ins-compare-foot .ins-screen-preview-foot-secondary { order: 2; flex: 1 0 100%; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ins-compare-shot img { animation: none; transition: none !important; }
@@ -13989,6 +14310,37 @@ button.ins-app-icon:hover .ins-app-icon-name,
   transition: background var(--ins-fast) var(--ins-ease);
 }
 .ins-logo-view-btn:hover { background: rgba(255, 255, 255, 0.22); }
+/* Glass, as the dock: frosted (what's behind blurs instead of showing
+   through, sharp), a hairline edge and a lit top. The backdrop itself is
+   unchanged. (-webkit- first: the other order loses the blur in the build.) */
+.ins-logo-view-btn:not(.ins-logo-view-btn--primary),
+.ins-logo-view-chip {
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.ins-logo-view-btn:not(.ins-logo-view-btn--primary) {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+.ins-logo-dock { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 18px 50px rgba(0, 0, 0, 0.35); }
+/* The logo view's top bar in the same glass: Close, Back, and the all-logos
+   search and filter — the page's own header blurs under them rather than
+   reading through. */
+.ins-logo-view .ins-lightbox-close,
+.ins-logo-view-back,
+.ins-logo-grid-search,
+.ins-logo-grid-category-btn {
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
+}
+.ins-logo-view .ins-lightbox-close,
+.ins-logo-view-back {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.ins-logo-grid-search,
+.ins-logo-grid-category-btn {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
 .ins-logo-view-btn:active { scale: 0.97; }
 .ins-logo-view-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; box-shadow: none; }
 /* The icons are drawn black; white here. */
@@ -14039,8 +14391,8 @@ button.ins-app-icon:hover .ins-app-icon-name,
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 26px;
   background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
   transform: translateX(-50%);
   animation: insLogoDockIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
@@ -14304,8 +14656,8 @@ button.ins-app-icon:hover .ins-app-icon-name,
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
   background: rgba(30, 30, 33, 0.96);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
   transform-origin: top right;
   animation: insLogoMenuIn 0.18s cubic-bezier(0.22, 1, 0.36, 1);
@@ -14429,8 +14781,8 @@ button.ins-app-icon:hover .ins-app-icon-name,
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 50%;
   background: rgba(10, 10, 12, 0.6);
-  backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   cursor: var(--ins-cursor-hand, pointer);
   transition: background var(--ins-fast) var(--ins-ease);
 }
@@ -14622,8 +14974,8 @@ html.ins-guest img[src*="/api/inspirations/logos/"] {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(244, 244, 242, 0.95));
   box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(20, 20, 20, 0.04), 0 12px 32px rgba(20, 20, 20, 0.07);
   transform: translateX(-50%);
-  backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   animation: insFadeIn 0.5s ease both;
 }
 /* The little cricket bat that stands in for the pointer over the empty
@@ -14787,6 +15139,21 @@ html.ins-bat-on .ins-search-bat { display: block; }
   transition: opacity 200ms ease;
 }
 .ins-moei.is-hidden { opacity: 0; }
+/* On a phone it takes a finger (a tap hops, a hold opens its studio): no
+   browser callout, selection or double-tap zoom on it. Out of sight, it
+   takes nothing. On the page it's below the header and dock buttons;
+   sitting on an open sheet or menu, it's drawn over that. */
+.ins-moei.is-touch {
+  z-index: 70;
+  pointer-events: auto;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.ins-moei.is-touch.is-hidden { pointer-events: none; }
+.ins-moei.is-touch.is-on-layer { z-index: 9000; }
 .ins-moei-figure { width: 44px; height: 44px; transition: transform 160ms ease; }
 .ins-moei-hop { width: 44px; height: 44px; transform-origin: 50% 100%; }
 .ins-moei-sprite { display: block; overflow: visible; }
@@ -15405,12 +15772,21 @@ html.ins-bat-on .ins-search-bat { display: block; }
   }
   /* The screen (and its strip, which takes what's left of it) fills the
      sheet as it opens; the details follow below, a scroll away. */
+  /* The sheet's height less its 28px handle strip above it, so the footer's
+     buttons end inside the sheet rather than 28px below the screen's foot;
+     filled up (dragged open), the same less its taller height. */
   .ins-sheet .ins-screen-preview-main {
     flex: none;
-    height: calc(100dvh - 40px);
+    height: calc(100dvh - 40px - 28px);
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+  }
+  .ins-sheet.is-expanded .ins-screen-preview-main {
+    height: calc(100dvh - 12px - 28px);
+  }
+  .ins-sheet .ins-screen-preview-foot {
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
   }
   .ins-sheet .ins-screen-preview-details {
     flex: none;

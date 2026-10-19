@@ -40,8 +40,12 @@ export function AppMenu({
   opensUp = false,
   compareHref,
   onOpenLogo,
+  leading,
 }: {
   busy: boolean;
+  /** Extra items at the menu's top, set off by a divider (a phone flow
+   * footer's Save and Nearby screens, which have no room of their own). */
+  leading?: { label: string; icon: string; onSelect: () => void }[];
   versions: AppVersion[];
   /** "Copy app link" by default; a flow's menu says "Copy flow link". */
   linkLabel?: string;
@@ -138,6 +142,32 @@ export function AppMenu({
         // opens beside it on the left, since the button sits at the page's edge.
         <div className={`ins-appmenu-layer ${opensUp ? 'ins-appmenu-layer--up' : ''}`}>
           <div className="ins-context-menu ins-appmenu-panel" role="menu">
+            {leading && leading.length > 0 && (
+              <>
+                <div className="ins-context-menu-group">
+                  {leading.map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      className="ins-context-menu-btn"
+                      role="menuitem"
+                      onClick={() => {
+                        close();
+                        item.onSelect();
+                      }}
+                    >
+                      <div className="ins-context-menu-btn-content">
+                        <div className="ins-context-menu-icon">
+                          <img alt="" src={item.icon} />
+                        </div>
+                        <p className="ins-context-menu-text">{item.label}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div className="ins-context-menu-divider" />
+              </>
+            )}
             <div className="ins-context-menu-group">
               <div className="ins-appmenu-row" onMouseEnter={keepVersions} onMouseLeave={dropVersions}>
                 <button

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
 import type { App, Industry } from '@/lib/inspirations/types';
@@ -183,7 +184,7 @@ function LogoLightbox({ app, onClose }: { app: App; onClose: () => void }) {
     const restoreFocus = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    closeRef.current?.focus();
+    focusOnOpen(closeRef.current);
     return () => {
       document.body.style.overflow = previousOverflow;
       restoreFocus?.focus?.();

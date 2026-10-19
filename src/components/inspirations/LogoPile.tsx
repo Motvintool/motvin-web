@@ -17,6 +17,9 @@ const MAX_THROW = 28;
 /** The shelf the icons land on: its gap from the window's bottom edge and its thickness. */
 const SHELF_BOTTOM = 28;
 const SHELF_H = 14;
+/** On a phone the dock's round buttons (Buddy, the assistant) stand at the window's right foot: the shelf stops short of them (this far, until they're drawn), so no icon settles under them. */
+const DOCK_CLEAR_PHONE = 80;
+const DOCK_GAP = 8;
 /** The cricket bat that stands in for the mouse pointer: its drawing's size,
  * the point on the blade that sits under the pointer (the sweet spot, on its
  * face), and the blade the physics knows (centre offset from the sweet spot
@@ -115,14 +118,30 @@ export function LogoPile({ apps, inline = false }: { apps: App[]; inline?: boole
         const logo = logos[i];
         if (logo) logo.style.transform = `rotate(${angle}rad)`;
       };
-      // The shelf: centred, nearly the window's width (narrower on a wide one).
+      // The shelf: centred, nearly the window's width (narrower on a wide
+      // one). On a phone it runs from the left margin to short of the dock's
+      // buttons at the right, its middle (shelfX) shifted left to match.
       let shelfW = 0;
+      let shelfX = 0;
       let shelfTop = 0;
       const placeShelf = () => {
-        shelfW = Math.min(width - (phone ? 24 : 64), 1120);
+        // Where the dock's buttons begin, if any stand low enough to meet the pile.
+        let dockLeft = width - DOCK_CLEAR_PHONE + 12;
+        if (phone && !inline) {
+          const low = [...document.querySelectorAll('.ins-dock-pill')]
+            .map((el) => el.getBoundingClientRect())
+            .filter((r) => r.width > 0 && r.bottom > window.innerHeight - 200);
+          if (low.length) dockLeft = Math.min(...low.map((r) => r.left));
+        }
+        const dock = phone && !inline ? Math.max(0, width - dockLeft + DOCK_GAP - 12) : 0;
+        shelfW = Math.min(width - (phone ? 24 : 64) - dock, 1120);
+        shelfX = width / 2 - dock / 2;
         shelfTop = height - SHELF_BOTTOM - SHELF_H;
         const shelf = shelfRef.current;
-        if (shelf) shelf.style.width = `${shelfW}px`;
+        if (shelf) {
+          shelf.style.width = `${shelfW}px`;
+          shelf.style.left = `${shelfX}px`;
+        }
       };
       placeShelf();
       const floorY = shelfTop;
@@ -133,7 +152,7 @@ export function LogoPile({ apps, inline = false }: { apps: App[]; inline?: boole
         let i = 0;
         for (let row = 0; i < count; row++) {
           const inRow = Math.min(count - i, Math.max(1, perRow - row * 3));
-          const start = width / 2 - ((inRow - 1) * (size + 8)) / 2;
+          const start = shelfX - ((inRow - 1) * (size + 8)) / 2;
           for (let k = 0; k < inRow && i < count; k++, i++) {
             place(i, start + k * (size + 8), floorY - size / 2 - row * size, 0);
           }
@@ -153,12 +172,16 @@ export function LogoPile({ apps, inline = false }: { apps: App[]; inline?: boole
       let walls: Matter.Body[] = [];
       const buildWalls = () => {
         Composite.remove(engine.world, walls);
-        const shelfL = width / 2 - shelfW / 2;
-        const shelfR = width / 2 + shelfW / 2;
+        const shelfL = shelfX - shelfW / 2;
+        const shelfR = shelfX + shelfW / 2;
+        // A phone's shortened shelf (clear of the dock) holds fewer in a row,
+        // so its lips stand taller: the icons heap up rather than roll off
+        // the end and under the dock's buttons.
+        const lip = phone && !inline ? size * 2.6 : size * 0.6;
         walls = [
-          Bodies.rectangle(width / 2, shelfTop + SHELF_H / 2, shelfW, SHELF_H, { isStatic: true, chamfer: { radius: SHELF_H / 2 } }),
-          Bodies.rectangle(shelfL + 3, shelfTop - size * 0.3, 6, size * 0.6, { isStatic: true, chamfer: { radius: 3 } }),
-          Bodies.rectangle(shelfR - 3, shelfTop - size * 0.3, 6, size * 0.6, { isStatic: true, chamfer: { radius: 3 } }),
+          Bodies.rectangle(shelfX, shelfTop + SHELF_H / 2, shelfW, SHELF_H, { isStatic: true, chamfer: { radius: SHELF_H / 2 } }),
+          Bodies.rectangle(shelfL + 3, shelfTop - lip / 2, 6, lip, { isStatic: true, chamfer: { radius: 3 } }),
+          Bodies.rectangle(shelfR - 3, shelfTop - lip / 2, 6, lip, { isStatic: true, chamfer: { radius: 3 } }),
           Bodies.rectangle(width / 2, height + T / 2, width + T * 2, T, { isStatic: true }),
           Bodies.rectangle(-T / 2, height - height * 2, T, height * 6, { isStatic: true }),
           Bodies.rectangle(width + T / 2, height - height * 2, T, height * 6, { isStatic: true }),
@@ -178,7 +201,7 @@ export function LogoPile({ apps, inline = false }: { apps: App[]; inline?: boole
       // they arrive one after another and bounce as they land.
       const bodies = Array.from({ length: count }, (_, i) =>
         Bodies.circle(
-          width / 2 - shelfW / 2 + size + Math.random() * Math.max(1, shelfW - size * 2),
+          shelfX - shelfW / 2 + size + Math.random() * Math.max(1, shelfW - size * 2),
           -size - i * size * 0.7 - Math.random() * 80,
           size / 2,
           {
@@ -419,6 +442,25 @@ export function LogoPile({ apps, inline = false }: { apps: App[]; inline?: boole
         wake();
       };
       window.addEventListener('resize', onResize);
+      // On a phone the dock's buttons may not be drawn yet when the shelf is
+      // first placed: measured again once they are, before the icons land.
+      // Any icon already falling outside the shorter shelf drops again from above it.
+      const redock = phone && !inline
+        ? setTimeout(() => {
+            onResize();
+            const left = shelfX - shelfW / 2 + size / 2;
+            const right = shelfX + shelfW / 2 - size / 2;
+            bodies.forEach((b, i) => {
+              if (b.position.x >= left && b.position.x <= right) return;
+              Body.setPosition(b, { x: left + Math.random() * Math.max(1, right - left), y: -size });
+              Body.setVelocity(b, { x: 0, y: 0 });
+              // As a respawn: drawn where it now is, not slid there from where it was.
+              shown[i].x = NaN;
+              prev[i].x = b.position.x;
+              prev[i].y = b.position.y;
+            });
+          }, 700)
+        : undefined;
 
       // Step the world and draw each icon where its body is. One that ends
       // up far outside (thrown hard) drops back in from the top.
@@ -449,8 +491,12 @@ export function LogoPile({ apps, inline = false }: { apps: App[]; inline?: boole
         acc = Math.min(acc, STEP);
         const alpha = acc / STEP;
         bodies.forEach((b, i) => {
-          if (b.position.y > height + 400 || b.position.x < -400 || b.position.x > width + 400) {
-            Body.setPosition(b, { x: width / 2, y: -size });
+          // On a phone, one that's come off the shortened shelf (it would lie
+          // under the dock's buttons, or half off the screen) drops back in too.
+          const offShelf =
+            phone && !inline && b.position.y > shelfTop + size / 2 && (b.position.x < shelfX - shelfW / 2 || b.position.x > shelfX + shelfW / 2);
+          if (offShelf || b.position.y > height + 400 || b.position.x < -400 || b.position.x > width + 400) {
+            Body.setPosition(b, { x: shelfX, y: -size });
             shown[i].x = NaN;
             Body.setVelocity(b, { x: 0, y: 0 });
             b.collisionFilter.mask = ~CEILING;
@@ -555,6 +601,7 @@ export function LogoPile({ apps, inline = false }: { apps: App[]; inline?: boole
         window.removeEventListener('pointerup', onUp);
         window.removeEventListener('pointercancel', onUp);
         window.removeEventListener('resize', onResize);
+        clearTimeout(redock);
         window.removeEventListener('pointermove', onHover);
         document.documentElement.removeEventListener('pointerleave', onHoverOut);
         document.documentElement.classList.remove('ins-bat-on');
