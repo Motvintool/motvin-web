@@ -228,8 +228,9 @@ export function FilteredGallery({
     <>
       {exploreMode ? (
         <>
+          {/* No running count on the app list. */}
           <ToolbarRow
-            total={allApps ? apps.length : null}
+            total={null}
             unit="app"
             right={<SortPill value={sort} options={EXPLORE_SORTS} onChange={setSort} />}
           >

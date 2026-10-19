@@ -377,8 +377,14 @@ export function SortPill<S extends string>({
  * scroll-tracking and portal target are computed once, the same way,
  * everywhere it's used.
  */
+/** How long a row that undocks stays in the header, fading out as the header's own content comes back. */
+const UNDOCK_MS = 240;
+
 export function useDockingRow() {
   const [docked, setDocked] = useState(false);
+  // Just undocked: the header copy is still there for UNDOCK_MS, on its way out (`.is-leaving`).
+  const [leaving, setLeaving] = useState(false);
+  const leaveTimerRef = useRef(0);
   const anchorRef = useRef<HTMLDivElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const inFlowRowHeightRef = useRef(0);
@@ -412,6 +418,9 @@ export function useDockingRow() {
       if (next !== dockedRef.current) {
         dockedRef.current = next;
         setDocked(next);
+        window.clearTimeout(leaveTimerRef.current);
+        setLeaving(!next);
+        if (!next) leaveTimerRef.current = window.setTimeout(() => setLeaving(false), UNDOCK_MS);
       }
     };
     check();
@@ -420,6 +429,7 @@ export function useDockingRow() {
     return () => {
       window.removeEventListener('scroll', check);
       window.removeEventListener('resize', check);
+      window.clearTimeout(leaveTimerRef.current);
     };
   }, []);
 
@@ -430,12 +440,15 @@ export function useDockingRow() {
 
   useEffect(() => {
     document.body.classList.toggle('ins-toolbar-docked', docked);
+    // From the first dock on, the header's own content animates back in each time a row leaves.
+    if (docked) document.body.classList.add('ins-toolbar-was-docked');
     return () => {
       document.body.classList.remove('ins-toolbar-docked');
     };
   }, [docked]);
+  useEffect(() => () => document.body.classList.remove('ins-toolbar-was-docked'), []);
 
-  return { docked, anchorRef, rowRef, headerContent };
+  return { docked, leaving, anchorRef, rowRef, headerContent };
 }
 
 /**
@@ -499,7 +512,7 @@ export function ToolbarRow({
   unit?: string;
   right?: ReactNode;
 }) {
-  const { docked, anchorRef, rowRef, headerContent } = useDockingRow();
+  const { docked, leaving, anchorRef, rowRef, headerContent } = useDockingRow();
 
   // Apps / Webs is the top-level split and lives in the header's tabs. Inside "Apps" the switch here picks
   // iOS or Web Apps.
@@ -520,7 +533,7 @@ export function ToolbarRow({
   const toolbar = (inHeader = false) => (
     <div
       ref={inHeader ? undefined : rowRef}
-      className={`ins-ftoolbar ${inHeader ? 'is-docked' : ''} ${docked && !inHeader ? 'is-docked-placeholder' : ''}`}
+      className={`ins-ftoolbar ${inHeader ? 'is-docked' : ''} ${inHeader && !docked ? 'is-leaving' : ''} ${docked && !inHeader ? 'is-docked-placeholder' : ''}`}
       role="group"
       aria-label="Filters and sort"
       aria-hidden={docked && !inHeader ? true : undefined}
@@ -543,7 +556,7 @@ export function ToolbarRow({
   return (
     <div ref={anchorRef} className="ins-ftoolbar-anchor">
       {toolbar()}
-      {docked && headerContent && createPortal(toolbar(true), headerContent)}
+      {(docked || leaving) && headerContent && createPortal(toolbar(true), headerContent)}
     </div>
   );
 }

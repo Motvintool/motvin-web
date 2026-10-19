@@ -8,6 +8,7 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
+import { StoreLinkButton } from './StoreMenuItem';
 import { INDUSTRY_LABEL, PLATFORM_LABEL, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type Flow, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
@@ -635,11 +636,9 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   app={app ?? undefined}
                   className="ins-screen-preview-foot-btn ins-screen-preview-foot-btn--save"
                 />
+                {/* The live store listing, found by name (StoreLinkButton), as the masthead's menu does — the app's own link is often empty. */}
                 {store && (
-                  <a className="ins-screen-preview-foot-btn" href={store.href} target="_blank" rel="noopener noreferrer">
-                    <img src={store.icon} alt="" width={18} height={16} />
-                    {store.label}
-                  </a>
+                  <StoreLinkButton name={app?.name ?? ''} platform={view.platform} action={store} className="ins-screen-preview-foot-btn" />
                 )}
                 {/* A phone: More sits in this row, holding the flow and Nearby screens too. */}
                 {phone && moreMenu}

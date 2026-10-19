@@ -10,7 +10,8 @@ const cache = new Map<string, StoreStats | null>();
  * loading and null when the store has nothing; `store` is null for Web Apps and Webs.
  */
 export function useStoreStats(name: string, platform: Platform) {
-  const store: 'ios' | null = platform === 'ios' ? 'ios' : null;
+  // No name yet (the app still loading): nothing to look up.
+  const store: 'ios' | null = platform === 'ios' && name ? 'ios' : null;
   const key = `${store}:${name}`;
   const [stats, setStats] = useState<StoreStats | null | undefined>(cache.get(key));
 

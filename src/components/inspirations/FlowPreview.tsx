@@ -10,7 +10,7 @@ import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
 import { flowCategoryLabel, PLATFORM_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
-import { isDesktopPlatform, type App, type Platform, type Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type App, type Flow, type Platform, type Screen } from '@/lib/inspirations/types';
 import type { StoreAction } from '@/lib/inspirations/storeAction';
 import { AppLogo } from './AppLogo';
 import { AppMenu } from './AppMenu';
@@ -30,6 +30,35 @@ import { useSwipeStep } from './useSwipeStep';
 export const FLOW_PARAM = 'flow';
 /** Optional `&step=<screen id>`: open the flow on that step rather than the first. */
 export const STEP_PARAM = 'step';
+/** Optional `&play=1`: start playing as soon as the steps are in (the app page's Prototype card). */
+export const PLAY_PARAM = 'play';
+
+/**
+ * `?flow=app:<slug>`: not a recorded flow but the whole app as a prototype —
+ * every screen of its current capture, in the app's own order, played in
+ * this same player (the app page's "Prototype" card).
+ */
+const APP_FLOW_PREFIX = 'app:';
+export const appPrototypeFlowId = (slug: string) => `${APP_FLOW_PREFIX}${slug}`;
+
+async function loadAppPrototype(flowId: string): Promise<{ flow: Flow; screens: Screen[]; app: App | null } | null> {
+  const res = await inspirationsApi.getApp(flowId.slice(APP_FLOW_PREFIX.length));
+  if (!res) return null;
+  const { app, screens: all } = res;
+  // One capture's screens, not every dated version's copies of them.
+  const current = app.currentVersion ? all.filter((s) => s.version === app.currentVersion) : all;
+  const screens = current.length ? current : all;
+  const flow: Flow = {
+    id: flowId,
+    appId: app.id,
+    name: 'All screens',
+    category: 'all-screens' as Flow['category'],
+    platform: screens[0]?.platform ?? app.platforms[0],
+    screenIds: screens.map((s) => s.id),
+    parentId: null,
+  };
+  return { flow, screens, app };
+}
 
 /** Present mode's control bar hides after the pointer has been still this long. */
 const PRESENT_HUD_MS = 2500;
@@ -91,7 +120,11 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const filmRef = useRef<HTMLDivElement>(null);
 
-  const { data, loading } = useAsync(() => inspirationsApi.getFlow(flowId), `flow-preview:${flowId}`);
+  const isAppPrototype = flowId.startsWith(APP_FLOW_PREFIX);
+  const { data, loading } = useAsync(
+    () => (isAppPrototype ? loadAppPrototype(flowId) : inspirationsApi.getFlow(flowId)),
+    `flow-preview:${flowId}`,
+  );
   const flow = data?.flow ?? null;
   const app = data?.app ?? null;
   const screens = useMemo(() => data?.screens ?? [], [data]);
@@ -246,6 +279,12 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     setPlaying(false);
     setPresenting(false);
   }
+  // `&play=1`: playing from the moment its steps are in — once per opening.
+  const [autoPlayed, setAutoPlayed] = useState<string | null>(null);
+  if (params.get(PLAY_PARAM) === '1' && screens.length > 1 && autoPlayed !== flowId) {
+    setAutoPlayed(flowId);
+    setPlaying(true);
+  }
 
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
 
@@ -261,6 +300,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     const sp = new URLSearchParams(params.toString());
     sp.delete(FLOW_PARAM);
     sp.delete(STEP_PARAM);
+    sp.delete(PLAY_PARAM);
     const qs = sp.toString();
     // back() keeps history tidy when the overlay was opened from this page;
     // replace() covers arriving here from a shared link.
@@ -560,7 +600,9 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   // A phone in Nearby screens' view: Save, the store link and More in one
   // row, More holding "Individual screen" (back to the player).
   const phoneMulti = phone && multiScreen && screens.length > 1;
-  const flowSaved = collectionsContaining('flow', flow.id).length > 0;
+  // The whole-app prototype isn't a flow of its own: its Save saves the app.
+  const saveTarget = isAppPrototype && app ? { type: 'app' as const, id: app.id } : { type: 'flow' as const, id: flow.id };
+  const flowSaved = collectionsContaining(saveTarget.type, saveTarget.id).length > 0;
   const menuLeading = [
     {
       label: flowSaved ? 'Remove from saved' : 'Save',
@@ -757,8 +799,8 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
               <div className={`ins-screen-preview-foot-primary ${phoneFoot ? 'is-in-menu' : ''}`}>
                 <SaveButton
                   ref={saveBtnRef}
-                  type="flow"
-                  id={flow.id}
+                  type={saveTarget.type}
+                  id={saveTarget.id}
                   variant={showPlayer ? 'icon' : 'button'}
                   app={app ?? undefined}
                   className={

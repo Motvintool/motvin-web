@@ -36,6 +36,7 @@ export function ScreenGrid({
   webLayout = false,
   webGrid = false,
   saveItem,
+  prototype,
 }: {
   screens: Screen[];
   /** Overrides the shared app lookup; omit and the grid fetches it itself. */
@@ -57,6 +58,13 @@ export function ScreenGrid({
    * they land in those tabs of the collection.
    */
   saveItem?: (screen: Screen) => { type: SavedItemType; id: string };
+  /**
+   * An extra card ahead of the screens that plays the app as a prototype:
+   * the screen `screenId` (the app page's first) with a "Prototype" badge,
+   * playing through `screens` on its own, and a click opens the flow player
+   * at `href`. That screen still has its own card right after it.
+   */
+  prototype?: { screenId: string; href: string; label: string; screens?: Screen[] };
 }) {
   const fetchedApps = useApps();
   const apps = appsOverride ?? fetchedApps;
@@ -73,6 +81,7 @@ export function ScreenGrid({
   };
 
   const clearSelection = () => setSelectedIds(new Set());
+  const protoScreen = prototype ? screens.find((s) => s.id === prototype.screenId) : undefined;
   const selectedScreens = screens.filter((screen) => selectedIds.has(screen.id));
   const selectedApp = selectedScreens.length ? apps.get(selectedScreens[0].appId) : undefined;
 
@@ -110,6 +119,18 @@ export function ScreenGrid({
   return (
     <>
       <div className={`ins-grid ${webLayout || webGrid ? 'ins-web-grid' : ''}`} role="list">
+        {protoScreen && !webLayout && (
+          <ScreenCard
+            // A new first screen (another version) starts the reel over.
+            key={`prototype-${protoScreen.id}`}
+            screen={protoScreen}
+            app={apps.get(protoScreen.appId)}
+            showApp={showApp}
+            showMeta={showMeta}
+            index={0}
+            prototype={prototype}
+          />
+        )}
         {screens.map((screen, index) => (
           webLayout ? <WebScreenCard
             key={screen.id}

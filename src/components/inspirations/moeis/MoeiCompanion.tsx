@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { moeiHex, moeiStore, openMoeiStudio, type MoeiSpeed } from '@/lib/inspirations/moei';
 import { libraryStore } from '@/lib/inspirations/store';
+import { playMoeiSound } from '@/lib/inspirations/moeiSound';
 import { useMediaQuery } from '../useSheet';
 import { SWIPE_QUERY } from '../useSiblingCycle';
 import { MoeiSprite, type MoeiMood } from './MoeiSprite';
@@ -35,6 +36,8 @@ const SIT_MS = 1200;
 const SLEEP_MS = 25_000;
 /** How long the happy face and heart last after a snack. */
 const HAPPY_MS = 1800;
+/** Out on its own, the longest a snack waits for it to walk over to where you saved. */
+const SNACK_WAIT_MAX_MS = 2500;
 
 const noSubscribe = () => () => {};
 /** On a phone (SWIPE_QUERY) there's no cursor to follow: it sits on the page and answers taps and scrolling instead. */
@@ -49,6 +52,45 @@ const FOOT_CLEAR = 120;
 const LAYERS = '.ins-portal, .ins-sheet-overlay, .ins-search-overlay, .ins-guide, .ins-popover, .ins-uielements-menu, .ins-context-menu, [role="menu"], [role="listbox"]';
 /** Let a sheet finish sliding up before it looks for a seat on it. */
 const LAYER_SETTLE_MS = 360;
+/**
+ * What it does when it's clicked or tapped: one of these at random (never the
+ * same twice running), each with how long it lasts. Woken by a click it
+ * startles; clicked five times in a couple of seconds, it gets dizzy.
+ */
+const TRICKS = ['hop', 'spin', 'wiggle', 'hearts', 'boop', 'hello'] as const;
+type Trick = (typeof TRICKS)[number] | 'startle' | 'dizzy';
+const TRICK_MS: Record<Trick, number> = {
+  hop: 1100,
+  spin: 1300,
+  wiggle: 1400,
+  hearts: 1400,
+  boop: 1300,
+  hello: 1700,
+  startle: 1200,
+  dizzy: 1800,
+};
+/** What it says to each (the name tag steps aside meanwhile). */
+const TRICK_SAYS: Partial<Record<Trick, (name: string) => string>> = {
+  spin: () => 'wheee!',
+  wiggle: () => 'hehe',
+  boop: () => 'boop!',
+  hello: (name) => `hi, I'm ${name}!`,
+  startle: () => '!',
+  dizzy: () => '@_@',
+};
+/** This many clicks within DIZZY_WINDOW_MS: dizzy. */
+const DIZZY_CLICKS = 5;
+const DIZZY_WINDOW_MS = 2000;
+/** Hearts in a burst, sparkles round a spin: their drift (px) and start delay (ms). */
+const BURST = [
+  { dx: -14, dy: -22, d: 0 },
+  { dx: 2, dy: -30, d: 90 },
+  { dx: 16, dy: -20, d: 180 },
+];
+
+/** Auto on a computer: now and then, between these, it gets up and goes to sit somewhere else on screen. */
+const WANDER_MIN_MS = 9000;
+const WANDER_MAX_MS = 16000;
 
 /**
  * The open sheet, modal or menu on top, if any (the last open one in the
@@ -279,7 +321,10 @@ function itemCount() {
  * and sits on the nearest thing (a button, card, pill, logo…), facing the
  * cursor, with its name above it — and falls asleep after a while. Saving something to a
  * collection gives it a snack — a hop, a heart and its count goes up.
- * Never takes a click (pointer-events: none) and only animates while moving.
+ * Following the cursor it never takes a click (pointer-events: none); out on
+ * its own (a phone, or Auto) a click or tap on it gets a trick — a hop, a
+ * spin, a giggle, a burst of hearts, a boop, a hello — and holding it opens
+ * its studio. It only animates while moving.
  *
  * On a phone (no cursor) it lives on the page instead: it sits on a card
  * near the middle of the screen, rides along with it as the page scrolls
@@ -303,14 +348,27 @@ export function MoeiCompanion() {
   // On a phone: sitting on an open sheet or menu, so drawn over it.
   const [onLayer, setOnLayer] = useState(false);
   const [snack, setSnack] = useState(0);
-  const press = useRef<{ timer: ReturnType<typeof setTimeout> | undefined; held: boolean }>({ timer: undefined, held: false });
+  // The trick it's doing for a click or tap, re-keyed each time so it plays again.
+  const [trick, setTrick] = useState<{ id: number; kind: Trick } | null>(null);
+  const lastTrick = useRef<Trick | null>(null);
+  // Out on its own: whether it's still (not walking, no click's walk about to
+  // start), so a snack waits until it has arrived where you saved.
+  const settled = useRef<() => boolean>(() => true);
+  const clicks = useRef<number[]>([]);
+  const press = useRef<{ timer: ReturnType<typeof setTimeout> | undefined; held: boolean; wasAsleep: boolean }>({
+    timer: undefined,
+    held: false,
+    wasAsleep: false,
+  });
   const happyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const active = moei.out && mounted;
+  // Getting about on its own (a phone, or Auto chosen in the studio) rather than following the cursor.
+  const auto = touch || moei.mode === 'auto';
 
   // Following the cursor.
   useEffect(() => {
-    if (!active || touch) return;
+    if (!active || auto) return;
     const pos = { x: -100, y: -100 };
     const target = { x: -100, y: -100 };
     const cursor = { x: -100, y: -100 };
@@ -467,11 +525,12 @@ export function MoeiCompanion() {
       window.removeEventListener('scroll', onScroll, { capture: true });
       document.documentElement.removeEventListener('mouseleave', onLeave);
     };
-  }, [active, touch]);
+  }, [active, auto]);
 
-  // On a phone: sitting on the page, moved by scrolling and taps.
+  // On its own (a phone, or Auto): sitting on the page, moved by scrolling and
+  // taps or clicks — and, on a computer, wandering to another seat now and then.
   useEffect(() => {
-    if (!active || !touch) return;
+    if (!active || !auto) return;
     const pos = { x: -100, y: -100 };
     let placed = false;
     let seat: Seat | null = null;
@@ -487,6 +546,11 @@ export function MoeiCompanion() {
     let settleTimer: ReturnType<typeof setTimeout> | undefined;
     let tapTimer: ReturnType<typeof setTimeout> | undefined;
     let sleepTimer: ReturnType<typeof setTimeout> | undefined;
+    let wanderTimer: ReturnType<typeof setTimeout> | undefined;
+    let asleep = false;
+    // A click's walk over to it, queued but not yet started.
+    let tapPending = false;
+    settled.current = () => !walk && !tapPending;
 
     const draw = () => {
       const el = elRef.current;
@@ -578,9 +642,29 @@ export function MoeiCompanion() {
 
     // Anything the visitor does wakes it, and puts sleep off again.
     const stir = () => {
+      asleep = false;
       setMood((m) => (m === 'sleep' ? 'idle' : m));
       clearTimeout(sleepTimer);
-      sleepTimer = setTimeout(() => setMood('sleep'), SLEEP_MS);
+      sleepTimer = setTimeout(() => {
+        asleep = true;
+        setMood('sleep');
+      }, SLEEP_MS);
+    };
+
+    // Auto on a computer: every so often, awake and sitting still on the
+    // page, it gets up and goes to sit somewhere else in view.
+    const wander = () => {
+      clearTimeout(wanderTimer);
+      if (touch) return;
+      wanderTimer = setTimeout(() => {
+        if (!asleep && !walk && !layer && seat && !document.hidden) {
+          const b = bounds();
+          const x = 80 + Math.random() * Math.max(0, window.innerWidth - 160);
+          const y = b.minTop + Math.random() * Math.max(0, b.maxTop - b.minTop);
+          perchNear(x, y);
+        }
+        wander();
+      }, WANDER_MIN_MS + Math.random() * (WANDER_MAX_MS - WANDER_MIN_MS));
     };
 
     // The page scrolling: it rides along on its seat, out of sight once that
@@ -622,7 +706,11 @@ export function MoeiCompanion() {
       down = null;
       if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10 || performance.now() - d.t > 450) return;
       clearTimeout(tapTimer);
-      tapTimer = setTimeout(() => perchNear(e.clientX, e.clientY), 260);
+      tapPending = true;
+      tapTimer = setTimeout(() => {
+        tapPending = false;
+        perchNear(e.clientX, e.clientY);
+      }, 260);
     };
 
     // A sheet, modal or menu opening over the page: drawn over it, it hops
@@ -657,6 +745,7 @@ export function MoeiCompanion() {
       const h = home();
       perchNear(h.x, h.y);
       stir();
+      wander();
     }, 600);
     const retries = [1500, 3000].map((ms) =>
       setTimeout(() => {
@@ -666,10 +755,22 @@ export function MoeiCompanion() {
       }, ms),
     );
 
+    // On a computer, the cursor moving about keeps it awake too (checked every couple of seconds, not every move).
+    let lastMoveStir = 0;
+    const onPointerMove = () => {
+      const now = performance.now();
+      if (!asleep && now - lastMoveStir < 2000) return;
+      lastMoveStir = now;
+      stir();
+    };
+
     window.addEventListener('scroll', onScroll, { passive: true, capture: true });
     window.addEventListener('pointerdown', onDown, { passive: true, capture: true });
     window.addEventListener('pointerup', onUp, { passive: true, capture: true });
+    if (!touch) window.addEventListener('pointermove', onPointerMove, { passive: true });
     return () => {
+      clearTimeout(wanderTimer);
+      window.removeEventListener('pointermove', onPointerMove);
       cancelAnimationFrame(raf);
       cancelAnimationFrame(scrollRaf);
       clearTimeout(settleTimer);
@@ -686,8 +787,9 @@ export function MoeiCompanion() {
       setSitting(false);
       setWalking(false);
       setOnLayer(false);
+      settled.current = () => true;
     };
-  }, [active, touch]);
+  }, [active, auto, touch]);
 
   useEffect(
     () => () => {
@@ -697,10 +799,12 @@ export function MoeiCompanion() {
     [],
   );
 
-  // On a phone the moei itself answers a finger: a tap, a hop and a heart;
-  // held, its studio.
+  // Out on its own (a phone, or Auto) the moei itself answers a click or a
+  // tap with a trick; held, it opens its studio.
   const onMoeiDown = () => {
     press.current.held = false;
+    // Read before the press wakes it (the page's own listener runs first, in the same event).
+    press.current.wasAsleep = mood === 'sleep';
     clearTimeout(press.current.timer);
     press.current.timer = setTimeout(() => {
       press.current.held = true;
@@ -711,43 +815,72 @@ export function MoeiCompanion() {
   const onMoeiUp = () => {
     clearTimeout(press.current.timer);
     if (press.current.held) return;
-    setMood('happy');
-    setSnack((n) => n + 1);
+    const now = performance.now();
+    clicks.current = [...clicks.current.filter((t) => now - t < DIZZY_WINDOW_MS), now];
+    let kind: Trick;
+    if (press.current.wasAsleep) kind = 'startle';
+    else if (clicks.current.length >= DIZZY_CLICKS) {
+      kind = 'dizzy';
+      clicks.current = [];
+    } else {
+      const options = TRICKS.filter((t) => t !== lastTrick.current);
+      kind = options[Math.floor(Math.random() * options.length)];
+    }
+    lastTrick.current = kind;
+    if (moei.sound) playMoeiSound(kind);
+    setTrick((t) => ({ id: (t?.id ?? 0) + 1, kind }));
+    setMood(kind === 'dizzy' || kind === 'startle' ? 'idle' : 'happy');
     clearTimeout(happyTimer.current);
-    happyTimer.current = setTimeout(() => setMood('idle'), HAPPY_MS);
+    happyTimer.current = setTimeout(() => {
+      setMood('idle');
+      setTrick(null);
+    }, TRICK_MS[kind]);
   };
   const onMoeiCancel = () => clearTimeout(press.current.timer);
 
-  // Snacks: something new saved to a collection.
+  // Snacks: something new saved to a collection. Following the cursor it's
+  // right there; out on its own (Auto, a phone) it first walks over to where
+  // you clicked Save, then eats it there — the walk's bob would hide the hop.
   useEffect(() => {
     if (!active) return;
     let count = itemCount();
     let happyTimer: ReturnType<typeof setTimeout> | undefined;
+    let waitTimer: ReturnType<typeof setTimeout> | undefined;
+    const eat = () => {
+      moeiStore.update({ fed: moeiStore.getSnapshot().fed + 1 });
+      setMood('happy');
+      setSnack((n) => n + 1);
+      clearTimeout(happyTimer);
+      happyTimer = setTimeout(() => setMood('idle'), HAPPY_MS);
+    };
+    const eatOnceSettled = (waited: number) => {
+      if (settled.current() || waited >= SNACK_WAIT_MAX_MS) eat();
+      else waitTimer = setTimeout(() => eatOnceSettled(waited + 100), 100);
+    };
     const unsubscribe = libraryStore.subscribe(() => {
       const next = itemCount();
       if (next > count) {
-        moeiStore.update({ fed: moeiStore.getSnapshot().fed + 1 });
-        setMood('happy');
-        setSnack((n) => n + 1);
-        clearTimeout(happyTimer);
-        happyTimer = setTimeout(() => setMood('idle'), HAPPY_MS);
+        clearTimeout(waitTimer);
+        if (auto) waitTimer = setTimeout(() => eatOnceSettled(0), 60);
+        else eat();
       }
       count = next;
     });
     return () => {
       unsubscribe();
       clearTimeout(happyTimer);
+      clearTimeout(waitTimer);
     };
-  }, [active]);
+  }, [active, auto]);
 
   if (!active) return null;
 
   return createPortal(
     <div
       ref={elRef}
-      className={`ins-moei ${touch ? 'is-touch' : ''} ${touch && onLayer ? 'is-on-layer' : ''} ${walking ? 'is-walking' : ''} ${sitting && !walking ? 'is-sitting' : ''} ${mood === 'sleep' ? 'is-asleep' : ''} ${mood === 'happy' ? 'is-happy' : ''} ${hidden ? 'is-hidden' : ''}`}
+      className={`ins-moei ${touch ? 'is-touch' : ''} ${auto && !touch ? 'is-clickable' : ''} ${trick ? 'is-tricking' : ''} ${auto && onLayer ? 'is-on-layer' : ''} ${walking ? 'is-walking' : ''} ${sitting && !walking ? 'is-sitting' : ''} ${mood === 'sleep' ? 'is-asleep' : ''} ${mood === 'happy' ? 'is-happy' : ''} ${hidden ? 'is-hidden' : ''}`}
       aria-hidden
-      {...(touch && {
+      {...(auto && {
         onPointerDown: onMoeiDown,
         onPointerUp: onMoeiUp,
         onPointerCancel: onMoeiCancel,
@@ -756,14 +889,48 @@ export function MoeiCompanion() {
       })}
     >
       <div className="ins-moei-figure" style={{ transform: `scaleX(${facing})` }}>
-        {/* Re-keyed on each snack so the hop plays again. */}
-        <div key={snack} className={`ins-moei-hop ${snack ? 'is-snack' : ''}`}>
+        {/* Re-keyed on each snack and trick so its hop plays again. */}
+        <div
+          key={`${snack}-${trick?.id ?? 0}`}
+          className={`ins-moei-hop ${snack ? 'is-snack' : ''} ${trick ? `is-trick is-${trick.kind}` : ''}`}
+        >
           <MoeiSprite kind={moei.kind} color={moeiHex(moei.color)} accessory={moei.accessory} face={moei.face} mood={mood} size={44} />
         </div>
       </div>
-      {snack > 0 && mood === 'happy' && (
-        <span key={`heart-${snack}`} className="ins-moei-heart">
+      {((snack > 0 && mood === 'happy' && !trick) || trick?.kind === 'hop') && (
+        <span key={`heart-${snack}-${trick?.id ?? 0}`} className="ins-moei-heart">
           ♥
+        </span>
+      )}
+      {trick?.kind === 'hearts' &&
+        BURST.map((b, i) => (
+          <span
+            key={`burst-${trick.id}-${i}`}
+            className="ins-moei-heart is-burst"
+            style={{ '--dx': `${b.dx}px`, '--dy': `${b.dy}px`, animationDelay: `${b.d}ms` } as CSSProperties}
+          >
+            ♥
+          </span>
+        ))}
+      {trick?.kind === 'spin' &&
+        BURST.map((b, i) => (
+          <span
+            key={`spark-${trick.id}-${i}`}
+            className="ins-moei-spark"
+            style={{ '--dx': `${b.dx * 1.6}px`, '--dy': `${b.dy}px`, animationDelay: `${180 + b.d}ms` } as CSSProperties}
+          >
+            ✦
+          </span>
+        ))}
+      {/* Eating a snack (something saved): it says so, in its name tag's own dark pill. */}
+      {snack > 0 && mood === 'happy' && !trick && (
+        <span key={`yum-${snack}`} className="ins-moei-say is-yum" style={{ animationDuration: `${HAPPY_MS}ms` }}>
+          tasty! saved
+        </span>
+      )}
+      {trick && TRICK_SAYS[trick.kind] && (
+        <span key={`say-${trick.id}`} className="ins-moei-say" style={{ animationDuration: `${TRICK_MS[trick.kind]}ms` }}>
+          {TRICK_SAYS[trick.kind]!(moei.name)}
         </span>
       )}
       {mood === 'sleep' && <span className="ins-moei-zzz">z z</span>}

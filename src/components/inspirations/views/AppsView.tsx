@@ -69,8 +69,9 @@ export function AppsView() {
     <>
       <PageHeading title="Apps" />
 
+      {/* No running count on the app list. */}
       <ToolbarRow
-        total={loading ? null : visible.length}
+        total={null}
         unit="app"
         right={<SortPill value={sort} options={APP_SORTS} onChange={(next) => setParam('sort', next === 'curated' ? undefined : next)} />}
       >

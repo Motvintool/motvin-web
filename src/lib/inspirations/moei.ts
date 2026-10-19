@@ -1,7 +1,7 @@
 /**
  * Motvin Moeis: a little companion that follows the cursor around
  * Inspirations. Its look (kind, colour, hat, face, name), how it behaves
- * (follow speed, name tag), whether it's out, and how many snacks it's had are kept in this browser's localStorage, as
+ * (follow speed, follow or auto, name tag), whether it's out, and how many snacks it's had are kept in this browser's localStorage, as
  * collections are — a tiny external store so the companion and the studio
  * read the same snapshot (useSyncExternalStore).
  */
@@ -90,6 +90,20 @@ export const MOEI_SPEED_LABEL: Record<MoeiSpeed, string> = {
   zoomy: 'Zoomy',
 };
 
+/**
+ * How it gets about on a computer: following the cursor, or on its own —
+ * sitting on things on the page, wandering to another now and then, riding
+ * along as the page scrolls, as it always does on a phone (no cursor there,
+ * so a phone is always Auto).
+ */
+export const MOEI_MODES = ['follow', 'auto'] as const;
+export type MoeiMode = (typeof MOEI_MODES)[number];
+
+export const MOEI_MODE_LABEL: Record<MoeiMode, string> = {
+  follow: 'Follow cursor',
+  auto: 'Auto',
+};
+
 export type Moei = {
   /** Out following the cursor, or resting at home. */
   out: boolean;
@@ -101,8 +115,11 @@ export type Moei = {
   face: MoeiFace;
   name: string;
   speed: MoeiSpeed;
+  mode: MoeiMode;
   /** Its name shown above it while it sits. */
   showName: boolean;
+  /** Little chirps when it's clicked or tapped. */
+  sound: boolean;
   /** Snacks so far: one each time something is saved to a collection. */
   fed: number;
 };
@@ -122,7 +139,9 @@ export const DEFAULT_MOEI: Moei = {
   face: 'none',
   name: 'Moei',
   speed: 'normal',
+  mode: 'follow',
   showName: true,
+  sound: true,
   fed: 0,
 };
 
@@ -154,8 +173,11 @@ function sanitize(raw: unknown): Moei {
     face: MOEI_FACES.includes(value.face as MoeiFace) ? (value.face as MoeiFace) : DEFAULT_MOEI.face,
     name: typeof value.name === 'string' && value.name.trim() ? value.name.trim().slice(0, 16) : DEFAULT_MOEI.name,
     speed: MOEI_SPEEDS.includes(value.speed as MoeiSpeed) ? (value.speed as MoeiSpeed) : DEFAULT_MOEI.speed,
+    // Saved before there was a choice: following the cursor, as it always did.
+    mode: MOEI_MODES.includes(value.mode as MoeiMode) ? (value.mode as MoeiMode) : DEFAULT_MOEI.mode,
     // Saved before there was a choice: shown, as it always was.
     showName: typeof value.showName === 'boolean' ? value.showName : DEFAULT_MOEI.showName,
+    sound: typeof value.sound === 'boolean' ? value.sound : DEFAULT_MOEI.sound,
     fed: Number.isFinite(value.fed) ? Math.max(0, Math.floor(value.fed as number)) : 0,
   };
 }

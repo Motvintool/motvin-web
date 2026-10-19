@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { useSheet } from '../useSheet';
+import { useMediaQuery, useSheet } from '../useSheet';
+import { SWIPE_QUERY } from '../useSiblingCycle';
+import { playMoeiSound } from '@/lib/inspirations/moeiSound';
 import {
   DEFAULT_MOEI,
   MOEI_ACCESSORIES,
@@ -12,6 +14,8 @@ import {
   MOEI_FACE_LABEL,
   MOEI_KINDS,
   MOEI_KIND_LABEL,
+  MOEI_MODES,
+  MOEI_MODE_LABEL,
   MOEI_SPEEDS,
   MOEI_SPEED_LABEL,
   MOEI_STUDIO_EVENT,
@@ -25,7 +29,7 @@ import { CloseIcon } from '../Icons';
 import { useToast } from '../Toast';
 import { MoeiAccessoryIcon, MoeiFaceIcon, MoeiSprite } from './MoeiSprite';
 
-type Look = Pick<Moei, 'kind' | 'color' | 'accessory' | 'face' | 'name' | 'speed' | 'showName'>;
+type Look = Pick<Moei, 'kind' | 'color' | 'accessory' | 'face' | 'name' | 'speed' | 'mode' | 'showName' | 'sound'>;
 
 /** The customising tabs under the stage: one set of choices shown at a time. */
 const TABS = [
@@ -62,9 +66,11 @@ function MoeiStudio({ onClose }: { onClose: () => void }) {
   const moei = useSyncExternalStore(moeiStore.subscribe, moeiStore.getSnapshot, moeiStore.getServerSnapshot);
   const { show } = useToast();
   const [look, setLook] = useState<Look>(() => {
-    const { kind, color, accessory, face, name, speed, showName } = moei.adopted ? moei : DEFAULT_MOEI;
-    return { kind, color, accessory, face, name, speed, showName };
+    const { kind, color, accessory, face, name, speed, mode, showName, sound } = moei.adopted ? moei : DEFAULT_MOEI;
+    return { kind, color, accessory, face, name, speed, mode, showName, sound };
   });
+  // A phone has no cursor: there it's always Auto, so the choice isn't offered.
+  const touch = useMediaQuery(SWIPE_QUERY);
   const [tab, setTab] = useState<Tab>('colour');
   const set = (patch: Partial<Look>) => setLook((current) => ({ ...current, ...patch }));
   const name = look.name.trim() || 'Moei';
@@ -132,7 +138,7 @@ function MoeiStudio({ onClose }: { onClose: () => void }) {
             {moei.adopted ? 'Your moei' : 'Adopt a moei'}
           </h2>
           <p className="ins-moei-studio-sub">
-            A little buddy that follows your cursor while you browse. Save something and it gets a snack.
+            A little buddy that keeps you company while you browse. Save something and it gets a snack.
           </p>
         </div>
 
@@ -359,10 +365,34 @@ function MoeiStudio({ onClose }: { onClose: () => void }) {
 
             {tab === 'behaviour' && (
               <div className="ins-moei-behaviour">
+                {!touch && (
+                  <div className="ins-moei-setting ins-moei-setting--mode">
+                    <span className="ins-moei-setting-label" id="ins-moei-mode">
+                      Moves
+                      <span className="ins-moei-setting-hint">
+                        {look.mode === 'auto' ? 'Wanders and sits on the page by itself' : 'Follows your cursor about'}
+                      </span>
+                    </span>
+                    <div className="ins-segmented ins-moei-pills" role="radiogroup" aria-labelledby="ins-moei-mode">
+                      {MOEI_MODES.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          role="radio"
+                          aria-checked={look.mode === m}
+                          className={`ins-segmented-item ${look.mode === m ? 'is-active' : ''}`}
+                          onClick={() => set({ mode: m })}
+                        >
+                          {MOEI_MODE_LABEL[m]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="ins-moei-setting ins-moei-setting--speed">
                   <span className="ins-moei-setting-label" id="ins-moei-speed">
                     Speed
-                    <span className="ins-moei-setting-hint">How fast it follows you</span>
+                    <span className="ins-moei-setting-hint">How fast it gets about</span>
                   </span>
                   <div className="ins-segmented ins-moei-pills" role="radiogroup" aria-labelledby="ins-moei-speed">
                     {MOEI_SPEEDS.map((sp) => (
@@ -393,6 +423,28 @@ function MoeiStudio({ onClose }: { onClose: () => void }) {
                     onClick={() => set({ showName: !look.showName })}
                   />
                 </div>
+                {/* Only where it can be clicked (Auto, or a phone): following the cursor it never is, so it never makes a sound. */}
+                {(touch || look.mode === 'auto') && (
+                  <div className="ins-moei-setting ins-moei-setting--sound">
+                    <span className="ins-moei-setting-label" id="ins-moei-sound">
+                      Sounds
+                      <span className="ins-moei-setting-hint">Little chirps when you click it</span>
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={look.sound}
+                      aria-labelledby="ins-moei-sound"
+                      className={`ins-moei-switch ${look.sound ? 'is-on' : ''}`}
+                      onClick={() => {
+                        const next = !look.sound;
+                        set({ sound: next });
+                        // A taste of it as it's turned on.
+                        if (next) playMoeiSound('hello');
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>

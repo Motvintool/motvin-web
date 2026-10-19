@@ -10,6 +10,7 @@ import { isDesktopPlatform, type App, type ElementKind, type Flow, type Pattern,
 import { appPlatform, storeAction } from '@/lib/inspirations/storeAction';
 import { AppLogo } from '../AppLogo';
 import { MastheadLogo } from '../MastheadLogo';
+import { appPrototypeFlowId, FLOW_PARAM, PLAY_PARAM } from '../FlowPreview';
 import { AppMenu } from '../AppMenu';
 import { COMPARE_PARAM, CompareScreens, defaultCompareType } from '../CompareScreens';
 import { AppPaletteMenu, useAppPalette } from '../AppPalette';
@@ -493,6 +494,18 @@ export function AppDetailView({
   // reset those other picks.
   const versionScreens = version ? screens.filter((s) => s.version === version) : screens;
   const versionFlows = version ? flows.filter((f) => !f.version || f.version === version) : flows;
+  // The prototype on the Screens grid's first card (its "Prototype" badge):
+  // every screen of the app, played in the flow player from the first.
+  const prototypeHref = (() => {
+    if (versionScreens.length < 2) return null;
+    const sp = new URLSearchParams(params.toString());
+    sp.delete('screen');
+    sp.delete('step');
+    sp.set(FLOW_PARAM, appPrototypeFlowId(app.slug));
+    // Opened playing: a prototype, not a still.
+    sp.set(PLAY_PARAM, '1');
+    return `${pathname}?${sp.toString()}`;
+  })();
 
   const elementCounts = new Map<ElementKind, number>();
   versionScreens.forEach((s) => s.elements.forEach((e) => elementCounts.set(e, (elementCounts.get(e) ?? 0) + 1)));
@@ -558,12 +571,12 @@ export function AppDetailView({
   // Docks into the header on scroll, same as the browse pages' own filter
   // toolbar (ToolbarRow) — reuses its scroll-tracking/portal hook so both
   // read the "past the header edge" boundary identically.
-  const { docked, anchorRef, rowRef, headerContent } = useDockingRow();
+  const { docked, leaving, anchorRef, rowRef, headerContent } = useDockingRow();
 
   const renderTabbarRow = (inHeader = false) => (
     <div
       ref={inHeader ? undefined : rowRef}
-      className={`ins-tabbar-row ${inHeader ? 'is-docked' : ''} ${docked && !inHeader ? 'is-docked-placeholder' : ''}`}
+      className={`ins-tabbar-row ${inHeader ? 'is-docked' : ''} ${inHeader && !docked ? 'is-leaving' : ''} ${docked && !inHeader ? 'is-docked-placeholder' : ''}`}
       aria-hidden={docked && !inHeader ? true : undefined}
     >
       {/* Only once docked — in flow the masthead just above already shows
@@ -841,7 +854,7 @@ export function AppDetailView({
 
       <div ref={anchorRef} className="ins-ftoolbar-anchor">
         {renderTabbarRow()}
-        {docked && headerContent && createPortal(renderTabbarRow(true), headerContent)}
+        {(docked || leaving) && headerContent && createPortal(renderTabbarRow(true), headerContent)}
       </div>
 
       {tab === 'screens' && (
@@ -857,6 +870,12 @@ export function AppDetailView({
               showMeta={false}
               selectable
               textHighlights={textHighlights}
+              prototype={
+                // Not over a narrowed grid: it plays every screen, so it would be the one card off the filter.
+                prototypeHref && sortedScreens[0] && !textActive && !selectedFlowScreenIds
+                  ? { screenId: sortedScreens[0].id, href: prototypeHref, label: `Prototype: play all of ${app.name}'s screens`, screens: versionScreens }
+                  : undefined
+              }
               empty={
                 <EmptyState
                   play={textActive && 'inline'}

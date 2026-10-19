@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { memo, type MouseEvent } from 'react';
+import { memo, useEffect, useId, useRef, useState, type MouseEvent } from 'react';
+import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 
 import type { App, Screen } from '@/lib/inspirations/types';
@@ -20,6 +21,43 @@ function isPlainClick(e: MouseEvent) {
 }
 
 const NAME_TAGLINE_SEPARATOR = ' — ';
+
+/** How long each screen shows while a Prototype card plays on its own. */
+const PROTO_STEP_MS = 1400;
+const NO_SCREENS: Screen[] = [];
+
+/** The Prototype card's hover hand (Material's touch-app hand), its fingertip on the button's centre. */
+const HAND_PATH =
+  'M18.84 15.87l-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.43-.72c-.08-.01-.15-.03-.24-.03-.31 0-.59.13-.79.33l-.79.8 4.94 4.94c.27.27.65.44 1.06.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.91-1.38z';
+const HAND_TRANSFORM = 'translate(24 24) rotate(-30) scale(1.9) translate(-11.5 -6.2)';
+
+/**
+ * The Prototype card's own playback: the index of the screen it shows, and
+ * whether the card is on screen. Its timer bar (`.ins-card-proto-timer`)
+ * paces it: each step moves on when the bar fills, and the bar holds while
+ * the card is hovered, focused or scrolled away, and isn't there with
+ * reduced motion — so the reel holds exactly where the bar does. `prev` is
+ * the screen it just left (null before the first step), kept under the
+ * next one as that fades in.
+ */
+function usePrototypeReel(cardRef: React.RefObject<HTMLElement | null>, count: number) {
+  const [frames, setFrames] = useState<{ step: number; prev: number | null }>({ step: 0, prev: null });
+  const setStep = (next: number) => setFrames((f) => ({ step: next, prev: f.step }));
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el || count < 2) return;
+    const io = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting), { threshold: 0.3 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [cardRef, count]);
+  return {
+    step: count ? frames.step % count : 0,
+    prev: count && frames.prev !== null ? frames.prev % count : null,
+    inView,
+    setStep,
+  };
+}
 
 
 /**
@@ -57,6 +95,7 @@ function ScreenCardImpl({
   index,
   textHighlights,
   onRemove,
+  prototype,
 }: {
   screen: Screen;
   app?: App;
@@ -68,8 +107,34 @@ function ScreenCardImpl({
   index?: number;
   textHighlights?: Array<{ left: number; top: number; width: number; height: number }>;
   onRemove?: () => void;
+  /** This card plays the app as a prototype: a badge, and a click opens the flow player at `href` (ScreenGrid). */
+  prototype?: { href: string; label: string; screens?: Screen[] };
 }) {
   const shownScreen = screen;
+  const cardRef = useRef<HTMLElement>(null);
+  const handCutId = `ins-hand-cut-${useId().replace(/:/g, '')}`;
+  const reelScreens = prototype?.screens ?? NO_SCREENS;
+  const reelCount = reelScreens.length;
+  const { step: reelStep, prev: reelPrev, inView: reelInView, setStep: setReelStep } = usePrototypeReel(cardRef, reelCount);
+  // Once it has moved on, the screen showing and the one it left under it — never the first card's own shot showing through.
+  const reelScreen = reelPrev !== null ? reelScreens[reelStep] : null;
+  const reelUnder = reelPrev !== null ? reelScreens[reelPrev] : null;
+  // The next screenshot loads while this one shows, so stepping never flashes blank.
+  const reelNext = reelCount > 1 ? reelScreens[(reelStep + 1) % reelCount] : null;
+  useEffect(() => {
+    const src = reelInView && reelNext ? inspirationsApi.mediaUrl(reelNext.url) : null;
+    if (src) new Image().src = src;
+  }, [reelInView, reelNext]);
+  // The timer bar filled: on to the next screen once it has loaded (past it if it can't).
+  const advanceReel = () => {
+    const next = (reelStep + 1) % reelCount;
+    const src = inspirationsApi.mediaUrl(reelScreens[next].url);
+    if (!src) return setReelStep(next);
+    const img = new Image();
+    img.onload = () => setReelStep(next);
+    img.onerror = () => setReelStep((next + 1) % reelCount);
+    img.src = src;
+  };
 
   const handleSave = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -94,7 +159,7 @@ function ScreenCardImpl({
     return `${pathname}?${sp.toString()}`;
   })();
   const openPreview = () => {
-    router.push(href, { scroll: false });
+    router.push(prototype?.href ?? href, { scroll: false });
   };
 
   // Right-click on the shot: Copy PNG, Download PNG, Copy link (guests get the sign-in notice).
@@ -108,7 +173,8 @@ function ScreenCardImpl({
     // light text) so the overlay blends into the screenshot instead of a
     // white wash over it.
     <article
-      className={`ins-card ${selected ? 'is-selected' : ''} ${shownScreen.style?.includes('dark') ? 'is-dark-shot' : ''}`}
+      ref={cardRef}
+      className={`ins-card ${selected ? 'is-selected' : ''} ${shownScreen.style?.includes('dark') ? 'is-dark-shot' : ''} ${prototype ? 'is-prototype' : ''}`}
       data-id={screen.id}
       role="listitem"
     >
@@ -144,9 +210,9 @@ function ScreenCardImpl({
         )}
         <div className="ins-card-inset" onContextMenu={shotMenu.onContextMenu}>
           <Link
-            href={href}
+            href={prototype?.href ?? href}
             className="ins-card-link"
-            aria-label={`${shownScreen.name}${app ? ` — ${app.name}` : ''}`}
+            aria-label={prototype ? prototype.label : `${shownScreen.name}${app ? ` — ${app.name}` : ''}`}
             prefetch={index !== undefined && index < 10 ? undefined : false}
             onClick={(e) => {
               if (!isPlainClick(e)) return;
@@ -155,6 +221,45 @@ function ScreenCardImpl({
             }}
           >
             <Screenshot screen={shownScreen} />
+            {prototype && (
+              <>
+                {/* The reel: the app's screens playing over the first (which keeps the card's size), each fading in over the last. */}
+                {reelUnder && <Screenshot key={reelUnder.id} screen={reelUnder} className="ins-card-proto-frame is-under" />}
+                {reelScreen && <Screenshot key={reelScreen.id} screen={reelScreen} className="ins-card-proto-frame" />}
+                <span className="ins-card-proto-badge" aria-hidden>
+                  Prototype
+                </span>
+                {reelCount > 1 && (
+                  // Dark on a light screen, light on a dark one (the screen's own Dark tag), so it shows on both.
+                  <span
+                    className={`ins-card-proto-timer ${reelInView ? '' : 'is-held'} ${(reelScreens[reelStep] ?? screen).style?.includes('dark') ? '' : 'is-on-light'}`}
+                    aria-hidden
+                  >
+                    <i key={reelStep} style={{ animationDuration: `${PROTO_STEP_MS}ms` }} onAnimationEnd={advanceReel} />
+                  </span>
+                )}
+                {/* Hover: the shot dims and a finger taps a button over "Try the prototype". */}
+                <span className="ins-card-proto-hover" aria-hidden>
+                  <svg className="ins-card-proto-cue" width="74" height="58" viewBox="-7 5 62 48">
+                    {/* The rings are cut a gap wide around the finger, following it as it moves. */}
+                    <mask id={handCutId} maskUnits="userSpaceOnUse" x="-12" y="0" width="72" height="64">
+                      <rect x="-12" y="0" width="72" height="64" fill="#fff" />
+                      <g className="ins-card-proto-hand-cut">
+                        <path transform={HAND_TRANSFORM} d={HAND_PATH} fill="#000" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
+                      </g>
+                    </mask>
+                    <g mask={`url(#${handCutId})`}>
+                      <circle className="ins-card-proto-ripple" cx="24" cy="24" r="15" />
+                      <circle className="ins-card-proto-dot" cx="24" cy="24" r="15" />
+                    </g>
+                    <g className="ins-card-proto-hand">
+                      <path transform={HAND_TRANSFORM} d={HAND_PATH} />
+                    </g>
+                  </svg>
+                  <span className="ins-card-proto-cue-text">Try the prototype</span>
+                </span>
+              </>
+            )}
             {shownScreen.id === screen.id && textHighlights?.map((highlight, index) => (
               <span
                 key={`${highlight.left}-${highlight.top}-${index}`}
@@ -165,6 +270,7 @@ function ScreenCardImpl({
             ))}
           </Link>
         </div>
+        {!prototype && (
         <div className="ins-card-hover-footer">
           {app && (
             <div className="ins-card-hover-app">
@@ -180,6 +286,7 @@ function ScreenCardImpl({
             <button type="button" className="ins-btn-copy" onClick={(e) => void shotMenu.copyPng(e)}>Copy</button>
           </div>
         </div>
+        )}
       </div>
       {showMeta && (
         <div className="ins-card-meta">
