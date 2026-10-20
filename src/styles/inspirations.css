@@ -1070,7 +1070,7 @@ body {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
   gap: 0 clamp(24px, 3vw, 48px);
-  padding: 0;
+  padding: 0 4px;
   margin-bottom: 62px;
 }
 
@@ -2565,6 +2565,20 @@ select.ins-input {
   background: #f5f5f5;
 }
 
+/* App cards: a 28px grey frame at any card width (it was 10.4% of the
+   width, ~31px). The screen keeps its own shape and the frame's height
+   follows from it, and the frame's corner is the screen's corner plus 28px. */
+.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot {
+  aspect-ratio: auto;
+  padding: 28px;
+  border-radius: 19.4% / 9.8%;
+}
+
+.ins-app-grid:not(.ins-shot-panel *) .ins-card-inset {
+  height: auto;
+  aspect-ratio: 253 / 556;
+}
+
 .ins-shot-panel .ins-card-shot {
   padding: 0;
   aspect-ratio: 282 / 611;
@@ -3783,6 +3797,21 @@ select.ins-input {
   pointer-events: none;
 }
 
+/* On the 28px app-card frame, the select ring (and the remove button in its
+   place) sits over the screen's top-left corner so it hides the corner's
+   curve — the spot Explore's cards always had, now on every app grid. */
+.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring,
+.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-remove-btn {
+  top: 25px;
+  left: 25px;
+}
+
+/* On the 28px app-card frame, the same few px over the screen's corner. */
+.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-fresh-badge {
+  top: 24px;
+  right: 25px;
+}
+
 .ins-card-proto-badge {
   position: absolute;
   top: clamp(8px, 2.6%, 14px);
@@ -4505,9 +4534,7 @@ select.ins-input {
 .ins-app-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  /* Tighter across than down, so five frames read as one row. */
-  column-gap: 16px;
-  row-gap: 20px;
+  gap: 20px 20px;
 }
 
 /* AppCard reuses .ins-card wholesale — same shot, badge, actions and meta row
@@ -6235,13 +6262,14 @@ select.ins-input {
    frame with the screenshot's rounded panel inside it, and the 50px logo
    row with its 16px sides (98px tall, like the real one). */
 .ins-app-grid .ins-card--skeleton .ins-card-shot {
-  padding: min(36px, 10.4%);
+  padding: 28px;
   background: #f5f5f5;
 }
 
 .ins-app-grid .ins-card--skeleton .ins-skel--shot {
-  height: 100%;
-  aspect-ratio: auto;
+  height: auto;
+  /* The loaded screen's own shape (see the 28px frame above). */
+  aspect-ratio: 253 / 556;
   border-radius: 12.41% / 5.65%;
 }
 
@@ -8608,6 +8636,11 @@ select.ins-input {
     bottom: calc(min(36px, 5.34%) - 12px);
     height: 24px;
     padding: 0;
+  }
+
+  /* The app card's 28px frame: the 24px dots centred on the screen's bottom edge. */
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-hover-controls {
+    bottom: 16px;
   }
 
   .ins-card-hover-controls::before,
@@ -15220,6 +15253,11 @@ body:has(.ins-logo-dock) .ins-toast-host { top: clamp(12px, 3vw, 28px); bottom: 
     bottom: calc(min(36px, 5.34%) - 12px);
     height: 24px;
     padding: 0;
+  }
+
+  /* The app card's 28px frame: the 24px dots centred on the screen's bottom edge. */
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-hover-controls {
+    bottom: 16px;
   }
 
   .ins-card-hover-controls::before,
