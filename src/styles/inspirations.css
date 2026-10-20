@@ -1065,6 +1065,68 @@ body {
   .ins-rotor-emoji { animation: none; }
 }
 
+/* Explore's heading and lists fold away on the first scroll down (ExploreView toggles .is-head-collapsed)
+   and open again on a scroll up at the very top: the height eases to nothing as they fade, and the toolbar
+   and screens rise into the space at the same pace. Scroll anchoring is off here, or the browser would
+   scroll to hold the cards still while the heading shrinks. */
+html:has(.ins-explore-view) {
+  overflow-anchor: none;
+}
+
+.ins-explore-head {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ins-explore-head-inner {
+  min-height: 0;
+  overflow: hidden;
+  /* Unfolding: the space opens first, then the heading and lists settle in from a little above. */
+  transition:
+    opacity 300ms var(--ins-ease) 90ms,
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1) 40ms;
+}
+
+.ins-explore-view.is-head-collapsed .ins-explore-head {
+  grid-template-rows: 0fr;
+}
+
+/* Folding: they lift and fade a beat ahead of the space closing, so they leave cleanly rather than being
+   squeezed. */
+.ins-explore-view.is-head-collapsed .ins-explore-head-inner {
+  transform: translateY(-14px);
+  transition:
+    opacity 180ms var(--ins-ease),
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Explore starts 8px under the header. Folded, the page eases up those 8px so the toolbar sits right
+   under the header — where it pins once scrolled — and nothing shifts when it pins. */
+.ins-main:has(> .ins-explore-view) {
+  padding-top: 8px;
+}
+
+.ins-explore-view {
+  transition: margin-top 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ins-explore-view.is-head-collapsed {
+  margin-top: -8px;
+}
+
+.ins-explore-view.is-head-collapsed .ins-explore-head-inner {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-explore-view,
+  .ins-explore-head,
+  .ins-explore-head-inner {
+    transition: none;
+  }
+}
+
 .ins-explore-taxonomy {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1500,6 +1562,103 @@ body {
   margin: 4px 0 24px;
 }
 
+/* Pinned (Explore): the row sticks just below the header instead of docking into it, on a white band as
+   wide as the window — two sideways shadows paint the band past the page's padding without widening the
+   page or clipping the row's menus. */
+.ins-ftoolbar-anchor.is-pinned {
+  position: sticky;
+  top: var(--ins-header-h);
+  z-index: 30;
+  /* The gap to the screens is part of the band, so its bottom edge is exactly where the first row's tops
+     rest: scrolling, the header, the row and that line stay put and only the screens move, slipping under
+     a crisp edge as if scrolling inside their own box. */
+  margin: 0;
+  padding: 4px 0 24px;
+}
+
+/* Its backdrop: glass like the header's (see-through white, blurred), as wide as the window so the two read
+   as one frosted bar. A layer behind the row, so the pills and their menus stay sharp. */
+.ins-ftoolbar-anchor.is-pinned::before {
+  content: '';
+  position: absolute;
+  inset: 0 -100vmax;
+  z-index: -1;
+  /* Whiter than the header's own 75% (95%), and a softer blur, so the cards behind read as a faint wash and the
+     pills and search stay clear on top. */
+  background: rgba(255, 255, 255, 0.95);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  pointer-events: none;
+}
+
+/* Pinned under the header, the two are one pane: the row's backdrop reaches up behind the header too, and
+   the header's own glass steps aside — two blurs side by side showed a seam where they met. */
+.ins-explore-view.is-bar-stuck .ins-ftoolbar-anchor.is-pinned::before {
+  top: calc(-1 * var(--ins-header-h));
+}
+
+html:has(.ins-explore-view.is-bar-stuck) .ins-header {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* After the first few applied filters, "+N more" — opens the Filters panel with the rest. Plain text with
+   the dotted underline Explore's column titles show on hover (.ins-explore-taxonomy-titlebtn): a link,
+   quieter than the pills beside it. Its tooltip lists what's behind it. */
+.ins-fpill.ins-fpill--more,
+.ins-ftoolbar-anchor.is-pinned .ins-fpill.ins-fpill--more {
+  padding: 0 6px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ins-text);
+  font-weight: 500;
+}
+
+/* The dotted line drawn under the words rather than as a text underline, so it can run a few dots past
+   the last letter instead of stopping short of it. */
+.ins-fpill-more-text {
+  /* A few dots past the last letter, and a small gap under the words. */
+  padding: 0 4px 2px 0;
+  border-bottom: 1.5px dotted currentColor;
+  line-height: 1.15;
+}
+
+.ins-fpill.ins-fpill--more:hover,
+.ins-ftoolbar-anchor.is-pinned .ins-fpill.ins-fpill--more:hover {
+  border-color: transparent;
+  background: transparent;
+}
+
+.ins-fpill.ins-fpill--more:hover .ins-fpill-more-text {
+  border-bottom-style: solid;
+}
+
+/* The row's pills let that glass show through, outlined in a see-through dark rather than the page's pale
+   grey, which vanished against the glass: it reads over whatever colour is behind. Picked pills keep
+   their own dark outline. */
+.ins-ftoolbar-anchor.is-pinned .ins-fpill,
+.ins-ftoolbar-anchor.is-pinned .ins-fsort {
+  background: transparent;
+  border-color: rgba(17, 18, 20, 0.14);
+}
+
+.ins-ftoolbar-anchor.is-pinned .ins-fpill:hover,
+.ins-ftoolbar-anchor.is-pinned .ins-fsort:hover {
+  border-color: rgba(17, 18, 20, 0.28);
+}
+
+.ins-ftoolbar-anchor.is-pinned .ins-fpill.is-applied {
+  border-color: var(--ins-text);
+}
+
+/* That backdrop reaches past the page's sides; clipped there so the page never scrolls sideways (clip,
+   unlike hidden, keeps the pinned row and header sticky). */
+.ins-root:has(.ins-ftoolbar-anchor.is-pinned) {
+  overflow-x: clip;
+}
+
+
 /* Plain in-page row: no forced height, no background — those exist only to
    make the docked bar read as part of the (blurred, 92px-tall) header, and
    leaking them into the normal in-flow state left a tall empty band above a
@@ -1835,9 +1994,9 @@ body.ins-toolbar-was-docked:not(.ins-toolbar-docked) .ins-header-content > :not(
   transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease);
 }
 
+/* The pills' own hover (.ins-fpill:hover): only the border darkens, the fill stays white. */
 .ins-fsort:hover {
-  border-color: #d6d8dd;
-  background: #fafafa;
+  border-color: var(--ins-border-strong);
 }
 
 .ins-fsort-icon {
@@ -13854,27 +14013,19 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   mask: url(/ASSET/Icons/Motvin/chevron-dark.svg) center / contain no-repeat;
 }
 
-/* Websites have no sub-platforms: on wide screens the Apps / Webs tabs carry that choice and this
-   switch steps aside. Below 1140px the tabs are hidden, so the switch lists all three. */
-.ins-ftoolbar-context button[data-platform='web'] {
-  display: none;
-}
-
-.ins-ftoolbar-context.is-webs,
-.ins-ftoolbar-context.is-webs + .ins-ftoolbar-divider--switch {
+/* On wide screens the header's Apps / Webs tabs choose the section, so the iOS / Webs switch is
+   hidden. Below 1140px the tabs are hidden and the switch takes their place. */
+.ins-ftoolbar-context,
+.ins-ftoolbar-context + .ins-ftoolbar-divider--switch {
   display: none;
 }
 
 @media (max-width: 1139px) {
-  .ins-ftoolbar-context button[data-platform='web'] {
+  .ins-ftoolbar-context {
     display: inline-flex;
   }
 
-  .ins-ftoolbar-context.is-webs {
-    display: inline-flex;
-  }
-
-  .ins-ftoolbar-context.is-webs + .ins-ftoolbar-divider--switch {
+  .ins-ftoolbar-context + .ins-ftoolbar-divider--switch {
     display: block;
   }
 }
@@ -14075,6 +14226,236 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
 /* Search page: the one "Filters" pill's panel — a header, sections of toggle chips (applied straight away) and
    a footer whose button shows the live result count. */
 .ins-popover.ins-fpanel { left: 0; display: flex; flex-direction: column; width: min(360px, 100vw - 48px); padding: 0; overflow: hidden; }
+/* On the right edge (the app lists' Filters), it opens leftwards from the button. */
+
+/* The app lists' Filters, opened from the right edge: a side panel the size and shape of Motvin Buddy
+   (.ins-guide) — 10px off the window's edges, 400px wide, 24px corners — over a dimmed page, with a title
+   bar, the search, every section scrolling in between and the footer pinned to the bottom. */
+.ins-fdrawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--ins-backdrop);
+  animation: insFadeIn 160ms var(--ins-ease);
+}
+
+.ins-fdrawer {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 91;
+  display: flex;
+  flex-direction: column;
+  width: min(400px, calc(100vw - 20px));
+  border-radius: 24px;
+  background: var(--ins-card);
+  color: var(--ins-text);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  animation: insFdrawerIn 220ms var(--ins-ease);
+}
+
+@keyframes insFdrawerIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: none; }
+}
+
+.ins-fdrawer-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: none;
+  padding: 16px 16px 8px 22px;
+}
+
+/* Motvin Buddy's 44px round header button. */
+.ins-fdrawer-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1.2px solid #e4e5e8;
+  border-radius: 1000px;
+  background: #fff;
+  color: #0b0c0e;
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: border-color 140ms var(--ins-ease);
+}
+
+.ins-fdrawer-close:hover {
+  border-color: #c9cbd0;
+}
+
+/* The search is the top bar: a soft grey field filling the row, the close button beside it, a hairline below. */
+.ins-fdrawer .ins-fdrawer-top {
+  padding: 16px;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.ins-fdrawer .ins-uielements-search {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #f4f4f6;
+}
+
+/* Every section has the panel's full height to scroll in; the footer stays put at the bottom. */
+.ins-fdrawer .ins-fpanel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  padding: 6px 20px 20px;
+  /* Reaching either end doesn't carry on into the page behind. */
+  overscroll-behavior: contain;
+}
+
+/* Sections set apart by space, not rules; each titled in plain words, the way it reads. */
+.ins-fdrawer .ins-fpanel-section {
+  padding: 22px 0 2px;
+}
+
+.ins-fdrawer .ins-fpanel-section + .ins-fpanel-section {
+  border-top: 0;
+}
+
+.ins-fdrawer .ins-fpanel-section-head {
+  margin-bottom: 10px;
+}
+
+/* Titled like the app page's facts ("Platform", "Category" — .ins-fact dt): quiet grey, a touch firmer
+   (500) so each section still reads as a heading. */
+.ins-fdrawer .ins-fpanel-section-head h3 {
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ins-muted);
+}
+
+.ins-fdrawer .ins-fpanel-options {
+  gap: 8px;
+}
+
+.ins-fdrawer .ins-fpanel-option {
+  height: 36px;
+  padding: 0 14px;
+  border-color: #e9e9ec;
+  color: #26282c;
+  transition: border-color 160ms var(--ins-ease), background 160ms var(--ins-ease), color 160ms var(--ins-ease), padding 180ms var(--ins-ease);
+}
+
+/* The toolbar pills' own hover (.ins-fpill:hover): only the border darkens, the fill stays white. */
+.ins-fdrawer .ins-fpanel-option:hover:not(:disabled) {
+  border-color: var(--ins-border-strong);
+  background: #fff;
+}
+
+/* Picked: the cards' own selection tick — see-through grey glass with a white tick (.ins-card-select-ring
+   .is-selected) — instead of solid black. */
+.ins-fdrawer .ins-fpanel-option.is-on,
+.ins-fdrawer .ins-fpanel-option.is-on:hover {
+  padding-left: 12px;
+  border-color: transparent;
+  background: rgba(70, 70, 70, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+}
+
+.ins-fdrawer .ins-fpanel-option.is-on .ins-fpanel-count {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.ins-fdrawer .ins-fpanel-option.is-empty {
+  opacity: 0.4;
+}
+
+/* Counts only once a chip is picked (then how many apps it leaves), grown in beside the tick like it,
+   so the unpicked chips read as plain words and nothing jumps. The footer's "Show N apps" is the total. */
+.ins-fdrawer .ins-fpanel-count {
+  max-width: 0;
+  margin-left: -6px;
+  overflow: hidden;
+  opacity: 0;
+  font-size: 13px;
+  color: #b3b6bd;
+  transition: max-width 180ms var(--ins-ease), margin-left 180ms var(--ins-ease), opacity 140ms var(--ins-ease);
+}
+
+.ins-fdrawer .ins-fpanel-option.is-on .ins-fpanel-count {
+  max-width: 48px;
+  margin-left: 0;
+  opacity: 1;
+}
+
+/* "+17 more": plain text at the end of the row, level with the chips. */
+.ins-fdrawer .ins-fpanel-more {
+  height: 36px;
+  padding: 0 6px 0 2px;
+  color: #6b6f76;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ins-fdrawer .ins-fpanel-more:hover:not(:disabled) {
+  color: #0b0c0e;
+  text-decoration: none;
+}
+
+.ins-fdrawer .ins-fpanel-foot {
+  flex: none;
+  max-height: 80px;
+  padding: 14px 16px 16px 22px;
+  overflow: hidden;
+  transition:
+    max-height 260ms var(--ins-ease),
+    padding 260ms var(--ins-ease),
+    border-color 260ms var(--ins-ease),
+    opacity 200ms var(--ins-ease),
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Folded away below the list until something is picked: no height, no rule, dropped and faded. */
+.ins-fdrawer .ins-fpanel-foot.is-hidden {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-color: transparent;
+  border-top-width: 0;
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+.ins-fdrawer .ins-fpanel-done {
+  height: 44px;
+  padding: 0 24px;
+  font-size: 15px;
+}
+
+@media (max-width: 759px) {
+  .ins-fdrawer {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: calc(100dvh - 64px);
+  }
+
+  @keyframes insFdrawerIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: none; }
+  }
+}
 .ins-fpanel-body { max-height: min(480px, calc(100vh - 300px)); overflow-y: auto; padding: 4px 18px 8px; }
 .ins-fpanel-section { padding: 14px 0; }
 .ins-fpanel-section + .ins-fpanel-section { border-top: 1px solid #f1f1f1; }
@@ -14082,9 +14463,18 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
 .ins-fpanel-section-head h3 { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #8a8f9a; }
 .ins-fpanel-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9999px; background: #111; color: #fff; font-size: 11px; letter-spacing: 0; }
 .ins-fpanel-options { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* TwoRowOptions' invisible copy of a section's chips, laid out at the same width only to be measured. */
+.ins-fpanel-options-wrap { position: relative; }
+.ins-fpanel-options--measure { position: absolute; top: 0; left: 0; right: 0; visibility: hidden; pointer-events: none; }
+/* Measured at its final size at once: a picked chip's grow-in would otherwise be caught half way. */
+.ins-fpanel-options--measure * { transition: none !important; }
+.ins-fpanel-measure-item { display: contents; }
 .ins-fpanel-option { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 15px; border: 1px solid #e8e8e8; border-radius: 9999px; background: #fff; color: #323232; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: var(--ins-cursor-hand, pointer); transition: border-color 0.15s, background 0.15s, color 0.15s; }
-.ins-fpanel-option:hover:not(:disabled) { border-color: #c4c4c4; }
+.ins-fpanel-option:hover:not(:disabled) { border-color: var(--ins-border-strong); }
 .ins-fpanel-option.is-on { padding-left: 12px; border-color: #111; background: #111; color: #fff; }
+/* The tick, folded away until the chip is picked, then grown in: no jump in the chip's width. */
+.ins-fpanel-check { display: inline-flex; width: 0; margin-right: -6px; overflow: hidden; opacity: 0; transition: width 180ms var(--ins-ease), margin-right 180ms var(--ins-ease), opacity 140ms var(--ins-ease); }
+.ins-fpanel-option.is-on .ins-fpanel-check { width: 12px; margin-right: 0; opacity: 1; }
 .ins-fpanel-option.is-empty { opacity: 0.4; cursor: default; }
 .ins-fpanel-count { color: #a0a4ab; font-size: 12px; font-variant-numeric: tabular-nums; }
 .ins-fpanel-option.is-on .ins-fpanel-count { color: rgba(255, 255, 255, 0.65); }
@@ -14093,7 +14483,7 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
 .ins-fpanel-link:disabled { opacity: 0.4; cursor: default; }
 .ins-fpanel-more { height: 36px; padding: 0 6px; }
 .ins-fpanel-foot { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px 12px 18px; border-top: 1px solid #efefef; background: #fff; }
-.ins-fpanel-done { height: 40px; padding: 0 20px; border: 0; border-radius: 9999px; background: #111; color: #fff; font-size: 14px; font-weight: 600; cursor: var(--ins-cursor-hand, pointer); transition: background 0.15s; }
+.ins-fpanel-done { margin-left: auto; height: 40px; padding: 0 20px; border: 0; border-radius: 9999px; background: #111; color: #fff; font-size: 14px; font-weight: 600; cursor: var(--ins-cursor-hand, pointer); transition: background 0.15s; }
 .ins-fpanel-done:hover { background: #2a2a2a; }
 
 /* Search page: the result count inside the type pill ("Screens 100"). */
@@ -16540,4 +16930,279 @@ html.ins-bat-on .ins-search-bat { display: block; }
 .ins-settings-unit {
   font-size: 16px;
   color: var(--ins-muted);
+}
+
+/* ─── Micro-interactions ─────────────────────────────────────────────────
+   Small answers to a touch, as Mobbin's: a pill or button gives a little under the press, a menu's chevron
+   turns as it opens, an applied filter pops into the row, and the Filters count bumps when it changes. On
+   the `scale` property, so none of it fights an element's own transform. */
+.ins-fpill,
+.ins-fsort {
+  transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease), box-shadow var(--ins-fast) var(--ins-ease), scale 160ms var(--ins-ease);
+}
+.ins-fdrawer .ins-fpanel-option {
+  transition: border-color 160ms var(--ins-ease), background 160ms var(--ins-ease), color 160ms var(--ins-ease), padding 180ms var(--ins-ease), scale 160ms var(--ins-ease);
+}
+.ins-fpanel-done,
+.ins-fdrawer-close,
+.ins-card-control {
+  transition: background var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease), scale 160ms var(--ins-ease);
+}
+.ins-fpill:active:not(:disabled),
+.ins-fsort:active,
+.ins-fpanel-option:active:not(:disabled),
+.ins-fpanel-done:active,
+.ins-fdrawer-close:active,
+.ins-card-control:active:not(:disabled) {
+  scale: 0.96;
+  transition-duration: 80ms;
+}
+/* "+N more" is text, not a pill: it doesn't press in. */
+.ins-fpill.ins-fpill--more:active {
+  scale: none;
+}
+
+.ins-fpill-chev {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+[aria-expanded='true'] > .ins-fpill-chev {
+  transform: rotate(-90deg);
+}
+
+.ins-ftoolbar .ins-fpill.is-applied:not(.ins-popwrap > *) {
+  animation: insPillIn 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes insPillIn {
+  from { opacity: 0; scale: 0.9; }
+}
+
+.ins-fsort .ins-fpill-more {
+  display: inline-block;
+  animation: insCountBump 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes insCountBump {
+  0% { scale: 0.6; opacity: 0.4; }
+  60% { scale: 1.15; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-fpill:active, .ins-fsort:active, .ins-fpanel-option:active, .ins-fpanel-done:active,
+  .ins-fdrawer-close:active, .ins-card-control:active { scale: none; }
+  .ins-fpill-chev { transition: none; }
+  .ins-ftoolbar .ins-fpill.is-applied, .ins-fsort .ins-fpill-more { animation: none; }
+}
+
+/* Cards: the grey frame deepens a shade under the pointer, the screen gives a little under a click (pointer
+   only — on touch a press is as often the start of a swipe), and a pick's tick pops in. */
+.ins-app-grid .ins-card-shot {
+  transition: background 220ms var(--ins-ease);
+}
+.ins-app-grid .ins-card-inset {
+  transition: scale 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (hover: hover) {
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card:hover .ins-card-shot {
+    background: #f0f0f0;
+  }
+  .ins-app-grid .ins-card-inset:has(.ins-card-link:active) {
+    scale: 0.985;
+    transition-duration: 90ms;
+  }
+}
+
+.ins-card-select-check {
+  animation: insCheckPop 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes insCheckPop {
+  from { scale: 0.4; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-app-grid .ins-card-inset:has(.ins-card-link:active) { scale: none; }
+  .ins-card-select-check { animation: none; }
+}
+
+/* Header: the logo tips toward the pointer, the two app marks beside "Apps" fan apart, the Try Icons tile
+   tilts, the icon buttons get a soft round backing, and everything clickable gives a little under the press.
+   Springy (a touch of overshoot) on the way in, quick on the way down. On the images' wrappers: theme.css
+   keeps every img and svg from transitioning. */
+.ins-brand-logo,
+.ins-apptab-icon,
+.ins-try-icons-img,
+.ins-header-action-link {
+  transition: background var(--ins-fast) var(--ins-ease), scale 280ms cubic-bezier(0.34, 1.56, 0.64, 1), rotate 280ms cubic-bezier(0.34, 1.56, 0.64, 1), translate 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ins-brand-logo:hover { scale: 1.06; rotate: -6deg; }
+.ins-brand-logo:active { scale: 0.92; transition-duration: 90ms; }
+
+.ins-apptab:hover .ins-apptab-icon:first-child { translate: -2px 0; rotate: -8deg; }
+.ins-apptab:hover .ins-apptab-icon + .ins-apptab-icon { translate: 2px 0; rotate: 8deg; }
+
+.ins-header-try-icons {
+  transition: background 0.2s ease, scale 160ms var(--ins-ease);
+}
+.ins-header-try-icons:hover .ins-try-icons-img { scale: 1.06; rotate: -6deg; }
+.ins-header-try-icons:active { scale: 0.97; transition-duration: 80ms; }
+
+.ins-header-action-link { border-radius: 100px; }
+.ins-header-action-link:hover { background: rgba(0, 0, 0, 0.05); }
+.ins-header-action-link:active { scale: 0.9; transition-duration: 90ms; }
+
+/* Scoped to the header so they outrank profile-menu.css's own transition. */
+.ins-header .ins-profile-login-btn,
+.ins-header .ins-profile-menu-btn {
+  transition: opacity var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease), scale 160ms var(--ins-ease);
+}
+.ins-header .ins-profile-login-btn:active { scale: 0.95; transition-duration: 80ms; }
+.ins-header .ins-profile-menu-btn:active { scale: 0.9; transition-duration: 80ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-brand-logo:hover, .ins-brand-logo:active, .ins-apptab:hover .ins-apptab-icon,
+  .ins-header-try-icons:hover .ins-try-icons-img, .ins-header-try-icons:active, .ins-header-action-link:active,
+  .ins-header .ins-profile-login-btn:active, .ins-header .ins-profile-menu-btn:active { scale: none; rotate: none; translate: none; }
+}
+
+/* Filters drawer: it slides back out the way it came (FiltersPill holds it for DRAWER_OUT_MS), its sections
+   rise in one after another as it opens, a section's count bumps as it changes and its "Clear" fades in,
+   and the close button's cross turns a quarter under the pointer. */
+.ins-fdrawer.is-closing {
+  animation: insFdrawerOut 180ms var(--ins-ease) forwards;
+  pointer-events: none;
+}
+.ins-fdrawer-backdrop.is-closing {
+  animation: insFdrawerBackdropOut 180ms var(--ins-ease) forwards;
+}
+@keyframes insFdrawerOut {
+  to { opacity: 0; transform: translateX(16px); }
+}
+@keyframes insFdrawerBackdropOut {
+  to { opacity: 0; }
+}
+@media (max-width: 759px) {
+  @keyframes insFdrawerOut {
+    to { opacity: 0; transform: translateY(16px); }
+  }
+}
+
+.ins-fdrawer .ins-fpanel-section {
+  animation: insFsectionIn 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(min(var(--i, 0), 8) * 30ms + 40ms);
+}
+@keyframes insFsectionIn {
+  from { opacity: 0; translate: 0 10px; }
+}
+
+.ins-fdrawer .ins-fpanel-badge {
+  animation: insCountBump 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-fdrawer .ins-fpanel-section-head .ins-fpanel-link {
+  animation: insFadeIn 200ms var(--ins-ease);
+}
+
+.ins-fdrawer-close {
+  transition: background var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease), scale 160ms var(--ins-ease), rotate 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ins-fdrawer-close:hover {
+  rotate: 90deg;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-fdrawer.is-closing, .ins-fdrawer-backdrop.is-closing { animation: none; opacity: 0; }
+  .ins-fdrawer .ins-fpanel-section, .ins-fdrawer .ins-fpanel-badge,
+  .ins-fdrawer .ins-fpanel-section-head .ins-fpanel-link { animation: none; }
+  .ins-fdrawer-close:hover { rotate: none; }
+}
+
+/* Above a pinned row, the header slides up out of the way while the page scrolls down and the row rises
+   into its place at the top; a scroll up brings both back (ToolbarRow sets html.ins-header-away). */
+.ins-header {
+  transition: background-color 0.2s ease, translate 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-ftoolbar-anchor.is-pinned {
+  transition: top 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+html.ins-header-away .ins-header {
+  translate: 0 -100%;
+}
+/* As much room off the window's edge as below the row (its own 4px padding + 20 = the band's 24px bottom), and the row's glass reaches up behind it and over where the header was,
+   so the screens never show above the row — in CSS, without waiting on ExploreView's is-bar-stuck check. */
+html.ins-header-away .ins-ftoolbar-anchor.is-pinned {
+  top: 20px;
+}
+html.ins-header-away .ins-ftoolbar-anchor.is-pinned::before {
+  top: calc(-1 * var(--ins-header-h));
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-header, .ins-ftoolbar-anchor.is-pinned { transition: none; }
+}
+
+/* Back to top (BackToTop): at the end of a long page, a pill centred at the foot of the window — arrow and
+   "Scroll to top" — clear of the assistant's button in the corner. In the cards' selection tick's
+   see-through grey glass (.ins-card-select-ring.is-selected), so it reads over any screen behind it. It rises and fades in, and drops away again once the page leaves the end; the arrow nudges up
+   under the pointer. */
+.ins-back-to-top {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 74;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 20px 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(70, 70, 70, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: var(--ins-cursor-hand, pointer);
+  opacity: 0;
+  translate: -50% 14px;
+  pointer-events: none;
+  transition: opacity 200ms var(--ins-ease), translate 300ms cubic-bezier(0.22, 1, 0.36, 1), background var(--ins-fast) var(--ins-ease), scale 160ms var(--ins-ease);
+}
+.ins-back-to-top.is-shown {
+  opacity: 1;
+  translate: -50% 0;
+  pointer-events: auto;
+}
+.ins-back-to-top:hover {
+  background: rgba(55, 55, 55, 0.8);
+}
+.ins-back-to-top:active {
+  scale: 0.96;
+  transition-duration: 80ms;
+}
+.ins-back-to-top-arrow {
+  display: inline-flex;
+  transition: translate 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ins-back-to-top:hover .ins-back-to-top-arrow {
+  translate: 0 -2px;
+}
+/* Room for it at the end of Explore (with .ins-main's own 32px): there the pill rests on empty page, clear of
+   the last row's names. */
+.ins-explore-view {
+  padding-bottom: 64px;
+}
+@media (max-width: 640px) {
+  .ins-back-to-top {
+    bottom: 16px;
+  }
+}
+/* A phone picking cards to save: the save bar takes the window's foot, so the pill steps aside. */
+@media (max-width: 759px) {
+  .ins-root:has(.ins-float-collection-bar) .ins-back-to-top {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-back-to-top { translate: -50% 0; transition: opacity 120ms linear; }
+  .ins-back-to-top:active { scale: none; }
+  .ins-back-to-top:hover .ins-back-to-top-arrow { translate: none; }
 }

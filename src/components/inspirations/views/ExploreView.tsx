@@ -4,11 +4,12 @@ import { isDesktopPlatform, type App, type Platform, type Screen, type ScreenTyp
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { openSearch, type SearchSection } from '@/lib/inspirations/openSearch';
 import { elementLabel, flowCategoryLabel, INDUSTRY_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
+import { BackToTop } from '../BackToTop';
 import { FilteredGallery } from '../FilteredGallery';
 import { PageHeading } from '../PageHeading';
 import { RotatingTitle } from '../RotatingTitle';
@@ -23,8 +24,33 @@ import { taxonomyEmoji } from '@/lib/inspirations/emoji';
 type PreviewItem = { type: 'screen' | 'app'; id: string; name: string; url: string | null; app: App | null };
 
 const PREVIEW_LIMIT = 5;
+/** Near the top of the page, a scroll down folds the heading away instead of moving the page. */
+const FOLD_ZONE_PX = 24;
+/** After the fold, a flick's coasting is absorbed while its events keep coming this close together… */
+const COAST_GAP_MS = 140;
+/** …for at most this long. */
+const COAST_MAX_MS = 900;
+/** The first moments after the fold, while the flick that caused it is still speeding up. */
+const FLICK_PUSH_MS = 280;
+/** How long the page's own smooth scroll back to the results is told apart from the visitor's scrolling. */
+const OWN_SCROLL_MS = 1200;
 /** Longest the card waits on its pictures before showing anyway. */
 const PREVIEW_IMAGE_WAIT_MS = 1500;
+/** How soon after Back / Forward the page counts as returning to where it was left. */
+const RETURN_WINDOW_MS = 2000;
+
+// Whether the heading was folded when the visitor last left Explore, and when the browser last went Back or
+// Forward: together they say the page is being returned to (an app opened from the gallery, then Back), so
+// it comes back folded as it was left — the restored scroll was measured that way — instead of a heading's
+// height off and folding again under the visitor on the next scroll. Arriving fresh it starts open.
+let leftFolded = false;
+let poppedAt = -Infinity;
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', () => {
+    poppedAt = performance.now();
+  });
+}
+const returningFolded = () => leftFolded && performance.now() - poppedAt < RETURN_WINDOW_MS;
 
 /**
  * Preview content per link, kept for the visit: hovering a link a second
@@ -112,7 +138,7 @@ function HoverPreview({
   mousePos: { x: number; y: number };
   platforms: Platform[];
 }) {
-  const isWeb = platforms.length === 1 && isDesktopPlatform(platforms[0]);
+  const isWeb = platforms.every(isDesktopPlatform);
   const isScreens = category.title === 'Screens' || category.title === 'Flows' || category.title === 'UI Elements';
 
   const key = previewKey(category, platforms);
@@ -207,6 +233,157 @@ export function ExploreView() {
   const [hoveredLabel, setHoveredLabel] = useState<{ text: string; emoji: string } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [mounted, setMounted] = useState(false);
+  const viewRef = useRef<HTMLDivElement>(null);
+  // Read once, so the class it sets is the same on every render and never fights the ones toggled below.
+  const [startFolded] = useState(returningFolded);
+  // Until when a scroll is the page's own (bringing results back up after a filter change), not the
+  // visitor's: it mustn't unfold the heading by arriving at the top.
+  const ownScrollUntil = useRef(0);
+
+  // The heading and the four lists fold away on the first scroll down and the gallery fits the window
+  // (the toolbar under the header, the first row of screens right below it, nothing cut); scrolling up at
+  // the very top unfolds them. Driven by the scroll's direction, not by how far the page has scrolled:
+  // the fold eases in CSS while the page stays where it is, so nothing jumps back, and nothing is held —
+  // a scroll that keeps going simply carries on. Toggled as a class, so scrolling never re-renders.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || loading) return;
+    const head = view.querySelector<HTMLElement>('.ins-explore-head');
+    const folded = () => view.classList.contains('is-head-collapsed');
+    // Only when there's something to fold: on narrower windows the heading and lists aren't shown at all,
+    // and folding would swallow a scroll and shift the page for nothing.
+    const canFold = () => (head?.querySelector<HTMLElement>('.ins-explore-head-inner')?.scrollHeight ?? 0) > 0 && head?.offsetParent !== null;
+    // Returned to folded (startFolded), or set up again after a cleanup that opened it: folded, as left.
+    if (folded() || returningFolded()) {
+      view.classList.add('is-head-collapsed');
+      if (head) head.inert = true;
+    }
+    const fold = (on: boolean) => {
+      view.classList.toggle('is-head-collapsed', on);
+      // Folded away, its links leave the tab order too, and a preview card open under the pointer closes.
+      if (head) head.inert = on;
+      if (on) {
+        setHoveredCategory(null);
+        setHoveredLabel(null);
+      }
+    };
+    // A fast flick that folds keeps going — first its push, still speeding up, then its coasting, a stream
+    // of ever-smaller wheel events — which would scroll straight past the fitted view and cut the first
+    // row. Both are absorbed, and only them: after the push, a fresh swipe arrives as a growing push and
+    // lets go at once, so the page never holds anyone for long.
+    let coastUntil = 0;
+    let coastStarted = 0;
+    let lastPush = 0;
+    const onWheel = (e: WheelEvent) => {
+      // A scroll in the Filters drawer scrolls the drawer, not the page.
+      if (e.target instanceof Element && e.target.closest('.ins-fdrawer')) return;
+      const y = window.scrollY;
+      const now = performance.now();
+      const push = Math.abs(e.deltaY);
+      if (now < coastUntil && e.deltaY > 0) {
+        // The flick's own push (its first moments, still speeding up) and then its coasting are held.
+        if (now - coastStarted < FLICK_PUSH_MS || push <= lastPush * 1.3 + 2) {
+          e.preventDefault();
+          lastPush = push;
+          coastUntil = Math.min(Math.max(now + COAST_GAP_MS, coastStarted + FLICK_PUSH_MS), coastStarted + COAST_MAX_MS);
+          return;
+        }
+        coastUntil = 0;
+      }
+      if (e.deltaY > 0 && !folded() && y < FOLD_ZONE_PX && canFold()) {
+        // This first nudge folds instead of scrolling; a new swipe scrolls as usual.
+        e.preventDefault();
+        fold(true);
+        coastStarted = now;
+        coastUntil = now + COAST_GAP_MS;
+        lastPush = push;
+      } else if (e.deltaY < 0 && folded() && y <= 0) {
+        e.preventDefault();
+        fold(false);
+      }
+    };
+    // A wheel listener that can hold the page (passive: false) makes the browser wait on this script before
+    // every scroll step, so it's only there where it's needed — at the very top, where the fold happens, and
+    // while a flick's coasting is being absorbed. Everywhere else the page scrolls on its own, untouched.
+    let wheelOn = false;
+    const syncWheel = () => {
+      const want = window.scrollY < FOLD_ZONE_PX || performance.now() < coastUntil;
+      if (want === wheelOn) return;
+      wheelOn = want;
+      if (want) window.addEventListener('wheel', onWheel, { passive: false });
+      else window.removeEventListener('wheel', onWheel);
+    };
+    // Touch and keys: the same, from where the page has got to.
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (!folded() && y > FOLD_ZONE_PX && y > lastY && canFold()) fold(true);
+      else if (folded() && y <= 0 && lastY > 0 && performance.now() > ownScrollUntil.current) fold(false);
+      lastY = y;
+      syncWheel();
+    };
+    syncWheel();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('scroll', onScroll);
+      leftFolded = folded();
+      fold(false);
+    };
+  }, [loading]);
+
+  // Once the toolbar row is pinned under the header, the two share one pane of glass (CSS: the row's
+  // backdrop reaches up behind the header, whose own glass steps aside) instead of two blurs meeting at a
+  // seam. "Pinned" is measured — the row's top at its sticky offset — on scroll, on resize and when the
+  // heading's fold finishes, and kept as a class so it costs no re-render.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || loading) return;
+    let frame = 0;
+    const check = () => {
+      frame = 0;
+      const anchor = view.querySelector<HTMLElement>('.ins-ftoolbar-anchor.is-pinned');
+      // At its own sticky offset: under the header, or near the top while the header has stepped away.
+      const stuck = Boolean(anchor && anchor.getBoundingClientRect().top <= (parseFloat(getComputedStyle(anchor).top) || 0) + 0.5);
+      view.classList.toggle('is-bar-stuck', stuck);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(check);
+    };
+    check();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    view.addEventListener('transitionend', schedule);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      view.removeEventListener('transitionend', schedule);
+      view.classList.remove('is-bar-stuck');
+    };
+  }, [loading]);
+
+  // A filter, sort or category picked while scrolled down the gallery: the list changes length under the
+  // visitor, which could leave them in blank space or mid-list. Bring the results' start back up to the
+  // toolbar's line, smoothly — only from below it, so a pick made at the top of the page moves nothing.
+  const query = params.toString();
+  const lastQuery = useRef(query);
+  useEffect(() => {
+    if (lastQuery.current === query) return;
+    lastQuery.current = query;
+    const view = viewRef.current;
+    const anchor = view?.querySelector<HTMLElement>('.ins-ftoolbar-anchor');
+    const grid = view?.querySelector<HTMLElement>('.ins-app-grid');
+    if (!anchor || !grid) return;
+    // Under the header: scrolling back up brings it back (FilterToolbar), even when it had stepped away.
+    const line = (document.querySelector<HTMLElement>('.ins-header')?.offsetHeight ?? 0) + anchor.offsetHeight;
+    const target = Math.round(grid.getBoundingClientRect().top + window.scrollY - line);
+    if (window.scrollY > target + 1) {
+      const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      ownScrollUntil.current = performance.now() + OWN_SCROLL_MS;
+      window.scrollTo({ top: target, behavior: smooth ? 'smooth' : 'auto' });
+    }
+  }, [query]);
 
   useEffect(() => {
     setMounted(true);
@@ -277,13 +454,12 @@ export function ExploreView() {
   // from placeholder to content), so its typed phrase starts once on first
   // paint instead of restarting when the taxonomy arrives.
   return (
-    <div className="ins-explore-view" aria-busy={loading || undefined}>
+    <div ref={viewRef} className={`ins-explore-view${startFolded ? ' is-head-collapsed' : ''}`} aria-busy={loading || undefined}>
+      {/* The heading and the lists, folded away together on the first scroll down (see the effect above). */}
+      <div className="ins-explore-head">
+        <div className="ins-explore-head-inner">
       <PageHeading title={<RotatingTitle override={hoveredLabel?.text} overrideEmoji={hoveredLabel?.emoji} />} />
-      {loading ? (
-        <ExploreSkeleton web={platforms.length === 1 && isDesktopPlatform(platforms[0])} />
-      ) : (
-      <>
-      {taxonomyGroups.length > 0 && (
+      {!loading && taxonomyGroups.length > 0 && (
         <section
           className="ins-explore-taxonomy"
           aria-label="Explore categories"
@@ -335,9 +511,16 @@ export function ExploreView() {
           ))}
         </section>
       )}
+        </div>
+      </div>
+      {loading ? (
+        <ExploreSkeleton web={platforms.every(isDesktopPlatform)} />
+      ) : (
+      <>
       <Suspense fallback={null}>
         <FilteredGallery counts={meta.counts} />
       </Suspense>
+      <BackToTop />
 
       {mounted && hoveredCategory && (
         <HoverPreview category={hoveredCategory} mousePos={mousePos} platforms={platforms} />

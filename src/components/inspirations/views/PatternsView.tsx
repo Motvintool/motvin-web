@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { browsedPlatforms } from '@/lib/inspirations/filters';
 import { screenItemId } from '@/lib/inspirations/savedItems';
-import type { Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type Screen } from '@/lib/inspirations/types';
 import { EmptyState } from '../EmptyState';
 import { NavPill, ToolbarRow } from '../FilterToolbar';
 import { GridIcon } from '../Icons';
@@ -33,6 +33,8 @@ export function PatternsView() {
   const pathname = usePathname();
   const meta = useMeta();
   const platforms = browsedPlatforms(params);
+  // Webs (websites and web apps) are landscape screenshots: the web grid, as an app page shows them.
+  const webGrid = platforms.every(isDesktopPlatform);
   const picked = (params.get('category') ?? '').split(',').filter(Boolean);
   const [shown, setShown] = useState(PAGE);
 
@@ -134,10 +136,11 @@ export function PatternsView() {
 
       <section className="ins-shot-panel">
         {loading || (textQuery && textLoading) ? (
-          <ScreenGridSkeleton count={10} meta={false} />
+          <ScreenGridSkeleton count={10} meta={false} web={webGrid} />
         ) : (
           <ScreenGrid
             screens={gridScreens.slice(0, shown)}
+            webGrid={webGrid}
             showMeta={false}
             selectable
             saveItem={(s) => ({ type: 'pattern', id: screenItemId(s.id, categoryOf.get(s.id) ?? '') })}

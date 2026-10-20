@@ -3,6 +3,28 @@ import type { Platform } from '@/lib/inspirations/types';
 import type { StoreStats } from '@/lib/inspirations/storeStats';
 
 const cache = new Map<string, StoreStats | null>();
+const pending = new Map<string, Promise<StoreStats | null>>();
+
+/**
+ * An iOS app's store numbers outside a component (the app filters' rating), through the same cache
+ * the hook below fills, so a card and a filter never look the same app up twice.
+ */
+export function loadStoreStats(name: string): Promise<StoreStats | null> {
+  const key = `ios:${name}`;
+  if (cache.has(key)) return Promise.resolve(cache.get(key) ?? null);
+  const inFlight = pending.get(key);
+  if (inFlight) return inFlight;
+  const promise = fetch(`/api/store-stats?name=${encodeURIComponent(name)}&platform=ios`)
+    .then((r) => (r.ok ? (r.json() as Promise<StoreStats>) : null))
+    .catch(() => null)
+    .then((s) => {
+      cache.set(key, s);
+      pending.delete(key);
+      return s;
+    });
+  pending.set(key, promise);
+  return promise;
+}
 
 /**
  * Live store numbers for an app (see storeStats.ts), fetched once per app and

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { isWebsPlatforms } from '@/lib/inspirations/filters';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { AppTabs } from './AppTabs';
 import { GlobalSearch } from './GlobalSearch';
@@ -78,15 +79,14 @@ export function Header() {
     INSPIRATIONS_ROUTES.patterns,
     INSPIRATIONS_ROUTES.search,
   ];
-  // "Apps" covers iOS and Web Apps (the toolbar's switch picks between them); "Webs" is websites.
+  // "Apps" is iOS; "Webs" is websites and web apps together (isWebsPlatforms).
   // Switching keeps the visitor on the same browse page with the same filters, only the platform changes.
-  const appsOn = visuallyActivePlatform !== 'web';
+  const appsOn = !(visuallyActivePlatform ? isWebsPlatforms([visuallyActivePlatform]) : isWebsPlatforms(activePlatforms));
   const tabHref = (target: 'apps' | 'web') => {
     const staying = BROWSE_PATHS.includes(pathname);
     const base = staying ? pathname : INSPIRATIONS_ROUTES.explore;
     const sp = staying ? new URLSearchParams(params.toString()) : new URLSearchParams();
     if (target === 'web') sp.set('platform', 'web');
-    else if (visuallyActivePlatform === 'webapp') sp.set('platform', 'webapp');
     else sp.delete('platform');
     const qs = sp.toString();
     return qs ? `${base}?${qs}` : base;

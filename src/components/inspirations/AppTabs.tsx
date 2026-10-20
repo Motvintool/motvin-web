@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 /**
- * The library's two top-level tabs (Figma "Tabs", node 1311:15013): "Apps" — iOS apps and Web Apps,
- * with the toolbar's switch choosing between them — and "Webs", the websites. Shared by the header
+ * The library's two top-level tabs (Figma "Tabs", node 1311:15013): "Apps" — the iOS apps — and
+ * "Webs", websites and web apps together. Shared by the header
  * and by the toolbar when it docks over the header, so the two always read the same.
  */
 export function AppTabs({

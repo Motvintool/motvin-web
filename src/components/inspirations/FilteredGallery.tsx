@@ -14,6 +14,8 @@ import { FilterPill, FilterToolbar, NavPill, SortPill, ToolbarRow, type SortOpti
 import { ImageIcon } from './Icons';
 import { ScreenGrid } from './ScreenGrid';
 import { ScreenshotTextSearch } from './ScreenshotTextSearch';
+import { APPLIED_PILLS_MAX, AppliedFilterPills, FiltersPill } from './FiltersPanel';
+import { useAppFilters } from './useAppFilters';
 import { useAsync } from './useAsync';
 import { useExploreFilters } from './useExploreFilters';
 import { useLibrarySettings, useMeta } from './useMeta';
@@ -222,7 +224,10 @@ export function FilteredGallery({
   // In the default order, newly added apps lead, then updated ones; a sort the visitor picks is kept as is.
   const freshness = useLibrarySettings().freshness;
   const matchingApps = allApps?.filter((a) => appMatchesFilters(a, withDefaultPlatform(filters))) ?? [];
-  const apps = sort === 'curated' ? freshFirst(matchingApps, freshness) : matchingApps;
+  const appFilters = useAppFilters(matchingApps);
+  // "+N more" beside the applied filters opens the Filters panel.
+  const [openFilters, setOpenFilters] = useState(0);
+  const apps = sort === 'curated' ? freshFirst(appFilters.filtered, freshness) : appFilters.filtered;
   const appsLibraryEmpty = meta.counts.apps === 0;
 
   // The only ScreenFilters dimensions an app feed can't honor.
@@ -234,9 +239,10 @@ export function FilteredGallery({
         <>
           {/* No running count on the app list. */}
           <ToolbarRow
+            pinned
             total={null}
             unit="app"
-            right={<SortPill value={sort} options={EXPLORE_SORTS} onChange={setSort} />}
+            right={<FiltersPill sections={appFilters.sections} onClearAll={appFilters.clear} total={apps.length} unit="app" atEnd onOpenChange={appFilters.onPanelOpen} openSignal={openFilters} />}
           >
             <NavPill counts={counts} />
             <FilterPill
@@ -246,6 +252,8 @@ export function FilteredGallery({
               onToggle={(v) => update({ industries: toggleValue(filters.industries, v as Industry) })}
               onClear={() => update({ industries: [] })}
             />
+            <SortPill value={sort} options={EXPLORE_SORTS} onChange={setSort} asPill />
+            <AppliedFilterPills sections={appFilters.sections} max={APPLIED_PILLS_MAX} onMore={() => setOpenFilters((n) => n + 1)} />
           </ToolbarRow>
           {droppedFilterCount > 0 && (
             <p className="ins-muted ins-explore-hint">
@@ -255,7 +263,7 @@ export function FilteredGallery({
           <AppsGrid
             apps={apps}
             loading={appsLoading}
-            webLayout={filters.platforms.length === 1 && isDesktopPlatform(filters.platforms[0])}
+            webLayout={filters.platforms.length > 0 && filters.platforms.every(isDesktopPlatform)}
             emptyTitle={appsLibraryEmpty ? 'No apps here yet' : 'No apps match these filters'}
             emptyPlay={!appsLibraryEmpty}
             emptyDescription={
@@ -263,6 +271,7 @@ export function FilteredGallery({
                 ? 'We add new apps regularly. Check back soon.'
                 : 'Try removing a filter, or search for something broader.'
             }
+            emptyAction={appFilters.active ? { label: 'Clear filters', onClick: appFilters.clear } : undefined}
           />
         </>
       ) : (
@@ -282,10 +291,10 @@ export function FilteredGallery({
           />
           {/* .ins-shot-panel applies the app-page gallery treatment: five
               frameless, hairline-bordered shots per row. */}
-          <div className={filters.platforms.length === 1 && isDesktopPlatform(filters.platforms[0]) ? '' : 'ins-shot-panel'}>
+          <div className={filters.platforms.length > 0 && filters.platforms.every(isDesktopPlatform) ? '' : 'ins-shot-panel'}>
             <ScreenGrid
               screens={items}
-              webLayout={filters.platforms.length === 1 && isDesktopPlatform(filters.platforms[0])}
+              webLayout={filters.platforms.length > 0 && filters.platforms.every(isDesktopPlatform)}
               showMeta={false}
               selectable
               loading={textOn ? textLoading || !textHits : !ready || loadingMore}

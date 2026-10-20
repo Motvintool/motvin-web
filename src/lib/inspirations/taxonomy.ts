@@ -244,6 +244,9 @@ export const CONTENT_KINDS: { kind: ContentKind; label: string; href: string }[]
   { kind: 'patterns', label: 'Patterns', href: '/inspirations/patterns' },
 ];
 
+/** What the "Apps" content type is called in the Webs section, where it lists web apps and websites. */
+export const WEBS_APPS_LABEL = 'Webs';
+
 /** Compact "116K" style counts — never dominant, always readable. */
 export function formatCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;

@@ -4,9 +4,9 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import type { ScreenFilters } from '@/lib/inspirations/filters';
+import { browsedPlatforms, isWebsPlatforms, type ScreenFilters } from '@/lib/inspirations/filters';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import { CONTENT_KINDS, elementLabel, formatCount, INDUSTRY_LABEL, screenStateLabel, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
+import { CONTENT_KINDS, WEBS_APPS_LABEL, elementLabel, formatCount, INDUSTRY_LABEL, screenStateLabel, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
 import {
   type Industry,
   type LibraryCounts,
@@ -14,9 +14,9 @@ import {
   type ScreenType,
   type Style,
 } from '@/lib/inspirations/types';
-import { AppliedFilterPills, FiltersPill, type FilterSection } from './FiltersPanel';
+import { APPLIED_PILLS_MAX, AppliedFilterPills, FiltersPill, type FilterSection } from './FiltersPanel';
 import { useMeta } from './useMeta';
-import { AppleIcon, CheckIcon, CloseIcon, WebAppIcon, WebIcon } from './Icons';
+import { AppleIcon, CheckIcon, CloseIcon, WebIcon } from './Icons';
 
 /**
  * The Screens-page filter row: one dropdown pill per
@@ -31,10 +31,6 @@ import { AppleIcon, CheckIcon, CloseIcon, WebAppIcon, WebIcon } from './Icons';
 
 export type SortOption<S extends string> = { value: S; label: string };
 
-/** True when the current selection is exactly the Webs (websites) platform. */
-export function isWebPlatform(platforms: string[]): boolean {
-  return platforms.length === 1 && platforms[0] === 'web';
-}
 
 /** A menu choice; `count`, when given, is shown at the right (how many results picking it would give). */
 type Option = { value: string; label: string; count?: number };
@@ -230,13 +226,20 @@ export function NavPill({ counts, activeCount = null }: { counts: LibraryCounts 
   const ref = useRef<HTMLDivElement>(null);
   useDismiss(open, () => setOpen(false), ref);
   useAutoFocusMenu(open, ref);
+  const webs = isWebsPlatforms(browsedPlatforms(searchParams));
 
   // "Explore" is a real destination (the app-browsing home), not just the
   // pill's fallback label when nothing else matches — so it's reachable from
   // every other browse page's menu, the same as the other five.
   const items: { key: string; label: string; href: string; count: number | undefined }[] = [
     { key: 'explore', label: 'Explore', href: INSPIRATIONS_ROUTES.explore, count: undefined },
-    ...CONTENT_KINDS.map((k) => ({ key: k.kind, label: k.label, href: k.href, count: counts?.[k.kind] })),
+    ...CONTENT_KINDS.map((k) => ({
+      key: k.kind,
+      // In Webs, "Apps" lists web apps and websites, and says so.
+      label: k.kind === 'apps' && webs ? WEBS_APPS_LABEL : k.label,
+      href: k.href,
+      count: counts?.[k.kind],
+    })),
   ];
   const active =
     items.find((i) => i.key !== 'explore' && (pathname === i.href || pathname.startsWith(`${i.href}/`))) ??
@@ -313,10 +316,13 @@ export function SortPill<S extends string>({
   value,
   options,
   onChange,
+  asPill = false,
 }: {
   value: S;
   options: SortOption<S>[];
   onChange: (value: S) => void;
+  /** Sit among the left-hand pills (the app lists, where Filters takes the right edge): a plain pill with a chevron. */
+  asPill?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -327,19 +333,20 @@ export function SortPill<S extends string>({
     <div className="ins-popwrap" ref={ref}>
       <button
         type="button"
-        className="ins-fsort"
+        className={asPill ? 'ins-fpill' : 'ins-fsort'}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="Sort screens"
+        aria-label="Sort"
         onClick={() => setOpen((o) => !o)}
         onKeyDown={(e) => onTriggerKeyDown(e, open, setOpen)}
       >
-        <img src="/ASSET/Icons/Motvin/sort-curated.svg" alt="" className="ins-fsort-icon" width={20} height={20} />
+        {!asPill && <img src="/ASSET/Icons/Motvin/sort-curated.svg" alt="" className="ins-fsort-icon" width={20} height={20} />}
         {options.find((o) => o.value === value)?.label}
+        {asPill && <span className="ins-fpill-chev" aria-hidden />}
       </button>
       {open && (
         <div
-          className="ins-popover ins-popover--right ins-fmenu"
+          className={`ins-popover ${asPill ? '' : 'ins-popover--right'} ins-fmenu`}
           role="listbox"
           aria-label="Sort"
           onKeyDown={onMenuKeyDown}
@@ -380,7 +387,7 @@ export function SortPill<S extends string>({
 /** How long a row that undocks stays in the header, fading out as the header's own content comes back. */
 const UNDOCK_MS = 240;
 
-export function useDockingRow() {
+export function useDockingRow(enabled = true) {
   const [docked, setDocked] = useState(false);
   // Just undocked: the header copy is still there for UNDOCK_MS, on its way out (`.is-leaving`).
   const [leaving, setLeaving] = useState(false);
@@ -393,7 +400,7 @@ export function useDockingRow() {
   useEffect(() => {
     const anchor = anchorRef.current;
     const row = rowRef.current;
-    if (!anchor || !row) return;
+    if (!enabled || !anchor || !row) return;
     const headerH = parseFloat(getComputedStyle(anchor).getPropertyValue('--ins-header-h')) || 92;
     // Measure once while the row is guaranteed in flow (state starts
     // undocked), so a page that loads already scrolled — back button, restored
@@ -431,7 +438,7 @@ export function useDockingRow() {
       window.removeEventListener('resize', check);
       window.clearTimeout(leaveTimerRef.current);
     };
-  }, []);
+  }, [enabled]);
 
   // The header listens for this body class to swap its content with the
   // portaled toolbar while the in-flow placeholder keeps the page stable.
@@ -453,20 +460,19 @@ export function useDockingRow() {
 
 /**
  * The platform switch: the library's own segmented control (the same one the admin uses), with the current
- * platform on the black pill. It switches between iOS and Web Apps; websites ("Webs") have no sub-platforms,
- * so on wide screens it steps aside there (the Apps / Webs tabs carry that choice). On narrow screens the
- * tabs are not shown, so the switch carries all three and is the only way to move between them.
+ * section on the black pill — iOS ("Apps") or Webs (websites and web apps together). On wide screens the
+ * header's Apps / Webs tabs make that choice, so the switch is hidden; below 1140px the tabs are not shown
+ * and the switch is the way to move between the two.
  */
 const SWITCH_OPTIONS: { value: string; label: string; param: string | null; Icon: typeof AppleIcon }[] = [
   { value: 'ios', label: 'iOS', param: null, Icon: AppleIcon },
-  { value: 'webapp', label: 'Web Apps', param: 'webapp', Icon: WebAppIcon },
   { value: 'web', label: 'Webs', param: 'web', Icon: WebIcon },
 ];
 
 function PlatformSwitch({ platform, onPick }: { platform: string; onPick: (param: string | null) => void }) {
   return (
     <div
-      className={`ins-segmented ins-segmented--toolbar ins-ftoolbar-context ${platform === 'web' ? 'is-webs' : ''}`}
+      className="ins-segmented ins-segmented--toolbar ins-ftoolbar-context"
       role="radiogroup"
       aria-label="Platform"
     >
@@ -496,6 +502,11 @@ function PlatformSwitch({ platform, onPick }: { platform: string; onPick: (param
   );
 }
 
+/** On <html> while the header is scrolled out of the way above a pinned row. */
+const HEADER_AWAY_CLASS = 'ins-header-away';
+/** How far the page has to move one way before the header goes or comes back. */
+const HEADER_AWAY_SLACK_PX = 6;
+
 /**
  * The row itself: dimension pills on the left, "Showing N <unit>s" and any
  * `right` control (usually a SortPill) on the right edge. Pages whose
@@ -506,21 +517,62 @@ export function ToolbarRow({
   total,
   unit = 'screen',
   right,
+  pinned = false,
 }: {
   children: ReactNode;
   total: number | null;
   unit?: string;
   right?: ReactNode;
+  /**
+   * Stay below the header, pinned, instead of docking into it (Explore): the header keeps its own nav and
+   * search, and the row sticks under it while the page scrolls.
+   */
+  pinned?: boolean;
 }) {
-  const { docked, leaving, anchorRef, rowRef, headerContent } = useDockingRow();
+  const { docked, leaving, anchorRef, rowRef, headerContent } = useDockingRow(!pinned);
 
-  // Apps / Webs is the top-level split and lives in the header's tabs. Inside "Apps" the switch here picks
-  // iOS or Web Apps.
+  // Pinned, the header steps out of the way while the visitor scrolls down the gallery — the row slides up
+  // into its place (CSS: html.ins-header-away) — and comes back on a scroll up, or near the top. Small
+  // wobbles add up rather than flicking it each time. It stays while its search is typed in or its menu is
+  // open, and comes back whenever something in it takes the focus (tabbing back up from the row, ⌘K), so
+  // the focus never lands on a control that's off screen.
+  useEffect(() => {
+    if (!pinned) return;
+    const root = document.documentElement;
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const header = document.querySelector<HTMLElement>('.ins-header');
+      const busy = Boolean(header?.querySelector('input:focus, .ins-pmenu.is-open'));
+      // Landing on the very bottom on the way up is the page growing shorter under the visitor (Explore's
+      // heading folding away), not a scroll up.
+      const atBottom = y >= root.scrollHeight - window.innerHeight - 1;
+      if (y <= (header?.offsetHeight ?? 0) || busy) root.classList.remove(HEADER_AWAY_CLASS);
+      else if (y > lastY + HEADER_AWAY_SLACK_PX) root.classList.add(HEADER_AWAY_CLASS);
+      else if (y < lastY - HEADER_AWAY_SLACK_PX) {
+        if (!atBottom) root.classList.remove(HEADER_AWAY_CLASS);
+      } else return;
+      lastY = y;
+    };
+    const onFocus = (e: FocusEvent) => {
+      if (e.target instanceof Element && e.target.closest('.ins-header')) root.classList.remove(HEADER_AWAY_CLASS);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    document.addEventListener('focusin', onFocus);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      document.removeEventListener('focusin', onFocus);
+      root.classList.remove(HEADER_AWAY_CLASS);
+    };
+  }, [pinned]);
+
+  // Apps / Webs is the top-level split and lives in the header's tabs; the switch here stands in for
+  // them on narrow screens.
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
   const activePlatforms = (searchParams.get('platform') ?? '').split(',').filter(Boolean);
-  const webMode = isWebPlatform(activePlatforms);
+  const webMode = isWebsPlatforms(activePlatforms);
   const platformHref = (value: string | null) => {
     const sp = new URLSearchParams(searchParams.toString());
     if (value) sp.set('platform', value);
@@ -538,7 +590,7 @@ export function ToolbarRow({
       aria-label="Filters and sort"
       aria-hidden={docked && !inHeader ? true : undefined}
     >
-        <PlatformSwitch platform={activePlatforms[0] ?? 'ios'} onPick={setPlatformParam} />
+        <PlatformSwitch platform={webMode ? 'web' : 'ios'} onPick={setPlatformParam} />
         <span className="ins-ftoolbar-divider ins-ftoolbar-divider--switch" aria-hidden="true" />
         {children}
         <div className="ins-ftoolbar-right">
@@ -554,7 +606,7 @@ export function ToolbarRow({
   );
 
   return (
-    <div ref={anchorRef} className="ins-ftoolbar-anchor">
+    <div ref={anchorRef} className={`ins-ftoolbar-anchor ${pinned ? 'is-pinned' : ''}`}>
       {toolbar()}
       {(docked || leaving) && headerContent && createPortal(toolbar(true), headerContent)}
     </div>
@@ -596,6 +648,8 @@ export function FilterToolbar<S extends string>({
   beforeSort?: ReactNode;
 }) {
   const meta = useMeta();
+  // "+N more" beside the applied filters opens the Filters panel.
+  const [openFilters, setOpenFilters] = useState(0);
   const toggle = <T extends string>(list: T[], value: T) =>
     list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
@@ -667,8 +721,8 @@ export function FilterToolbar<S extends string>({
       }
     >
       {counts && <NavPill counts={counts} activeCount={total} />}
-      <FiltersPill sections={sections} onClearAll={clearAll} total={total} unit={unit} />
-      <AppliedFilterPills sections={sections} />
+      <FiltersPill sections={sections} onClearAll={clearAll} total={total} unit={unit} openSignal={openFilters} />
+      <AppliedFilterPills sections={sections} max={APPLIED_PILLS_MAX} onMore={() => setOpenFilters((n) => n + 1)} />
       {filters.query && (
         <button
           type="button"

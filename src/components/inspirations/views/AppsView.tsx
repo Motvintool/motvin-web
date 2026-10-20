@@ -1,14 +1,17 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { freshFirst } from '@/lib/inspirations/appFreshness';
-import { DEFAULT_PLATFORM } from '@/lib/inspirations/filters';
-import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
-import { PLATFORMS, isDesktopPlatform, type Industry, type Platform } from '@/lib/inspirations/types';
+import { browsedPlatforms, isWebsPlatforms } from '@/lib/inspirations/filters';
+import { INDUSTRY_LABEL, WEBS_APPS_LABEL } from '@/lib/inspirations/taxonomy';
+import { isDesktopPlatform, type Industry } from '@/lib/inspirations/types';
 import { AppsGrid } from '../AppsGrid';
 import { FilterPill, NavPill, SortPill, ToolbarRow, type SortOption } from '../FilterToolbar';
+import { APPLIED_PILLS_MAX, AppliedFilterPills, FiltersPill } from '../FiltersPanel';
 import { PageHeading } from '../PageHeading';
+import { APP_FILTER_PARAMS, useAppFilters } from '../useAppFilters';
 import { useAsync } from '../useAsync';
 import { useLibrarySettings, useMeta } from '../useMeta';
 
@@ -41,12 +44,9 @@ export function AppsView() {
   const rawIndustry = params.get('industry');
   const industry = industries.includes(rawIndustry as Industry) ? (rawIndustry as Industry) : undefined;
 
-  // Validated against all known platforms, not just those in the library, so
-  // a header switch to a platform with no apps yet shows an honest empty
-  // state instead of silently ignoring the filter. No param means the iOS
-  // default — the same real default every feed and the header nav use.
-  const rawPlatform = params.get('platform');
-  const platform = PLATFORMS.includes(rawPlatform as Platform) ? (rawPlatform as Platform) : DEFAULT_PLATFORM;
+  // The section being browsed: iOS by default, or Webs (websites and web apps
+  // together) — the same platforms every feed and the header nav use.
+  const platforms = browsedPlatforms(params);
 
   const rawSort = params.get('sort');
   const sort: AppSort = APP_SORTS.some((s) => s.value === rawSort) ? (rawSort as AppSort) : 'curated';
@@ -66,18 +66,21 @@ export function AppsView() {
 
   // In the default order, newly added apps lead, then updated ones; a sort the visitor picks is kept as is.
   const freshness = useLibrarySettings().freshness;
-  const onPlatform = (apps ?? []).filter((app) => app.platforms.includes(platform));
-  const visible = sort === 'curated' ? freshFirst(onPlatform, freshness) : onPlatform;
+  const onPlatform = (apps ?? []).filter((app) => app.platforms.some((p) => platforms.includes(p)));
+  const appFilters = useAppFilters(onPlatform);
+  // "+N more" beside the applied filters opens the Filters panel.
+  const [openFilters, setOpenFilters] = useState(0);
+  const visible = sort === 'curated' ? freshFirst(appFilters.filtered, freshness) : appFilters.filtered;
 
   return (
     <>
-      <PageHeading title="Apps" />
+      <PageHeading title={isWebsPlatforms(platforms) ? WEBS_APPS_LABEL : 'Apps'} />
 
       {/* No running count on the app list. */}
       <ToolbarRow
         total={null}
         unit="app"
-        right={<SortPill value={sort} options={APP_SORTS} onChange={(next) => setParam('sort', next === 'curated' ? undefined : next)} />}
+        right={<FiltersPill sections={appFilters.sections} onClearAll={appFilters.clear} total={visible.length} unit="app" atEnd onOpenChange={appFilters.onPanelOpen} openSignal={openFilters} />}
       >
         <NavPill counts={meta.counts} />
         <FilterPill
@@ -88,6 +91,8 @@ export function AppsView() {
           onClear={() => setParam('industry')}
           multi={false}
         />
+        <SortPill value={sort} options={APP_SORTS} onChange={(next) => setParam('sort', next === 'curated' ? undefined : next)} asPill />
+        <AppliedFilterPills sections={appFilters.sections} max={APPLIED_PILLS_MAX} onMore={() => setOpenFilters((n) => n + 1)} />
       </ToolbarRow>
 
       {/* "Filtered" means an explicit choice beyond the defaults — a category,
@@ -96,22 +101,23 @@ export function AppsView() {
       <AppsGrid
         apps={visible}
         loading={loading}
-        webLayout={isDesktopPlatform(platform)}
-        emptyTitle={industry || params.get('platform') ? 'No apps match these filters' : 'No apps here yet'}
-        emptyPlay={Boolean(industry || params.get('platform'))}
+        webLayout={platforms.every(isDesktopPlatform)}
+        emptyTitle={industry || appFilters.active || params.get('platform') ? 'No apps match these filters' : 'No apps here yet'}
+        emptyPlay={Boolean(industry || appFilters.active || params.get('platform'))}
         emptyDescription={
-          industry || params.get('platform')
+          industry || appFilters.active || params.get('platform')
             ? undefined
             : 'We add new apps regularly. Check back soon.'
         }
         emptyAction={
-          industry || params.get('platform')
+          industry || appFilters.active || params.get('platform')
             ? {
-                label: 'Show all apps',
+                label: industry || appFilters.active ? 'Clear filters' : 'Show all apps',
                 onClick: () => {
+                  // The category and every app filter go; Apps / Webs stays, unless it was the only narrowing.
                   const sp = new URLSearchParams(params.toString());
-                  sp.delete('industry');
-                  sp.delete('platform');
+                  const narrowed = Boolean(industry || appFilters.active);
+                  for (const key of ['industry', ...APP_FILTER_PARAMS, ...(narrowed ? [] : ['platform'])]) sp.delete(key);
                   const qs = sp.toString();
                   router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
                 },

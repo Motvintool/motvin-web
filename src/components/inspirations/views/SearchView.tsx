@@ -12,7 +12,7 @@ import { AppsGrid } from '../AppsGrid';
 import { AppTreePill } from '../AppTreePill';
 import { EmptyState } from '../EmptyState';
 import { onMenuKeyDown, onTriggerKeyDown, ToolbarRow, useAutoFocusMenu, useDismiss } from '../FilterToolbar';
-import { AppliedFilterPills, FiltersPill, type FilterSection } from '../FiltersPanel';
+import { APPLIED_PILLS_MAX, AppliedFilterPills, FiltersPill, type FilterSection } from '../FiltersPanel';
 import { FlowList } from '../FlowList';
 import { ScreenshotTextSearch } from '../ScreenshotTextSearch';
 import { SearchEmpty } from '../SearchEmpty';
@@ -58,6 +58,8 @@ export function SearchView() {
   const pickedKind = KINDS.some((k) => k.id === rawView) ? (rawView as ResultKind) : null;
 
   const filters: ScreenFilters = { ...parseFilters(params), platforms: browsedPlatforms(params) };
+  // Webs (websites and web apps) are landscape screenshots: screen results use the web grid.
+  const webGrid = filters.platforms.every(isDesktopPlatform);
   const elementFilter = (params.get('element') ?? '').split(',').filter((k) => /^[a-z0-9]+(-[a-z0-9]+)*$/.test(k));
   const appFilter = (params.get('app') ?? '').split(',').filter(Boolean);
   // A query that names a screen type, category, style or state ("login", "food checkout", "dark settings") is
@@ -89,6 +91,8 @@ export function SearchView() {
   // and appends them. Pages are tied to the request they were loaded for, so changing anything starts over.
   type ExtraPages = { key: string; screens: Screen[]; highlights: NonNullable<typeof first>['textHighlights'] };
   const [pages, setPages] = useState<ExtraPages>({ key: '', screens: [], highlights: {} });
+  // "+N more" beside the applied filters opens the Filters panel.
+  const [openFilters, setOpenFilters] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const extra = pages.key === searchKey ? pages : null;
   const raw = first
@@ -350,8 +354,8 @@ export function SearchView() {
         }
       >
         <KindPill kind={kind} counts={KINDS.map((k) => ({ ...k, count: countFor(k.id) }))} onPick={setKind} />
-        {filterSections.length > 0 && <FiltersPill sections={filterSections} onClearAll={clearDimensionFilters} total={shownTotal} unit={unit} />}
-        <AppliedFilterPills sections={filterSections} />
+        {filterSections.length > 0 && <FiltersPill sections={filterSections} onClearAll={clearDimensionFilters} total={shownTotal} unit={unit} openSignal={openFilters} />}
+        <AppliedFilterPills sections={filterSections} max={APPLIED_PILLS_MAX} onMore={() => setOpenFilters((n) => n + 1)} />
         {kind === 'patterns' && patternCategoryCounts.length > 0 && (
           <CheckboxFilterPill
             label="Patterns"
@@ -382,7 +386,7 @@ export function SearchView() {
       {loading || (textQuery && (textLoading || !textHits)) || !data ? (
         // Screen results load in the frameless app-page cards with no app line, so their skeleton matches that.
         <div className={kind === 'apps' || kind === 'flows' ? '' : 'ins-shot-panel'}>
-          <ScreenGridSkeleton count={kind === 'apps' ? 4 : 10} meta={kind === 'apps'} />
+          <ScreenGridSkeleton count={kind === 'apps' ? 4 : 10} meta={kind === 'apps'} web={webGrid} />
         </div>
       ) : (first?.total ?? 0) === 0 && !anyFilter ? (
         <SearchEmpty query={query} platform={filters.platforms[0] ?? 'ios'} />
@@ -397,7 +401,7 @@ export function SearchView() {
 
           {kind === 'screens' && data.screens.length > 0 && (
             <section className="ins-result-section ins-shot-panel">
-              <ScreenGrid screens={data.screens} showMeta={false} selectable textHighlights={textSearch || textQuery ? data.textHighlights : undefined} />
+              <ScreenGrid screens={data.screens} webGrid={webGrid} showMeta={false} selectable textHighlights={textSearch || textQuery ? data.textHighlights : undefined} />
               {hasMoreScreens && <LoadMore loading={loadingMore} shown={raw?.screens.length ?? 0} total={screenTotalAll} onMore={loadMoreScreens} />}
             </section>
           )}
@@ -406,6 +410,7 @@ export function SearchView() {
             <section className="ins-result-section ins-shot-panel">
               <ScreenGrid
                 screens={componentScreens}
+                webGrid={webGrid}
                 showMeta={false}
                 selectable
                 saveItem={(s) => ({ type: 'component', id: screenItemId(s.id, s.elements.find((e) => elementFilter.includes(e)) ?? s.elements[0] ?? '') })}
@@ -430,10 +435,11 @@ export function SearchView() {
           {kind === 'patterns' && data.patterns.length > 0 && (
             <section className="ins-result-section ins-shot-panel">
               {patternScreensLoading ? (
-                <ScreenGridSkeleton count={Math.min(patternScreenIds.length, 10) || 5} meta={false} />
+                <ScreenGridSkeleton count={Math.min(patternScreenIds.length, 10) || 5} meta={false} web={webGrid} />
               ) : (
                 <ScreenGrid
                   screens={patternScreens}
+                  webGrid={webGrid}
                   showMeta={false}
                   selectable
                   saveItem={(s) => ({ type: 'pattern', id: screenItemId(s.id, pickedPatterns.find((p) => p.screenIds.includes(s.id))?.category ?? '') })}

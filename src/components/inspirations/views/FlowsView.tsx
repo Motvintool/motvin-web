@@ -2,9 +2,9 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
-import { DEFAULT_PLATFORM } from '@/lib/inspirations/filters';
+import { browsedPlatforms } from '@/lib/inspirations/filters';
 import { flowCategoryLabel } from '@/lib/inspirations/taxonomy';
-import { type App, type Flow, type Platform, type Screen } from '@/lib/inspirations/types';
+import { type App, type Flow, type Screen } from '@/lib/inspirations/types';
 import { EmptyState } from '../EmptyState';
 import { FilterPill, NavPill, ToolbarRow } from '../FilterToolbar';
 import { FlowList } from '../FlowList';
@@ -30,16 +30,17 @@ export function FlowsView() {
   const apps = useApps();
 
   const category = params.get('category') ?? undefined;
-  // No param means the iOS default — the same real default every feed and the
-  // header nav use, so this page always agrees with both.
-  const platform = (params.get('platform') as Platform | null) ?? DEFAULT_PLATFORM;
+  // No param means the iOS default; Webs is websites and web apps together —
+  // the same platforms every feed and the header nav use.
+  const platforms = browsedPlatforms(params);
+  const platform = platforms.join(',');
 
   const { data: flows, loading } = useAsync(
     () => inspirationsApi.listFlows(category),
     `flows:${category ?? 'all'}`,
   );
 
-  const visible = (flows ?? []).filter((f) => f.platform === platform);
+  const visible = (flows ?? []).filter((f) => platforms.includes(f.platform));
 
   // Flow cards need their screens; one request per flow, cached by the client.
   const { data: resolved } = useAsync<{ flow: Flow; screens: Screen[] }[]>(async () => {
@@ -48,7 +49,7 @@ export function FlowsView() {
     return full
       .filter((entry): entry is { flow: Flow; screens: Screen[]; app: App | null } => Boolean(entry))
       .map(({ flow, screens }) => ({ flow, screens }));
-  }, `flow-screens:${category ?? 'all'}:${platform ?? 'all'}:${visible.map((f) => f.id).join(',')}`);
+  }, `flow-screens:${category ?? 'all'}:${platform}:${visible.map((f) => f.id).join(',')}`);
 
   // One URL write per call: two sequential setParam calls would each start
   // from this render's (stale) params, so the second would resurrect the key

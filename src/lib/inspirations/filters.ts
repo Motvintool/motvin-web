@@ -36,7 +36,7 @@ export const EMPTY_FILTERS: ScreenFilters = {
  * The platform actually browsed when the URL names none. Our model: a
  * visitor is always in exactly one platform's section — iOS by default —
  * rather than an "all platforms" soup no control can describe. The
- * URL stays clean for the default; only Web Apps/Webs are ever written to it.
+ * URL stays clean for the default; only Webs (`web`) is ever written to it.
  */
 export const DEFAULT_PLATFORM: Platform = 'ios';
 
@@ -52,12 +52,30 @@ function parseList<T extends string>(raw: string | null, allowed: readonly T[]):
 }
 
 /**
+ * "Webs" (the header's second tab) is websites and web apps together, one
+ * section with no switch between them; "Apps" is iOS. A URL naming either web
+ * platform browses both, and the URL writes the pair as plain `web`.
+ */
+export const WEBS_PLATFORMS: readonly Platform[] = ['webapp', 'web'];
+
+/** True when the platforms are the Webs section (web apps and/or websites, nothing else). */
+export function isWebsPlatforms(platforms: readonly string[]): boolean {
+  return platforms.length > 0 && platforms.every((p) => (WEBS_PLATFORMS as readonly string[]).includes(p));
+}
+
+function parsePlatforms(raw: string | null): Platform[] {
+  const named = parseList(raw, PLATFORMS);
+  if (!named.some((p) => WEBS_PLATFORMS.includes(p))) return named;
+  return [...named.filter((p) => !WEBS_PLATFORMS.includes(p)), ...WEBS_PLATFORMS];
+}
+
+/**
  * The platforms a URL is actually browsing: the validated `?platform=` list,
  * or the default when it names none. What feeds, the header nav and the
  * platform-scoped meta all agree on.
  */
 export function browsedPlatforms(params: { get(name: string): string | null }): Platform[] {
-  const named = parseList(params.get('platform'), PLATFORMS);
+  const named = parsePlatforms(params.get('platform'));
   return named.length ? named : [DEFAULT_PLATFORM];
 }
 
@@ -73,7 +91,7 @@ function parseSlugs<T extends string>(raw: string | null): T[] {
 
 export function parseFilters(params: URLSearchParams): ScreenFilters {
   return {
-    platforms: parseList(params.get('platform'), PLATFORMS),
+    platforms: parsePlatforms(params.get('platform')),
     screenTypes: parseSlugs<ScreenType>(params.get('type')),
     states: parseSlugs<ScreenState>(params.get('state')),
     industries: parseList(params.get('industry'), INDUSTRIES),
@@ -88,7 +106,7 @@ export function serializeFilters(filters: ScreenFilters, base?: URLSearchParams)
     if (values.length) params.set(key, values.join(','));
     else params.delete(key);
   };
-  setList('platform', filters.platforms);
+  setList('platform', isWebsPlatforms(filters.platforms) ? ['web'] : filters.platforms);
   setList('type', filters.screenTypes);
   setList('state', filters.states);
   setList('industry', filters.industries);

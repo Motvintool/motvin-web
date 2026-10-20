@@ -1,9 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { appCardScreens } from '@/lib/inspirations/cover';
 
 import { inspirationsApi } from '@/lib/inspirations/api';
-import type { App } from '@/lib/inspirations/types';
+import type { App, Screen } from '@/lib/inspirations/types';
 import { AppCard } from './AppCard';
 import { WebCard } from './WebCard';
 import { EmptyState } from './EmptyState';
@@ -53,14 +54,24 @@ export function AppsGrid({
   }, `apps-grid-previews:${key}`);
   const { selected, toggle, clear } = useAppSelection();
 
-  if (loading || previewsLoading) {
+  // Every app's preview seen so far. When the list changes (a filter, a sort), the cards already known keep
+  // showing while any new ones load, instead of the whole grid dropping back to placeholders — that flash
+  // shook the page under the Filters panel on every pick. Kept from render, not an effect.
+  const [known, setKnown] = useState<Map<string, Screen[]>>(() => new Map());
+  if (previews && [...previews].some(([id, shots]) => known.get(id) !== shots)) {
+    setKnown(new Map([...known, ...previews]));
+  }
+  const allKnown = apps.every((app) => known.has(app.id));
+  const shownPreviews = previews ?? (allKnown ? known : null);
+
+  if (loading || (previewsLoading && !shownPreviews)) {
     // On the cards' own grid (and web layout), one placeholder per app being
     // loaded — a row of five while the list itself is still on its way — so
     // neither the columns nor the count jump when the cards land.
     return <ScreenGridSkeleton count={Math.min(apps.length || 5, 10)} apps web={webLayout} />;
   }
 
-  if (!loading && !previewsLoading && apps.length === 0) {
+  if (!loading && apps.length === 0) {
     return (
       <EmptyState
         play={emptyPlay}
@@ -87,14 +98,14 @@ export function AppsGrid({
           webLayout ? <WebCard
             key={app.id}
             app={app}
-            previewScreens={previews?.get(app.id)}
+            previewScreens={shownPreviews?.get(app.id)}
             selected={selected.has(app.id)}
             selectable
             onToggleSelect={() => toggle(app.id)}
           /> : <AppCard
             key={app.id}
             app={app}
-            previewScreens={previews?.get(app.id)}
+            previewScreens={shownPreviews?.get(app.id)}
             selected={selected.has(app.id)}
             selectable
             onToggleSelect={() => toggle(app.id)}
