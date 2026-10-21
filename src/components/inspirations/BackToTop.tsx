@@ -50,7 +50,7 @@ export function BackToTop() {
     >
       {/* A wrapper, so the arrow can nudge up on hover: theme.css keeps svgs from transitioning. */}
       <span className="ins-back-to-top-arrow" aria-hidden>
-        <ArrowUpIcon size={18} strokeWidth={2.2} />
+        <ArrowUpIcon size={20} strokeWidth={2.2} />
       </span>
       Scroll to top
     </button>

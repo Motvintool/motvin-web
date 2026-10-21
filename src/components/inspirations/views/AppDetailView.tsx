@@ -453,6 +453,15 @@ export function AppDetailView({
   const textMatchedIds = textActive && textSearchData ? new Set(textSearchData.screens.map((s) => s.id)) : null;
   const textHighlights = textActive ? textSearchData?.textHighlights : undefined;
 
+  // The bookmark springs the moment the app becomes saved — and only then: the previous value is kept in state
+  // and compared during render, so arriving on an already-saved app plays nothing.
+  const [savedBefore, setSavedBefore] = useState(saved);
+  const [savePop, setSavePop] = useState(false);
+  if (saved !== savedBefore) {
+    setSavedBefore(saved);
+    if (saved) setSavePop(true);
+  }
+
   const handleSaveClick = () => {
     if (saved) {
       // Out of every collection it's in; the collections themselves stay.
@@ -815,7 +824,14 @@ export function AppDetailView({
             className={`ins-btn ins-btn--masthead-save ${saved ? 'is-active' : ''}`}
             onClick={handleSaveClick}
           >
-            <img src={`/ASSET/Icons/Motvin/${saved ? 'saved.svg' : 'unsaved.svg'}`} alt="" width={16} height={16} />
+            <img
+              src={`/ASSET/Icons/Motvin/${saved ? 'saved.svg' : 'unsaved.svg'}`}
+              alt=""
+              width={16}
+              height={16}
+              className={savePop ? 'is-pop' : undefined}
+              onAnimationEnd={() => setSavePop(false)}
+            />
             <span>{saved ? 'Saved' : 'Save'}</span>
           </button>
           <AppPaletteMenu

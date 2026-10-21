@@ -4,7 +4,7 @@ import { isDesktopPlatform, type App, type Platform, type Screen, type ScreenTyp
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { openSearch, type SearchSection } from '@/lib/inspirations/openSearch';
@@ -26,31 +26,56 @@ type PreviewItem = { type: 'screen' | 'app'; id: string; name: string; url: stri
 const PREVIEW_LIMIT = 5;
 /** Near the top of the page, a scroll down folds the heading away instead of moving the page. */
 const FOLD_ZONE_PX = 24;
-/** After the fold, a flick's coasting is absorbed while its events keep coming this close together… */
-const COAST_GAP_MS = 140;
-/** …for at most this long. */
-const COAST_MAX_MS = 900;
+/** After the fold, a flick's coasting is absorbed while its events keep coming this close together — a
+ *  trackpad's stream arrives every frame or so; a mouse wheel's notches come much further apart… */
+const COAST_GAP_MS = 64;
+/** …for at most this long: a safety stop, not the usual end — the hold ends when the stream does, so a long
+ *  coast's tail is never let through to move the page late. */
+const COAST_MAX_MS = 2400;
 /** The first moments after the fold, while the flick that caused it is still speeding up. */
 const FLICK_PUSH_MS = 280;
 /** How long the page's own smooth scroll back to the results is told apart from the visitor's scrolling. */
 const OWN_SCROLL_MS = 1200;
+/** How long the page's own instant scroll that goes with a fold is told apart from the visitor's scrolling. */
+const FOLD_SCROLL_MS = 120;
+/** Folded, the view also lifts this much (CSS: .ins-explore-view.is-head-collapsed's margin-top). */
+const FOLDED_LIFT_PX = 8;
+/** How far a finger pulls down at the very top before the heading unfolds. */
+const TOUCH_UNFOLD_PX = 12;
 /** Longest the card waits on its pictures before showing anyway. */
 const PREVIEW_IMAGE_WAIT_MS = 1500;
 /** How soon after Back / Forward the page counts as returning to where it was left. */
 const RETURN_WINDOW_MS = 2000;
+/** How long Back waits for the gallery to grow tall enough to return to the remembered spot. */
+const RESTORE_GIVE_UP_MS = 4000;
 
 // Whether the heading was folded when the visitor last left Explore, and when the browser last went Back or
 // Forward: together they say the page is being returned to (an app opened from the gallery, then Back), so
 // it comes back folded as it was left — the restored scroll was measured that way — instead of a heading's
 // height off and folding again under the visitor on the next scroll. Arriving fresh it starts open.
 let leftFolded = false;
+// Where the page was when the visitor last opened something from it. The gallery loads after the page
+// mounts, so the browser's own restore on Back lands while the page is still short and ends up near the top;
+// this is put back once the gallery is tall enough again.
+let leftScrollY = 0;
 let poppedAt = -Infinity;
 if (typeof window !== 'undefined') {
-  window.addEventListener('popstate', () => {
+  const notePopped = () => {
     poppedAt = performance.now();
+  };
+  // Noted as Back / Forward starts, before the router renders the page it goes back to — that render is what
+  // reads it. The Navigation API says so first ("traverse"); popstate, in the capture phase so it runs ahead
+  // of the router's own listener, covers browsers without it.
+  const navigation = (window as unknown as { navigation?: EventTarget }).navigation;
+  navigation?.addEventListener('navigate', (event) => {
+    if ((event as Event & { navigationType?: string }).navigationType === 'traverse') notePopped();
   });
+  window.addEventListener('popstate', notePopped, { capture: true });
 }
 const returningFolded = () => leftFolded && performance.now() - poppedAt < RETURN_WINDOW_MS;
+
+/** A store that never changes: useSyncExternalStore with it only tells server from client. */
+const subscribeToNothing = () => () => {};
 
 /**
  * Preview content per link, kept for the visit: hovering a link a second
@@ -232,7 +257,9 @@ export function ExploreView() {
   // The link under the pointer (or keyboard focus): its name is typed into the heading.
   const [hoveredLabel, setHoveredLabel] = useState<{ text: string; emoji: string } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [mounted, setMounted] = useState(false);
+  // Whether this is the client render: false for the server's HTML and the hydration pass, true after. The
+  // hover preview portals into the body, which only exists on the client.
+  const mounted = useSyncExternalStore(subscribeToNothing, () => true, () => false);
   const viewRef = useRef<HTMLDivElement>(null);
   // Read once, so the class it sets is the same on every render and never fights the ones toggled below.
   const [startFolded] = useState(returningFolded);
@@ -274,15 +301,21 @@ export function ExploreView() {
     let coastUntil = 0;
     let coastStarted = 0;
     let lastPush = 0;
+    let lastWheelAt = -Infinity;
     const onWheel = (e: WheelEvent) => {
       // A scroll in the Filters drawer scrolls the drawer, not the page.
       if (e.target instanceof Element && e.target.closest('.ins-fdrawer')) return;
       const y = window.scrollY;
       const now = performance.now();
       const push = Math.abs(e.deltaY);
+      // Only a trackpad's stream of events — pixel deltas, one every frame or so — can be a flick's coasting.
+      // A mouse wheel's notches come further apart (in Firefox, in lines), and each is a fresh ask to scroll:
+      // after the notch that folds, the next one scrolls at once.
+      const continuing = e.deltaMode === 0 && now - lastWheelAt < COAST_GAP_MS;
+      lastWheelAt = now;
       if (now < coastUntil && e.deltaY > 0) {
         // The flick's own push (its first moments, still speeding up) and then its coasting are held.
-        if (now - coastStarted < FLICK_PUSH_MS || push <= lastPush * 1.3 + 2) {
+        if (continuing && (now - coastStarted < FLICK_PUSH_MS || push <= lastPush * 1.3 + 2)) {
           e.preventDefault();
           lastPush = push;
           coastUntil = Math.min(Math.max(now + COAST_GAP_MS, coastStarted + FLICK_PUSH_MS), coastStarted + COAST_MAX_MS);
@@ -313,24 +346,110 @@ export function ExploreView() {
       if (want) window.addEventListener('wheel', onWheel, { passive: false });
       else window.removeEventListener('wheel', onWheel);
     };
-    // Touch and keys: the same, from where the page has got to.
+    // Touch, keys and the scrollbar can't be held like the wheel: by the time they're seen the page has
+    // already moved, and folding then would pull everything up by the heading's height under the visitor
+    // (Page Down skipping part of the gallery, a reload part-way down jumping on the next scroll). So the
+    // page is moved to match. A short way in — an arrow press, a small swipe — it lands on the fitted view
+    // at the top, the same place the wheel's fold arrives at. Further down it folds at once and scrolls
+    // back by what folded away, so what's on screen stays exactly where it was.
+    const foldFromScroll = (y: number) => {
+      const shrink = (head?.offsetHeight ?? 0) + FOLDED_LIFT_PX;
+      ownScrollUntil.current = performance.now() + FOLD_SCROLL_MS;
+      if (y < shrink) {
+        fold(true);
+        window.scrollTo({ top: 0, behavior: 'auto' });
+        return;
+      }
+      view.classList.add('is-head-instant');
+      fold(true);
+      window.scrollTo({ top: y - shrink, behavior: 'auto' });
+      // Transitions back on once the folded layout has been drawn, ready for the unfold.
+      requestAnimationFrame(() => requestAnimationFrame(() => view.classList.remove('is-head-instant')));
+    };
     let lastY = window.scrollY;
     const onScroll = () => {
       const y = window.scrollY;
-      if (!folded() && y > FOLD_ZONE_PX && y > lastY && canFold()) fold(true);
+      if (!folded() && y > FOLD_ZONE_PX && y > lastY && canFold() && performance.now() > ownScrollUntil.current) foldFromScroll(y);
       else if (folded() && y <= 0 && lastY > 0 && performance.now() > ownScrollUntil.current) fold(false);
-      lastY = y;
+      lastY = window.scrollY;
       syncWheel();
+    };
+    // Already at the top, a scroll up doesn't move the page, so there's no scroll to see: Up, Page Up, Home
+    // and Shift+Space — and a pull down on a touch screen — unfold it themselves, as the wheel does.
+    const onKey = (e: KeyboardEvent) => {
+      if (!folded() || window.scrollY > 0 || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable], [role="dialog"], .ins-fdrawer')) return;
+      if (e.key === 'ArrowUp' || e.key === 'PageUp' || e.key === 'Home' || (e.key === ' ' && e.shiftKey)) fold(false);
+    };
+    let touchY: number | null = null;
+    const onTouchStart = (e: TouchEvent) => {
+      touchY = folded() && window.scrollY <= 0 && e.touches.length === 1 ? e.touches[0].clientY : null;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (touchY === null || e.touches.length !== 1) return;
+      if (e.touches[0].clientY - touchY > TOUCH_UNFOLD_PX && window.scrollY <= 0) {
+        touchY = null;
+        fold(false);
+      }
     };
     syncWheel();
     window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
     return () => {
       window.removeEventListener('wheel', onWheel);
       window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
       leftFolded = folded();
       fold(false);
+      view.classList.remove('is-head-instant');
     };
   }, [loading]);
+
+  // Opening anything from the page (an app, a screen, a list link) remembers where the page was, for Back.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const remember = () => {
+      leftScrollY = window.scrollY;
+    };
+    view.addEventListener('click', remember, true);
+    return () => view.removeEventListener('click', remember, true);
+  }, []);
+
+  // Back to Explore: once the gallery has loaded enough to reach the remembered spot, the page goes there.
+  // Anything the visitor does first — a scroll, a tap, a key — wins, and so does a gallery that never gets
+  // that tall (a filter changed in between), after a few seconds. Worked out each time the view is shown
+  // rather than once: Back can show the earlier page again with its state kept, re-running only effects.
+  useEffect(() => {
+    const view = viewRef.current;
+    const returnY = performance.now() - poppedAt < RETURN_WINDOW_MS ? leftScrollY : 0;
+    if (!view || returnY <= 0) return;
+    let done = false;
+    const inputs = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+    const stop = () => {
+      done = true;
+      observer.disconnect();
+      window.clearTimeout(timer);
+      inputs.forEach((type) => window.removeEventListener(type, stop));
+    };
+    const restore = () => {
+      if (done) return;
+      if (document.documentElement.scrollHeight - window.innerHeight < returnY - 1) return;
+      ownScrollUntil.current = performance.now() + FOLD_SCROLL_MS;
+      window.scrollTo({ top: returnY, behavior: 'auto' });
+      stop();
+    };
+    const observer = new ResizeObserver(restore);
+    observer.observe(view);
+    const timer = window.setTimeout(stop, RESTORE_GIVE_UP_MS);
+    inputs.forEach((type) => window.addEventListener(type, stop, { passive: true }));
+    restore();
+    return stop;
+  }, []);
 
   // Once the toolbar row is pinned under the header, the two share one pane of glass (CSS: the row's
   // backdrop reaches up behind the header, whose own glass steps aside) instead of two blurs meeting at a
@@ -384,10 +503,6 @@ export function ExploreView() {
       window.scrollTo({ top: target, behavior: smooth ? 'smooth' : 'auto' });
     }
   }, [query]);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Every value here comes from meta.taxonomy — what the store actually
   // holds — rather than a fixed list, so a group disappears instead of

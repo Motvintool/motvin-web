@@ -1065,12 +1065,24 @@ body {
   .ins-rotor-emoji { animation: none; }
 }
 
+/* The header covers the top 82px of every Inspirations page (and docks the filter row inside itself once
+   scrolled): a card reached with Tab, or an anchor, is scrolled to just below it rather than under it, and
+   Space / Page Down keep what was under it in view instead of skipping it. Explore sets its own, larger
+   value below, where the toolbar pins beneath the header instead. */
+html:has(.ins-header) {
+  scroll-padding-top: 100px;
+}
+
 /* Explore's heading and lists fold away on the first scroll down (ExploreView toggles .is-head-collapsed)
    and open again on a scroll up at the very top: the height eases to nothing as they fade, and the toolbar
    and screens rise into the space at the same pace. Scroll anchoring is off here, or the browser would
    scroll to hold the cards still while the heading shrinks. */
 html:has(.ins-explore-view) {
   overflow-anchor: none;
+  /* The header and the pinned toolbar cover the top of the window: a card reached with Tab (or Shift+Tab)
+     is scrolled to just below them instead of under them, and Space / Page Down keep what was under the
+     bars in view instead of skipping it. */
+  scroll-padding-top: 170px;
 }
 
 .ins-explore-head {
@@ -1080,12 +1092,31 @@ html:has(.ins-explore-view) {
 }
 
 .ins-explore-head-inner {
+  position: relative;
   min-height: 0;
   overflow: hidden;
-  /* Unfolding: the space opens first, then the heading and lists settle in from a little above. */
+  /* Unfolding: the space opens, the content comes back at once, and the curtain below uncovers it from the top
+     down; the content settles in from a little above. */
   transition:
-    opacity 300ms var(--ins-ease) 90ms,
+    opacity 120ms var(--ins-ease),
     transform 420ms cubic-bezier(0.22, 1, 0.36, 1) 40ms;
+}
+
+/* The curtain that reveals the heading and lists on the way back, like text being uncovered: a sheet in the
+   page's colour with a soft upper edge (clear → page over --ins-reveal-edge), taller than the content by that
+   edge and starting above it, so covering it hides everything. Unfolding slides it down and out of the
+   inner's clip; the edge sweeps over the text and each line shows through as it passes. Moved with transform
+   only, so the reveal is composited — nothing repaints — and it costs nothing while the page scrolls. */
+.ins-explore-head-inner::after {
+  --ins-reveal-edge: 160px;
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--ins-reveal-edge)) 0 auto;
+  height: calc(100% + var(--ins-reveal-edge));
+  background: linear-gradient(to bottom, transparent, var(--ins-page) var(--ins-reveal-edge));
+  pointer-events: none;
+  transform: translateY(100%);
+  transition: transform 560ms cubic-bezier(0.22, 1, 0.36, 1) 40ms;
 }
 
 .ins-explore-view.is-head-collapsed .ins-explore-head {
@@ -1099,6 +1130,12 @@ html:has(.ins-explore-view) {
   transition:
     opacity 180ms var(--ins-ease),
     transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* The curtain only draws over the content once that fade is over — unseen — so it's in place for the reveal. */
+.ins-explore-view.is-head-collapsed .ins-explore-head-inner::after {
+  transform: translateY(0);
+  transition: transform 0ms linear 220ms;
 }
 
 /* Explore starts 8px under the header. Folded, the page eases up those 8px so the toolbar sits right
@@ -1119,10 +1156,20 @@ html:has(.ins-explore-view) {
   opacity: 0;
 }
 
+/* A fold that comes with a scroll already made (keys, scrollbar, touch further down) happens at once, so the
+   page can scroll back by exactly what folded away and nothing on screen moves. */
+.ins-explore-view.is-head-instant,
+.ins-explore-view.is-head-instant .ins-explore-head,
+.ins-explore-view.is-head-instant .ins-explore-head-inner,
+.ins-explore-view.is-head-instant .ins-explore-head-inner::after {
+  transition: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ins-explore-view,
   .ins-explore-head,
-  .ins-explore-head-inner {
+  .ins-explore-head-inner,
+  .ins-explore-head-inner::after {
     transition: none;
   }
 }
@@ -2710,6 +2757,43 @@ select.ins-input {
   contain-intrinsic-size: 380px 846px;
 }
 
+/* A card out of view is laid out at its placeholder size, and the page re-measures as each row scrolls in and
+   takes its real size — the scrollbar jitters, the page length keeps changing, and on Explore (no scroll
+   anchoring) the content shifts. So the placeholder is worked out from the grid's actual width: the grid is a
+   container, and a card's block size is its column width (the grid's own column rules, mirrored here) times
+   the card's own aspect, plus any caption. `auto` first: once a card has been laid out, its real size is
+   remembered over the estimate. */
+.ins-grid,
+.ins-app-grid {
+  container-type: inline-size;
+}
+
+/* Screen cards in the shot panel: five 380px-capped columns, 24px apart, shot aspect 282 / 611, no caption. */
+.ins-shot-panel .ins-grid > .ins-card {
+  contain-intrinsic-block-size: auto calc(min(380px, (100cqw - 96px) / 5) * 611 / 282);
+}
+
+/* App cards: five 1fr columns 20px apart, a 346 / 674 shot in a frame plus a 98px caption. */
+.ins-app-grid > .ins-card {
+  --ins-app-card-w: calc((100cqw - 80px) / 5);
+  contain-intrinsic-block-size: auto calc(var(--ins-app-card-w) * 1.956 + 98px);
+}
+@media (max-width: 1499px) {
+  .ins-app-grid > .ins-card { --ins-app-card-w: calc((100cqw - 60px) / 4); }
+}
+@media (max-width: 1139px) {
+  .ins-app-grid > .ins-card { --ins-app-card-w: calc((100cqw - 40px) / 3); }
+}
+@media (max-width: 759px) {
+  .ins-app-grid > .ins-card { --ins-app-card-w: calc((100cqw - 20px) / 2); }
+  .ins-shot-panel .ins-grid > .ins-card {
+    contain-intrinsic-block-size: auto calc((100cqw - 16px) / 2 * 611 / 282);
+  }
+}
+@media (max-width: 520px) {
+  .ins-app-grid > .ins-card { --ins-app-card-w: 100cqw; }
+}
+
 /* Figma ScreenPreview (node 1014:9412): 346x770 total, with a 346x674
    screenshot shell, 32px inset, 48px outer radius and 24px inner radius. */
 .ins-card-shot {
@@ -3236,7 +3320,7 @@ select.ins-input {
   justify-content: center;
   border: 0;
   cursor: var(--ins-cursor-hand, pointer);
-  transition: background 180ms ease, color 180ms ease;
+  transition: background 180ms ease, color 180ms ease, scale 160ms var(--ins-ease);
 }
 .ins-btn-save {
   background: #000;
@@ -4693,7 +4777,9 @@ select.ins-input {
 .ins-app-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 20px 20px;
+  /* Rows further apart than columns: each app's name sits under its own screen, and with a tight row gap it
+     read as the caption of the row below while scrolling. */
+  gap: 40px 20px;
 }
 
 /* AppCard reuses .ins-card wholesale — same shot, badge, actions and meta row
@@ -4974,6 +5060,11 @@ select.ins-input {
   flex-direction: column;
   gap: 20px;
   padding: 16px;
+  /* Hundreds of journeys, each a strip of dozens of screens: only the rows near the window are laid out and
+     painted. Every row is the same height, so the placeholder is exact and nothing shifts as rows come in —
+     the size is the content box (the 46px meta line, 20px gap and 527px strip); padding and border add on. */
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 593px;
   border: 1px solid var(--ins-border);
   border-radius: 32px 32px 46px 46px;
   background: var(--ins-card);
@@ -16995,17 +17086,69 @@ html.ins-bat-on .ins-search-bat { display: block; }
 /* Cards: the grey frame deepens a shade under the pointer, the screen gives a little under a click (pointer
    only — on touch a press is as often the start of a swipe), and a pick's tick pops in. */
 .ins-app-grid .ins-card-shot {
-  transition: background 220ms var(--ins-ease);
+  transition: scale 220ms cubic-bezier(0.22, 1, 0.36, 1), background 220ms var(--ins-ease);
 }
-.ins-app-grid .ins-card-inset {
-  transition: scale 200ms cubic-bezier(0.22, 1, 0.36, 1);
+/* Pressing a screen: the whole card answers, as one piece. The frame sinks to 0.97 and its grey deepens, the
+   screen's tint deepens past its hover value, and — because the hover footer, select ring and screen all live
+   inside the frame — they go down with it and spring back together on release (the footer stays fully
+   opaque: dimmed, the screen shows through it and it reads as broken). Pressing the footer's own
+   Save / Copy buttons leaves the card still: only the screen link's press counts. Pointer devices only: on
+   touch, :active flickers on while a finger scrolls past. */
+.ins-card-shot,
+.ins-web-card-shot {
+  transition:
+    scale 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    background var(--ins-fast) var(--ins-ease);
+}
+.ins-card-inset,
+.ins-web-card-inset {
+  transition: scale 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 @media (hover: hover) {
   .ins-app-grid:not(.ins-shot-panel *) .ins-card:hover .ins-card-shot {
     background: #f0f0f0;
   }
-  .ins-app-grid .ins-card-inset:has(.ins-card-link:active) {
+  .ins-card-shot:has(.ins-card-link:active),
+  .ins-web-card-shot:has(.ins-web-card-link:active),
+  .ins-web-card-shot:has(.ins-web-card-inset > a:active) {
+    scale: 0.97;
+    transition-duration: 90ms, 90ms;
+  }
+  /* Frames that draw a grey ground (app cards, web cards) deepen it; the shot panel's frames have none. The
+     app-grid form is written out in full so it outranks that grid's own hover rule for the frame. */
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card:has(.ins-card-link:active) .ins-card-shot,
+  .ins-card-shot:not(.ins-shot-panel *):has(.ins-card-link:active),
+  .ins-web-card-shot:has(.ins-web-card-link:active),
+  .ins-web-card-shot:has(.ins-web-card-inset > a:active) {
+    background: #e9e9e9;
+  }
+  /* The shot panel's frame is a hairline stroke (the frame's ::before and the screen's own border): on
+     hover it firms up a step, on press a step more, with the rest of the card. */
+  .ins-shot-panel .ins-card-shot::before,
+  .ins-shot-panel .ins-card-inset {
+    transition-property: border-color, scale;
+    transition-duration: var(--ins-fast), 220ms;
+    transition-timing-function: var(--ins-ease), cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .ins-shot-panel .ins-card:hover .ins-card-shot::before,
+  .ins-shot-panel .ins-card:hover .ins-card-inset {
+    border-color: #e2e2e2;
+  }
+  .ins-shot-panel .ins-card-shot:has(.ins-card-link:active)::before,
+  .ins-shot-panel .ins-card-inset:has(.ins-card-link:active) {
+    border-color: #cfcfcf;
+    transition-duration: 90ms, 90ms;
+  }
+  /* Where the frame has a grey ground around the screen (app cards, web cards), the screen sinks a hair more
+     than its frame, so the frame reads as holding it. Not in the shot panel: there the screen fills its frame
+     edge to edge, and shrinking it alone would open a pale ring of page between the two. */
+  .ins-card-inset:not(.ins-shot-panel *):has(.ins-card-link:active),
+  .ins-web-card-inset:has(a:active) {
     scale: 0.985;
+    transition-duration: 90ms;
+  }
+  .ins-card-link:active::after {
+    background: rgba(11, 12, 14, 0.14);
     transition-duration: 90ms;
   }
 }
@@ -17018,7 +17161,11 @@ html.ins-bat-on .ins-search-bat { display: block; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ins-app-grid .ins-card-inset:has(.ins-card-link:active) { scale: none; }
+  .ins-card-shot:has(.ins-card-link:active),
+  .ins-web-card-shot:has(.ins-web-card-link:active),
+  .ins-web-card-shot:has(.ins-web-card-inset > a:active),
+  .ins-card-inset:has(.ins-card-link:active),
+  .ins-web-card-inset:has(a:active) { scale: none; }
   .ins-card-select-check { animation: none; }
 }
 
@@ -17147,42 +17294,72 @@ html.ins-header-away .ins-ftoolbar-anchor.is-pinned::before {
   z-index: 74;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 44px;
-  padding: 0 20px 0 16px;
+  gap: 12px;
+  height: 52px;
+  padding: 0 24px 0 9px;
   border: 0;
   border-radius: 999px;
+  /* Smoked glass over the page, lifted by a soft shadow and a hairline highlight along its top edge. */
   background: rgba(70, 70, 70, 0.7);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   color: #fff;
-  font-size: 15px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 28px -10px rgba(0, 0, 0, 0.45),
+    0 2px 6px -2px rgba(0, 0, 0, 0.25);
+  font-size: 16px;
   font-weight: 600;
+  letter-spacing: 0.01em;
   white-space: nowrap;
   cursor: var(--ins-cursor-hand, pointer);
   opacity: 0;
-  translate: -50% 14px;
+  translate: -50% 20px;
+  scale: 0.92;
   pointer-events: none;
-  transition: opacity 200ms var(--ins-ease), translate 300ms cubic-bezier(0.22, 1, 0.36, 1), background var(--ins-fast) var(--ins-ease), scale 160ms var(--ins-ease);
+  transition:
+    opacity 220ms var(--ins-ease),
+    translate 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    scale 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow var(--ins-fast) var(--ins-ease),
+    background var(--ins-fast) var(--ins-ease);
 }
 .ins-back-to-top.is-shown {
   opacity: 1;
   translate: -50% 0;
+  scale: 1;
   pointer-events: auto;
 }
+/* Hover lifts it a step with a deeper shadow; the press sinks it, quickly. */
 .ins-back-to-top:hover {
+  translate: -50% -2px;
   background: rgba(55, 55, 55, 0.8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 14px 32px -10px rgba(0, 0, 0, 0.5),
+    0 3px 8px -2px rgba(0, 0, 0, 0.28);
+  transition-duration: 220ms, 220ms, 220ms, 220ms, 220ms;
 }
 .ins-back-to-top:active {
   scale: 0.96;
-  transition-duration: 80ms;
+  translate: -50% 0;
+  transition-duration: 80ms, 80ms, 80ms, 80ms, 80ms;
 }
+/* The arrow sits in a round chip; on hover it nudges up (theme.css keeps svgs from transitioning, so the
+   movement is on the wrapper). */
 .ins-back-to-top-arrow {
   display: inline-flex;
-  transition: translate 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  transition: translate 280ms cubic-bezier(0.34, 1.56, 0.64, 1), background var(--ins-fast) var(--ins-ease);
 }
 .ins-back-to-top:hover .ins-back-to-top-arrow {
   translate: 0 -2px;
+  background: rgba(255, 255, 255, 0.2);
 }
 /* Room for it at the end of Explore (with .ins-main's own 32px): there the pill rests on empty page, clear of
    the last row's names. */
@@ -17202,7 +17379,301 @@ html.ins-header-away .ins-ftoolbar-anchor.is-pinned::before {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ins-back-to-top { translate: -50% 0; transition: opacity 120ms linear; }
+  .ins-back-to-top { translate: -50% 0; scale: 1; transition: opacity 120ms linear; }
+  .ins-back-to-top:hover { translate: -50% 0; }
   .ins-back-to-top:active { scale: none; }
   .ins-back-to-top:hover .ins-back-to-top-arrow { translate: none; }
+}
+
+/* ─── Press feedback ───────────────────────────────────────────────────────────────────────────────────────
+   Every pill and round button answers a press the same way the filter pills and card arrows already do: it
+   sinks to 0.96 (small round ones to 0.9) and springs back on release. Each class's transition list is
+   restated whole, with `scale` added — a later shorthand would otherwise drop the properties it had. The
+   masthead Save's bookmark springs when it fills (AppDetailView adds is-pop for that one moment, so it never
+   plays on arrival); an animation, since the theme rules out transitions on images. */
+.ins-btn {
+  transition:
+    background var(--ins-fast) var(--ins-ease),
+    border-color var(--ins-fast) var(--ins-ease),
+    color var(--ins-fast) var(--ins-ease),
+    scale 160ms var(--ins-ease);
+}
+.ins-iconbtn {
+  transition:
+    background var(--ins-fast) var(--ins-ease),
+    border-color var(--ins-fast) var(--ins-ease),
+    color var(--ins-fast) var(--ins-ease),
+    transform var(--ins-fast) var(--ins-ease),
+    scale 160ms var(--ins-ease);
+}
+.ins-text-search-trigger,
+.ins-search-clear {
+  transition:
+    background var(--ins-fast) var(--ins-ease),
+    color var(--ins-fast) var(--ins-ease),
+    scale 160ms var(--ins-ease);
+}
+.ins-loadmore-btn {
+  transition:
+    border-color var(--ins-fast) var(--ins-ease),
+    scale 160ms var(--ins-ease);
+}
+.ins-collections-new {
+  transition:
+    opacity var(--ins-fast) var(--ins-ease),
+    scale 160ms var(--ins-ease);
+}
+.ins-card-select-ring {
+  transition:
+    opacity var(--ins-fast) var(--ins-ease),
+    background var(--ins-fast) var(--ins-ease),
+    border-color var(--ins-fast) var(--ins-ease),
+    scale 160ms var(--ins-ease);
+}
+.ins-rating-star {
+  transition:
+    color var(--ins-fast) var(--ins-ease),
+    transform var(--ins-fast) var(--ins-ease),
+    scale 160ms var(--ins-ease);
+}
+
+.ins-btn:active:not(:disabled),
+.ins-iconbtn:active:not(:disabled),
+.ins-btn-copy:active:not(:disabled),
+.ins-btn-save:active:not(:disabled),
+.ins-loadmore-btn:active:not(:disabled),
+.ins-collections-new:active:not(:disabled),
+.ins-text-search-trigger:active:not(:disabled) {
+  scale: 0.96;
+}
+.ins-card-select-ring:active:not(:disabled),
+.ins-rating-star:active:not(:disabled),
+.ins-search-clear:active:not(:disabled) {
+  scale: 0.9;
+}
+
+/* Text-only controls don't shrink; they dim for the moment of the press. */
+.ins-explore-taxonomy-titlebtn:active:not(:disabled),
+.ins-tab:active:not(:disabled) {
+  opacity: 0.6;
+}
+
+.ins-btn--masthead-save img.is-pop {
+  animation: insSavePop 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes insSavePop {
+  0% { transform: scale(0.7); }
+  55% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-btn,
+  .ins-iconbtn,
+  .ins-btn-copy,
+  .ins-btn-save,
+  .ins-text-search-trigger,
+  .ins-search-clear,
+  .ins-loadmore-btn,
+  .ins-collections-new,
+  .ins-card-select-ring,
+  .ins-rating-star {
+    transition-duration: 0s;
+  }
+  .ins-btn--masthead-save img.is-pop {
+    animation: none;
+  }
+}
+
+/* ─── Motvin Buddy: press and hover feedback ───────────────────────────────────────────────────────────────
+   The guide's controls answer a press the way the page's pills do, and the small cues the panel already has
+   (a hover tint, a scaling send button) are completed: the launcher lifts and sinks, the "Try asking" rows
+   point where they lead, the route chips' icons nudge, and every button sinks under the finger. */
+
+/* The floating launcher: lifts on hover with a deeper shadow, sinks on press. */
+.ins-dock-pill {
+  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.22);
+  transition:
+    background-color 200ms var(--ins-ease),
+    color 200ms var(--ins-ease),
+    opacity 200ms var(--ins-ease),
+    box-shadow 220ms var(--ins-ease),
+    scale 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-dock-pill:hover {
+  scale: 1.06;
+  box-shadow: 0 12px 20px rgba(0, 0, 0, 0.26);
+}
+.ins-dock-pill:active {
+  scale: 0.94;
+  transition-duration: 200ms, 200ms, 200ms, 90ms, 90ms;
+}
+
+/* "Try asking" rows: the arrow leans toward where the row leads on hover; the row sinks a touch on press. */
+.ins-guide-example {
+  transition:
+    background 160ms var(--ins-ease),
+    scale 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-guide-example .ins-chip-ai {
+  transition: translate 220ms cubic-bezier(0.34, 1.56, 0.64, 1), color 160ms var(--ins-ease);
+}
+.ins-guide-example:hover:not(:disabled) .ins-chip-ai {
+  translate: 3px 0;
+  color: #0b0c0e;
+}
+.ins-guide-example:active:not(:disabled) {
+  scale: 0.985;
+  background: #e9ebee;
+  transition-duration: 90ms, 90ms;
+}
+
+/* Route chips (Apps, Screens, Flows…): the icon nudges up on hover; the chip sinks on press. */
+.ins-chip-btn {
+  transition:
+    background 160ms var(--ins-ease),
+    border-color 160ms var(--ins-ease),
+    scale 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-chip-btn .ins-chip-icon {
+  display: inline-flex;
+  transition: translate 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ins-chip-btn:hover:not(:disabled) .ins-chip-icon {
+  translate: 0 -1px;
+}
+.ins-chip-btn:active:not(:disabled) {
+  scale: 0.95;
+  transition-duration: 160ms, 160ms, 90ms;
+}
+
+/* Round buttons — history, new chat, the suggestions arrow, jump-to-latest, delete — and the Esc badge. */
+.ins-guide-history-btn,
+.ins-guide-newchat,
+.ins-guide-jump,
+.ins-guide-history-del,
+.ins-guide-esc {
+  transition:
+    background 160ms var(--ins-ease),
+    border-color 160ms var(--ins-ease),
+    color 160ms var(--ins-ease),
+    opacity 160ms var(--ins-ease),
+    scale 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-guide-history-btn:active,
+.ins-guide-newchat:active,
+.ins-guide-jump:active,
+.ins-guide-history-del:active {
+  scale: 0.92;
+  transition-duration: 160ms, 160ms, 160ms, 160ms, 90ms;
+}
+.ins-guide-esc:active {
+  scale: 0.96;
+  transition-duration: 160ms, 160ms, 160ms, 160ms, 90ms;
+}
+/* These two already move with transform on hover, so the press follows suit. */
+.ins-guide-suggest-arrow:active {
+  transform: scale(0.94);
+  transition-duration: 90ms;
+}
+.ins-guide-send:active:not(:disabled) {
+  transform: scale(0.92);
+  transition-duration: 90ms;
+}
+.ins-guide-empty-cta:active {
+  transform: scale(0.96);
+  transition-duration: 90ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-dock-pill,
+  .ins-guide-example,
+  .ins-guide-example .ins-chip-ai,
+  .ins-chip-btn,
+  .ins-chip-btn .ins-chip-icon,
+  .ins-guide-history-btn,
+  .ins-guide-newchat,
+  .ins-guide-jump,
+  .ins-guide-history-del,
+  .ins-guide-esc {
+    transition-duration: 0s;
+  }
+  .ins-dock-pill:hover,
+  .ins-guide-example:hover:not(:disabled) .ins-chip-ai,
+  .ins-chip-btn:hover:not(:disabled) .ins-chip-icon {
+    scale: 1;
+    translate: 0;
+  }
+}
+
+/* ─── Explore index (the heading's four lists): hover and press ────────────────────────────────────────────
+   Hovering a line already dims its neighbours, swaps the title, and shows a dotted leader to the count with a
+   preview under the pointer. The pieces now move rather than appear: the label leans toward where it leads,
+   the leader draws itself from the label out to the count, the count slides in to meet it, and the preview
+   glides after the pointer and crossfades between screens. A press leans the label a step further. */
+.ins-explore-taxonomy-link .ins-explore-index-label {
+  transition: translate 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ins-explore-taxonomy-link:hover .ins-explore-index-label {
+  translate: 4px 0;
+}
+.ins-explore-taxonomy-link:active .ins-explore-index-label {
+  translate: 7px 0;
+  transition-duration: 90ms;
+}
+.ins-explore-taxonomy-link:active {
+  opacity: 0.7;
+  transition-duration: 90ms;
+}
+
+.ins-explore-index-leader {
+  clip-path: inset(0 100% 0 0);
+  transition:
+    opacity 120ms cubic-bezier(0.22, 1, 0.36, 1),
+    clip-path 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms;
+}
+.ins-explore-taxonomy-link:hover .ins-explore-index-leader {
+  clip-path: inset(0 0 0 0);
+}
+.ins-explore-index-count {
+  translate: 6px 0;
+  transition:
+    opacity 180ms cubic-bezier(0.22, 1, 0.36, 1) 120ms,
+    translate 320ms cubic-bezier(0.22, 1, 0.36, 1) 120ms,
+    color 200ms;
+}
+.ins-explore-taxonomy-link:hover .ins-explore-index-count {
+  translate: 0 0;
+}
+@media (hover: none) {
+  .ins-explore-index-leader { clip-path: none; }
+  .ins-explore-index-count { translate: 0 0; }
+}
+
+/* The preview follows the pointer with a little lag, and its screens crossfade instead of cutting. */
+.ins-explore-cursor-preview {
+  transition: top 90ms linear, left 90ms linear;
+}
+.ins-explore-cursor-slide {
+  visibility: visible;
+  opacity: 0;
+  transition: opacity 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-explore-cursor-slide.is-active {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ins-explore-taxonomy-link .ins-explore-index-label,
+  .ins-explore-index-leader,
+  .ins-explore-index-count,
+  .ins-explore-cursor-preview,
+  .ins-explore-cursor-slide {
+    transition-duration: 0s;
+  }
+  .ins-explore-taxonomy-link:hover .ins-explore-index-label,
+  .ins-explore-taxonomy-link:active .ins-explore-index-label {
+    translate: 0 0;
+  }
 }
