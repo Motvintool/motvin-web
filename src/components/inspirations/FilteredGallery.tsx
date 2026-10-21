@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { inspirationsApi, type Page, type ScreenSort } from '@/lib/inspirations/api';
 import { freshFirst } from '@/lib/inspirations/appFreshness';
 import { EMPTY_FILTERS, matchesFilters, parseFilters, serializeFilters, toggleValue, withDefaultPlatform, type ScreenFilters } from '@/lib/inspirations/filters';
@@ -17,6 +17,7 @@ import { ScreenshotTextSearch } from './ScreenshotTextSearch';
 import { APPLIED_PILLS_MAX, AppliedFilterPills, FiltersPill } from './FiltersPanel';
 import { useAppFilters } from './useAppFilters';
 import { useAsync } from './useAsync';
+import { useFitResults } from './useFitResults';
 import { useExploreFilters } from './useExploreFilters';
 import { useLibrarySettings, useMeta } from './useMeta';
 
@@ -214,16 +215,30 @@ export function FilteredGallery({
   const textOn = Boolean(textQuery) && !exploreMode;
   const setText = (text: string | undefined) => setUrlParam('text', text ?? null);
 
-  const items = textOn ? textScreens : ready ? pages.items : [];
+  // While the next page of results loads, the ones it replaces stay up and the new ones take their place on
+  // arrival: an empty grid meanwhile made the page shorter than the window, which pulled a scrolled visitor
+  // back to the top before the results came.
+  const [shownItems, setShownItems] = useState<Screen[]>([]);
+  if (ready && pages.items !== shownItems) setShownItems(pages.items);
+  const items = textOn ? textScreens : ready ? pages.items : shownItems;
+  // A filter, sort, element or text search changed while scrolled into the results: once they're in, bring
+  // them to the fitted view under the docked bar. Explore runs its own fit (ExploreView), so none here.
+  const gridWrapRef = useRef<HTMLDivElement>(null);
+  useFitResults(exploreMode ? '' : `${key}|${textQuery}`, () => gridWrapRef.current, '.ins-grid');
   const libraryEmpty = meta.counts.screens === 0;
 
   const { data: allApps, loading: appsLoading } = useAsync<App[]>(
     () => (exploreMode ? inspirationsApi.listApps(undefined, sort === 'curated' ? undefined : sort) : Promise.resolve([])),
     `filtered-gallery-apps:${exploreMode}:${sort}`,
   );
+  // While another order loads, the list it replaces stays up and the new one takes its place on arrival:
+  // swapping to a one-row placeholder meanwhile made the page shorter than the window, which pulled a
+  // scrolled visitor back to the top before the results came.
+  const [shownApps, setShownApps] = useState<App[] | null>(null);
+  if (allApps && allApps !== shownApps) setShownApps(allApps);
   // In the default order, newly added apps lead, then updated ones; a sort the visitor picks is kept as is.
   const freshness = useLibrarySettings().freshness;
-  const matchingApps = allApps?.filter((a) => appMatchesFilters(a, withDefaultPlatform(filters))) ?? [];
+  const matchingApps = (allApps ?? shownApps)?.filter((a) => appMatchesFilters(a, withDefaultPlatform(filters))) ?? [];
   const appFilters = useAppFilters(matchingApps);
   // "+N more" beside the applied filters opens the Filters panel.
   const [openFilters, setOpenFilters] = useState(0);
@@ -237,9 +252,9 @@ export function FilteredGallery({
     <>
       {exploreMode ? (
         <>
-          {/* No running count on the app list. */}
+          {/* No running count on the app list. The row docks into the header once the gallery reaches it,
+              as on every other page: one bar, not a header with a second bar pinned beneath it. */}
           <ToolbarRow
-            pinned
             total={null}
             unit="app"
             right={<FiltersPill sections={appFilters.sections} onClearAll={appFilters.clear} total={apps.length} unit="app" atEnd onOpenChange={appFilters.onPanelOpen} openSignal={openFilters} />}
@@ -262,7 +277,7 @@ export function FilteredGallery({
           )}
           <AppsGrid
             apps={apps}
-            loading={appsLoading}
+            loading={appsLoading && !shownApps}
             webLayout={filters.platforms.length > 0 && filters.platforms.every(isDesktopPlatform)}
             emptyTitle={appsLibraryEmpty ? 'No apps here yet' : 'No apps match these filters'}
             emptyPlay={!appsLibraryEmpty}
@@ -291,13 +306,13 @@ export function FilteredGallery({
           />
           {/* .ins-shot-panel applies the app-page gallery treatment: five
               frameless, hairline-bordered shots per row. */}
-          <div className={filters.platforms.length > 0 && filters.platforms.every(isDesktopPlatform) ? '' : 'ins-shot-panel'}>
+          <div ref={gridWrapRef} className={filters.platforms.length > 0 && filters.platforms.every(isDesktopPlatform) ? '' : 'ins-shot-panel'}>
             <ScreenGrid
               screens={items}
               webLayout={filters.platforms.length > 0 && filters.platforms.every(isDesktopPlatform)}
               showMeta={false}
               selectable
-              loading={textOn ? textLoading || !textHits : !ready || loadingMore}
+              loading={textOn ? textLoading || !textHits : (!ready && shownItems.length === 0) || loadingMore}
               hasMore={!textOn && ready && pages.next !== null}
               onLoadMore={loadMore}
               textHighlights={textOn ? textHits?.textHighlights : undefined}

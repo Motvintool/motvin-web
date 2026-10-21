@@ -16,6 +16,7 @@ import { AdminChatbot } from './admin/AdminChatbot';
 import { UserChatbot } from './UserChatbot';
 import { LongPressScreenMenus } from './useScreenContextMenu';
 import { RevealPressedPills } from './RevealPressedPills';
+import { BackToTop } from './BackToTop';
 
 function InspirationsHeaderSkeleton() {
   return (
@@ -66,6 +67,8 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
             screenshot or logo (see GuestImageGuard). Renders nothing. */}
         <GuestImageGuard />
         <main className={`ins-main ${wide ? 'ins-main--wide' : ''}`}>{children}</main>
+        {/* At the end of a long page, a pill back to its top (every Inspirations page). */}
+        <BackToTop />
         {/* Reads ?flow= and renders over whatever page is showing. */}
         <Suspense fallback={null}>
           <FlowPreview />

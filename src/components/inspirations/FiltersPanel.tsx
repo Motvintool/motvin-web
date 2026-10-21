@@ -97,7 +97,7 @@ export function FiltersPill({
       if (!first || !last) return;
       if (!drawer.contains(document.activeElement) || (e.shiftKey ? document.activeElement === first : document.activeElement === last)) {
         e.preventDefault();
-        (e.shiftKey ? last : first).focus();
+        (e.shiftKey ? last : first).focus({ preventScroll: true });
       }
     };
     // Over a dimmed page, as Motvin Buddy opens: a click anywhere outside it — the dimmed page, or its own

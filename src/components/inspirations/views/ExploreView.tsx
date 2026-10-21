@@ -9,13 +9,13 @@ import { createPortal } from 'react-dom';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { openSearch, type SearchSection } from '@/lib/inspirations/openSearch';
 import { elementLabel, flowCategoryLabel, INDUSTRY_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
-import { BackToTop } from '../BackToTop';
 import { FilteredGallery } from '../FilteredGallery';
 import { PageHeading } from '../PageHeading';
 import { RotatingTitle } from '../RotatingTitle';
 import { usePlatformMeta } from '../useMeta';
 import { ExploreSkeleton } from '../Skeletons';
 import { useAsync } from '../useAsync';
+import { useFitResults } from '../useFitResults';
 import { AppLogo } from '../AppLogo';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { EMPTY_FILTERS, browsedPlatforms } from '@/lib/inspirations/filters';
@@ -42,6 +42,16 @@ const FOLD_SCROLL_MS = 120;
 const FOLDED_LIFT_PX = 8;
 /** How far a finger pulls down at the very top before the heading unfolds. */
 const TOUCH_UNFOLD_PX = 12;
+/** Something laid above the page — the Filters drawer, the search panel, any modal dialog (the moei studio,
+ *  a preview…) — owns the wheel, touch and keys while it's open: they scroll it (or nothing), never the page,
+ *  so the heading behind it never folds or unfolds. That's input over its backdrop too, not only over it. */
+const OVERLAY = '.ins-fdrawer, .ins-search-overlay, [aria-modal="true"]';
+function overlayInput(target: EventTarget | null): boolean {
+  if (document.querySelector(OVERLAY)) return true;
+  return target instanceof Element && Boolean(target.closest(`${OVERLAY}, [role="dialog"]`));
+}
+/** After a touch, how long the page must have been still before the fold moves it (a glide must have ended). */
+const TOUCH_SETTLE_MS = 160;
 /** Longest the card waits on its pictures before showing anyway. */
 const PREVIEW_IMAGE_WAIT_MS = 1500;
 /** How soon after Back / Forward the page counts as returning to where it was left. */
@@ -279,9 +289,15 @@ export function ExploreView() {
     const folded = () => view.classList.contains('is-head-collapsed');
     // Only when there's something to fold: on narrower windows the heading and lists aren't shown at all,
     // and folding would swallow a scroll and shift the page for nothing.
-    const canFold = () => (head?.querySelector<HTMLElement>('.ins-explore-head-inner')?.scrollHeight ?? 0) > 0 && head?.offsetParent !== null;
-    // Returned to folded (startFolded), or set up again after a cleanup that opened it: folded, as left.
-    if (folded() || returningFolded()) {
+    // Only a heading with something in it: on a phone its lists are hidden, and there's nothing to fold (its
+    // reveal curtain overhangs it, so the inner's scrollHeight alone would say otherwise).
+    const canFold = () => {
+      const inner = head?.querySelector<HTMLElement>('.ins-explore-head-inner');
+      return Boolean(inner && head?.offsetParent !== null && Array.from(inner.children).some((c) => (c as HTMLElement).offsetHeight > 0));
+    };
+    // Returned to folded (startFolded), set up again after a cleanup that opened it, or starting on a page
+    // that's already scrolled into the gallery (a reload of the results, a restored scroll): folded.
+    if (folded() || returningFolded() || window.scrollY > FOLD_ZONE_PX) {
       view.classList.add('is-head-collapsed');
       if (head) head.inert = true;
     }
@@ -304,7 +320,7 @@ export function ExploreView() {
     let lastWheelAt = -Infinity;
     const onWheel = (e: WheelEvent) => {
       // A scroll in the Filters drawer scrolls the drawer, not the page.
-      if (e.target instanceof Element && e.target.closest('.ins-fdrawer')) return;
+      if (overlayInput(e.target)) return;
       const y = window.scrollY;
       const now = performance.now();
       const push = Math.abs(e.deltaY);
@@ -366,23 +382,47 @@ export function ExploreView() {
       // Transitions back on once the folded layout has been drawn, ready for the unfold.
       requestAnimationFrame(() => requestAnimationFrame(() => view.classList.remove('is-head-instant')));
     };
+    // A finger's scroll, and the glide it leaves behind, can't be moved under it — a scrollTo then stops the
+    // glide dead (iOS). After a touch, the fold waits until the page has come to rest.
+    let touchScrolling = false;
+    let settle = 0;
+    const foldWhenSettled = () => {
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => {
+        touchScrolling = false;
+        const y = window.scrollY;
+        if (!folded() && y > FOLD_ZONE_PX && canFold()) foldFromScroll(y);
+      }, TOUCH_SETTLE_MS);
+    };
     let lastY = window.scrollY;
     const onScroll = () => {
       const y = window.scrollY;
-      if (!folded() && y > FOLD_ZONE_PX && y > lastY && canFold() && performance.now() > ownScrollUntil.current) foldFromScroll(y);
-      else if (folded() && y <= 0 && lastY > 0 && performance.now() > ownScrollUntil.current) fold(false);
+      if (document.querySelector(OVERLAY)) {
+        lastY = y;
+        return;
+      }
+      if (!folded() && y > FOLD_ZONE_PX && y > lastY && canFold() && performance.now() > ownScrollUntil.current) {
+        if (touchScrolling) foldWhenSettled();
+        else foldFromScroll(y);
+      } else if (folded() && y <= 0 && lastY > 0 && performance.now() > ownScrollUntil.current) fold(false);
       lastY = window.scrollY;
       syncWheel();
     };
     // Already at the top, a scroll up doesn't move the page, so there's no scroll to see: Up, Page Up, Home
     // and Shift+Space — and a pull down on a touch screen — unfold it themselves, as the wheel does.
     const onKey = (e: KeyboardEvent) => {
-      if (!folded() || window.scrollY > 0 || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (!folded() || window.scrollY > 0 || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || document.querySelector(OVERLAY)) return;
       if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable], [role="dialog"], .ins-fdrawer')) return;
       if (e.key === 'ArrowUp' || e.key === 'PageUp' || e.key === 'Home' || (e.key === ' ' && e.shiftKey)) fold(false);
     };
     let touchY: number | null = null;
     const onTouchStart = (e: TouchEvent) => {
+      if (overlayInput(e.target)) {
+        touchScrolling = false;
+        touchY = null;
+        return;
+      }
+      touchScrolling = true;
       touchY = folded() && window.scrollY <= 0 && e.touches.length === 1 ? e.touches[0].clientY : null;
     };
     const onTouchMove = (e: TouchEvent) => {
@@ -403,6 +443,7 @@ export function ExploreView() {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('touchmove', onTouchMove);
+      window.clearTimeout(settle);
       leftFolded = folded();
       fold(false);
       view.classList.remove('is-head-instant');
@@ -451,58 +492,28 @@ export function ExploreView() {
     return stop;
   }, []);
 
-  // Once the toolbar row is pinned under the header, the two share one pane of glass (CSS: the row's
-  // backdrop reaches up behind the header, whose own glass steps aside) instead of two blurs meeting at a
-  // seam. "Pinned" is measured — the row's top at its sticky offset — on scroll, on resize and when the
-  // heading's fold finishes, and kept as a class so it costs no re-render.
-  useEffect(() => {
-    const view = viewRef.current;
-    if (!view || loading) return;
-    let frame = 0;
-    const check = () => {
-      frame = 0;
-      const anchor = view.querySelector<HTMLElement>('.ins-ftoolbar-anchor.is-pinned');
-      // At its own sticky offset: under the header, or near the top while the header has stepped away.
-      const stuck = Boolean(anchor && anchor.getBoundingClientRect().top <= (parseFloat(getComputedStyle(anchor).top) || 0) + 0.5);
-      view.classList.toggle('is-bar-stuck', stuck);
-    };
-    const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(check);
-    };
-    check();
-    window.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
-    view.addEventListener('transitionend', schedule);
-    return () => {
-      if (frame) cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', schedule);
-      window.removeEventListener('resize', schedule);
-      view.removeEventListener('transitionend', schedule);
-      view.classList.remove('is-bar-stuck');
-    };
-  }, [loading]);
-
-  // A filter, sort or category picked while scrolled down the gallery: the list changes length under the
-  // visitor, which could leave them in blank space or mid-list. Bring the results' start back up to the
-  // toolbar's line, smoothly — only from below it, so a pick made at the top of the page moves nothing.
+  // A filter, sort or category picked while scrolled into the gallery brings the new results to the fitted
+  // view (useFitResults). Explore's heading folds for it, instantly, so what's measured is what will show.
   const query = params.toString();
-  const lastQuery = useRef(query);
-  useEffect(() => {
-    if (lastQuery.current === query) return;
-    lastQuery.current = query;
-    const view = viewRef.current;
-    const anchor = view?.querySelector<HTMLElement>('.ins-ftoolbar-anchor');
-    const grid = view?.querySelector<HTMLElement>('.ins-app-grid');
-    if (!anchor || !grid) return;
-    // Under the header: scrolling back up brings it back (FilterToolbar), even when it had stepped away.
-    const line = (document.querySelector<HTMLElement>('.ins-header')?.offsetHeight ?? 0) + anchor.offsetHeight;
-    const target = Math.round(grid.getBoundingClientRect().top + window.scrollY - line);
-    if (window.scrollY > target + 1) {
-      const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  useFitResults(query, () => viewRef.current, '.ins-app-grid', {
+    prepare: () => {
+      const view = viewRef.current;
+      const head = view?.querySelector<HTMLElement>('.ins-explore-head');
+      const open = Boolean(view && !view.classList.contains('is-head-collapsed'));
+      return {
+        shrink: open ? (head?.offsetHeight ?? 0) + FOLDED_LIFT_PX : 0,
+        commit: () => {
+          if (!open || !view) return;
+          view.classList.add('is-head-instant', 'is-head-collapsed');
+          if (head) head.inert = true;
+          requestAnimationFrame(() => requestAnimationFrame(() => view.classList.remove('is-head-instant')));
+        },
+      };
+    },
+    onOwnScroll: () => {
       ownScrollUntil.current = performance.now() + OWN_SCROLL_MS;
-      window.scrollTo({ top: target, behavior: smooth ? 'smooth' : 'auto' });
-    }
-  }, [query]);
+    },
+  });
 
   // Every value here comes from meta.taxonomy — what the store actually
   // holds — rather than a fixed list, so a group disappears instead of
@@ -635,7 +646,6 @@ export function ExploreView() {
       <Suspense fallback={null}>
         <FilteredGallery counts={meta.counts} />
       </Suspense>
-      <BackToTop />
 
       {mounted && hoveredCategory && (
         <HoverPreview category={hoveredCategory} mousePos={mousePos} platforms={platforms} />

@@ -36,6 +36,7 @@ import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, CloseIcon, ExternalIcon, Sea
 
 import { ScreenGrid } from '../ScreenGrid';
 import { ScreenGridSkeleton } from '../Skeletons';
+import { useFitResults } from '../useFitResults';
 import { useAsync } from '../useAsync';
 import { SHEET_QUERY, useMediaQuery } from '../useSheet';
 
@@ -89,7 +90,7 @@ export function CheckboxFilterPill({
   useEffect(() => {
     if (!open) return;
     setQuery('');
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
   }, [open]);
 
   const applied = selected.length > 0;
@@ -153,7 +154,7 @@ export function CheckboxFilterPill({
                 // cursor in the text field instead of navigating options.
                 if (e.key === 'ArrowDown') {
                   e.preventDefault();
-                  optionsRef.current?.querySelector<HTMLElement>(MENU_ITEM_SELECTOR)?.focus();
+                  optionsRef.current?.querySelector<HTMLElement>(MENU_ITEM_SELECTOR)?.focus({ preventScroll: true });
                 }
               }}
             />
@@ -231,7 +232,7 @@ function FlowTreePill({
   useEffect(() => {
     if (!open) return;
     setQuery('');
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
     // Reopening starts from what's actually applied — an outside-click that
     // dismissed the popover last time without Apply shouldn't leave stray
     // checks lying around.
@@ -361,7 +362,7 @@ function FlowTreePill({
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') {
                   e.preventDefault();
-                  optionsRef.current?.querySelector<HTMLElement>(MENU_ITEM_SELECTOR)?.focus();
+                  optionsRef.current?.querySelector<HTMLElement>(MENU_ITEM_SELECTOR)?.focus({ preventScroll: true });
                 }
               }}
             />
@@ -417,6 +418,12 @@ export function AppDetailView({
   const [patternFilter, setPatternFilter] = useState<string[]>([]);
   const [flowFilter, setFlowFilter] = useState<string[]>([]);
   const [textSearchOpen, setTextSearchOpen] = useState(false);
+  // The search field takes focus as it opens — without scrolling: it sits in the tab bar, which may be docked
+  // in the sticky header, and a focus that scrolls would send the page to the header's own place at the top.
+  const textInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (textSearchOpen) textInputRef.current?.focus({ preventScroll: true });
+  }, [textSearchOpen]);
   const [textQuery, setTextQuery] = useState('');
   // A phone's field is narrow (it shares a line with the version picker).
   const textPlaceholder = useMediaQuery(SHEET_QUERY) ? 'Search text…' : 'Search text in screenshot...';
@@ -581,6 +588,15 @@ export function AppDetailView({
   // toolbar (ToolbarRow) — reuses its scroll-tracking/portal hook so both
   // read the "past the header edge" boundary identically.
   const { docked, leaving, anchorRef, rowRef, headerContent } = useDockingRow();
+  // A tab, version or filter changed while scrolled into the content: once the new panel is in, bring it to
+  // the fitted view under the docked tab bar. Opening a screen or the logo view (`screen`, `logo`) is not a
+  // change of content, so those are left out of the key. The tab bar's parent holds the panels too.
+  const fitParams = new URLSearchParams(params.toString());
+  fitParams.delete('screen');
+  fitParams.delete('logo');
+  // The page's own filters live in state, not the URL, so they're part of the key too.
+  const fitKey = `${fitParams.toString()}|${version}|${elementFilter.join(',')}|${patternFilter.join(',')}|${flowFilter.join(',')}|${debouncedTextQuery}`;
+  useFitResults(fitKey, () => anchorRef.current?.parentElement ?? null, '.ins-tabpanel');
 
   const renderTabbarRow = (inHeader = false) => (
     <div
@@ -708,8 +724,8 @@ export function AppDetailView({
               <div className="ins-text-search">
                 <SearchIcon size={16} />
                 <input
+                  ref={textInputRef}
                   type="text"
-                  autoFocus
                   value={textQuery}
                   onChange={(e) => setTextQuery(e.target.value)}
                   placeholder={textPlaceholder}

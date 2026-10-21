@@ -65,7 +65,7 @@ export function ProfileMenu() {
       if (e.key === 'Escape') {
         e.preventDefault();
         setOpen(false);
-        triggerRef.current?.focus();
+        triggerRef.current?.focus({ preventScroll: true });
         return;
       }
       if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
@@ -77,7 +77,7 @@ export function ProfileMenu() {
       if (e.key === 'ArrowDown') next = at < 0 ? 0 : (at + 1) % items.length;
       else if (e.key === 'ArrowUp') next = at < 0 ? items.length - 1 : (at - 1 + items.length) % items.length;
       else if (e.key === 'End') next = items.length - 1;
-      items[next].focus();
+      items[next].focus({ preventScroll: true });
     };
     document.addEventListener('pointerdown', onDown);
     document.addEventListener('keydown', onKey);

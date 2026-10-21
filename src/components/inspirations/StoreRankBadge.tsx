@@ -18,8 +18,10 @@ function cupFor(position: number): string {
   return '/ASSET/Icons/Motvin/cup-bronze.png';
 }
 
-/** Only ranks at or above this show a badge — a badge for #86 is not a distinction. */
-const MAX_RANK = 20;
+/** Only ranks at or above this show a badge. The top 100 of a category chart is still a distinction, and a
+ *  newer app in a crowded category (Notion #46 in Productivity, Luma #87 in Lifestyle) earns it there long
+ *  before it reaches the top 20; below the top 100 a rank says little. */
+const MAX_RANK = 100;
 
 /** The ring follows the cup: gold / silver / bronze (bronze for everything below #2). */
 function tierFor(position: number): 'gold' | 'silver' | 'bronze' {

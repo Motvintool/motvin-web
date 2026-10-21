@@ -411,7 +411,16 @@ body {
   box-shadow: 0 0.8px 2.4px -0.8px rgba(0, 0, 0, 0.2), 0 1.6px 3.2px rgba(0, 0, 0, 0.1);
 }
 
+/* Each circle is its own layer, the second above the first, so the front circle (and its shadow) always covers
+   the one behind it whole — logo included. The marks' pop-in scales them, and a scaled image is otherwise painted
+   above everything that isn't layered, so the back logo rose over the front circle's edge. */
+.ins-apptab-icon {
+  position: relative;
+  isolation: isolate;
+}
+
 .ins-apptab-icon + .ins-apptab-icon {
+  z-index: 1;
   margin-left: -8px;
 }
 
@@ -709,8 +718,6 @@ body {
   box-shadow: none;
   backdrop-filter: blur(12px);
 }
-.ins-header-center .ins-search-modal.is-searching,
-.ins-search-overlay .ins-search-modal.is-searching { align-self: start; height: auto; max-height: calc(100vh - 40px); margin-top: max(0px, calc((100vh - 720px) / 2 - 24px)); }
 
 .ins-search-modal button {
   appearance: none;
@@ -739,16 +746,35 @@ body {
 .ins-search-chip-icon[src$="figma-02.png"], .ins-search-chip-icon.is-app-logo { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; }
 .ins-search-chip-remove { display: inline-grid; place-items: center; width: 32px; height: 32px; margin-right: 8px; border-radius: 50%; color: #515151; transition: background 120ms ease; }
 .ins-search-chip-remove:hover { background: rgba(0, 0, 0, 0.08); }
-.ins-search-modal-body { height: calc(100% - 154px); }
-.ins-search-modal-body.has-nav { display: grid; grid-template-columns: 260px minmax(0, 1fr); }
-.ins-search-modal-head + .ins-search-modal-body { height: calc(100% - 74px); }
-.ins-search-modal.is-searching .ins-search-modal-body { height: auto; }
+/* The panel is a column: the head, the recent-searches row when there is one, and the body filling whatever
+   height is left — down to the panel's bottom edge whether or not that row is showing. (A fixed height
+   reserved the row's space even without it, leaving an empty band under the sidebar.) */
+.ins-header-center .ins-search-modal,
+.ins-search-overlay .ins-search-modal { display: flex; flex-direction: column; }
+.ins-search-modal-head,
+.ins-search-chips { flex: none; }
+.ins-search-modal-body { flex: 1 1 0; min-height: 0; }
+.ins-search-modal-body.has-nav { display: grid; grid-template-columns: 260px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+/* Its padding inside its height, so the scrolling column ends at the panel's edge rather than 48px past it
+   (where the end of the list was cut off). */
+.ins-search-modal-results { box-sizing: border-box; }
+/* Typing: the panel hugs its suggestions, never taller than it opened at (it used to grow past the bottom of
+   the window); a longer list scrolls inside. Its top stays where the full panel's top is, so it shrinks
+   upward from the bottom instead of jumping. */
+.ins-header-center .ins-search-modal.is-searching,
+.ins-search-overlay .ins-search-modal.is-searching {
+  align-self: start;
+  height: auto;
+  max-height: min(720px, calc(100vh - 40px));
+  margin-top: max(0px, calc((100vh - min(720px, calc(100vh - 40px))) / 2 - 24px));
+}
+.ins-search-modal.is-searching .ins-search-modal-body { display: flex; flex-direction: column; flex: 0 1 auto; }
+.ins-search-modal.is-searching .ins-search-modal-results { flex: 0 1 auto; min-height: 0; height: auto; }
 .ins-search-modal-nav { display: flex; flex-direction: column; gap: 4px; padding: 20px; background: linear-gradient(90deg, #fff, rgba(255,255,255,0)); }
 .ins-search-modal-nav button { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 24px; border-radius: 999px; color: #1d1d1d; font-size: 16px; text-align: left; }
 .ins-search-modal-nav button img { display: block; flex: none; width: auto; height: 20px; max-width: 20px; object-fit: contain; }
 .ins-search-modal-nav button.is-active, .ins-search-modal-nav button:hover { background: #e6e6e6; }
 .ins-search-modal-results { height: 100%; min-width: 0; padding: 16px 24px 32px; overflow-y: auto; }
-.ins-search-modal.is-searching .ins-search-modal-results { height: auto; max-height: calc(100vh - 114px); }
 .ins-search-modal-title { padding: 0 20px 16px; color: #737373; font-size: 16px; }
 .ins-search-suggestions { display: flex; flex-direction: column; }
 .ins-search-search-actions { display: flex; flex-direction: column; gap: 10px; padding: 0 4px 20px; }
@@ -783,8 +809,16 @@ body {
 .ins-search-resource-list span { padding: 4px 10px; color: #4e4e4e; font-weight: 400; }
 .ins-search-top-rated { display: flex; flex-direction: column; gap: 24px; }
 .ins-search-top-section { display: flex; flex-direction: column; gap: 12px; width: 100%; }
-.ins-search-top-apps { display: flex; align-items: flex-start; gap: 16px; width: 100%; }
-.ins-search-top-apps button {
+/* Seven across in one row, each tile shrinking a little (never growing past 76px) where the column is narrower. */
+.ins-search-top-apps { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: start; justify-items: center; gap: 16px; width: 100%; }
+.ins-search-top-apps > .ins-muted { grid-column: 1 / -1; justify-self: start; }
+.ins-search-top-apps button { width: min(76px, 100%) !important; height: auto !important; aspect-ratio: 1; }
+.ins-search-top-apps button > .ins-app-logo,
+.ins-search-top-apps button > .ins-app-logo--initials { width: 100% !important; height: 100% !important; }
+.ins-search-top-apps strong { top: calc(100% + 8px) !important; }
+/* The app icons, in the Top Rated row and the Apps section alike: the bare tile, its name rising into view
+   under it on hover. */
+:is(.ins-search-top-apps button, button.ins-app-peek) {
   position: relative;
   display: block;
   width: 76px;
@@ -800,7 +834,7 @@ body {
   -webkit-mask-image: -webkit-radial-gradient(white, black);
   clip-path: inset(0 0 0 0 round 20px 20px 0 0);
 }
-.ins-search-top-apps button > .ins-app-logo {
+:is(.ins-search-top-apps button, button.ins-app-peek) > .ins-app-logo {
   display: block;
   width: 76px;
   height: 76px;
@@ -809,7 +843,7 @@ body {
   transform: translate3d(0, 0, 0);
   transition: transform 0.2s ease-out !important;
 }
-.ins-search-top-apps button > .ins-app-logo--initials {
+:is(.ins-search-top-apps button, button.ins-app-peek) > .ins-app-logo--initials {
   display: grid;
   place-items: center;
   background: #e6e6e6;
@@ -821,7 +855,7 @@ body {
   transform: translate3d(0, 0, 0);
   transition: transform 0.2s ease-out !important;
 }
-.ins-search-top-apps strong {
+:is(.ins-search-top-apps, button.ins-app-peek) strong {
   position: absolute;
   top: 84px;
   left: 0;
@@ -836,14 +870,14 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ins-search-top-apps button:hover > .ins-app-logo,
-.ins-search-top-apps button:focus-visible > .ins-app-logo,
-.ins-search-top-apps button:hover > .ins-app-logo--initials,
-.ins-search-top-apps button:focus-visible > .ins-app-logo--initials {
+:is(.ins-search-top-apps button, button.ins-app-peek):hover > .ins-app-logo,
+:is(.ins-search-top-apps button, button.ins-app-peek):focus-visible > .ins-app-logo,
+:is(.ins-search-top-apps button, button.ins-app-peek):hover > .ins-app-logo--initials,
+:is(.ins-search-top-apps button, button.ins-app-peek):focus-visible > .ins-app-logo--initials {
   transform: translate3d(0, -28px, 0);
 }
-.ins-search-top-apps button:hover > strong,
-.ins-search-top-apps button:focus-visible > strong {
+:is(.ins-search-top-apps button, button.ins-app-peek):hover > strong,
+:is(.ins-search-top-apps button, button.ins-app-peek):focus-visible > strong {
   transform: translate3d(0, -28px, 0);
 }
 .ins-search-top-heading { color: #313131; font-size: 16px; }
@@ -856,11 +890,19 @@ body {
 .ins-search-top-screens strong { position: absolute; top: 20px; left: 20px; z-index: 1; font-size: 16px; font-weight: 600; }
 .ins-search-top-screen-preview { position: absolute; right: 18px; bottom: -11px; width: 72px; height: 97px; transition: transform 160ms ease; }
 .ins-search-top-screens button.is-active .ins-search-top-screen-preview, .ins-search-top-screens button:hover .ins-search-top-screen-preview { transform: translateY(-4px); }
-.ins-search-top-screen-preview img { position: absolute; bottom: 0; width: 43px; height: 97px; border-radius: 4px; object-fit: cover; }
-.ins-search-top-screen-preview .is-back { right: 0; opacity: 0.8; }
+.ins-search-top-screen-preview img { position: absolute; bottom: 0; width: 43px; height: 97px; border-radius: 4px; object-fit: cover; object-position: top; background: #fff; }
+.ins-search-top-screen-preview .is-back { right: 0; bottom: -12px; opacity: 0.8; }
 .ins-search-top-screen-preview .is-front { left: 0; z-index: 1; box-shadow: 6px 0 15px rgba(0, 0, 0, 0.12); }
 .ins-search-top-screens button.is-featured .ins-search-top-screen-preview { right: 18px; bottom: -11px; width: 72px; height: 97px; }
 .ins-search-top-screens button.is-featured .ins-search-top-screen-preview img { width: 43px; height: 97px; }
+/* Web screens keep their own, wide shape: a pair of browser-sized pages rather than phones, sized to the card
+   (larger in the wide first card), running off its bottom edge like the phones. */
+.ins-search-top-screens button.is-web .ins-search-top-screen-preview { right: 12px; bottom: -4px; width: 100px; height: 60px; }
+.ins-search-top-screens button.is-web .ins-search-top-screen-preview img { width: 86px; height: 54px; border-radius: 4px; }
+.ins-search-top-screens button.is-web .ins-search-top-screen-preview .is-back { bottom: -8px; }
+.ins-search-top-screens button.is-web.is-featured .ins-search-top-screen-preview { right: 24px; bottom: -4px; width: 168px; height: 96px; }
+.ins-search-top-screens button.is-web.is-featured .ins-search-top-screen-preview img { width: 144px; height: 90px; border-radius: 6px; }
+.ins-search-top-screens button.is-web.is-featured .ins-search-top-screen-preview .is-back { bottom: -12px; }
 .ins-search-top-screens button.is-featured .ins-search-top-screen-preview .is-front { box-shadow: 8px 0 20px rgba(0, 0, 0, 0.12); }
 .ins-search-top-screen-fade { position: absolute; right: 0; bottom: 0; left: 0; z-index: 2; height: 63px; background: linear-gradient(to bottom, rgba(230, 230, 230, 0), #e6e6e6); pointer-events: none; transition: background 160ms ease; }
 .ins-search-top-screens button.is-active .ins-search-top-screen-fade, .ins-search-top-screens button:hover .ins-search-top-screen-fade { background: linear-gradient(to bottom, rgba(221, 221, 221, 0), #dddddd); }
@@ -936,7 +978,7 @@ body {
   /* Two-up Top Rated screens (the featured tile then fills a row) instead of
      four slivers. */
   .ins-search-top-screens { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ins-search-top-apps { flex-wrap: wrap; }
+  .ins-search-top-apps { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 16px; }
   /* List rows (Categories / Screens / UI Elements / Flows): no side padding,
      so the text lines up with the page's own 16px gutter. */
   .ins-search-categories button,
@@ -1079,10 +1121,6 @@ html:has(.ins-header) {
    scroll to hold the cards still while the heading shrinks. */
 html:has(.ins-explore-view) {
   overflow-anchor: none;
-  /* The header and the pinned toolbar cover the top of the window: a card reached with Tab (or Shift+Tab)
-     is scrolled to just below them instead of under them, and Space / Page Down keep what was under the
-     bars in view instead of skipping it. */
-  scroll-padding-top: 170px;
 }
 
 .ins-explore-head {
@@ -1609,52 +1647,10 @@ html:has(.ins-explore-view) {
   margin: 4px 0 24px;
 }
 
-/* Pinned (Explore): the row sticks just below the header instead of docking into it, on a white band as
-   wide as the window — two sideways shadows paint the band past the page's padding without widening the
-   page or clipping the row's menus. */
-.ins-ftoolbar-anchor.is-pinned {
-  position: sticky;
-  top: var(--ins-header-h);
-  z-index: 30;
-  /* The gap to the screens is part of the band, so its bottom edge is exactly where the first row's tops
-     rest: scrolling, the header, the row and that line stay put and only the screens move, slipping under
-     a crisp edge as if scrolling inside their own box. */
-  margin: 0;
-  padding: 4px 0 24px;
-}
-
-/* Its backdrop: glass like the header's (see-through white, blurred), as wide as the window so the two read
-   as one frosted bar. A layer behind the row, so the pills and their menus stay sharp. */
-.ins-ftoolbar-anchor.is-pinned::before {
-  content: '';
-  position: absolute;
-  inset: 0 -100vmax;
-  z-index: -1;
-  /* Whiter than the header's own 75% (95%), and a softer blur, so the cards behind read as a faint wash and the
-     pills and search stay clear on top. */
-  background: rgba(255, 255, 255, 0.95);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  pointer-events: none;
-}
-
-/* Pinned under the header, the two are one pane: the row's backdrop reaches up behind the header too, and
-   the header's own glass steps aside — two blurs side by side showed a seam where they met. */
-.ins-explore-view.is-bar-stuck .ins-ftoolbar-anchor.is-pinned::before {
-  top: calc(-1 * var(--ins-header-h));
-}
-
-html:has(.ins-explore-view.is-bar-stuck) .ins-header {
-  background: transparent;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-
 /* After the first few applied filters, "+N more" — opens the Filters panel with the rest. Plain text with
    the dotted underline Explore's column titles show on hover (.ins-explore-taxonomy-titlebtn): a link,
    quieter than the pills beside it. Its tooltip lists what's behind it. */
-.ins-fpill.ins-fpill--more,
-.ins-ftoolbar-anchor.is-pinned .ins-fpill.ins-fpill--more {
+.ins-fpill.ins-fpill--more {
   padding: 0 6px;
   border-color: transparent;
   background: transparent;
@@ -1671,8 +1667,7 @@ html:has(.ins-explore-view.is-bar-stuck) .ins-header {
   line-height: 1.15;
 }
 
-.ins-fpill.ins-fpill--more:hover,
-.ins-ftoolbar-anchor.is-pinned .ins-fpill.ins-fpill--more:hover {
+.ins-fpill.ins-fpill--more:hover {
   border-color: transparent;
   background: transparent;
 }
@@ -1680,31 +1675,6 @@ html:has(.ins-explore-view.is-bar-stuck) .ins-header {
 .ins-fpill.ins-fpill--more:hover .ins-fpill-more-text {
   border-bottom-style: solid;
 }
-
-/* The row's pills let that glass show through, outlined in a see-through dark rather than the page's pale
-   grey, which vanished against the glass: it reads over whatever colour is behind. Picked pills keep
-   their own dark outline. */
-.ins-ftoolbar-anchor.is-pinned .ins-fpill,
-.ins-ftoolbar-anchor.is-pinned .ins-fsort {
-  background: transparent;
-  border-color: rgba(17, 18, 20, 0.14);
-}
-
-.ins-ftoolbar-anchor.is-pinned .ins-fpill:hover,
-.ins-ftoolbar-anchor.is-pinned .ins-fsort:hover {
-  border-color: rgba(17, 18, 20, 0.28);
-}
-
-.ins-ftoolbar-anchor.is-pinned .ins-fpill.is-applied {
-  border-color: var(--ins-text);
-}
-
-/* That backdrop reaches past the page's sides; clipped there so the page never scrolls sideways (clip,
-   unlike hidden, keeps the pinned row and header sticky). */
-.ins-root:has(.ins-ftoolbar-anchor.is-pinned) {
-  overflow-x: clip;
-}
-
 
 /* Plain in-page row: no forced height, no background — those exist only to
    make the docked bar read as part of the (blurred, 92px-tall) header, and
@@ -8840,11 +8810,16 @@ select.ins-input {
 
   /* Screens stay two-up on a phone instead of one giant
      device frame per row; the frame's mat scales with the card via a
-     percentage inset (36/346 of the desktop card). */
+     percentage inset (36/346 of the desktop card). 16px between them,
+     across and down. */
   .ins-grid,
   .ins-shot-panel .ins-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: 16px;
+    row-gap: 16px;
+  }
+  /* Explore's app cards carry a name and tagline under each frame, so their rows keep more air. */
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) {
     row-gap: 24px;
   }
 
@@ -14977,13 +14952,15 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
 
 .ins-search-app-icons {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  /* Six across, as the Top Rated row. */
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 28px 8px;
   margin: 0;
   padding: 8px 8px 24px;
   list-style: none;
 }
 .ins-search-app-icons > .ins-muted { grid-column: 1 / -1; }
+.ins-search-app-icons > li { display: flex; justify-content: center; }
 
 .ins-app-icon {
   display: flex;
@@ -17260,27 +17237,11 @@ html.ins-bat-on .ins-search-bat { display: block; }
   .ins-fdrawer-close:hover { rotate: none; }
 }
 
-/* Above a pinned row, the header slides up out of the way while the page scrolls down and the row rises
-   into its place at the top; a scroll up brings both back (ToolbarRow sets html.ins-header-away). */
 .ins-header {
-  transition: background-color 0.2s ease, translate 320ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.ins-ftoolbar-anchor.is-pinned {
-  transition: top 320ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-html.ins-header-away .ins-header {
-  translate: 0 -100%;
-}
-/* As much room off the window's edge as below the row (its own 4px padding + 20 = the band's 24px bottom), and the row's glass reaches up behind it and over where the header was,
-   so the screens never show above the row — in CSS, without waiting on ExploreView's is-bar-stuck check. */
-html.ins-header-away .ins-ftoolbar-anchor.is-pinned {
-  top: 20px;
-}
-html.ins-header-away .ins-ftoolbar-anchor.is-pinned::before {
-  top: calc(-1 * var(--ins-header-h));
+  transition: background-color 0.2s ease;
 }
 @media (prefers-reduced-motion: reduce) {
-  .ins-header, .ins-ftoolbar-anchor.is-pinned { transition: none; }
+  .ins-header { transition: none; }
 }
 
 /* Back to top (BackToTop): at the end of a long page, a pill centred at the foot of the window — arrow and
@@ -17329,6 +17290,14 @@ html.ins-header-away .ins-ftoolbar-anchor.is-pinned::before {
   translate: -50% 0;
   scale: 1;
   pointer-events: auto;
+}
+/* The collection bar (selecting screens or flows) takes the same spot at the foot of the window: the pill
+   yields. (Matched by the bar itself; the toast host shares the `.ins-float-collection` class.) */
+.ins-root:has(.ins-float-collection-bar) .ins-back-to-top {
+  opacity: 0;
+  translate: -50% 20px;
+  scale: 0.92;
+  pointer-events: none;
 }
 /* Hover lifts it a step with a deeper shadow; the press sinks it, quickly. */
 .ins-back-to-top:hover {
@@ -17610,7 +17579,7 @@ html.ins-header-away .ins-ftoolbar-anchor.is-pinned::before {
    Hovering a line already dims its neighbours, swaps the title, and shows a dotted leader to the count with a
    preview under the pointer. The pieces now move rather than appear: the label leans toward where it leads,
    the leader draws itself from the label out to the count, the count slides in to meet it, and the preview
-   glides after the pointer and crossfades between screens. A press leans the label a step further. */
+   crossfades between screens. A press leans the label a step further. */
 .ins-explore-taxonomy-link .ins-explore-index-label {
   transition: translate 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -17651,10 +17620,8 @@ html.ins-header-away .ins-ftoolbar-anchor.is-pinned::before {
   .ins-explore-index-count { translate: 0 0; }
 }
 
-/* The preview follows the pointer with a little lag, and its screens crossfade instead of cutting. */
-.ins-explore-cursor-preview {
-  transition: top 90ms linear, left 90ms linear;
-}
+/* The preview's screens crossfade instead of cutting. (It follows the pointer directly: any easing on its
+   position reads as the card dragging behind a quick sweep down the list.) */
 .ins-explore-cursor-slide {
   visibility: visible;
   opacity: 0;
@@ -17668,7 +17635,6 @@ html.ins-header-away .ins-ftoolbar-anchor.is-pinned::before {
   .ins-explore-taxonomy-link .ins-explore-index-label,
   .ins-explore-index-leader,
   .ins-explore-index-count,
-  .ins-explore-cursor-preview,
   .ins-explore-cursor-slide {
     transition-duration: 0s;
   }
@@ -17676,4 +17642,132 @@ html.ins-header-away .ins-ftoolbar-anchor.is-pinned::before {
   .ins-explore-taxonomy-link:active .ins-explore-index-label {
     translate: 0 0;
   }
+}
+
+/* ─── Platform switch in the docked bar ─────────────────────────────────────────────────────────────────────
+   Docked into the header, the row covers the header's Apps / Webs tabs, so its own switch — hidden on wide
+   screens while the tabs are there — comes back in their place, names and all, and its options press like
+   the pills do. */
+.ins-ftoolbar.is-docked .ins-ftoolbar-context {
+  display: inline-flex;
+}
+.ins-ftoolbar.is-docked .ins-ftoolbar-context + .ins-ftoolbar-divider--switch {
+  display: block;
+}
+.ins-segmented--toolbar .ins-segmented-item {
+  transition:
+    background 160ms var(--ins-ease),
+    color 160ms var(--ins-ease),
+    scale 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-segmented--toolbar .ins-segmented-item:hover:not(.is-active) {
+  color: var(--ins-text);
+}
+.ins-segmented--toolbar .ins-segmented-item:active:not(:disabled) {
+  scale: 0.95;
+  transition-duration: 160ms, 160ms, 90ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-segmented--toolbar .ins-segmented-item { transition-duration: 0s; }
+}
+
+/* Phone: menus here are fixed and anchored to their pill (see the anchor rules above). An ancestor with a
+   backdrop-filter becomes the containing block of a fixed box, so the header's glass, or the docked bar's,
+   trapped every menu in a box the bar's height, where the sideways-scrolling strip then clipped it out of
+   sight. The glass is drawn by layers behind the content instead, which aren't the menus' ancestors; the
+   look is unchanged. */
+@media (max-width: 759px) {
+  .ins-header {
+    backdrop-filter: none;
+  }
+  .ins-header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    pointer-events: none;
+  }
+  /* The filter strip never wraps and fills the header exactly, so the header's own glass serves it, at the
+     docked bar's more opaque white. */
+  .ins-ftoolbar.is-docked {
+    background: none;
+    backdrop-filter: none;
+  }
+  .ins-header:has(.ins-ftoolbar.is-docked) {
+    background: rgba(255, 255, 255, 0.92);
+  }
+  /* The app page's tab row can wrap below the header, so it carries its own layer, sized to it. */
+  .ins-tabbar-row.is-docked {
+    background: none;
+    backdrop-filter: none;
+  }
+  .ins-tabbar-row.is-docked::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: rgba(255, 255, 255, 0.92);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    pointer-events: none;
+  }
+  /* The row's fade-in, held at its end (fill "both"), isolates the row, and a layer inside it then frosts
+     nothing: the second line showed the screens through it, unblurred. The fade only needs its start. */
+  .ins-tabbar-row.is-docked:not(.is-leaving) {
+    animation-fill-mode: backwards;
+  }
+  /* The row's layer covers the header's box as well, so the header's own one steps aside: one sheet of glass
+     across both lines, the same throughout. */
+  .ins-header:has(.ins-tabbar-row.is-docked:not(.is-leaving))::before {
+    display: none;
+  }
+}
+
+/* Docked in the header, the bar's pills are outlines on its glass rather than white blocks on it: see-through,
+   so the frosted bar reads as one surface (as on a white page, where the two look the same). Hover and the
+   applied state still darken the outline. "+N more" is text and has no fill to lose. */
+:is(.ins-ftoolbar, .ins-tabbar-row).is-docked :is(.ins-fpill, .ins-fsort, .ins-segmented) {
+  background: transparent;
+}
+/* The pills' pale grey outline vanishes on frosted glass over dark screens; a see-through dark one reads the
+   same on white and stays visible over anything. Hover and applied keep their own, darker outlines. */
+:is(.ins-ftoolbar, .ins-tabbar-row).is-docked :is(.ins-fpill, .ins-fsort):not(.is-applied):not(:hover) {
+  border-color: rgba(11, 12, 14, 0.1);
+}
+
+/* The tab's app marks turn through the library's apps: each new logo pops into its circle (a little
+   overshoot), the second a beat after the first. On the img, which theme.css lets animate (not transition). */
+.ins-apptab-icon img {
+  animation: insTabMarkIn 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.ins-apptab-icon + .ins-apptab-icon img {
+  animation-delay: 80ms;
+}
+@keyframes insTabMarkIn {
+  from {
+    opacity: 0;
+    scale: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-apptab-icon img {
+    animation: none;
+  }
+}
+
+/* While a popup is open over the page — any modal dialog (the moei studio, a preview, a confirm) or the search
+   panel — the page behind it doesn't scroll: the wheel or a swipe over the backdrop, or past the end of the
+   popup's own list, used to move (and on Explore fold) the page underneath. The scrollbar's space is kept, so
+   nothing shifts sideways as it opens. */
+html:has([aria-modal="true"]),
+html:has(.ins-search-overlay) {
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+
+/* A phone fits three of the search panel's app icons across. */
+@media (max-width: 759px) {
+  .ins-search-app-icons { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

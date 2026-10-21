@@ -29,10 +29,15 @@ export function BackToTop() {
     schedule();
     window.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
+    // The end moves without a scroll, too: more results load in, off-screen rows take their real height
+    // once rendered (content-visibility), pictures land. A page that changes height is measured again.
+    const grow = new ResizeObserver(schedule);
+    grow.observe(document.documentElement);
     return () => {
       if (frame) cancelAnimationFrame(frame);
       window.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
+      grow.disconnect();
     };
   }, []);
 

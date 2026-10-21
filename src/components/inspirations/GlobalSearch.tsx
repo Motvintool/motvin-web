@@ -3,17 +3,19 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { EMPTY_FILTERS, browsedPlatforms } from '@/lib/inspirations/filters';
+import { EMPTY_FILTERS, WEBS_PLATFORMS, browsedPlatforms, isWebsPlatforms } from '@/lib/inspirations/filters';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { OPEN_SEARCH_EVENT, type SearchSection } from '@/lib/inspirations/openSearch';
 import { suggestQueries, type SearchSuggestion } from '@/lib/inspirations/search';
-import { elementLabel, INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
-import type { App, Flow, Industry, Platform, Screen } from '@/lib/inspirations/types';
+import { elementLabel, INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
+import type { App, Flow, Industry, Platform, Screen, ScreenType } from '@/lib/inspirations/types';
+import { isDesktopPlatform } from '@/lib/inspirations/types';
+import { IMAGE_SIZE, optimizedImage } from '@/lib/inspirations/optimizedImage';
 import { AppLogo } from './AppLogo';
 import { RequestAppModal } from './RequestAppModal';
 import { FLOW_PARAM } from './FlowPreview';
-import { AppleIcon, ChevronDownIcon, CloseIcon, SearchIcon, WebAppIcon, WebIcon } from './Icons';
+import { AppleIcon, ChevronDownIcon, CloseIcon, SearchIcon, WebIcon } from './Icons';
 import { SCREEN_PARAM } from './ScreenPreviewModal';
 import { SHEET_QUERY, useMediaQuery } from './useSheet';
 
@@ -38,11 +40,20 @@ const FIGMA_MODAL_ICONS = {
  * SVG image can't be recolored by the surrounding page's CSS (`currentColor`
  * only resolves through CSS inheritance when the SVG is actually in the DOM),
  * so there'd be no way to switch between the active/inactive colors below. */
-const MODAL_PLATFORMS: { value: Platform; Icon: typeof AppleIcon }[] = [
-  { value: 'ios', Icon: AppleIcon },
-  { value: 'webapp', Icon: WebAppIcon },
-  { value: 'web', Icon: WebIcon },
+const MODAL_SCOPES: { value: ModalScope; Icon: typeof AppleIcon; label: string }[] = [
+  { value: 'ios', Icon: AppleIcon, label: 'iOS' },
+  { value: 'webs', Icon: WebIcon, label: 'Webs' },
 ];
+
+/** The library's two sections, as the header's Apps / Webs tabs have them: iOS apps, and Webs — web apps and
+ *  websites together, one section with no switch between them (WEBS_PLATFORMS). */
+type ModalScope = 'ios' | 'webs';
+function platformsOf(scope: ModalScope | null): Platform[] {
+  return scope === 'ios' ? ['ios'] : scope === 'webs' ? [...WEBS_PLATFORMS] : [];
+}
+/** The Top Rated tab's screen-type cards, each showing two real screens of its type from the library: the
+ *  first seven of these the picked platform has screens of (the grid is laid out for seven — the first card
+ *  spans two columns), so a type the library lacks gives way to the next rather than leaving a hole. */
 const FIGMA_TOP_RATED_CARDS = [
   ['Login', 'login'],
   ['Signup', 'signup'],
@@ -50,8 +61,94 @@ const FIGMA_TOP_RATED_CARDS = [
   ['Dashboard', 'dashboard'],
   ['Search', 'search'],
   ['Checkout', 'checkout'],
-  ['Setting', 'setting'],
-] as const;
+  ['Setting', 'settings'],
+  ['Onboarding', 'onboarding'],
+  ['Profile', 'profile'],
+  ['Feed', 'feed'],
+  ['Detail', 'detail'],
+  ['Product', 'product'],
+  ['Cart', 'cart'],
+] as const satisfies readonly (readonly [string, ScreenType])[];
+const TYPE_CARDS_SHOWN = 7;
+/** How many screens of each type the clearest two are chosen from. */
+const TYPE_CANDIDATES = 120;
+/** Flow names that mark a screen as clearly of a type — the type tags alone are loose (a carousel or a dialog
+ *  can be tagged "signup"), so a screen from a flow named for the type is the better example of it. */
+const TYPE_FLOW_WORDS: Partial<Record<ScreenType, string[]>> = {
+  login: ['login', 'log-in', 'logging-in', 'sign-in', 'signin'],
+  signup: ['sign-up', 'signup', 'register', 'create-account', 'creating-an-account'],
+  home: ['home'],
+  dashboard: ['dashboard'],
+  search: ['search', 'searching'],
+  checkout: ['checkout', 'payment', 'paying', 'cart', 'order'],
+  settings: ['setting', 'preference', 'account'],
+  onboarding: ['onboarding', 'welcome', 'get-started'],
+  profile: ['profile'],
+  feed: ['feed'],
+  detail: ['detail'],
+  product: ['product'],
+  cart: ['cart', 'bag', 'basket'],
+};
+
+/** The two clearest screens of a type among the library's curated ones. The type tags and flow names are both
+ *  loose (an event menu filed under "creating an account", a loading skeleton under "home"), so what the
+ *  screen is described as holding counts most: a form's fields for a sign-up or login, a tab bar and a full
+ *  page for a home, a search bar and results for a search. Plain screens beat dialogs, sheets, toasts, the
+ *  keyboard up or a loading state; the two come from different apps. */
+function bestOfType(type: ScreenType, items: Screen[]): Screen[] {
+  const words = TYPE_FLOW_WORDS[type] ?? [type];
+  const count = (about: string, what: string) => {
+    const match = about.match(new RegExp(`(\\d+) ${what}`));
+    return match ? Number(match[1]) : about.includes(`a ${what}`) || about.includes(`1 ${what}`) ? 1 : 0;
+  };
+  const score = (screen: Screen) => {
+    const flow = screen.file.split('/').slice(-2, -1)[0]?.toLowerCase() ?? '';
+    const about = screen.description.toLowerCase();
+    const inputs = count(about, 'input field');
+    const texts = count(about, 'text element');
+    let points = 0;
+    if (words.some((word) => flow.includes(word))) points += 2;
+    if (screen.fineType === type) points += 1;
+    if (screen.states.length === 0) points += 1;
+    if (/dialog|toast|over a dimmed|sheet|loading|skeleton/.test(about)) points -= 3;
+    // The keyboard up hides most of a screen — except a search, where it's the moment itself.
+    if (type !== 'search' && about.includes('keyboard open')) points -= 3;
+    // A full, settled page rather than a near-empty one.
+    if (texts >= 12) points += 1;
+    if (type === 'signup') points += inputs >= 2 ? 3 : 0;
+    if (type === 'login') {
+      // An app's own way in names it on its main button ("Log in or sign up", "Continue with Phone"); a bare
+      // "Sign in" is as often a system password sheet or a partner's page.
+      const action = about.match(/primary action labelled “([^”]*)”/)?.[1] ?? '';
+      if (/log in or sign up|continue with/.test(action)) points += 5;
+      else if (/log in|sign in/.test(action)) points += 2;
+      if (inputs >= 1) points += 1;
+      if (screen.fineType === 'external_auth') points -= 3;
+    }
+    if (type === 'home') {
+      if (about.includes('tab bar')) points += 2;
+      if (texts >= 15) points += 1;
+      if (/category chips|search bar/.test(about)) points += 1;
+    }
+    if (type === 'search') {
+      if (about.includes('search bar')) points += 3;
+      if (about.includes('results')) points += 1;
+      if (texts >= 15) points += 1;
+      // Prices make it a menu or a product page that happens to have a search box, not a search; a big call to
+      // action, a landing page.
+      if (about.includes('prices')) points -= 4;
+      if (about.includes('primary action')) points -= 1;
+    }
+    return points;
+  };
+  const ranked = items.map((screen, i) => ({ screen, i, points: score(screen) })).sort((a, b) => b.points - a.points || a.i - b.i);
+  const first = ranked[0]?.screen;
+  if (!first) return [];
+  const second = ranked.find(({ screen }) => screen.id !== first.id && screen.appId !== first.appId)?.screen ?? ranked[1]?.screen;
+  return second ? [first, second] : [first];
+}
+/** How many app icons the Top Rated tab's row shows: the latest added apps, one row across the column. */
+const TOP_APPS_SHOWN = 7;
 const RECENT_SEARCHES_STORAGE_KEY = 'motvin-recent-searches';
 const RECENT_SEARCH_ICON_SOURCES = {
   app: FIGMA_APP_ART,
@@ -139,7 +236,9 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // stock imagery behind whichever screen a click happens to land on) and
   // the UI Elements counts (aggregated across all platforms already) have no
   // honest per-platform breakdown to filter with the data this modal fetches.
-  const [modalPlatform, setModalPlatform] = useState<Platform | null>('ios');
+  const [modalScope, setModalScope] = useState<ModalScope | null>('ios');
+  const inScope = (platform: Platform) => !modalScope || platformsOf(modalScope).includes(platform);
+  const scopeLabel = modalScope === 'webs' ? 'Webs' : 'iOS';
   const [topApps, setTopApps] = useState<App[]>([]);
   // Unlike `topApps` (the Top Rated preview's own short row — the Apps
   // section lists `allApps` below instead, so capping this one is fine),
@@ -187,8 +286,9 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // lists matches the page behind it. Re-synced each time it opens; a change made inside the
   // modal sticks until it is closed.
   const browsedPlatform = browsedPlatforms(params)[0];
+  const browsedScope: ModalScope = isWebsPlatforms(browsedPlatforms(params)) ? 'webs' : 'ios';
   useEffect(() => {
-    if (open) setModalPlatform(browsedPlatform);
+    if (open) setModalScope(browsedScope);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when it opens
   }, [open]);
 
@@ -308,10 +408,13 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
       inspirationsApi.listScreens(EMPTY_FILTERS, 0, 'curated'),
       inspirationsApi.listFlows(),
       inspirationsApi.getMeta(),
-    ]).then(([apps, screensPage, flowsList, meta]) => {
+      inspirationsApi.listApps(undefined, 'newest'),
+    ]).then(([apps, screensPage, flowsList, meta, newestApps]) => {
       if (cancelled) return;
       appsRef.current = apps;
-      setTopApps(apps.slice(0, 7));
+      // The Top Rated tab's icon row leads with what's new: the latest added apps first (cut to the row's
+      // length after the platform filter, below).
+      setTopApps(newestApps);
       setRecentSearches((searches) => searches.map((search) => {
         const app = apps.find(({ name }) => name.toLocaleLowerCase() === search.query.toLocaleLowerCase());
         return app && !search.iconSrc ? { ...search, icon: 'app', iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined } : search;
@@ -327,19 +430,40 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     };
   }, [open]);
 
-  const screensKey = modalPlatform ?? 'all';
+  const screensKey = modalScope ?? 'all';
+
+  // The Top Rated tab's screen-type cards: the two best curated screens of each type, on the picked platform.
+  const [typeShots, setTypeShots] = useState<{ key: string; shots: Partial<Record<ScreenType, Screen[]>> } | null>(null);
+  useEffect(() => {
+    if (!open || typeShots?.key === screensKey) return;
+    let cancelled = false;
+    Promise.all(
+      FIGMA_TOP_RATED_CARDS.map(([, type]) =>
+        inspirationsApi
+          // A wide pick (not just the first page) to choose the clearest two from.
+          .listScreens({ ...EMPTY_FILTERS, screenTypes: [type], platforms: platformsOf(modalScope) }, 0, 'curated', { limit: TYPE_CANDIDATES })
+          .then((page) => [type, bestOfType(type, page.items)] as const)
+          .catch(() => [type, []] as const),
+      ),
+    ).then((entries) => {
+      if (!cancelled) setTypeShots({ key: screensKey, shots: Object.fromEntries(entries) });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, screensKey, typeShots?.key, modalScope]);
 
   // First page of the Screens tab, fetched when the tab is opened or the platform changes.
   useEffect(() => {
     if (!open || section !== 'screens' || screensTab?.key === screensKey) return;
     let cancelled = false;
-    inspirationsApi.listScreens({ ...EMPTY_FILTERS, platforms: modalPlatform ? [modalPlatform] : [] }, 0, 'curated').then((page) => {
+    inspirationsApi.listScreens({ ...EMPTY_FILTERS, platforms: platformsOf(modalScope) }, 0, 'curated').then((page) => {
       if (!cancelled) setScreensTab({ key: screensKey, items: page.items, next: page.nextOffset });
     });
     return () => {
       cancelled = true;
     };
-  }, [open, section, screensKey, screensTab?.key, modalPlatform]);
+  }, [open, section, screensKey, screensTab?.key, modalScope]);
 
   // Next page, when the end of the list scrolls into view.
   const loadMoreScreens = useCallback(() => {
@@ -347,14 +471,14 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     loadingMoreScreens.current = true;
     const { key, next } = screensTab;
     inspirationsApi
-      .listScreens({ ...EMPTY_FILTERS, platforms: modalPlatform ? [modalPlatform] : [] }, next, 'curated')
+      .listScreens({ ...EMPTY_FILTERS, platforms: platformsOf(modalScope) }, next, 'curated')
       .then((page) => {
         setScreensTab((prev) => (prev && prev.key === key ? { key, items: [...prev.items, ...page.items], next: page.nextOffset } : prev));
       })
       .finally(() => {
         loadingMoreScreens.current = false;
       });
-  }, [screensTab, modalPlatform]);
+  }, [screensTab, modalScope]);
 
   useEffect(() => {
     if (!screensSentinel) return;
@@ -370,13 +494,13 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    inspirationsApi.listElements(modalPlatform ? [modalPlatform] : undefined).then((list) => {
+    inspirationsApi.listElements(modalScope ? platformsOf(modalScope) : undefined).then((list) => {
       if (!cancelled) setElements(list);
     });
     return () => {
       cancelled = true;
     };
-  }, [open, modalPlatform]);
+  }, [open, modalScope]);
 
   useEffect(() => {
     if (!open) return;
@@ -442,6 +566,12 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   );
 
   const modalSuggestions = suggestions.slice(0, 12);
+  // The panel keeps its height while typing, so the suggestions scroll: the one the arrow keys land on is
+  // brought into view (only as far as needed; one already showing, as under the pointer, doesn't move).
+  useEffect(() => {
+    if (active < 0) return;
+    document.querySelector<HTMLElement>('.ins-search-modal .ins-search-modal-item.is-active')?.scrollIntoView({ block: 'nearest' });
+  }, [active]);
   // Matched against the full fetched list, not a 7-item preview slice — a
   // kind that exists but didn't happen to make the Top Rated row's cutoff
   // would otherwise never be found here no matter how exactly it's typed.
@@ -454,14 +584,14 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     .map((industry) => ({
       value: industry,
       label: INDUSTRY_LABEL[industry as Industry] ?? industry,
-      count: allApps.filter((app) => app.industry === industry && (!modalPlatform || app.platforms.includes(modalPlatform))).length,
+      count: allApps.filter((app) => app.industry === industry && (!modalScope || app.platforms.some(inScope))).length,
     }))
     .filter((c) => c.count > 0)
     .sort((a, b) => b.count - a.count);
-  const visibleTopApps = modalPlatform ? topApps.filter((app) => app.platforms.includes(modalPlatform)) : topApps;
+  const visibleTopApps = (modalScope ? topApps.filter((app) => app.platforms.some(inScope)) : topApps).slice(0, TOP_APPS_SHOWN);
   // The Apps tab: every app on the picked platform, best rated first (the order they're fetched in).
-  const visibleApps = modalPlatform ? allApps.filter((app) => app.platforms.includes(modalPlatform)) : allApps;
-  const visibleFlows = modalPlatform ? flows.filter((flow) => flow.platform === modalPlatform) : flows;
+  const visibleApps = modalScope ? allApps.filter((app) => app.platforms.some(inScope)) : allApps;
+  const visibleFlows = modalScope ? flows.filter((flow) => inScope(flow.platform)) : flows;
   // Unlike the Top Rated tab's decorative Screens showcase (fixed stock
   // imagery, positionally paired with whichever screen happens to fill that
   // slot), the dedicated Screens tab lists real screens with real names —
@@ -472,7 +602,12 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // Preview-sized slices for the Top Rated tab only — the sidebar's own
   // Screens/UI Elements/Flows sections use the full lists above instead, so
   // browsing there isn't artificially capped to whatever fits in this row.
-  const previewScreens = screens.slice(0, FIGMA_TOP_RATED_CARDS.length);
+  // Only types the library has screens of (on this platform), each with its own two.
+  const typeCards = typeShots && typeShots.key === screensKey
+    ? FIGMA_TOP_RATED_CARDS.map(([label, type]) => ({ label, type, shots: typeShots.shots[type] ?? [] })).filter((card) => card.shots.length > 0).slice(0, TYPE_CARDS_SHOWN)
+    : [];
+  const typeHref = (type: ScreenType) =>
+    `${INSPIRATIONS_ROUTES.screens}?type=${type}${modalScope ? `&platform=${modalScope === 'ios' ? 'ios' : 'web'}` : ''}`;
   const previewElements = elements.slice(0, 7);
   const previewFlows = visibleFlows.slice(0, 12);
   const modalSections = [
@@ -491,7 +626,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     section === 'top'
       ? [
           ...visibleTopApps.map((app) => ({ onActivate: () => { close(); router.push(INSPIRATIONS_ROUTES.app(app)); } })),
-          ...previewScreens.map((screen) => ({ onActivate: () => { close(); router.push(screenPreviewHref(screen)); } })),
+          ...typeCards.map((card) => ({ onActivate: () => { close(); router.push(typeHref(card.type)); } })),
           ...previewElements.map((el) => ({ onActivate: () => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(el.kind)}`); } })),
           ...previewFlows.map((flow) => ({ onActivate: () => { close(); router.push(flowPreviewHref(flow)); } })),
         ]
@@ -663,14 +798,14 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
               />
             </div>
             <div className="ins-search-modal-platforms" role="group" aria-label="Filter by platform">
-              {MODAL_PLATFORMS.map(({ value, Icon }) => (
+              {MODAL_SCOPES.map(({ value, Icon, label }) => (
                 <button
                   key={value}
                   type="button"
-                  className={modalPlatform === value ? 'is-active' : ''}
-                  aria-pressed={modalPlatform === value}
-                  aria-label={PLATFORM_LABEL[value] ?? value}
-                  onClick={() => setModalPlatform((current) => (current === value ? null : value))}
+                  className={modalScope === value ? 'is-active' : ''}
+                  aria-pressed={modalScope === value}
+                  aria-label={label}
+                  onClick={() => setModalScope((current) => (current === value ? null : value))}
                 >
                   <Icon size={20} />
                 </button>
@@ -756,30 +891,30 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                           </button>
                         );
                       })}
-                    {libraryReady && modalPlatform && visibleTopApps.length === 0 && (
-                      <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} apps yet.</p>
+                    {libraryReady && modalScope && visibleTopApps.length === 0 && (
+                      <p className="ins-muted">No {scopeLabel} apps yet.</p>
                     )}
                   </div>
                   <section className="ins-search-top-section">
                     <div className="ins-search-top-heading">Screens</div>
                     <div className="ins-search-top-screens">
-                      {previewScreens.map((screen, index) => {
-                        const [label, assetName] = FIGMA_TOP_RATED_CARDS[index];
+                      {typeCards.map(({ label, type, shots }, index) => {
                         const active = currentTopIndex === browseActive;
                         const itemIndex = currentTopIndex++;
+                        const [front, back] = shots.map((shot) => optimizedImage(inspirationsApi.mediaUrl(shot.url) ?? '', IMAGE_SIZE.small));
                         return (
-                          <button 
-                            key={screen.id} 
-                            type="button" 
-                            className={`${index === 0 ? 'is-featured' : ''} ${active ? 'is-active' : ''}`}
+                          <button
+                            key={type}
+                            type="button"
+                            className={`${index === 0 ? 'is-featured' : ''} ${active ? 'is-active' : ''} ${isDesktopPlatform(shots[0]?.platform) ? 'is-web' : ''}`}
                             onMouseEnter={() => setBrowseActive(itemIndex)}
                             onFocus={() => setBrowseActive(itemIndex)}
-                            onClick={() => { close(); router.push(screenPreviewHref(screen)); }}
+                            onClick={() => { close(); router.push(typeHref(type)); }}
                           >
                             <strong>{label}</strong>
                             <span className="ins-search-top-screen-preview" aria-hidden="true">
-                              <img className="is-back" src={`/ASSET/search-modal/top-rated/${assetName}-back.png`} alt="" />
-                              <img className="is-front" src={`/ASSET/search-modal/top-rated/${assetName}-front.png`} alt="" />
+                              {back && <img className="is-back" src={back.src} srcSet={back.srcSet} alt="" loading="lazy" />}
+                              {front && <img className="is-front" src={front.src} srcSet={front.srcSet} alt="" loading="lazy" />}
                             </span>
                             <span className="ins-search-top-screen-fade" aria-hidden="true" />
                           </button>
@@ -827,8 +962,8 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                           </button>
                         );
                       })}
-                      {libraryReady && modalPlatform && previewFlows.length === 0 && (
-                        <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} flows yet.</p>
+                      {libraryReady && modalScope && previewFlows.length === 0 && (
+                        <p className="ins-muted">No {scopeLabel} flows yet.</p>
                       )}
                     </div>
                   </section>
@@ -841,15 +976,13 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                         <li key={app.id}>
                           <button
                             type="button"
-                            className={`ins-app-icon ${index === browseActive ? 'is-active' : ''}`}
+                            className={`ins-app-peek ${index === browseActive ? 'is-active' : ''}`}
                             onMouseEnter={() => setBrowseActive(index)}
                             onFocus={() => setBrowseActive(index)}
                             onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.app(app)); }}
                           >
-                            <span className="ins-app-icon-art">
-                              <AppLogo app={app} size={72} className="ins-app-icon-logo" />
-                            </span>
-                            <span className="ins-app-icon-name">{app.name}</span>
+                            <AppLogo app={app} size={76} />
+                            <strong>{app.name}</strong>
                           </button>
                         </li>
                       ))
@@ -861,8 +994,8 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                           <span className="ins-skel ins-skel--line ins-app-icon-skel-name" />
                         </li>
                       ))}
-                  {libraryReady && modalPlatform && visibleApps.length === 0 && (
-                    <li className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} apps yet.</li>
+                  {libraryReady && modalScope && visibleApps.length === 0 && (
+                    <li className="ins-muted">No {scopeLabel} apps yet.</li>
                   )}
                 </ul>
               ) : !value.trim() && section === 'categories' ? (
@@ -882,7 +1015,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       <span>{count}</span>
                     </button>
                   ))}
-                  {modalPlatform && categories.length === 0 && <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} categories yet.</p>}
+                  {modalScope && categories.length === 0 && <p className="ins-muted">No {scopeLabel} categories yet.</p>}
                 </div>
               ) : !value.trim() && section === 'screens' ? (
                 <div className="ins-search-resource-list" aria-label="Screens">
@@ -907,8 +1040,8 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       Loading more…
                     </div>
                   )}
-                  {screensReady && modalPlatform && visibleScreens.length === 0 && (
-                    <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} screens yet.</p>
+                  {screensReady && modalScope && visibleScreens.length === 0 && (
+                    <p className="ins-muted">No {scopeLabel} screens yet.</p>
                   )}
                 </div>
               ) : !value.trim() && section === 'elements' ? (
@@ -928,7 +1061,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       <span>{element.count}</span>
                     </button>
                   ))}
-                  {modalPlatform && elements.length === 0 && <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} UI elements yet.</p>}
+                  {modalScope && elements.length === 0 && <p className="ins-muted">No {scopeLabel} UI elements yet.</p>}
                 </div>
               ) : !value.trim() && section === 'flows' ? (
                 <div className="ins-search-resource-list" aria-label="Flows">
@@ -947,8 +1080,8 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       <span>{flow.screenIds.length}</span>
                     </button>
                   ))}
-                  {modalPlatform && visibleFlows.length === 0 && (
-                    <p className="ins-muted">No {PLATFORM_LABEL[modalPlatform]} flows yet.</p>
+                  {modalScope && visibleFlows.length === 0 && (
+                    <p className="ins-muted">No {scopeLabel} flows yet.</p>
                   )}
                 </div>
               ) : (
@@ -1015,7 +1148,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       href="#request-app"
                       onClick={(e) => {
                         e.preventDefault();
-                        setRequesting({ name: value.trim(), platform: modalPlatform ?? browsedPlatform });
+                        setRequesting({ name: value.trim(), platform: modalScope === 'ios' ? 'ios' : modalScope === 'webs' ? (WEBS_PLATFORMS.includes(browsedPlatform) ? browsedPlatform : 'web') : browsedPlatform });
                         close();
                       }}
                     >

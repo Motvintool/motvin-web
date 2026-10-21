@@ -22,7 +22,7 @@ export function AppTreePill({ apps, selected, onApply }: { apps: App[]; selected
   useDismiss(open, () => setOpen(false), ref);
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
+    if (open) inputRef.current?.focus({ preventScroll: true });
   }, [open]);
 
   const q = query.trim().toLowerCase();
@@ -68,7 +68,7 @@ export function AppTreePill({ apps, selected, onApply }: { apps: App[]; selected
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') {
                   e.preventDefault();
-                  optionsRef.current?.querySelector<HTMLElement>(MENU_ITEM_SELECTOR)?.focus();
+                  optionsRef.current?.querySelector<HTMLElement>(MENU_ITEM_SELECTOR)?.focus({ preventScroll: true });
                 }
               }}
             />

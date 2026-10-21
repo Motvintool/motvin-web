@@ -63,12 +63,14 @@ export const MENU_ITEM_SELECTOR = '[role="option"], [role="menuitem"]';
 
 /** Moves focus to the selected option (or the first) the instant a menu opens. */
 export function useAutoFocusMenu(open: boolean, ref: React.RefObject<HTMLDivElement | null>) {
+  // Every focus here is `preventScroll`: the menu is a popover that's already in view, and a focus that
+  // scrolls would nudge the page to clear the window's scroll padding under the docked bar.
   useEffect(() => {
     if (!open || !ref.current) return;
     const container = ref.current;
     const items = container.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR);
     const selected = container.querySelector<HTMLElement>('[aria-selected="true"], [aria-current="page"]');
-    (selected ?? items[0])?.focus();
+    (selected ?? items[0])?.focus({ preventScroll: true });
   }, [open, ref]);
 }
 
@@ -79,16 +81,16 @@ export function onMenuKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
   const at = items.indexOf(document.activeElement as HTMLElement);
   if (e.key === 'ArrowDown') {
     e.preventDefault();
-    items[(at + 1 + items.length) % items.length].focus();
+    items[(at + 1 + items.length) % items.length].focus({ preventScroll: true });
   } else if (e.key === 'ArrowUp') {
     e.preventDefault();
-    items[(at - 1 + items.length) % items.length].focus();
+    items[(at - 1 + items.length) % items.length].focus({ preventScroll: true });
   } else if (e.key === 'Home') {
     e.preventDefault();
-    items[0].focus();
+    items[0].focus({ preventScroll: true });
   } else if (e.key === 'End') {
     e.preventDefault();
-    items[items.length - 1].focus();
+    items[items.length - 1].focus({ preventScroll: true });
   }
 }
 
@@ -386,6 +388,10 @@ export function SortPill<S extends string>({
  */
 /** How long a row that undocks stays in the header, fading out as the header's own content comes back. */
 const UNDOCK_MS = 240;
+/** The row docks this far before the grid reaches the bar — as it's about to slide under the glass, not once
+ *  it already has. Wide enough that the fitted view after a filter or tab change (the results 16px under the
+ *  bar, plus an app page's tab panel padding) is inside it, so that spot is docked however it's reached. */
+const DOCK_GAP_PX = 32;
 
 export function useDockingRow(enabled = true) {
   const [docked, setDocked] = useState(false);
@@ -396,6 +402,8 @@ export function useDockingRow(enabled = true) {
   const rowRef = useRef<HTMLDivElement>(null);
   const inFlowRowHeightRef = useRef(0);
   const dockedRef = useRef(false);
+  // Where the docked copy's bottom edge last was (0 before the first dock).
+  const dockedBottomRef = useRef(0);
 
   useEffect(() => {
     const anchor = anchorRef.current;
@@ -414,9 +422,15 @@ export function useDockingRow(enabled = true) {
       const grid = anchor.parentElement?.querySelector<HTMLElement>('.ins-grid');
       const trigger = grid ?? anchor;
       const triggerTop = trigger.getBoundingClientRect().top;
+      // Measured from the docked bar's real bottom edge: on a phone the app page's tab row wraps and hangs
+      // below the header, and results fitted under it sit lower than the header alone would allow. Docking
+      // again uses where that edge was last, so the row comes back at the same place it left.
+      const dockedCopy = dockedRef.current ? document.querySelector<HTMLElement>('.ins-header .is-docked:not(.is-leaving)') : null;
+      if (dockedCopy) dockedBottomRef.current = dockedCopy.getBoundingClientRect().bottom;
+      const barBottom = Math.max(headerH, dockedBottomRef.current);
       const next = dockedRef.current
-        ? triggerTop <= headerH + 32
-        : triggerTop <= headerH;
+        ? triggerTop <= barBottom + DOCK_GAP_PX + 32
+        : triggerTop <= barBottom + DOCK_GAP_PX;
       // The portaled header copy is outside this anchor, so retain only the
       // in-flow row's height here. Reserving the full header height adds a
       // visible blank band above the grid at the docking boundary.
@@ -460,12 +474,13 @@ export function useDockingRow(enabled = true) {
 
 /**
  * The platform switch: the library's own segmented control (the same one the admin uses), with the current
- * section on the black pill — iOS ("Apps") or Webs (websites and web apps together). On wide screens the
- * header's Apps / Webs tabs make that choice, so the switch is hidden; below 1140px the tabs are not shown
- * and the switch is the way to move between the two.
+ * section on the black pill — Apps (iOS) or Webs (websites and web apps together). On wide screens the
+ * header's Apps / Webs tabs make that choice, so the switch is hidden in the row — except once the row has
+ * docked into the header, where it stands in for the tabs it has covered; below 1140px the tabs are not
+ * shown and the switch is the way to move between the two.
  */
 const SWITCH_OPTIONS: { value: string; label: string; param: string | null; Icon: typeof AppleIcon }[] = [
-  { value: 'ios', label: 'iOS', param: null, Icon: AppleIcon },
+  { value: 'ios', label: 'Apps', param: null, Icon: AppleIcon },
   { value: 'web', label: 'Webs', param: 'web', Icon: WebIcon },
 ];
 
@@ -502,11 +517,6 @@ function PlatformSwitch({ platform, onPick }: { platform: string; onPick: (param
   );
 }
 
-/** On <html> while the header is scrolled out of the way above a pinned row. */
-const HEADER_AWAY_CLASS = 'ins-header-away';
-/** How far the page has to move one way before the header goes or comes back. */
-const HEADER_AWAY_SLACK_PX = 6;
-
 /**
  * The row itself: dimension pills on the left, "Showing N <unit>s" and any
  * `right` control (usually a SortPill) on the right edge. Pages whose
@@ -517,54 +527,13 @@ export function ToolbarRow({
   total,
   unit = 'screen',
   right,
-  pinned = false,
 }: {
   children: ReactNode;
   total: number | null;
   unit?: string;
   right?: ReactNode;
-  /**
-   * Stay below the header, pinned, instead of docking into it (Explore): the header keeps its own nav and
-   * search, and the row sticks under it while the page scrolls.
-   */
-  pinned?: boolean;
 }) {
-  const { docked, leaving, anchorRef, rowRef, headerContent } = useDockingRow(!pinned);
-
-  // Pinned, the header steps out of the way while the visitor scrolls down the gallery — the row slides up
-  // into its place (CSS: html.ins-header-away) — and comes back on a scroll up, or near the top. Small
-  // wobbles add up rather than flicking it each time. It stays while its search is typed in or its menu is
-  // open, and comes back whenever something in it takes the focus (tabbing back up from the row, ⌘K), so
-  // the focus never lands on a control that's off screen.
-  useEffect(() => {
-    if (!pinned) return;
-    const root = document.documentElement;
-    let lastY = window.scrollY;
-    const onScroll = () => {
-      const y = window.scrollY;
-      const header = document.querySelector<HTMLElement>('.ins-header');
-      const busy = Boolean(header?.querySelector('input:focus, .ins-pmenu.is-open'));
-      // Landing on the very bottom on the way up is the page growing shorter under the visitor (Explore's
-      // heading folding away), not a scroll up.
-      const atBottom = y >= root.scrollHeight - window.innerHeight - 1;
-      if (y <= (header?.offsetHeight ?? 0) || busy) root.classList.remove(HEADER_AWAY_CLASS);
-      else if (y > lastY + HEADER_AWAY_SLACK_PX) root.classList.add(HEADER_AWAY_CLASS);
-      else if (y < lastY - HEADER_AWAY_SLACK_PX) {
-        if (!atBottom) root.classList.remove(HEADER_AWAY_CLASS);
-      } else return;
-      lastY = y;
-    };
-    const onFocus = (e: FocusEvent) => {
-      if (e.target instanceof Element && e.target.closest('.ins-header')) root.classList.remove(HEADER_AWAY_CLASS);
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    document.addEventListener('focusin', onFocus);
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      document.removeEventListener('focusin', onFocus);
-      root.classList.remove(HEADER_AWAY_CLASS);
-    };
-  }, [pinned]);
+  const { docked, leaving, anchorRef, rowRef, headerContent } = useDockingRow();
 
   // Apps / Webs is the top-level split and lives in the header's tabs; the switch here stands in for
   // them on narrow screens.
@@ -606,7 +575,7 @@ export function ToolbarRow({
   );
 
   return (
-    <div ref={anchorRef} className={`ins-ftoolbar-anchor ${pinned ? 'is-pinned' : ''}`}>
+    <div ref={anchorRef} className="ins-ftoolbar-anchor">
       {toolbar()}
       {(docked || leaving) && headerContent && createPortal(toolbar(true), headerContent)}
     </div>

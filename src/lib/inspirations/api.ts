@@ -165,7 +165,7 @@ export const inspirationsApi = {
     filters: ScreenFilters,
     offset = 0,
     sort: ScreenSort = 'curated',
-    extra: { app?: string; element?: string } = {},
+    extra: { app?: string; element?: string; limit?: number } = {},
   ): Promise<Page<Screen>> {
     const params = new URLSearchParams();
     listParam('platform', filters.platforms, params);
@@ -177,7 +177,7 @@ export const inspirationsApi = {
     if (extra.app) params.set('app', extra.app);
     if (extra.element) params.set('element', extra.element);
     params.set('sort', sort);
-    params.set('limit', String(PAGE_SIZE));
+    params.set('limit', String(extra.limit ?? PAGE_SIZE));
     params.set('offset', String(offset));
     return request(`/screens?${params}`, TTL.list, EMPTY_PAGE as Page<Screen>);
   },

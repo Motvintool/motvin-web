@@ -73,8 +73,10 @@ export function isLightColor(hex: string): boolean {
 }
 
 async function samplePixels(src: string): Promise<Uint8ClampedArray | null> {
-  // The small version first; the full file if the resizer can't serve it.
-  const small = `/_next/image?url=${encodeURIComponent(src)}&w=64&q=60`;
+  // The small version first; the full file if the resizer can't serve it. Quality 75: Next 16 refuses any
+  // quality not listed in `images.qualities` (only 75 by default) with a 400, which sent every sample to the
+  // full-size file.
+  const small = `/_next/image?url=${encodeURIComponent(src)}&w=64&q=75`;
   let res = await fetch(small).catch(() => null);
   if (!res || !res.ok) res = await fetch(src).catch(() => null);
   if (!res || !res.ok) return null;
