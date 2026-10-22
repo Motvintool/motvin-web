@@ -46,7 +46,7 @@
  * same as any other step.
  */
 
-import { cleanTitle, looksLikeNavTitle } from './heuristics.js';
+import { cleanTitle, looksLikeNavTitle, pageLines } from './heuristics.js';
 import { flowCategoryFor, labelFor } from './taxonomy.js';
 
 /** Types that open a section of their own wherever they are reached from. */
@@ -101,6 +101,21 @@ export function buildJourneys(visits, options = {}) {
 function buildFrom(steps, options) {
   /** `${fromId}->${toId}` → what the person did to get there. */
   const actions = options.actions ?? new Map();
+  // The tab each desktop screen was on, carried along the walk: a screen
+  // that names no tab (an empty search on Connectors) is still on the one
+  // last seen.
+  let walkTab = null;
+  let walkSection = null;
+  for (const node of steps) {
+    if (!isDesktop(node)) continue;
+    const here = sectionOf(node);
+    if (here && here !== walkSection) {
+      walkSection = here;
+      walkTab = null;
+    }
+    walkTab = node.analysis?.signals?.activeTab ?? walkTab;
+    if (walkTab && node.analysis?.signals) node.analysis.signals.walkTab = walkTab;
+  }
 
   const journeys = [];
   let sequence = 0;
@@ -176,6 +191,8 @@ function buildFrom(steps, options) {
   };
 
   let previous = opening.length ? opening[opening.length - 1] : null;
+  let homeRoot = null;
+  let homeTitled = false;
   for (const node of steps.slice(opening.length)) {
     const before = previous;
     previous = node;
@@ -187,6 +204,25 @@ function buildFrom(steps, options) {
       const step = actions.get(`${before.id}->${node.id}`);
       const label = step && step.kind === 'tap' && step.label ? cleanTitle(step.label) : null;
       if (label && navOf(node).includes(label.toLowerCase())) section = /^(new|new chat|home)$/i.test(label) ? 'Home' : label;
+    }
+    // A chat opened from the sidebar's list is in the app's chats, wherever it
+    // was opened from; a document opened so stays where it was opened.
+    // Only the chat itself: a settings dialog or a paywall shown over it still
+    // carries the chat's title.
+    if (!section && isDesktop(node) && !node.capture?.overlay && node.analysis?.signals?.listedInSidebar && ['other', 'detail', 'messages', 'feed', 'home', 'category'].includes(type) && !listsSettings(node)) {
+      const title = String(node.analysis?.signals?.title ?? '');
+      if (!/(document|presentation|design|slides?|sheet|untitled)/i.test(title)) section = 'Chats';
+    }
+    // The home page is the first page with a heading of its own that is no
+    // section ("Good morning, Motvin"), when the app opened on something
+    // without one (a tip, a menu): it is home's page, and coming back to it
+    // is coming home.
+    if (!section && isDesktop(node) && !node.capture?.overlay && homeRoot && !homeTitled && stack[0] === homeRoot) {
+      const title = cleanTitle(node.analysis?.signals?.title ?? '');
+      if (title && !['dialog', 'bottom_sheet', 'toast', 'paywall', 'login', 'signup', 'otp', 'search', 'search_results'].includes(type)) {
+        section = homeRoot.name;
+        homeTitled = true;
+      }
     }
     // Back on a page a section already holds — the same heading as one of its
     // screens ("Good morning, Motvin" on the home page) — is back in that section.
@@ -229,7 +265,11 @@ function buildFrom(steps, options) {
     }
 
     // A section of its own kind, wherever it was reached from.
-    if (SECTION_TYPES.has(type) && !(isDesktop(node) && node.capture?.overlay)) {
+    // On desktop a page is only typed settings by its words; it is the
+    // Settings section when its title says so — an account menu or a page
+    // full of toggles elsewhere (Customize) is not.
+    const desktopSettings = !isDesktop(node) || /^(settings|profile|account|preferences)\b/i.test(cleanTitle(node.analysis?.signals?.title ?? '') ?? '') || listsSettings(node);
+    if (SECTION_TYPES.has(type) && desktopSettings) {
       const root = openRoot(labelFor(type), flowCategoryFor(type));
       add(root, node);
       continue;
@@ -241,6 +281,10 @@ function buildFrom(steps, options) {
       // tab bar at all. Its first screen stands as the section.
       // On desktop this is the page the app opens on: its home.
       const root = openRoot(isDesktop(node) ? 'Home' : cleanTitle(node.analysis?.name) || 'Home');
+      if (isDesktop(node)) {
+        homeRoot = root;
+        homeTitled = Boolean(cleanTitle(node.analysis?.signals?.title ?? '')) && !node.capture?.overlay && !['dialog', 'bottom_sheet', 'toast'].includes(type);
+      }
       add(root, node);
       continue;
     }
@@ -410,6 +454,22 @@ function hubMentioned(node, hubs) {
     return text.charAt(0).toUpperCase() + text.slice(1);
   }
   return null;
+}
+
+/**
+ * A real settings page or dialog lists the app's settings: three or more of
+ * General, Account, Privacy, Billing… A cookie banner or an account menu
+ * mentions "settings" without being one.
+ */
+const SETTINGS_ITEMS = /^(general|account|privacy|billing|appearance|notifications|security|capabilities|memory|language|connected apps|integrations|members|profile|data controls|personalization)$/i;
+function listsSettings(node) {
+  const items = new Set(
+    pageLines(node.analysis?.lines ?? [], 'desktop')
+      .map((line) => cleanTitle(String(line.text || '').replace(/^\S{1,2}\s+(?=[A-Z])/, '')) ?? '')
+      .filter((text) => SETTINGS_ITEMS.test(text))
+      .map((text) => text.toLowerCase()),
+  );
+  return items.size >= 3;
 }
 
 /** A desktop web page, laid out with a sidebar rather than a phone's tab bar. */

@@ -22,6 +22,8 @@ import {
   clearAssistantChat,
   getPending,
   heldUploadFilesNow,
+  holdUploadLogo,
+  takeJobLogo,
   holdImage,
   holdUpload,
   loadAssistantChat,
@@ -56,6 +58,8 @@ import {
 } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 import { ArrowRightIcon, CheckIcon, ChevronDownIcon, CloseIcon, CopyIcon, ExpandIcon, ExternalIcon, MinusIcon, PencilIcon, PlusIcon, RetryIcon, StopIcon, TrashIcon, UndoIcon, UploadIcon } from '../Icons';
 import { tone } from './AdminChatbotAiPicker';
+import { cupFor as rankCup, MAX_RANK as MAX_STORE_RANK } from '../StoreRankBadge';
+import { forgetStoreStats } from '../useStoreStats';
 
 /**
  * The assistant in the corner — the library owner's helper on every page.
@@ -156,7 +160,7 @@ export function AdminChatbot() {
   // shown picked instead of every option still looking equally pickable.
   const answeredReply = new Map<string, string>();
   messages.forEach((message, index) => {
-    if (message.role !== 'assistant' || !message.actions?.some((action) => action.type === 'reply')) return;
+    if (message.role !== 'assistant' || !message.actions?.some((action) => action.type === 'reply' || action.type === 'date')) return;
     const next = messages[index + 1];
     if (next?.role === 'user') answeredReply.set(message.id, next.text);
   });
@@ -183,6 +187,8 @@ export function AdminChatbot() {
   const [question, setQuestion] = useState('');
   const [asking, setAsking] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  /** The new app's logo, picked during an upload's questions. */
+  const logoRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const focusWhenOpen = useRef(false);
@@ -254,6 +260,44 @@ export function AdminChatbot() {
   const running = visible.some(isActive);
   /** The one job the composer's stop control acts on, if any is going. */
   const liveJob = visible.find(isActive) ?? null;
+  // A run that read an iOS app's rank fresh: the badge on any page showing
+  // that app re-reads it, once per run.
+  // A new app's logo picked during the questions is set once the run says
+  // which app it made — as soon as its screens are in the library.
+  useEffect(() => {
+    for (const job of visible) {
+      const appId = job.interim?.app?.id ?? job.result?.app?.id;
+      if (!appId) continue;
+      const logo = takeJobLogo(job.id);
+      if (!logo) continue;
+      const name = job.interim?.app?.name ?? job.result?.app?.name ?? appId;
+      void (async () => {
+        try {
+          // A recording can turn out to be an app already in the library, one
+          // with a logo of its own: that one isn't replaced without asking.
+          const state = await adminApi.getState();
+          if (state.apps.find((entry) => entry.id === appId)?.logo) {
+            holdImage(logo);
+            assistantSays(`${name} turned out to be in the library already, with a logo. I’ve kept “${logo.name}” — say “use this as ${name}’s logo” to replace it.`);
+            return;
+          }
+          await adminApi.uploadLogo(appId, logo.name, logo);
+          assistantSays(`Set “${logo.name}” as ${name}’s logo.`);
+          window.dispatchEvent(new CustomEvent('motvin:admin-changed'));
+        } catch (error) {
+          assistantSays(`I couldn’t set ${name}’s logo: ${(error as Error).message}. Drop the image here and say “use this as ${name}’s logo”.`);
+        }
+      })();
+    }
+  }, [visible]);
+  const rankRefreshed = useRef(new Set<string>());
+  useEffect(() => {
+    for (const job of visible) {
+      if (!job.badge || job.badge.checking || rankRefreshed.current.has(job.id)) continue;
+      rankRefreshed.current.add(job.id);
+      forgetStoreStats(job.badge.app);
+    }
+  }, [visible]);
   /** A run paused for review, if any — its decision buttons render in the
    * pinned strip below (`reviewSlot`), not inside the scrolling chat log, so
    * they stay reachable no matter how far down a long raw-sample grid the
@@ -348,6 +392,12 @@ export function AdminChatbot() {
   };
 
   const chip = (text: string) => ({ type: 'reply' as const, text });
+  /** A calendar for a version's date, starting on the first free day from today. */
+  const datePick = (taken: string[]) => {
+    let value = localDateString();
+    for (let guard = 0; taken.includes(value) && guard < 366; guard++) value = shiftDay(value, 1);
+    return { type: 'date' as const, value, taken, label: 'Use this date' };
+  };
   const library = async (): Promise<AdminState> => (libraryRef.current ??= await adminApi.getState());
   const versionName = (v: { isLatest: boolean; label: string }) => (v.isLatest ? 'Latest' : v.label);
 
@@ -356,7 +406,7 @@ export function AdminChatbot() {
    * as any other change — nothing is sent until it is pressed (or a typed
    * yes). The files themselves stay held by the chat store until then.
    */
-  const offerHeld = (opts: { platform: 'ios' | 'webapp' | 'web'; appId?: string; version?: string; newApp?: { id: string; name: string } }) => {
+  const offerHeld = (opts: { platform: 'ios' | 'webapp' | 'web'; appId?: string; version?: string; newApp?: { id: string; name: string }; logoName?: string }) => {
     const held = heldUpload;
     const files = heldUploadFilesNow();
     if (!held || !files.length || !user) return;
@@ -367,7 +417,7 @@ export function AdminChatbot() {
     setUploadPlan({ ...held.plan, step: 'confirm', platform: opts.platform, appId: opts.appId ?? opts.newApp?.id, appName, newApp: opts.newApp });
     const op: AdminOp =
       held.kind === 'video'
-        ? { kind: 'start-ingest', fileName: files[0].name, platform: opts.platform, appId: opts.appId, appName: app?.name, version: opts.version, versionLabel, startedBy: user.email }
+        ? { kind: 'start-ingest', fileName: files[0].name, platform: opts.platform, appId: opts.appId, appName: app?.name, version: opts.version, versionLabel, startedBy: user.email, ...(opts.logoName ? { logoName: opts.logoName } : {}) }
         : {
             kind: 'upload-screens',
             count: files.length,
@@ -377,6 +427,7 @@ export function AdminChatbot() {
             version: opts.version ?? localDateString(),
             versionLabel: versionLabel ?? `new version dated ${dayLabel(localDateString())}`,
             newApp: opts.newApp,
+            ...(opts.newApp && opts.logoName ? { logoName: opts.logoName } : {}),
           };
     offerAction(describeOp(op), { type: 'confirm', op, label: labelFor(op), destructive: false });
   };
@@ -395,12 +446,39 @@ export function AdminChatbot() {
     const state = await library();
     const apps = appsOnPlatform(state, plan.platform!);
     if (!apps.length) {
-      if (heldUpload?.kind === 'screens') askName(plan);
-      else offerHeld({ platform: plan.platform! });
+      askLogo(plan, heldUpload?.kind === 'screens' ? 'name' : 'offer');
       return;
     }
     setUploadPlan({ ...plan, step: 'app' });
     assistantSays('Is this a new app, or more screens of one already in the library?', [chip('New app'), ...apps.slice(0, 8).map((app) => chip(app.name)), chip('Cancel')]);
+  };
+
+  /**
+   * A new app — iOS, Web Apps or Webs — gets the chance of a logo straight
+   * after its platform: picked now, it is set the moment the app exists.
+   */
+  const askLogo = (plan: UploadPlan, afterLogo: 'name' | 'offer') => {
+    setUploadPlan({ ...plan, step: 'logo', afterLogo, logoName: undefined });
+    holdUploadLogo(null);
+    assistantSays('Add a logo for the new app? PNG, SVG or WebP — it’s set as soon as the app is in the library.', [chip('Upload logo'), chip('Skip'), chip('Cancel')]);
+  };
+
+  /** After the logo question: the screenshots' app name, or straight to the Confirm. */
+  const afterLogo = (plan: UploadPlan) => {
+    if (plan.afterLogo === 'name') askName({ ...plan, step: 'name' });
+    else offerHeld({ platform: plan.platform!, logoName: plan.logoName });
+  };
+
+  const chooseUploadLogo = (file: File) => {
+    const plan = heldUpload?.plan;
+    if (!plan || plan.step !== 'logo') return;
+    if (!/\.(png|svg|webp)$/i.test(file.name)) {
+      assistantSays('That isn’t a PNG, SVG or WebP — pick another image, or skip.', [chip('Upload logo'), chip('Skip'), chip('Cancel')]);
+      return;
+    }
+    holdUploadLogo(file);
+    adminSays(`Logo: ${file.name}`);
+    afterLogo({ ...plan, logoName: file.name });
   };
 
   /** Screenshots for an app that does not exist yet: a recording identifies its app itself; screenshots cannot. */
@@ -415,9 +493,24 @@ export function AdminChatbot() {
     assistantSays(`Which version of ${app.name} should these screens go into?`, [...versions.map((v) => chip(`Update ${versionName(v)}`)), chip('New version'), chip('Cancel')]);
   };
 
-  const askDate = (plan: UploadPlan) => {
+  /** A version named by its date, with "Latest" alongside when it is the newest: "22 Oct 2026 (Latest)". */
+  const datedName = (v: { id: string; isLatest: boolean }) => `${dayLabel(v.id)}${v.isLatest ? ' (Latest)' : ''}`;
+
+  const askDate = (plan: UploadPlan, versions: { id: string; isLatest: boolean; label: string }[] = []) => {
     setUploadPlan({ ...plan, step: 'date' });
-    assistantSays(`What date should the ${plan.newApp ? 'first' : 'new'} version have? Today is ${dayLabel(localDateString())}.`, [chip('Today'), chip('Cancel')]);
+    const today = localDateString();
+    const taken = versions.find((v) => v.id === today);
+    const picker = datePick(versions.map((v) => v.id));
+    // "Today" is only offered when it is free: a version can't share a date
+    // with one the app already has.
+    if (taken) {
+      assistantSays(
+        `What date should the new version have? Today, ${dayLabel(today)}, is already the ${datedName(taken)} version — pick another date, or add these screens to it.`,
+        [picker, chip(`Update ${versionName(taken)}`), chip('Cancel')],
+      );
+      return;
+    }
+    assistantSays(`What date should the ${plan.newApp ? 'first' : 'new'} version have? Today is ${dayLabel(today)}.`, [chip('Today'), picker, chip('Cancel')]);
   };
 
   /** One typed or chipped answer to whichever question the held upload is on. */
@@ -446,10 +539,23 @@ export function AdminChatbot() {
       await askApp({ ...plan, platform });
       return;
     }
+    if (plan.step === 'logo') {
+      // Opened from the click itself, so the browser lets the picker show.
+      if (/\b(upload|add|choose|pick)\b.*\blogo\b|^upload logo$/i.test(text)) {
+        logoRef.current?.click();
+        return;
+      }
+      if (/^(skip|no logo|not now|later|without( a)? logo)\b/i.test(text)) {
+        holdUploadLogo(null);
+        afterLogo({ ...plan, logoName: undefined });
+        return;
+      }
+      assistantSays('Upload a logo for the new app, or skip it?', [chip('Upload logo'), chip('Skip'), chip('Cancel')]);
+      return;
+    }
     if (plan.step === 'app') {
       if (/^(a )?new( app)?$/i.test(text)) {
-        if (heldUpload?.kind === 'screens') askName(plan);
-        else offerHeld({ platform: plan.platform! });
+        askLogo(plan, heldUpload?.kind === 'screens' ? 'name' : 'offer');
         return;
       }
       const state = await library();
@@ -488,7 +594,7 @@ export function AdminChatbot() {
     const versions = app?.versions ?? [];
     if (plan.step === 'version') {
       if (/\bnew\b/i.test(text)) {
-        askDate(plan);
+        askDate(plan, versions);
         return;
       }
       const version = matchHeldVersion(versions, text);
@@ -512,10 +618,11 @@ export function AdminChatbot() {
     }
     const clash = versions.find((v) => v.id === date);
     if (clash) {
-      assistantSays(`${app?.name ?? 'It'} already has a version dated ${versionName(clash)} — pick a different date, or add these screens to that one.`, [chip(`Update ${versionName(clash)}`), chip('Today'), chip('Cancel')]);
+      const todayFree = !versions.some((v) => v.id === localDateString());
+      assistantSays(`${app?.name ?? 'It'} already has a version dated ${datedName(clash)} — pick a different date, or add these screens to that one.`, [datePick(versions.map((v) => v.id)), chip(`Update ${versionName(clash)}`), ...(todayFree ? [chip('Today')] : []), chip('Cancel')]);
       return;
     }
-    offerHeld({ platform: plan.platform!, appId: plan.appId, version: date, newApp: plan.newApp });
+    offerHeld({ platform: plan.platform!, appId: plan.appId, version: date, newApp: plan.newApp, logoName: plan.logoName });
   };
 
   const ask = async (event?: FormEvent) => {
@@ -564,6 +671,8 @@ export function AdminChatbot() {
   };
 
   const act = (action: AssistantAction) => {
+    // A picked date is answered exactly as if it had been typed.
+    if (action.type === 'date') return act({ type: 'reply', text: action.value });
     if (action.type === 'upload') fileRef.current?.click();
     else if (action.type === 'confirm') void run(action);
     else if (action.type === 'reply') {
@@ -608,6 +717,18 @@ export function AdminChatbot() {
 
   const latest = visible[0];
   const picker = (
+    <>
+    <input
+      ref={logoRef}
+      type="file"
+      accept="image/png,image/svg+xml,image/webp,.png,.svg,.webp"
+      hidden
+      onChange={(e) => {
+        const file = e.target.files?.[0] ?? null;
+        e.target.value = '';
+        if (file) chooseUploadLogo(file);
+      }}
+    />
     <input
       ref={fileRef}
       type="file"
@@ -620,6 +741,7 @@ export function AdminChatbot() {
         if (files.length) void upload(files);
       }}
     />
+    </>
   );
 
   if (collapsed) {
@@ -769,6 +891,8 @@ export function AdminChatbot() {
               ? 'which platform? iOS, Web Apps or Webs.'
               : heldUpload.plan.step === 'app'
                 ? 'a new app, or which existing one?'
+                : heldUpload.plan.step === 'logo'
+                  ? 'a logo for the new app, or skip?'
                 : heldUpload.plan.step === 'name'
                   ? 'what is the new app called?'
                   : heldUpload.plan.step === 'version'
@@ -899,6 +1023,57 @@ function timeLabel(at: string): string {
  * offers the delete as a Confirm, the same as every other change. Once the
  * offer is answered the grid stays as a record, without its controls.
  */
+/**
+ * Beside "Identifying the app": the iOS app's chart rank as read just now —
+ * the rank its badge shows — or that it is being read, or not on its chart.
+ */
+function RankNote({ badge }: { badge: NonNullable<IngestJob['badge']> }) {
+  if (badge.checking) return <span className="ins-chat-step-note">· reading the store rank…</span>;
+  if (!badge.rank || badge.rank.position > MAX_STORE_RANK) return <span className="ins-chat-step-note">· not in its top-free chart</span>;
+  const where = badge.rank.country && badge.rank.country !== 'US' ? ` (${badge.rank.country})` : '';
+  return (
+    <span className="ins-chat-step-note ins-chat-step-rank" title={`Ranked #${badge.rank.position} in ${badge.rank.category}${where} — the app's badge is updated`}>
+      <img src={rankCup(badge.rank.position)} alt="" width={14} height={14} />
+      <b>#{badge.rank.position}</b> in {badge.rank.category}
+      {where}
+    </span>
+  );
+}
+
+/** "2026-10-22" moved by `days`, as a local calendar date. */
+function shiftDay(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(y, m - 1, d + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * A version's date, picked on the browser's own calendar instead of typed.
+ * A date the app already has a version for can't be used, and says so.
+ */
+function DatePick({ action, disabled, onPick }: { action: Extract<AssistantAction, { type: 'date' }>; disabled: boolean; onPick: (value: string) => void }) {
+  const [value, setValue] = useState(action.value);
+  const clash = action.taken.includes(value);
+  const valid = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return (
+    <span className="ins-chat-date">
+      <input
+        type="date"
+        className="ins-chat-date-input"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        aria-label="Version date"
+        aria-invalid={clash || undefined}
+        disabled={disabled}
+      />
+      <button type="button" className="ins-chip-btn ins-chip-btn--primary" disabled={disabled || !valid || clash} onClick={() => onPick(value)}>
+        <CheckIcon size={13} /> {action.label}
+      </button>
+      {clash && <span className="ins-chat-date-note">A version already has this date</span>}
+    </span>
+  );
+}
+
 function ScreenPicker({ action, live, disabled }: { action: ScreensAction; live: boolean; disabled: boolean }) {
   const [picked, setPicked] = useState<string[]>([]);
   const toggle = (id: string) => setPicked((list) => (list.includes(id) ? list.filter((entry) => entry !== id) : [...list, id]));
@@ -1158,6 +1333,11 @@ function ChatBubble({
               }
               if (action.type === 'screens') {
                 return <ScreenPicker key={index} action={action} live={isLatestGrid} disabled={busy} />;
+              }
+              if (action.type === 'date') {
+                // Answered: the question has moved on, so the calendar goes.
+                if (answeredWith !== undefined) return null;
+                return <DatePick key={index} action={action} disabled={busy} onPick={(value) => onAction({ ...action, value })} />;
               }
               if (action.type === 'reply') {
                 // Once the chat has moved past this question, show which
@@ -1746,6 +1926,7 @@ export function JobThread({ job, now, reviewSlot }: { job: IngestJob; now: numbe
                       {state === 'is-done' ? <CheckIcon size={11} /> : state === 'is-active' ? <span className="ins-spinner" /> : <span className="ins-chat-step-dot" />}
                     </span>
                     {stage.label}
+                    {stage.id === 'identify' && job.badge && index <= current && <RankNote badge={job.badge} />}
                   </li>
                 );
               })}

@@ -17931,3 +17931,61 @@ html:has(aside.ins-dock:not(.ins-dock-user)) {
     .ins-search-top-screens button:not(.is-featured) .ins-search-top-screen-go { top: auto; right: auto; bottom: 12px; left: 12px; z-index: 3; }
   }
 }
+
+/* The agent's date picker for a new version: the browser's own calendar in a
+   chip-shaped field, the button beside it, and a note when the date is taken. */
+.ins-chat-date {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex-basis: 100%;
+}
+.ins-chat-date-input {
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--ins-border-strong);
+  border-radius: 999px;
+  background: var(--ins-card);
+  color: var(--ins-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: var(--ins-cursor-hand, pointer);
+}
+.ins-chat-date-input:focus-visible {
+  outline: 2px solid var(--ins-text);
+  outline-offset: 2px;
+}
+.ins-chat-date-input[aria-invalid='true'] {
+  border-color: #d92d20;
+}
+.ins-chat-date .ins-chip-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.ins-chat-date-note {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: #d92d20;
+}
+
+/* Beside "Identifying the app" in a run: the iOS app's store rank as just read, the rank its badge shows. */
+.ins-chat-step-note {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ins-muted, #8a8f9a);
+}
+.ins-chat-step-rank {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px 1px 5px;
+  border-radius: 999px;
+  background: rgba(176, 116, 58, 0.12);
+  color: var(--ins-text);
+}
+.ins-chat-step-rank b {
+  font-weight: 700;
+}

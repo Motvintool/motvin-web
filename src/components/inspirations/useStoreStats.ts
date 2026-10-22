@@ -26,6 +26,15 @@ export function loadStoreStats(name: string): Promise<StoreStats | null> {
   return promise;
 }
 
+/** Told when an app's numbers were read again (an upload refreshed its rank), so pages showing it re-read them. */
+const refreshed = typeof window !== 'undefined' ? new EventTarget() : null;
+
+/** Drops what this page holds for an app, and has every badge showing it read it again. */
+export function forgetStoreStats(name: string) {
+  cache.delete(`ios:${name}`);
+  refreshed?.dispatchEvent(new CustomEvent('refresh', { detail: name }));
+}
+
 /**
  * Live store numbers for an app (see storeStats.ts), fetched once per app and
  * shared by everything on the page that wants them. `stats` is undefined while
@@ -36,6 +45,16 @@ export function useStoreStats(name: string, platform: Platform) {
   const store: 'ios' | null = platform === 'ios' && name ? 'ios' : null;
   const key = `${store}:${name}`;
   const [stats, setStats] = useState<StoreStats | null | undefined>(cache.get(key));
+  const [generation, setGeneration] = useState(0);
+
+  useEffect(() => {
+    if (!refreshed) return;
+    const onRefresh = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === name) setGeneration((n) => n + 1);
+    };
+    refreshed.addEventListener('refresh', onRefresh);
+    return () => refreshed.removeEventListener('refresh', onRefresh);
+  }, [name]);
 
   useEffect(() => {
     if (!store) return;
@@ -44,7 +63,8 @@ export function useStoreStats(name: string, platform: Platform) {
       return;
     }
     const ctl = new AbortController();
-    fetch(`/api/store-stats?name=${encodeURIComponent(name)}&platform=${store}`, { signal: ctl.signal })
+    // Re-read after an upload refreshed the rank: past the browser's cache too.
+    fetch(`/api/store-stats?name=${encodeURIComponent(name)}&platform=${store}`, { signal: ctl.signal, ...(generation ? { cache: 'reload' as const } : {}) })
       .then((r) => (r.ok ? (r.json() as Promise<StoreStats>) : null))
       .catch(() => null)
       .then((s) => {
@@ -53,7 +73,7 @@ export function useStoreStats(name: string, platform: Platform) {
         setStats(s);
       });
     return () => ctl.abort();
-  }, [key, name, store]);
+  }, [key, name, store, generation]);
 
   return { store, stats };
 }

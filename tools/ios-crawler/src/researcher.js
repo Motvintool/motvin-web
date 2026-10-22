@@ -19,6 +19,8 @@
  * at.
  */
 
+import { pageLines } from './heuristics.js';
+
 /** The brief, as written for the researcher. Sent verbatim as the system prompt. */
 export const BRIEF = `Analyze the uploaded app screenshots as a UX/UI researcher and product designer.
 Do not simply extract or copy the visible text from the screenshots.
@@ -48,7 +50,7 @@ const JOURNEY_RULES = `${SHARED_RULES}
 
 Return exactly this shape — a flat map from each journey key given (J0, J1, …) to its new name, one line per journey, and nothing else:
 { "journeys": { "J0": "Onboarding", "J1": "Food", "J2": "Searching dishes & restaurants", "J3": "Adding a dish to cart" } }
-The names in quotes here are examples from a different app; never copy one. Do not repeat the steps or the machine guesses from the input; the guess is there only to show which journey is meant, and it is usually wrong. Do not add keys that were not given. Every value is a name of two to six words.
+Name each journey from what its steps show: the page titles, the tab and the words on the pages. A page titled with a chat's or a document's own title ("Greeting", "Untitled") is that chat or document, so the journey is "Chatting with Claude" or "Editing a document", never about the title's word. A journey on a page's tab is named for the task on that tab ("Browsing skills", "Connecting a connector"). Use the app's words for its features. Each flow is exactly one task, so each name names one task: never join two with "and" ("Adding to a project and accessing support" is wrong; "Adding to a project" is right). Siblings that are the same task walked again get the same name. The names in quotes here are examples from a different app; never copy one. Do not repeat the steps or the machine guesses from the input; the guess is there only to show which journey is meant, and it is usually wrong. Do not add keys that were not given. Every value is a name of two to six words.
 
 Journey names read like a professional design-reference library's: the task in the person's own terms, starting with a verb ending in -ing whenever the person is doing something — "Searching dishes & restaurants", "Adding a dish to cart", "Turning on veg mode filter", "Booking a table", "Subscribing to Swiggy One", "Editing profile". A journey that opens a feature is named for the feature as the app names it — "Offer Zone", "Eatlist", "Restaurant detail". A journey inside a section is never named after the section it is in: a journey inside "Food" is the task done there, not "Food". A top-level section keeps its tab name — "Food", "Instamart", "Profile" — and "Onboarding" stays "Onboarding".`;
 
@@ -121,15 +123,33 @@ export function describeJourneys(journeys, graph, all = journeys) {
   for (const journey of journeys) {
     const index = indexOfJourney.get(journey);
     const parent = journey.parent ? nameOfKey.get(journey.parent) ?? journey.parent : null;
+    // A screen that names no tab is on the tab of the step before it.
+    let lastTab = null;
     const steps = (journey.steps ?? journey.nodeIds.map((nodeId) => ({ nodeId, action: null })))
       .map((step) => {
         const node = graph.get(step.nodeId);
         if (!node) return null;
         const analysis = node.analysis ?? {};
+        lastTab = analysis.signals?.activeTab ?? analysis.signals?.walkTab ?? lastTab;
         const tap = step.action?.kind === 'tap' && step.action.label ? ` (after tapping "${step.action.label}")` : step.action?.kind === 'type' && step.action.label ? ` (after typing "${step.action.label}")` : '';
-        return `${analysis.name}${analysis.screenType && analysis.screenType !== 'other' ? ` [${analysis.screenType}]` : ''}${tap}`;
+        // What the page itself says — its title, the tab it is on and its
+        // first few lines, navigation chrome left out — so a chat titled
+        // "Greeting" reads as a chat, not as a greeting page.
+        const signals = analysis.signals ?? {};
+        const words = pageLines(analysis.lines ?? [], signals.layout)
+          .map((line) => String(line.text || '').trim())
+          .filter((text) => text.length >= 4 && /[a-z]{3}/i.test(text) && text !== signals.title)
+          .slice(0, 3)
+          .join('; ');
+        const entry = signals.listedInSidebar ? ' (an item from the sidebar’s list, such as a chat or document)' : '';
+        const page = signals.title ? ` page "${signals.title}"${entry}` : '';
+        const tab = lastTab ? ` on the "${lastTab}" tab` : '';
+        const says = words ? ` showing: ${words.slice(0, 120)}` : '';
+        return `${analysis.name}${analysis.screenType && analysis.screenType !== 'other' ? ` [${analysis.screenType.replace(/_/g, ' ')}]` : ''}${page}${tab}${says}${tap}`;
       })
       .filter(Boolean);
+    // A long journey is shown by its first and last steps; its middle is more of the same.
+    if (steps.length > 8) steps.splice(5, steps.length - 7, `… ${steps.length - 7} more steps …`);
     // Bare keys on purpose: a key that carried the guessed name came back as
     // the answer, word for word. The guess is given separately, as a guess.
     lines.push(`J${index} — ${parent ? `inside "${parent}"` : 'top-level section'} — machine guess "${journey.name}" — steps: ${steps.join(' → ')}`);
@@ -138,7 +158,7 @@ export function describeJourneys(journeys, graph, all = journeys) {
 }
 
 function screenText(analysis, maxLines) {
-  return (analysis.lines ?? [])
+  return pageLines(analysis.lines ?? [], analysis.signals?.layout)
     .filter((line) => line.y > 0.045)
     .slice(0, maxLines)
     .map((line) => String(line.text || '').trim())
@@ -347,7 +367,7 @@ export async function researchTree(journeys, graph, options) {
       let got = [];
       try {
         const tree = describeJourneys(batch, graph, journeys);
-        const reply = await complete({ system: `${BRIEF}\n${JOURNEY_RULES}`, blocks: [{ type: 'text', text: `${header}${tree}` }], maxTokens: 1200, ...(journeyModel ? { model: journeyModel } : {}) });
+        const reply = await complete({ system: `${BRIEF}\n${JOURNEY_RULES}`, blocks: [{ type: 'text', text: `${header}${tree}` }], maxTokens: 1200, temperature: 0, ...(journeyModel ? { model: journeyModel } : {}) });
         debug(reply);
         const raw = parse(reply);
         if (raw && typeof raw.journeys === 'object') {
@@ -495,6 +515,33 @@ function shownOnScreens(name, journey, graph, screenProposals = {}) {
   return words.length > 0 && words.some((word) => text.includes(word.replace(/e?s$/, '')));
 }
 
+/**
+ * A flow is one task, so its name is too: "Adding to a project and accessing
+ * support" is two names glued together, and the first is the flow's. A name
+ * whose first half is a lone verb ("Searching and configuring connectors")
+ * shares its object and stays whole.
+ */
+/** "Chatting" or "Editing a document" for a journey mostly made of one sidebar entry opened; null otherwise. */
+function openedEntry(journey, graph) {
+  // Only a browsing journey of ordinary pages: a paywall or a sign-in shown
+  // over a chat still carries the chat's title, and is not the chat.
+  if (journey.category && journey.category !== 'discovery') return null;
+  const ordinary = new Set(['other', 'detail', 'feed', 'home', 'category', 'messages']);
+  const entries = journey.nodeIds.map((id) => graph.get(id)?.analysis).filter((analysis) => analysis?.signals?.listedInSidebar && ordinary.has(analysis.screenType));
+  if (entries.length < Math.max(2, journey.nodeIds.length * 0.6)) return null;
+  const title = String(entries[0].signals.title ?? '').toLowerCase();
+  if (/presentation|slides?|deck/.test(title)) return 'Editing a presentation';
+  if (/design/.test(title)) return 'Editing a design';
+  if (/document|doc\b|untitled/.test(title)) return 'Editing a document';
+  return 'Chatting';
+}
+
+export function oneTask(name) {
+  const match = /^(.+?)\s+(?:and|&|then)\s+([a-z]+ing\b.*)$/i.exec(String(name || ''));
+  if (!match || match[1].trim().split(/\s+/).length < 2) return name;
+  return match[1].trim();
+}
+
 export function applyProposals(journeys, graph, proposals) {
   let journeysRenamed = 0;
   let screensUpdated = 0;
@@ -529,6 +576,7 @@ export function applyProposals(journeys, graph, proposals) {
       if (bare !== name && bare.split(' ').length >= 2) name = bare.charAt(0).toUpperCase() + bare.slice(1);
     }
     name = sentenceCase(name, properNouns);
+    name = oneTask(name);
     // A section keeps its tab name and onboarding its own; the model names
     // the journeys inside them.
     // That holds for every top-level section ("Settings", "Projects"), not only
@@ -541,6 +589,17 @@ export function applyProposals(journeys, graph, proposals) {
       Boolean(journey.parent) &&
       (name.toLowerCase() === (parentName ?? '').toLowerCase() || sectionNames.has(name.toLowerCase()) || /^onboarding$/i.test(name));
     const copiedExample = Boolean(name) && EXAMPLE_NAMES.has(name.toLowerCase()) && !shownOnScreens(name, journey, graph, proposals.screens ?? {});
+    // A journey that is mostly one chat or document opened from the sidebar
+    // is about using it, whatever words appear inside it.
+    const opened = openedEntry(journey, graph);
+    const entryWord = String(journey.nodeIds.map((id) => graph.get(id)?.analysis?.signals).find((signals) => signals?.listedInSidebar)?.title ?? '').toLowerCase();
+    const aboutTitle = entryWord.length >= 4 && name.toLowerCase().includes(entryWord);
+    if (name && opened && (aboutTitle || !/(chat|conversation|messag|document|presentation|design|slides?|sheet|file|note|draft|edit|writ|read)/i.test(name))) name = opened;
+    // A chat's own title is not a feature: "Opening Greeting options" is
+    // "Opening chat options".
+    else if (name && aboutTitle && !/(document|presentation|design|untitled)/i.test(entryWord)) {
+      name = name.replace(new RegExp(`\\b${escapeRegExp(entryWord)}\\b`, 'i'), 'chat').replace(/\bchat chat\b/i, 'chat');
+    }
     if (name && !echoesAPlace && !copiedExample && name.split(' ').length <= 7 && !isSectionName && !/^onboarding$/i.test(journey.name)) {
       if (name.toLowerCase() !== journey.name.toLowerCase()) journeysRenamed++;
       journey.name = name;

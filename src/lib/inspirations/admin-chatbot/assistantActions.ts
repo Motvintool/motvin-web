@@ -41,9 +41,9 @@ export type AdminOp =
   /** The sidecar fields the Screens tab edits that have no op of their own: when it was captured, its components, its style. */
   | { kind: 'set-screen-details'; platform: string; appId: string; file: string; version?: string; flow?: string; name: string; capturedAt?: string; elements?: string[]; style?: string[] }
   /** A dropped recording, every question answered — the run starts on Confirm. The file itself is held by the dock. */
-  | { kind: 'start-ingest'; fileName: string; platform: 'ios' | 'webapp' | 'web'; appId?: string; appName?: string; version?: string; versionLabel?: string; startedBy: string }
+  | { kind: 'start-ingest'; fileName: string; platform: 'ios' | 'webapp' | 'web'; appId?: string; appName?: string; version?: string; versionLabel?: string; startedBy: string; logoName?: string }
   /** Dropped screenshots, every question answered — uploaded on Confirm, creating the app first when it is new. */
-  | { kind: 'upload-screens'; count: number; platform: 'ios' | 'webapp' | 'web'; appId: string; appName: string; version: string; versionLabel: string; newApp?: { id: string; name: string; industry?: string } }
+  | { kind: 'upload-screens'; count: number; platform: 'ios' | 'webapp' | 'web'; appId: string; appName: string; version: string; versionLabel: string; newApp?: { id: string; name: string; industry?: string }; logoName?: string }
   | { kind: 'set-flow-parent'; flowId: string; name: string; parentId: string | null; parentName: string | null }
   | { kind: 'set-source-status'; appId: string; name: string; status: 'pending' | 'review' | 'approved' | 'rejected' }
   | { kind: 'delete-app-version'; appId: string; name: string; versionId: string; versionLabel: string; screens: number }
@@ -61,6 +61,8 @@ export type AssistantAction =
   | { type: 'confirm'; op: AdminOp; label: string; destructive: boolean }
   /** A suggested next message, shown as a chip; pressing it sends it. */
   | { type: 'reply'; text: string }
+  /** A date to pick on a calendar; the picked date (YYYY-MM-DD) is sent as the answer. Dates in `taken` can't be used. */
+  | { type: 'date'; value: string; taken: string[]; label: string }
   /** The admin backed out: whatever was waiting for Confirm is dropped. */
   | { type: 'cancel' }
   /** Screens shown as thumbnails to pick from — to delete, or just to see. */
@@ -197,9 +199,9 @@ export function describeOp(op: AdminOp, extra: { screens?: number; flows?: numbe
       return `Set “${op.name}”’s ${parts.join(' and ')}?`;
     }
     case 'start-ingest':
-      return `Start a run on “${op.fileName}” (${platformName(op.platform)})${op.appName ? `, adding to ${op.appName}${op.versionLabel ? ` — ${op.versionLabel}` : ''}` : ', as a new app'}? The screens go live in a minute or two; the AI names them after that.`;
+      return `Start a run on “${op.fileName}” (${platformName(op.platform)})${op.appName ? `, adding to ${op.appName}${op.versionLabel ? ` — ${op.versionLabel}` : ''}` : ', as a new app'}${op.logoName ? `, with “${op.logoName}” as its logo` : ''}? The screens go live in a minute or two; the AI names them after that.`;
     case 'upload-screens':
-      return `Upload ${op.count} screenshot${op.count === 1 ? '' : 's'} to ${op.appName} (${platformName(op.platform)}, ${op.versionLabel})${op.newApp ? ` — ${op.appName} is created first` : ''}? Each screen’s type is read from its file name; you can retype any afterwards.`;
+      return `Upload ${op.count} screenshot${op.count === 1 ? '' : 's'} to ${op.appName} (${platformName(op.platform)}, ${op.versionLabel})${op.newApp ? ` — ${op.appName} is created first${op.logoName ? `, with “${op.logoName}” as its logo` : ''}` : ''}? Each screen’s type is read from its file name; you can retype any afterwards.`;
     case 'set-flow-parent':
       return op.parentName ? `Nest the flow “${op.name}” under “${op.parentName}”?` : `Make the flow “${op.name}” a top-level section?`;
     case 'set-source-status':

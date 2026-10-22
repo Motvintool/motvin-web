@@ -26,8 +26,9 @@ import { parseIdbElements } from './device.js';
 import { buildSections, classifyScreen, cleanTitle, groupFlowsLocally, guessBrand, looksLikeNavTitle } from './heuristics.js';
 import { segmentRecording, _internals as _segmentInternals, _thresholds as _segmentThresholds } from './segment.js';
 import { buildJourneys, journeyName, taskPhrase } from './journeys.js';
+import { mergeSameNamedSiblings, taskParts } from './structure.js';
 import { describeAction, actionPhrase } from './actions.js';
-import { applyProposals, describeTree, researchTree, salvageJson, BRIEF } from './researcher.js';
+import { applyProposals, describeTree, oneTask, researchTree, salvageJson, BRIEF } from './researcher.js';
 import { pickModel, supportsVision, ollamaReplyText, pickJourneyModel } from './ai.js';
 import { isExternalAuthScreen } from './safety.js';
 import { dominantColors, fingerprintFromThumb, THUMB } from './hash.js';
@@ -1231,6 +1232,39 @@ export async function selfTest() {
       const under = split.filter((j) => j.parent === section?.key).map((j) => `${j.name}:${j.nodeIds.length}`).join(',');
       check('a long section is split into one journey per tab, each starting on the section', under === 'Skills:4,Connectors:5,Plugins:3', under);
 
+    }
+
+    log.heading('One task per flow');
+    {
+      const parts = taskParts([{ start: 0, name: 'Changing settings' }, { start: 2, name: 'Going incognito' }, { start: 3, name: 'Viewing plans' }, { start: 6, name: 'Home' }, { start: 7, name: 'Chatting' }], 13);
+      check('the model’s task starts split a flow, a one-screen task opening the next', parts.map((p) => `${p.name}:${p.nodes.join('-')}`).join(' ') === 'Changing settings:0-1 Viewing plans:2-3-4-5 Chatting:6-7-8-9-10-11-12', JSON.stringify(parts));
+      check('one task stays one flow', taskParts([{ start: 0, name: 'Adding a connector' }], 5).length === 1 && taskParts('nonsense', 5).length === 1);
+      const chatGraph = new Map(['c1', 'c2', 'c3', 'w1', 'w2'].map((id) => [id, { id, analysis: { screenType: id.startsWith('w') ? 'paywall' : 'detail', name: 'Greeting', signals: { listedInSidebar: true, title: 'Greeting' }, lines: [] } }]));
+      const chats = [
+        { key: 'c', name: 'Opening a page', category: 'discovery', parent: 'p', nodeIds: ['c1', 'c2', 'c3'] },
+        { key: 'w', name: 'Subscribing', category: 'checkout', parent: 'p', nodeIds: ['w1', 'w2'] },
+      ];
+      applyProposals(chats, chatGraph, { journeys: { J0: 'Reporting an issue', J1: 'Viewing plans' }, screens: {} });
+      check('a chat opened from the sidebar is named as a chat, whatever words are in it', chats[0].name === 'Chatting', chats[0].name);
+      check('a paywall shown over a chat is still a paywall', chats[1].name === 'Viewing plans', chats[1].name);
+      check('a name is one task', oneTask('Adding to a project and accessing support') === 'Adding to a project' && oneTask('Creating and exporting a presentation') === 'Creating and exporting a presentation');
+
+      const graph = new Map(['p1', 'p2', 'p3', 'x1', 'x2', 'a', 'b', 'c', 'd'].map((id) => [id, { id, analysis: { screenType: id.startsWith('p') ? 'paywall' : 'other' } }]));
+      const tree = [
+        { key: 'r', name: 'Projects', section: true, parent: null, nodeIds: ['a'] },
+        { key: 's', name: 'Subscribing', section: true, promoted: true, parent: null, nodeIds: ['p1', 'p2'] },
+        { key: 'o1', name: 'Opening a page', parent: 'r', nodeIds: ['a', 'b'] },
+        { key: 'o2', name: 'Opening a page from Projects', parent: 'r', nodeIds: ['a', 'c'] },
+        { key: 'o3', name: 'Opening a page with details', parent: 'r', nodeIds: ['a', 'd'] },
+        { key: 'v', name: 'Viewing plans', parent: 'r', nodeIds: ['x1', 'p3'] },
+      ];
+      mergeSameNamedSiblings(tree, new Map(), graph);
+      const left = tree.map((j) => `${j.name}:${j.nodeIds.join('')}`).join(' | ');
+      check('the same task walked again, however its name is qualified, is one flow', tree.filter((j) => j.parent === 'r' && /^Opening a page/.test(j.name)).length === 1 && tree.find((j) => j.key === 'o1').nodeIds.join('') === 'abcd', left);
+      check('a paywall opened from a section is the app’s one subscribing flow', !tree.some((j) => j.key === 'v') && tree.find((j) => j.key === 's').nodeIds.join(',') === 'p1,p2,x1,p3', left);
+      const onboarding = [{ key: 'on', name: 'Onboarding', section: true, parent: null, nodeIds: ['l1', 'l2'] }, { key: 'si', name: 'Signing in', parent: 'on', nodeIds: ['l1', 'l2'] }];
+      mergeSameNamedSiblings(onboarding, new Map(), new Map(['l1', 'l2'].map((id) => [id, { analysis: { screenType: 'login' } }])));
+      check('a section’s own sign-in stays its child', onboarding.length === 2);
     }
 
     log.heading('Journeys from the walk');

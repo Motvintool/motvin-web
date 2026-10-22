@@ -39,11 +39,12 @@ const BLANK: StoreStats = {
 const REVALIDATE = 60 * 60 * 24;
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36';
 
-async function getText(url: string): Promise<string | null> {
+async function getText(url: string, fresh = false): Promise<string | null> {
   try {
     const res = await fetch(url, {
       headers: { 'User-Agent': UA, 'Accept-Language': 'en-US,en;q=0.9' },
-      next: { revalidate: REVALIDATE },
+      // A fresh read skips the day-long cache: the chart is read as it stands now.
+      ...(fresh ? { cache: 'no-store' as const } : { next: { revalidate: REVALIDATE } }),
       signal: AbortSignal.timeout(6000),
     });
     return res.ok ? await res.text() : null;
@@ -52,8 +53,8 @@ async function getText(url: string): Promise<string | null> {
   }
 }
 
-async function getJson<T>(url: string): Promise<T | null> {
-  const text = await getText(url);
+async function getJson<T>(url: string, fresh = false): Promise<T | null> {
+  const text = await getText(url, fresh);
   if (!text) return null;
   try {
     return JSON.parse(text) as T;
@@ -83,8 +84,8 @@ type ItunesResult = {
 };
 type Chart = { feed?: { entry?: { id: { attributes: { 'im:id': string } } }[] } };
 
-async function rankIn(url: string, trackId: number): Promise<number | null> {
-  const chart = await getJson<Chart>(url);
+async function rankIn(url: string, trackId: number, fresh = false): Promise<number | null> {
+  const chart = await getJson<Chart>(url, fresh);
   const ids = chart?.feed?.entry?.map((e) => e.id.attributes['im:id']) ?? [];
   const i = ids.indexOf(String(trackId));
   return i >= 0 ? i + 1 : null;
@@ -110,9 +111,10 @@ type Storefront = {
   overallRank: number | null;
 };
 
-async function iosStorefront(name: string, front: (typeof STOREFRONTS)[number]): Promise<Storefront> {
+async function iosStorefront(name: string, front: (typeof STOREFRONTS)[number], fresh = false): Promise<Storefront> {
   const search = await getJson<{ results: ItunesResult[] }>(
     `https://itunes.apple.com/search?term=${encodeURIComponent(name)}&entity=software&country=${front.code}&limit=5`,
+    fresh,
   );
   const results = search?.results ?? [];
   const want = norm(name);
@@ -120,15 +122,15 @@ async function iosStorefront(name: string, front: (typeof STOREFRONTS)[number]):
   const hit = results.find((r) => norm(r.trackName).startsWith(want)) ?? results[0] ?? null;
   if (!hit) return { ...front, hit: null, rank: null, overallRank: null };
   const [rank, overallRank] = await Promise.all([
-    rankIn(`https://itunes.apple.com/${front.code}/rss/topfreeapplications/limit=200/genre=${hit.primaryGenreId}/json`, hit.trackId),
-    rankIn(`https://itunes.apple.com/${front.code}/rss/topfreeapplications/limit=200/json`, hit.trackId),
+    rankIn(`https://itunes.apple.com/${front.code}/rss/topfreeapplications/limit=200/genre=${hit.primaryGenreId}/json`, hit.trackId, fresh),
+    rankIn(`https://itunes.apple.com/${front.code}/rss/topfreeapplications/limit=200/json`, hit.trackId, fresh),
   ]);
   return { ...front, hit, rank, overallRank };
 }
 
-async function iosStats(name: string): Promise<StoreStats> {
+async function iosStats(name: string, fresh = false): Promise<StoreStats> {
   const empty: StoreStats = { ...BLANK, platform: 'ios' };
-  const fronts = await Promise.all(STOREFRONTS.map((f) => iosStorefront(name, f)));
+  const fronts = await Promise.all(STOREFRONTS.map((f) => iosStorefront(name, f, fresh)));
   // Best placing wins; on a tie the earlier storefront (US) does.
   const ranked = fronts
     .filter((f) => f.hit && f.rank)
@@ -153,6 +155,22 @@ async function iosStats(name: string): Promise<StoreStats> {
   };
 }
 
+/**
+ * Numbers read fresh on purpose (an upload of the app), kept for the same
+ * day the cache would have held the old ones, and served ahead of it — so
+ * the page shows the rank read at upload, not yesterday's.
+ */
+const freshByName: Map<string, { stats: StoreStats; at: number }> = ((globalThis as unknown as { __motvinFreshStoreStats?: Map<string, { stats: StoreStats; at: number }> }).__motvinFreshStoreStats ??= new Map());
+
 export function getStoreStats(name: string, _platform: 'ios' = 'ios'): Promise<StoreStats> {
+  const kept = freshByName.get(norm(name));
+  if (kept && Date.now() - kept.at < REVALIDATE * 1000) return Promise.resolve(kept.stats);
   return iosStats(name);
+}
+
+/** Reads an iOS app's store numbers now, past the cache, and serves them from here on. */
+export async function refreshStoreStats(name: string): Promise<StoreStats> {
+  const stats = await iosStats(name, true);
+  freshByName.set(norm(name), { stats, at: Date.now() });
+  return stats;
 }

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { IngestEvent, IngestJob, IngestResult, ReviewDecision } from '@/lib/inspirations/admin-chatbot/ingestJobs';
+import { refreshStoreStats } from '@/lib/inspirations/storeStats';
 
 const execFileAsync = promisify(execFile);
 
@@ -447,6 +448,20 @@ function apply(job: ServerJob, event: IngestEvent) {
     if (event.frames !== undefined) job.frames = event.frames;
     if (event.screens !== undefined) job.screens = event.screens;
     if (event.stage === 'published' && event.result) job.interim = event.result;
+    // Which app this is, now settled: an iOS app's chart rank is read fresh
+    // straight away, so the badge on its page shows where it stands today.
+    if (event.app && event.app.platform === 'ios' && job.badge?.app !== event.app.name) {
+      const name = event.app.name;
+      job.badge = { app: name, checking: true, rank: null };
+      void refreshStoreStats(name)
+        .then((stats) => {
+          if (job.badge?.app === name) job.badge = { app: name, checking: false, rank: stats.rank };
+        })
+        .catch(() => {
+          if (job.badge?.app === name) job.badge = { app: name, checking: false, rank: null };
+        })
+        .finally(() => persist());
+    }
     if (event.stage === 'captured') {
       job.capturedScreens = event.capturedScreens ?? [];
       if (event.stagingDir) job.stagingDir = event.stagingDir;

@@ -37,6 +37,7 @@ import { analyseScreen, complete, encodeForModel, groupIntoFlows, identifyApp, p
 import { resolveIndustry } from './category.js';
 import { researchTree } from './researcher.js';
 import { extractJson } from './analyze.js';
+import { mergeSameNamedSiblings, reviewStructure } from './structure.js';
 import { buildJourneys } from './journeys.js';
 import { actionPhrase, describeAction } from './actions.js';
 import { isBlockingScreen, isExternalAuthScreen } from './safety.js';
@@ -601,6 +602,12 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
       resolvedApp = { ...resolvedApp, platform: options.platform };
     }
     if (!resolvedApp.platform) resolvedApp = { ...resolvedApp, platform: 'ios' };
+    // Which app this is, once settled — found from the screens or chosen up
+    // front — so the caller can look up what depends on it (an iOS app's
+    // store rank) while the rest of the run goes on.
+    report(options, 'identify', identified ? `This is ${resolvedApp.name}` : `Adding to ${resolvedApp.name}`, {
+      app: { id: resolvedApp.appId, name: resolvedApp.name, platform: resolvedApp.platform },
+    });
 
     // Which dated capture this run's screens land in: an explicit --version,
     // else today — so a re-ingest on a later day lands alongside the last
@@ -626,10 +633,37 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
       // is built from sections.
       validateTabBars([...graph.nodes.values()]);
       const journeys = buildJourneys(visits, { actions: graph.actions });
-      // The researcher runs after the screens are published (below), so the
-      // library shows them at once and the model's words arrive a few
-      // minutes later rather than holding everything up.
-      pendingResearch = { journeys, backend: pickBackend(options.backend) };
+      // With a model, the tree's final shape is settled before anything is
+      // published: every journey checked to be one task (split where it is
+      // not), named, and same-named siblings merged — the structure the
+      // library shows is the structure that stays. Naming the journeys is a
+      // short text call; the screens' words, the slow part, still follow
+      // after publishing.
+      const researchBackend = pickBackend(options.backend);
+      let journeysNamed = false;
+      if (researchBackend !== 'local' && researchBackend !== 'none') {
+        const ask = (request) => complete(researchBackend, request);
+        report(options, 'flows', 'AI is checking that every flow is one task');
+        try {
+          const review = await reviewStructure(journeys, graph, { complete: ask, extractJson, model: options.journeyModel ?? null, actions: graph.actions, log: (message) => log.detail(message) });
+          log.info(`structure: ${review.reviewed} flow(s) checked, ${review.split} task(s) split off`);
+        } catch (error) {
+          log.warn(`could not check the flows — ${error.message.split('\n')[0]}`);
+        }
+        report(options, 'flows', 'AI is naming the flows');
+        try {
+          await researchTree(journeys, graph, { complete: ask, encodeImage: encodeForModel, extractJson, app: resolvedApp, vision: false, only: 'journeys', journeyModel: options.journeyModel ?? null, log: (message) => log.detail(message) });
+          journeysNamed = true;
+          const merged = mergeSameNamedSiblings(journeys, graph.actions, graph);
+          if (merged) log.info(`structure: ${merged} repeat(s) of the same task merged`);
+        } catch (error) {
+          log.warn(`could not name the flows yet — ${error.message.split('\n')[0]}; the researcher will try after publishing`);
+        }
+      }
+      // The researcher's screen pass runs after the screens are published
+      // (below), so the library shows them at once and the model's words
+      // arrive a few minutes later rather than holding everything up.
+      pendingResearch = { journeys, backend: researchBackend, journeysNamed };
       const nameOfKey = new Map(journeys.map((journey) => [journey.key, journey.name]));
       flowGroups = journeys.map((journey) => ({
         key: journey.key,
@@ -702,9 +736,10 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
           capture: captureInfo,
         },
       });
-      const { journeys, backend } = pendingResearch;
+      const { journeys, backend, journeysNamed } = pendingResearch;
       try {
         const outcome = await researchTree(journeys, graph, {
+          only: journeysNamed ? 'screens' : null,
           complete: (request) => complete(backend, request),
           encodeImage: encodeForModel,
           extractJson,

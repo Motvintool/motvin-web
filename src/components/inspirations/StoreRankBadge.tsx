@@ -12,7 +12,7 @@ import { useStoreStats } from './useStoreStats';
  * chart.
  */
 /** Gold for #1, silver for #2, bronze for everything below. */
-function cupFor(position: number): string {
+export function cupFor(position: number): string {
   if (position === 1) return '/ASSET/Icons/cup.png';
   if (position === 2) return '/ASSET/Icons/Motvin/cup-silver.png';
   return '/ASSET/Icons/Motvin/cup-bronze.png';
@@ -21,7 +21,7 @@ function cupFor(position: number): string {
 /** Only ranks at or above this show a badge. The top 100 of a category chart is still a distinction, and a
  *  newer app in a crowded category (Notion #46 in Productivity, Luma #87 in Lifestyle) earns it there long
  *  before it reaches the top 20; below the top 100 a rank says little. */
-const MAX_RANK = 100;
+export const MAX_RANK = 100;
 
 /** The ring follows the cup: gold / silver / bronze (bronze for everything below #2). */
 function tierFor(position: number): 'gold' | 'silver' | 'bronze' {

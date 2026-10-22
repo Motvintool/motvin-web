@@ -89,7 +89,7 @@ export type CapturedScreen = {
 };
 
 export type IngestEvent =
-  | { type: 'progress'; stage: string; message: string; done?: number; total?: number; frames?: number; screens?: number; result?: Partial<IngestResult>; capturedScreens?: CapturedScreen[]; stagingDir?: string }
+  | { type: 'progress'; stage: string; message: string; done?: number; total?: number; frames?: number; screens?: number; result?: Partial<IngestResult>; capturedScreens?: CapturedScreen[]; stagingDir?: string; app?: { id: string; name: string; platform: string } }
   | { type: 'log'; line: string }
   | { type: 'result'; data: IngestResult }
   | { type: 'error'; message: string };
@@ -131,6 +131,13 @@ export type IngestJob = {
   /** Every screen found, while the job is `awaiting-review` and waiting on a decision. */
   capturedScreens: CapturedScreen[] | null;
   result: IngestResult | null;
+  /**
+   * An iOS app's store rank, read fresh once the run knows which app it is —
+   * the same rank its badge shows. Absent until then (and for Web Apps and
+   * Webs, which have no store chart); `checking` while it is being read; null
+   * rank when the app is not on its chart.
+   */
+  badge?: { app: string; checking: boolean; rank: { position: number; category: string; country: string } | null };
   error: string | null;
   dismissed: boolean;
 };
@@ -639,11 +646,15 @@ export type HeldKind = 'video' | 'screens';
  * every other change.
  */
 export type UploadPlan = {
-  step: 'platform' | 'app' | 'name' | 'version' | 'date' | 'confirm';
+  step: 'platform' | 'app' | 'logo' | 'name' | 'version' | 'date' | 'confirm';
   platform?: 'ios' | 'webapp' | 'web';
   appId?: string;
   appName?: string;
   newApp?: { id: string; name: string };
+  /** The new app's logo, picked after the platform; absent when skipped. */
+  logoName?: string;
+  /** What the logo question leads to: the screenshots' app name, or straight to the Confirm. */
+  afterLogo?: 'name' | 'offer';
 };
 
 type ChatSnapshot = {
@@ -660,6 +671,10 @@ type ChatSnapshot = {
 let chat: ChatSnapshot = { messages: [], pending: null, heldImage: null, heldUpload: null, expecting: null };
 let heldFile: File | null = null;
 let heldUploadFiles: File[] = [];
+/** The new app's logo, held with the upload until the app exists. */
+let heldUploadLogo: File | null = null;
+/** Logos waiting on a run to say which app it made: by job id. */
+const logosForJobs = new Map<string, File>();
 /** The in-flight assistant request, if any — `stopAssistant()` aborts it. */
 let currentAsk: AbortController | null = null;
 /** Set for the turn currently in flight; also halts the local typing animation for a whole (non-streamed) answer. */
@@ -969,8 +984,21 @@ export function heldUploadFilesNow(): File[] {
   return heldUploadFiles;
 }
 
+/** Keeps the logo picked for the new app the held upload will create. */
+export function holdUploadLogo(file: File | null) {
+  heldUploadLogo = file;
+}
+
+/** The logo a finished (or published) run's new app is waiting for, handed over once. */
+export function takeJobLogo(jobId: string): File | null {
+  const file = logosForJobs.get(jobId) ?? null;
+  logosForJobs.delete(jobId);
+  return file;
+}
+
 export function releaseUpload() {
   heldUploadFiles = [];
+  heldUploadLogo = null;
   emitChat({ ...chat, heldUpload: null });
 }
 
@@ -1152,10 +1180,14 @@ export async function performAction(action: ConfirmAction, image?: File | null):
       case 'start-ingest': {
         const file = heldUploadFiles[0];
         if (!file) throw new Error('The recording is no longer held — drop it here again.');
+        const logo = heldUploadLogo;
         releaseUpload();
         // The upload of a large recording can take a while on its own; the run
         // shows as a job above from its first second, so this does not wait.
-        void startIngest(file, op.startedBy, { platform: op.platform, appId: op.appId, version: op.version }).catch((error: Error) => {
+        // A new app's logo waits on the run: only it can say which app it made.
+        void startIngest(file, op.startedBy, { platform: op.platform, appId: op.appId, version: op.version }).then((jobId) => {
+          if (logo) logosForJobs.set(jobId, logo);
+        }).catch((error: Error) => {
           assistantSays(`I could not start that run: ${error.message}`);
         });
         break;
@@ -1164,6 +1196,7 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         const files = heldUploadFiles;
         if (!files.length) throw new Error('The screenshots are no longer held — drop them here again.');
         if (op.newApp) await adminApi.saveApp({ id: op.newApp.id, name: op.newApp.name, industry: (op.newApp.industry ?? 'saas') as Industry });
+        if (op.newApp && heldUploadLogo) await adminApi.uploadLogo(op.newApp.id, heldUploadLogo.name, heldUploadLogo);
         const failed: string[] = [];
         for (const file of files) {
           // The screen type must lead the file name — that is what the builder

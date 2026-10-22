@@ -83,6 +83,21 @@ function sidebarNav(column) {
   return labelled(groups.find((group) => labelled(group).length >= 3) ?? []);
 }
 
+function listedInSidebar(signals) {
+  const title = titleFrom(signals.lines, null, { layout: 'desktop', navLabels: signals.navLabels });
+  if (!title) return false;
+  const nav = new Set(signals.navLabels.map((label) => label.toLowerCase()));
+  const strip = (text) => (cleanTitle(String(text).replace(/^\S{1,2}\s+(?=[A-Z])/, '')) ?? '').toLowerCase();
+  return (signals.sidebarTexts ?? []).some((text) => strip(text) === title.toLowerCase() && !nav.has(title.toLowerCase()));
+}
+
+/** A screen's text without its navigation chrome: on a desktop page, everything but the sidebar. */
+export function pageLines(lines, layout) {
+  if (layout !== 'desktop') return lines;
+  const sidebar = new Set(sidebarLines(lines));
+  return lines.filter((line) => !sidebar.has(line));
+}
+
 /** The lines that make up a desktop page's left sidebar, or [] when it has none. */
 function sidebarLines(lines) {
   const column = lines.filter((line) => line.x <= SIDEBAR_LEFT_MAX && line.x + (line.w ?? 0) <= SIDEBAR_RIGHT);
@@ -178,6 +193,7 @@ export function extractSignals(lines, options = {}) {
     // it, never from the sidebar beside it.
     lines: page,
     layout: desktop ? 'desktop' : 'phone',
+    sidebarTexts: sidebar.map((line) => line.text),
     navLabels: sidebar.length ? sidebarNav(sidebar) : [],
     content,
     header,
@@ -453,9 +469,12 @@ function titleFrom(lines, box = null, options = {}) {
   // "Projects") is that page's name, even as one uncommon word.
   const nav = new Set((options?.navLabels ?? []).map((label) => label.toLowerCase()));
   const named = (line) => looksLikeNavTitle(line.text) || nav.has(cleanTitle(line.text)?.toLowerCase());
+  // On a desktop page the heading that repeats a sidebar item comes first;
+  // a button in the header ("+ Add") is never the page's name.
+  const isNav = (line) => nav.has(cleanTitle(line.text)?.toLowerCase());
   const header = lines
-    .filter((line) => line.y > top && line.y < HEADER_BOTTOM && wordy(line) && named(line))
-    .sort((a, b) => b.h - a.h);
+    .filter((line) => line.y > top && line.y < HEADER_BOTTOM && wordy(line) && named(line) && !/^[+＋]/.test(line.text.trim()))
+    .sort((a, b) => Number(isNav(b)) - Number(isNav(a)) || b.h - a.h);
   if (header[0]) return cleanTitle(header[0].text);
   if (options?.headerOnly) return null;
   // Below the header, only a proper headline counts — never a card label,
@@ -653,6 +672,9 @@ export function classifyScreen(lines, options = {}) {
       layout: signals.layout,
       navLabels: signals.navLabels.slice(0, 24),
       activeTab: signals.layout === 'desktop' ? activeTabOf(signals.content, signals.chipLabels, signals.navLabels) : null,
+      // A page titled like an entry in the sidebar's lists (pinned, recents)
+      // is that entry opened — a chat, a document — not a page named so.
+      listedInSidebar: signals.layout === 'desktop' ? listedInSidebar(signals) : false,
       title: titleFrom(signals.lines, context.overlay?.box ?? null, { layout: signals.layout, navLabels: signals.navLabels }),
       // The largest real words in the body — a section heading or a hero
       // line — kept so a screen can be told apart from siblings that share
