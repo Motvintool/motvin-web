@@ -448,6 +448,7 @@ function apply(job: ServerJob, event: IngestEvent) {
     if (event.frames !== undefined) job.frames = event.frames;
     if (event.screens !== undefined) job.screens = event.screens;
     if (event.stage === 'published' && event.result) job.interim = event.result;
+    if (event.app) job.identifiedApp = { name: event.app.name, tagline: event.app.tagline ?? null };
     // Which app this is, now settled: an iOS app's chart rank is read fresh
     // straight away, so the badge on its page shows where it stands today.
     if (event.app && event.app.platform === 'ios' && job.badge?.app !== event.app.name) {

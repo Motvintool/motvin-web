@@ -602,11 +602,31 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
       resolvedApp = { ...resolvedApp, platform: options.platform };
     }
     if (!resolvedApp.platform) resolvedApp = { ...resolvedApp, platform: 'ios' };
+    // Screens added to an app already in the library are not identified — it
+    // is the app chosen. One without a tagline yet gets one written from these
+    // screens; one that has a tagline keeps it as it is.
+    if (app && !String(resolvedApp.tagline || '').trim() && analyzer.usable && pickBackend(options.backend) !== 'local') {
+      report(options, 'identify', `Writing a tagline for ${resolvedApp.name}`);
+      try {
+        const nodes = [...graph.nodes.values()].filter((node) => !node.skipPublish);
+        const identity = await identifyApp(representativeFrames(nodes), {
+          backend: options.backend,
+          lineSets: nodes.map((node) => node.analysis.lines ?? []).filter((lines) => lines.length),
+        });
+        const tagline = String(identity?.tagline || '').trim();
+        if (tagline) {
+          resolvedApp = { ...resolvedApp, tagline };
+          log.info(`tagline: ${tagline} — written for ${resolvedApp.name}, which had none`);
+        }
+      } catch (error) {
+        log.warn(`could not write a tagline — ${String(error.message).split('\n')[0]}`);
+      }
+    }
     // Which app this is, once settled — found from the screens or chosen up
     // front — so the caller can look up what depends on it (an iOS app's
     // store rank) while the rest of the run goes on.
     report(options, 'identify', identified ? `This is ${resolvedApp.name}` : `Adding to ${resolvedApp.name}`, {
-      app: { id: resolvedApp.appId, name: resolvedApp.name, platform: resolvedApp.platform },
+      app: { id: resolvedApp.appId, name: resolvedApp.name, platform: resolvedApp.platform, tagline: String(resolvedApp.tagline || '').trim() || null },
     });
 
     // Which dated capture this run's screens land in: an explicit --version,

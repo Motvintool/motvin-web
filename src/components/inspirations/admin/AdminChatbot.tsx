@@ -1927,6 +1927,9 @@ export function JobThread({ job, now, reviewSlot }: { job: IngestJob; now: numbe
                     </span>
                     {stage.label}
                     {stage.id === 'identify' && job.badge && index <= current && <RankNote badge={job.badge} />}
+                    {stage.id === 'identify' && job.identifiedApp?.tagline && index <= current && (
+                      <span className="ins-chat-step-tagline">“{job.identifiedApp.tagline}”</span>
+                    )}
                   </li>
                 );
               })}

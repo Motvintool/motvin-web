@@ -89,7 +89,7 @@ export type CapturedScreen = {
 };
 
 export type IngestEvent =
-  | { type: 'progress'; stage: string; message: string; done?: number; total?: number; frames?: number; screens?: number; result?: Partial<IngestResult>; capturedScreens?: CapturedScreen[]; stagingDir?: string; app?: { id: string; name: string; platform: string } }
+  | { type: 'progress'; stage: string; message: string; done?: number; total?: number; frames?: number; screens?: number; result?: Partial<IngestResult>; capturedScreens?: CapturedScreen[]; stagingDir?: string; app?: { id: string; name: string; platform: string; tagline?: string | null } }
   | { type: 'log'; line: string }
   | { type: 'result'; data: IngestResult }
   | { type: 'error'; message: string };
@@ -138,6 +138,8 @@ export type IngestJob = {
    * rank when the app is not on its chart.
    */
   badge?: { app: string; checking: boolean; rank: { position: number; category: string; country: string } | null };
+  /** The app the run settled on, with its tagline — written from the screens for a new app, or one that had none. */
+  identifiedApp?: { name: string; tagline: string | null };
   error: string | null;
   dismissed: boolean;
 };

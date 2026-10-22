@@ -17989,3 +17989,17 @@ html:has(aside.ins-dock:not(.ins-dock-user)) {
 .ins-chat-step-rank b {
   font-weight: 700;
 }
+
+/* Under "Identifying the app": the app's tagline, as written from its screens. */
+.ins-chat-step-tagline {
+  display: block;
+  flex-basis: 100%;
+  margin: 2px 0 0 22px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--ins-muted, #8a8f9a);
+  line-height: 1.4;
+}
+.ins-chat-step:has(.ins-chat-step-tagline) {
+  flex-wrap: wrap;
+}

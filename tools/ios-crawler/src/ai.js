@@ -128,20 +128,37 @@ export function supportsVision(model) {
 /** Vision models that read phone screens best, most preferred first. */
 const PREFERRED = [/qwen3-vl/i, /qwen2\.5-?vl/i, /gemma3/i, /llava/i];
 
-/** Screens are read one call each, so the screen model stays at or under this size for speed. */
+/** Screens are read one call each, so the screen model's working size stays at or under this for speed. */
 const SCREEN_MODEL_MAX_B = 12;
+
+/**
+ * The parameters a model works with per token: a mixture-of-experts model
+ * ("30b-a3b") uses only its active share (3B), so it runs about as fast as a
+ * model that size while knowing as much as its full size.
+ */
+export function activeSize(name) {
+  const moe = String(name).match(/a(\d+(?:\.\d+)?)b\b/i);
+  return moe ? Number(moe[1]) : modelSize(name);
+}
+
+/**
+ * A model that answers directly. A "thinking" build reasons privately before
+ * every reply — slower, and prone to running out of room before the answer.
+ */
+const isInstruct = (name) => /instruct/i.test(String(name));
 
 export function pickModel(models, configured = '') {
   if (configured) return configured;
   const usable = models.filter((name) => !NOT_FOR_THIS.test(name));
   for (const pattern of PREFERRED) {
-    // Within the preferred family, the largest that is still quick enough to
-    // read every screen: qwen3-vl:8b over qwen3-vl:2b when both are installed.
+    // Within the preferred family: quick enough to read every screen, an
+    // instruct build over a thinking one, then the most capable (largest).
     const hits = usable.filter((name) => pattern.test(name));
     if (!hits.length) continue;
-    const sized = hits.map((name) => ({ name, size: modelSize(name) ?? 0 }));
-    const fitting = sized.filter((entry) => entry.size <= SCREEN_MODEL_MAX_B).sort((a, b) => b.size - a.size);
-    return (fitting[0] ?? sized.sort((a, b) => a.size - b.size)[0]).name;
+    const ranked = hits
+      .map((name) => ({ name, active: activeSize(name) ?? 0, size: modelSize(name) ?? 0, instruct: isInstruct(name) }))
+      .sort((a, b) => Number(a.active > SCREEN_MODEL_MAX_B) - Number(b.active > SCREEN_MODEL_MAX_B) || Number(b.instruct) - Number(a.instruct) || b.size - a.size);
+    return ranked[0].name;
   }
   const vision = usable.find((name) => supportsVision(name));
   return vision ?? usable[0] ?? models[0] ?? null;
@@ -166,8 +183,10 @@ export function pickJourneyModel(models, chosen) {
   const candidates = models
     .filter((name) => !NOT_FOR_THIS.test(name) && name !== chosen)
     .map((name) => ({ name, size: modelSize(name) ?? 0 }))
-    .filter((entry) => entry.size > own && entry.size >= 3 && entry.size <= 15)
+    .filter((entry) => entry.size > own && entry.size >= 3 && (activeSize(entry.name) ?? entry.size) <= 15)
     .sort((a, b) => b.size - a.size);
+  // A screen model as strong as anything else installed (a 30B mixture of
+  // experts) names the journeys itself: one model stays loaded, none swaps.
   return candidates[0]?.name ?? chosen;
 }
 
@@ -301,7 +320,17 @@ async function ollamaChat(config, model, vision, request) {
   if (!response.ok) throw new Error(`ollama ${response.status}: ${(await response.text()).slice(0, 400)}`);
   const payload = await response.json();
   const reply = ollamaReplyText(payload);
-  if (!reply.trim()) throw new Error('ollama returned an empty reply');
+  if (!reply.trim()) {
+    // A reasoning model can spend the whole budget thinking (Qwen3-VL does,
+    // even with thinking off) and stop before the answer: that is a reply cut
+    // off at the limit, worth asking again with more room, not an empty one.
+    if (payload?.done_reason === 'length') {
+      const error = new Error(`ollama reply was cut off at the ${body.options.num_predict}-token limit`);
+      error.cutOff = true;
+      throw error;
+    }
+    throw new Error('ollama returned an empty reply');
+  }
   return reply;
 }
 

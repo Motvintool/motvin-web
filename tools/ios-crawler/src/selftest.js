@@ -1519,6 +1519,12 @@ export async function selfTest() {
       check('a vision model is preferred over a code model', pickModel(['qwen2.5-coder:14b', 'gemma3:4b']) === 'gemma3:4b' && supportsVision('gemma3:4b') && !supportsVision('qwen2.5-coder:14b'));
       check('the screen-reading family is preferred among vision models', pickModel(['gemma3:4b', 'qwen2.5-coder:14b', 'qwen3-vl:2b']) === 'qwen3-vl:2b');
       check('a configured model wins', pickModel(['gemma3:4b'], 'llava:13b') === 'llava:13b');
+      check('a mixture-of-experts instruct build reads the screens and names the journeys too', (() => {
+        const installed = ['qwen3-vl:2b', 'qwen3:14b', 'qwen3-vl:8b', 'qwen3-vl:30b-a3b-instruct'];
+        const chosen = pickModel(installed);
+        return chosen === 'qwen3-vl:30b-a3b-instruct' && pickJourneyModel(installed, chosen) === chosen;
+      })());
+      check('an instruct build is preferred over a thinking one of the same size', pickModel(['qwen3-vl:8b', 'qwen3-vl:8b-instruct']) === 'qwen3-vl:8b-instruct');
       check('journeys go to the largest general model, never a coder, and stay put when nothing larger exists', pickJourneyModel(['qwen3-vl:2b', 'gemma3:4b', 'qwen2.5-coder:14b'], 'qwen3-vl:2b') === 'gemma3:4b' && pickJourneyModel(['qwen3-vl:2b'], 'qwen3-vl:2b') === 'qwen3-vl:2b' && pickJourneyModel(['gemma3:4b', 'llama3:70b'], 'gemma3:4b') === 'gemma3:4b');
       check('an answer filed under thinking is still the answer', ollamaReplyText({ message: { content: '', thinking: '{"name":"Phone login"}' } }) === '{"name":"Phone login"}' && ollamaReplyText({ message: { content: 'x', thinking: 'y' } }) === 'x');
       check('a chain of thought with no answer is not an answer', ollamaReplyText({ message: { content: '', thinking: 'Okay, the user wants me to think about this.' } }) === '');

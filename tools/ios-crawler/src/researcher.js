@@ -39,6 +39,24 @@ For every screen:
 9. Do not treat every screenshot as an independent flow.
 10. Do not create a flat list of screens.`;
 
+/**
+ * Screens described per call. Three keeps each call short enough that a local
+ * vision model answers in well under a minute and rarely runs out of room;
+ * a failed call costs three screens' time, not six.
+ */
+const SCREEN_BATCH = 3;
+/**
+ * Output room for one batch's names, purposes and descriptions. Qwen3-VL
+ * thinks before it answers even with thinking off, and a full answer for
+ * three screens can run past 2,000 tokens; at 4,000 nearly every call fits.
+ * One that is still cut off has most likely got stuck repeating itself, and
+ * is asked once more.
+ */
+const SCREEN_TOKENS = 4000;
+
+/** A placeholder rather than a name: the journey builder's fallbacks, which say nothing about what was done. */
+const VAGUE_NAME = /^(opening a (page|sheet)|browsing( a category)?|detail|journey|filling in a form|reaching an empty state)\b/i;
+
 /** What both passes share: the grouping is fixed, the words are the job. */
 const SHARED_RULES = `
 You are given journeys already grouped from a real recording of one app, in the order they were walked, with the screens in each. That grouping is fixed: keep every journey and every screen id exactly as given, and do not add, merge, split or reorder them. Return JSON only — no prose, no markdown fence. Use keys and ids exactly as written in the input.
@@ -316,7 +334,7 @@ function safeParse(text) {
  * @returns {Promise<{journeysRenamed: number, screensUpdated: number, batches: number}>}
  */
 export async function researchTree(journeys, graph, options) {
-  const { complete, encodeImage, app, vision = true, batchSize = 6, extractJson, log, analyzer = 'ai', onBatch, only = null, journeyModel = null } = options;
+  const { complete, encodeImage, app, vision = true, batchSize = SCREEN_BATCH, extractJson, log, analyzer = 'ai', onBatch, only = null, journeyModel = null } = options;
   if (!journeys.length) return { journeysRenamed: 0, screensUpdated: 0, batches: 0 };
 
   const nodes = [];
@@ -395,6 +413,33 @@ export async function researchTree(journeys, graph, options) {
       }
       // One journey, refused after already being halved down to it: it keeps the name read off the screen.
     }
+
+    // A name that says nothing ("Opening a page") is often the machine guess
+    // handed back. Those journeys are asked once more, on their own, told why.
+    const nameOf = (journey) => {
+      const proposal = proposals.journeys[`J${journeys.indexOf(journey)}`];
+      return typeof proposal === 'string' ? proposal : proposal?.name ?? journey.name;
+    };
+    const vague = journeys.filter((journey) => !journey.section && VAGUE_NAME.test(String(nameOf(journey)).trim()));
+    if (vague.length) {
+      calls++;
+      log?.(`researcher: ${vague.length} journey name(s) came back vague; asking once more for those`);
+      try {
+        const tree = describeJourneys(vague, graph, journeys);
+        const note = 'These journeys were named "Opening a page" or similar, which says nothing. Give each a specific name from what its pages show — the feature, the page title or the task — never "Opening a page", "Browsing" or "Detail".\n\n';
+        const reply = await complete({ system: `${BRIEF}\n${JOURNEY_RULES}`, blocks: [{ type: 'text', text: `${header}${note}${tree}` }], maxTokens: 800, temperature: 0, ...(journeyModel ? { model: journeyModel } : {}) });
+        debug(reply);
+        const raw = parse(reply);
+        for (const journey of vague) {
+          const index = journeys.indexOf(journey);
+          const proposal = raw?.journeys?.[`J${index}`] ?? raw?.journeys?.[String(index)];
+          const name = typeof proposal === 'string' ? proposal : proposal?.name;
+          if (name && !VAGUE_NAME.test(String(name).trim())) proposals.journeys[`J${index}`] = proposal;
+        }
+      } catch (error) {
+        log?.(`researcher: asking again for vague names failed — ${String(error.message).split('\n')[0]}`);
+      }
+    }
   }
 
   // ── Pass two: screens, a batch at a time ─────────────────────────────────
@@ -408,6 +453,8 @@ export async function researchTree(journeys, graph, options) {
   // the names read off the screens stand, and the run finishes instead of
   // asking a smaller question every twenty seconds for ten minutes.
   let emptyInARow = 0;
+  /** Batches already asked a second time after being cut off at the limit. */
+  const widened = new WeakSet();
   while (queue.length) {
     if (emptyInARow >= 3) {
       log?.(`researcher: the model returned nothing ${emptyInARow} times running — keeping the names read off the screens for the ${queue.reduce((n, b) => n + b.length, 0)} left`);
@@ -436,13 +483,22 @@ export async function researchTree(journeys, graph, options) {
     onBatch?.(doneScreens, nodes.length, batch.length, 'screens');
     let raw = null;
     try {
-      // Six names, purposes and actions run to a few hundred tokens; the
-      // budget leaves room for a talkative model without inviting an essay.
-      const reply = await complete({ system: `${BRIEF}\n${SCREEN_RULES}`, blocks, maxTokens: 1800 });
+      // A few names, purposes and actions run to a few hundred tokens; the
+      // budget leaves room for a model that thinks before it answers.
+      const reply = await complete({ system: `${BRIEF}\n${SCREEN_RULES}`, blocks, maxTokens: SCREEN_TOKENS });
       debug(reply);
       raw = parse(reply);
     } catch (error) {
       log?.(`researcher: batch ${screenCalls} failed — ${String(error.message).split('\n')[0]}`);
+      // Cut off at the limit: the model got stuck repeating itself, which
+      // rarely happens twice running — the same screens are asked once more
+      // before they are split into smaller calls.
+      if (error?.cutOff && !widened.has(batch)) {
+        widened.add(batch);
+        queue.unshift(batch);
+        log?.(`researcher: asking again for those ${batch.length} screen(s)`);
+        continue;
+      }
       raw = null;
     }
     const got = [];
