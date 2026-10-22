@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { has, run } from './exec.js';
 import { log } from './log.js';
+import { compileHelper } from './clang.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(HERE, 'ocr.m');
@@ -30,19 +31,8 @@ export async function buildOcr() {
   mkdirSync(BIN_DIR, { recursive: true });
   log.detail('building the text reader (once)…');
 
-  const result = await run(
-    'clang',
-    [
-      '-fobjc-arc',
-      '-O2',
-      '-Wno-deprecated-declarations',
-      ...FRAMEWORKS.flatMap((framework) => ['-framework', framework]),
-      '-o',
-      BINARY,
-      SOURCE,
-    ],
-    { timeout: 120_000 },
-  );
+  const result = await compileHelper({ source: SOURCE, binary: BINARY, frameworks: FRAMEWORKS });
+  if (result.sdk) log.detail(`built against ${result.sdk} (the default SDK is newer than this toolchain can link)`);
   if (result.failed) {
     throw new Error(`could not build the text reader: ${result.stderr.trim().split('\n').slice(0, 3).join(' ')}`);
   }
