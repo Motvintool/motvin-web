@@ -90,6 +90,11 @@ const TYPE_FLOW_WORDS: Partial<Record<ScreenType, string[]>> = {
   cart: ['cart', 'bag', 'basket'],
 };
 
+/** A count as people read it at a glance: 1.6K rather than 1,642. */
+function formatCount(n: number): string {
+  return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+}
+
 /** The two clearest screens of a type among the library's curated ones. The type tags and flow names are both
  *  loose (an event menu filed under "creating an account", a loading skeleton under "home"), so what the
  *  screen is described as holding counts most: a form's fields for a sign-up or login, a tab bar and a full
@@ -433,7 +438,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   const screensKey = modalScope ?? 'all';
 
   // The Top Rated tab's screen-type cards: the two best curated screens of each type, on the picked platform.
-  const [typeShots, setTypeShots] = useState<{ key: string; shots: Partial<Record<ScreenType, Screen[]>> } | null>(null);
+  const [typeShots, setTypeShots] = useState<{ key: string; shots: Partial<Record<ScreenType, { screens: Screen[]; total: number }>> } | null>(null);
   useEffect(() => {
     if (!open || typeShots?.key === screensKey) return;
     let cancelled = false;
@@ -442,8 +447,8 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
         inspirationsApi
           // A wide pick (not just the first page) to choose the clearest two from.
           .listScreens({ ...EMPTY_FILTERS, screenTypes: [type], platforms: platformsOf(modalScope) }, 0, 'curated', { limit: TYPE_CANDIDATES })
-          .then((page) => [type, bestOfType(type, page.items)] as const)
-          .catch(() => [type, []] as const),
+          .then((page) => [type, { screens: bestOfType(type, page.items), total: page.total }] as const)
+          .catch(() => [type, { screens: [] as Screen[], total: 0 }] as const),
       ),
     ).then((entries) => {
       if (!cancelled) setTypeShots({ key: screensKey, shots: Object.fromEntries(entries) });
@@ -572,6 +577,15 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     if (active < 0) return;
     document.querySelector<HTMLElement>('.ins-search-modal .ins-search-modal-item.is-active')?.scrollIntoView({ block: 'nearest' });
   }, [active]);
+  // A new section or query starts at the top, so its top edge starts sharp again.
+  useEffect(() => {
+    document.querySelector('.ins-search-modal .ins-search-modal-results')?.classList.remove('is-scrolled');
+  }, [section, value]);
+  // The same while browsing a section (nothing typed): the arrow keys walk the list, and the list follows.
+  useEffect(() => {
+    if (browseActive < 0) return;
+    document.querySelector<HTMLElement>('.ins-search-modal .ins-search-modal-results .is-active')?.scrollIntoView({ block: 'nearest' });
+  }, [browseActive, section]);
   // Matched against the full fetched list, not a 7-item preview slice — a
   // kind that exists but didn't happen to make the Top Rated row's cutoff
   // would otherwise never be found here no matter how exactly it's typed.
@@ -604,7 +618,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // browsing there isn't artificially capped to whatever fits in this row.
   // Only types the library has screens of (on this platform), each with its own two.
   const typeCards = typeShots && typeShots.key === screensKey
-    ? FIGMA_TOP_RATED_CARDS.map(([label, type]) => ({ label, type, shots: typeShots.shots[type] ?? [] })).filter((card) => card.shots.length > 0).slice(0, TYPE_CARDS_SHOWN)
+    ? FIGMA_TOP_RATED_CARDS.map(([label, type]) => ({ label, type, shots: typeShots.shots[type]?.screens ?? [], total: typeShots.shots[type]?.total ?? 0 })).filter((card) => card.shots.length > 0).slice(0, TYPE_CARDS_SHOWN)
     : [];
   const typeHref = (type: ScreenType) =>
     `${INSPIRATIONS_ROUTES.screens}?type=${type}${modalScope ? `&platform=${modalScope === 'ios' ? 'ios' : 'web'}` : ''}`;
@@ -867,13 +881,18 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                 ))}
               </nav>
             )}
-            <div className="ins-search-modal-results" role="listbox">
+            <div
+              className="ins-search-modal-results"
+              role="listbox"
+              // Scrolled down, the top edge fades as the bottom does (see .is-scrolled); at the top it stays sharp.
+              onScroll={(e) => e.currentTarget.classList.toggle('is-scrolled', e.currentTarget.scrollTop > 4)}
+            >
               {(!value.trim() && section !== 'top') && <div className="ins-search-modal-title">{modalSections.find((item) => item.key === section)?.label}</div>}
               {(() => {
                 let currentTopIndex = 0;
                 return !value.trim() && section === 'top' ? (
                   <div className="ins-search-top-rated">
-                    <div className="ins-search-top-apps" aria-label="Top rated apps">
+                    <div className="ins-search-top-apps" aria-label="Recently added apps">
                       {visibleTopApps.map((app) => {
                         const active = currentTopIndex === browseActive;
                         const itemIndex = currentTopIndex++;
@@ -883,6 +902,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             type="button" 
                             className={active ? 'is-active' : ''}
                             onMouseEnter={() => setBrowseActive(itemIndex)}
+                            onMouseLeave={() => setBrowseActive((current) => (current === itemIndex ? -1 : current))}
                             onFocus={() => setBrowseActive(itemIndex)}
                             onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.app(app)); }}
                           >
@@ -908,10 +928,14 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             type="button"
                             className={`${index === 0 ? 'is-featured' : ''} ${active ? 'is-active' : ''} ${isDesktopPlatform(shots[0]?.platform) ? 'is-web' : ''}`}
                             onMouseEnter={() => setBrowseActive(itemIndex)}
+                            onMouseLeave={() => setBrowseActive((current) => (current === itemIndex ? -1 : current))}
                             onFocus={() => setBrowseActive(itemIndex)}
                             onClick={() => { close(); router.push(typeHref(type)); }}
                           >
                             <strong>{label}</strong>
+                            <span className="ins-search-top-screen-go" aria-hidden="true">
+                              <img src="/ASSET/Icons/Motvin/view-apps.svg" alt="" width={16} height={16} />
+                            </span>
                             <span className="ins-search-top-screen-preview" aria-hidden="true">
                               {back && <img className="is-back" src={back.src} srcSet={back.srcSet} alt="" loading="lazy" />}
                               {front && <img className="is-front" src={front.src} srcSet={front.srcSet} alt="" loading="lazy" />}
@@ -934,10 +958,12 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             type="button" 
                             className={active ? 'is-active' : ''}
                             onMouseEnter={() => setBrowseActive(itemIndex)}
+                            onMouseLeave={() => setBrowseActive((current) => (current === itemIndex ? -1 : current))}
                             onFocus={() => setBrowseActive(itemIndex)}
                             onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}
                           >
                             <span><img src="/ASSET/search-modal/top-rated/element.svg" alt="" width={20} height={20} /></span>{elementLabel(element.kind)}
+                            {element.count > 0 && <em className="ins-search-top-count">{formatCount(element.count)}</em>}
                           </button>
                         );
                       })}
@@ -955,6 +981,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             type="button" 
                             className={active ? 'is-active' : ''}
                             onMouseEnter={() => setBrowseActive(itemIndex)}
+                            onMouseLeave={() => setBrowseActive((current) => (current === itemIndex ? -1 : current))}
                             onFocus={() => setBrowseActive(itemIndex)}
                             onClick={() => { close(); router.push(flowPreviewHref(flow)); }}
                           >
@@ -978,6 +1005,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             type="button"
                             className={`ins-app-peek ${index === browseActive ? 'is-active' : ''}`}
                             onMouseEnter={() => setBrowseActive(index)}
+                            onMouseLeave={() => setBrowseActive((current) => (current === index ? -1 : current))}
                             onFocus={() => setBrowseActive(index)}
                             onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.app(app)); }}
                           >
@@ -1008,6 +1036,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       aria-selected={index === browseActive}
                       className={index === browseActive ? 'is-active' : ''}
                       onMouseEnter={() => setBrowseActive(index)}
+                      onMouseLeave={() => setBrowseActive((current) => (current === index ? -1 : current))}
                       onFocus={() => setBrowseActive(index)}
                       onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.screens}?industry=${value}`); }}
                     >
@@ -1027,6 +1056,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       aria-selected={index === browseActive}
                       className={index === browseActive ? 'is-active' : ''}
                       onMouseEnter={() => setBrowseActive(index)}
+                      onMouseLeave={() => setBrowseActive((current) => (current === index ? -1 : current))}
                       onFocus={() => setBrowseActive(index)}
                       onClick={() => { close(); router.push(screenPreviewHref(screen)); }}
                     >
@@ -1054,6 +1084,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       aria-selected={index === browseActive}
                       className={index === browseActive ? 'is-active' : ''}
                       onMouseEnter={() => setBrowseActive(index)}
+                      onMouseLeave={() => setBrowseActive((current) => (current === index ? -1 : current))}
                       onFocus={() => setBrowseActive(index)}
                       onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}
                     >
@@ -1073,6 +1104,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       aria-selected={index === browseActive}
                       className={index === browseActive ? 'is-active' : ''}
                       onMouseEnter={() => setBrowseActive(index)}
+                      onMouseLeave={() => setBrowseActive((current) => (current === index ? -1 : current))}
                       onFocus={() => setBrowseActive(index)}
                       onClick={() => { close(); router.push(flowPreviewHref(flow)); }}
                     >
@@ -1159,6 +1191,12 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
               );
               })()}
             </div>
+          </div>
+          {/* What the keys do here — the panel is built to be driven from the keyboard, so it says so. */}
+          <div className="ins-search-modal-keys" aria-hidden="true">
+            <span><kbd>↑</kbd><kbd>↓</kbd> to move</span>
+            <span><kbd>↵</kbd> to open</span>
+            <span><kbd>esc</kbd> to close</span>
           </div>
         </div>
         </div>

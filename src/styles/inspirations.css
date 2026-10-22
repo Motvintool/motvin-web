@@ -713,10 +713,13 @@ body {
   width: min(900px, calc(100vw - 40px));
   height: min(720px, calc(100vh - 40px));
   overflow: hidden;
-  border-radius: 36px;
-  background: rgba(255, 255, 255, 0.90);
+  border-radius: 36px 36px 28px 28px;
+  /* Near-solid, so the page behind only tints it and never shows through as shapes — in a very light grey, so
+     the white sidebar (.ins-search-modal-nav) still reads as its own pane beside the results. */
+  background: rgba(246, 246, 246, 0.97);
   box-shadow: none;
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
 }
 
 .ins-search-modal button {
@@ -739,12 +742,13 @@ body {
    platform nav, just without room here for a full pill + label. */
 .ins-search-modal-platforms button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; color: #ADADAD; transition: color 120ms ease; }
 .ins-search-modal-platforms button.is-active { color: #000000; }
-.ins-search-chips { display: flex; gap: 12px; height: 74px; padding: 8px 20px 0px; overflow-x: auto; }
-.ins-search-chip { display: inline-flex; align-items: center; height: 48px; flex: none; border-radius: 999px; background: #e6e6e6; color: #151515; font-size: 16px; white-space: nowrap; }
-.ins-search-chip-query { display: inline-flex; align-items: center; gap: 8px; height: 100%; padding: 0 8px 0 12px; color: inherit; font: inherit; }
+.ins-search-chips { display: flex; gap: 12px; height: 66px; padding: 8px 20px 0px; overflow-x: auto; }
+/* The same size as the UI element chips below: 42px, 15px medium. */
+.ins-search-chip { display: inline-flex; align-items: center; height: 42px; flex: none; border-radius: 999px; background: #e6e6e6; color: #151515; font-size: 15px; font-weight: 500; white-space: nowrap; }
+.ins-search-chip-query { display: inline-flex; align-items: center; gap: 6px; height: 100%; padding: 0 4px 0 12px; color: inherit; font: inherit; }
 .ins-search-chip-icon { width: auto; max-width: 28px; height: 20px; border-radius: 0; object-fit: contain; }
 .ins-search-chip-icon[src$="figma-02.png"], .ins-search-chip-icon.is-app-logo { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; }
-.ins-search-chip-remove { display: inline-grid; place-items: center; width: 32px; height: 32px; margin-right: 8px; border-radius: 50%; color: #515151; transition: background 120ms ease; }
+.ins-search-chip-remove { display: inline-grid; place-items: center; width: 28px; height: 28px; margin-right: 6px; border-radius: 50%; color: #515151; transition: background 120ms ease; }
 .ins-search-chip-remove:hover { background: rgba(0, 0, 0, 0.08); }
 /* The panel is a column: the head, the recent-searches row when there is one, and the body filling whatever
    height is left — down to the panel's bottom edge whether or not that row is showing. (A fixed height
@@ -774,19 +778,37 @@ body {
 .ins-search-modal-nav button { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 24px; border-radius: 999px; color: #1d1d1d; font-size: 16px; text-align: left; }
 .ins-search-modal-nav button img { display: block; flex: none; width: auto; height: 20px; max-width: 20px; object-fit: contain; }
 .ins-search-modal-nav button.is-active, .ins-search-modal-nav button:hover { background: #e6e6e6; }
-.ins-search-modal-results { height: 100%; min-width: 0; padding: 16px 24px 32px; overflow-y: auto; }
+.ins-search-modal-results { height: 100%; min-width: 0; padding: 16px 24px 16px; overflow-y: auto; }
+/* The column's foot fades out, so what scrolls on below reads as continuing rather than cut off at the edge.
+   A mask on the scroller itself: it stays at the bottom of the view as the list moves under it. */
+.ins-search-modal-results {
+  /* Long and eased in and out (a cosine curve in fine stops): the fade starts and ends without a visible edge,
+     so the list melts away rather than ending at a line. The fade is short, so only the last row or so dims. */
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1.000) calc(100% - 112px), rgba(0, 0, 0, 0.983) calc(100% - 103px), rgba(0, 0, 0, 0.933) calc(100% - 93px), rgba(0, 0, 0, 0.854) calc(100% - 84px), rgba(0, 0, 0, 0.750) calc(100% - 75px), rgba(0, 0, 0, 0.629) calc(100% - 65px), rgba(0, 0, 0, 0.500) calc(100% - 56px), rgba(0, 0, 0, 0.371) calc(100% - 47px), rgba(0, 0, 0, 0.250) calc(100% - 37px), rgba(0, 0, 0, 0.146) calc(100% - 28px), rgba(0, 0, 0, 0.067) calc(100% - 19px), rgba(0, 0, 0, 0.017) calc(100% - 9px), rgba(0, 0, 0, 0.000) calc(100% - 0px));
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1.000) calc(100% - 112px), rgba(0, 0, 0, 0.983) calc(100% - 103px), rgba(0, 0, 0, 0.933) calc(100% - 93px), rgba(0, 0, 0, 0.854) calc(100% - 84px), rgba(0, 0, 0, 0.750) calc(100% - 75px), rgba(0, 0, 0, 0.629) calc(100% - 65px), rgba(0, 0, 0, 0.500) calc(100% - 56px), rgba(0, 0, 0, 0.371) calc(100% - 47px), rgba(0, 0, 0, 0.250) calc(100% - 37px), rgba(0, 0, 0, 0.146) calc(100% - 28px), rgba(0, 0, 0, 0.067) calc(100% - 19px), rgba(0, 0, 0, 0.017) calc(100% - 9px), rgba(0, 0, 0, 0.000) calc(100% - 0px));
+  /* The fade ends a little above the panel's foot, not against it. */
+  margin-bottom: 16px;
+}
+.ins-search-modal-body.has-nav > .ins-search-modal-results { height: calc(100% - 16px); }
+/* Scrolled down, the top fades too, so the list reads as running on above as well as below. */
+.ins-search-modal-results.is-scrolled {
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.000) 0px, rgba(0, 0, 0, 0.017) 5px, rgba(0, 0, 0, 0.067) 11px, rgba(0, 0, 0, 0.146) 16px, rgba(0, 0, 0, 0.250) 21px, rgba(0, 0, 0, 0.371) 27px, rgba(0, 0, 0, 0.500) 32px, rgba(0, 0, 0, 0.629) 37px, rgba(0, 0, 0, 0.750) 43px, rgba(0, 0, 0, 0.854) 48px, rgba(0, 0, 0, 0.933) 53px, rgba(0, 0, 0, 0.983) 59px, rgba(0, 0, 0, 1.000) 64px, rgba(0, 0, 0, 1.000) calc(100% - 112px), rgba(0, 0, 0, 0.983) calc(100% - 103px), rgba(0, 0, 0, 0.933) calc(100% - 93px), rgba(0, 0, 0, 0.854) calc(100% - 84px), rgba(0, 0, 0, 0.750) calc(100% - 75px), rgba(0, 0, 0, 0.629) calc(100% - 65px), rgba(0, 0, 0, 0.500) calc(100% - 56px), rgba(0, 0, 0, 0.371) calc(100% - 47px), rgba(0, 0, 0, 0.250) calc(100% - 37px), rgba(0, 0, 0, 0.146) calc(100% - 28px), rgba(0, 0, 0, 0.067) calc(100% - 19px), rgba(0, 0, 0, 0.017) calc(100% - 9px), rgba(0, 0, 0, 0.000) calc(100% - 0px));
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.000) 0px, rgba(0, 0, 0, 0.017) 5px, rgba(0, 0, 0, 0.067) 11px, rgba(0, 0, 0, 0.146) 16px, rgba(0, 0, 0, 0.250) 21px, rgba(0, 0, 0, 0.371) 27px, rgba(0, 0, 0, 0.500) 32px, rgba(0, 0, 0, 0.629) 37px, rgba(0, 0, 0, 0.750) 43px, rgba(0, 0, 0, 0.854) 48px, rgba(0, 0, 0, 0.933) 53px, rgba(0, 0, 0, 0.983) 59px, rgba(0, 0, 0, 1.000) 64px, rgba(0, 0, 0, 1.000) calc(100% - 112px), rgba(0, 0, 0, 0.983) calc(100% - 103px), rgba(0, 0, 0, 0.933) calc(100% - 93px), rgba(0, 0, 0, 0.854) calc(100% - 84px), rgba(0, 0, 0, 0.750) calc(100% - 75px), rgba(0, 0, 0, 0.629) calc(100% - 65px), rgba(0, 0, 0, 0.500) calc(100% - 56px), rgba(0, 0, 0, 0.371) calc(100% - 47px), rgba(0, 0, 0, 0.250) calc(100% - 37px), rgba(0, 0, 0, 0.146) calc(100% - 28px), rgba(0, 0, 0, 0.067) calc(100% - 19px), rgba(0, 0, 0, 0.017) calc(100% - 9px), rgba(0, 0, 0, 0.000) calc(100% - 0px));
+}
+/* Typed results hug their list, so there's nothing running on below to fade into: shown whole. */
+.ins-search-modal.is-searching .ins-search-modal-results { -webkit-mask-image: none; mask-image: none; }
 .ins-search-modal-title { padding: 0 20px 16px; color: #737373; font-size: 16px; }
 .ins-search-suggestions { display: flex; flex-direction: column; }
 .ins-search-search-actions { display: flex; flex-direction: column; gap: 10px; padding: 0 4px 20px; }
 .ins-search-search-action { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 66px; padding: 14px 16px; border-radius: 16px; color: #121212; font: inherit; font-size: 16px; text-align: left; }
-.ins-search-search-action:hover, .ins-search-search-action:focus-visible, .ins-search-search-action.is-active { background: #fff; }
+.ins-search-search-action:hover, .ins-search-search-action:focus-visible, .ins-search-search-action.is-active { background: #e9e9e9; }
 .ins-search-search-action > span { display: grid; place-items: center; flex: none; width: 38px; height: 38px; overflow: hidden; border-radius: 8px; background: #e6e6e6; }
 .ins-search-search-action img { display: block; width: 20px; height: 20px; object-fit: contain; }
 .ins-search-suggestion-section { display: flex; flex-direction: column; gap: 16px; padding: 0 4px 20px; }
 .ins-search-suggestion-heading { padding-left: 8px; color: #313131; font-size: 16px; }
 .ins-search-modal-list { display: flex; flex-direction: column; gap: 10px; }
 .ins-search-modal-item { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; padding: 14px 16px; border-radius: 16px; text-align: left; color: #121212; }
-.ins-search-modal-item:hover, .ins-search-modal-item.is-active { background: #fff; }
+.ins-search-modal-item:hover, .ins-search-modal-item.is-active { background: #e9e9e9; }
 .ins-search-modal-item-mark { display: grid; place-items: center; flex: none; width: 38px; height: 38px; overflow: hidden; border-radius: 8px; background: #e6e6e6; color: #121212; font-size: 16px; font-weight: 600; }
 .ins-search-modal-item-mark img { width: 38px; height: 38px; object-fit: cover; }
 .ins-search-modal-item span:last-child { display: grid; gap: 0; min-width: 0; }
@@ -799,12 +821,13 @@ body {
 .ins-search-suggestion-footer a { padding: 0; color: inherit; font: inherit; text-decoration: underline; }
 .ins-search-categories { display: flex; flex-direction: column; gap: 4px; }
 .ins-search-categories button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 48px; padding: 8px 8px 8px 20px; border-radius: 999px; color: #000; font-size: 16px; text-align: left; }
-.ins-search-categories button:hover, .ins-search-categories button.is-active { background: #fff; }
+/* A soft grey a step darker than the panel's own, so the row stands out (a white one would vanish). */
+.ins-search-categories button:hover, .ins-search-categories button.is-active { background: #e9e9e9; }
 .ins-search-categories strong { flex: 1; font-weight: 600; }
 .ins-search-categories span { padding: 4px 10px; color: #4e4e4e; font-weight: 400; }
 .ins-search-resource-list { display: flex; flex-direction: column; gap: 4px; }
 .ins-search-resource-list button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 48px; padding: 8px 8px 8px 20px; border-radius: 999px; color: #000; font-size: 16px; text-align: left; }
-.ins-search-resource-list button:hover, .ins-search-resource-list button.is-active { background: #fff; }
+.ins-search-resource-list button:hover, .ins-search-resource-list button.is-active { background: #e9e9e9; }
 .ins-search-resource-list strong { flex: 1; font-weight: 600; }
 .ins-search-resource-list span { padding: 4px 10px; color: #4e4e4e; font-weight: 400; }
 .ins-search-top-rated { display: flex; flex-direction: column; gap: 24px; }
@@ -870,17 +893,32 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-:is(.ins-search-top-apps button, button.ins-app-peek):hover > .ins-app-logo,
-:is(.ins-search-top-apps button, button.ins-app-peek):focus-visible > .ins-app-logo,
-:is(.ins-search-top-apps button, button.ins-app-peek):hover > .ins-app-logo--initials,
-:is(.ins-search-top-apps button, button.ins-app-peek):focus-visible > .ins-app-logo--initials {
-  transform: translate3d(0, -28px, 0);
-}
-:is(.ins-search-top-apps button, button.ins-app-peek):hover > strong,
-:is(.ins-search-top-apps button, button.ins-app-peek):focus-visible > strong {
+/* Pointed at, focused, or reached with the arrow keys (.is-active): the tile lifts and its name rises in. */
+:is(.ins-search-top-apps button, button.ins-app-peek):is(:hover, :focus-visible, .is-active) > :is(.ins-app-logo, .ins-app-logo--initials),
+:is(.ins-search-top-apps button, button.ins-app-peek):is(:hover, :focus-visible, .is-active) > strong {
   transform: translate3d(0, -28px, 0);
 }
 .ins-search-top-heading { color: #313131; font-size: 16px; }
+
+/* Screen-type cards: an arrow that slides in when the card is pointed at. */
+/* An element chip's screen count, in the chip's quieter grey. */
+.ins-search-top-count { margin-left: 6px; color: #8a8a88; font-size: 13px; font-style: normal; font-weight: 500; font-variant-numeric: tabular-nums; }
+/* The open button: the landing gallery's "Luma ↗" pill (.lpi-gallery-open) as a round, icon-only button —
+   the same frosted white, blur, wide soft shadow, arrow and fade-down entrance. */
+.ins-search-top-screen-go { position: absolute; top: 14px; right: 14px; z-index: 2; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9999px; background: rgba(255, 255, 255, 0.75); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: 0 12px 80px rgba(0, 0, 0, 0.12); opacity: 0; transform: translateY(-4px); transition: opacity 0.2s ease, transform 0.2s ease; }
+.ins-search-top-screen-go img { display: block; flex: none; width: 14px; height: 14px; }
+.ins-search-top-screens button:hover .ins-search-top-screen-go,
+.ins-search-top-screens button.is-active .ins-search-top-screen-go { opacity: 1; transform: none; }
+.ins-search-top-screens button:active { scale: 0.98; }
+
+
+/* The keys the panel answers to, along its foot. */
+.ins-search-modal-keys { display: flex; flex: none; align-items: center; gap: 20px; padding: 12px 28px; border-top: 1px solid rgba(0, 0, 0, 0.05); color: #8a8a88; font-size: 12px; }
+.ins-search-modal-keys > span { display: inline-flex; align-items: center; gap: 6px; }
+.ins-search-modal-keys kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px; background: #fff; box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.06); color: #313131; font: 600 11px/1 var(--font-manrope), Inter, sans-serif; }
+@media (max-width: 759px), (hover: none) {
+  .ins-search-modal-keys { display: none; }
+}
 .ins-search-top-screens { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .ins-search-top-screens button { position: relative; display: block; height: 166px; overflow: hidden; padding: 20px; border-radius: 16px; background: #e6e6e6; color: #1d1d1d; text-align: left; transition: background 160ms ease; }
 .ins-search-top-screens button.is-active, .ins-search-top-screens button:hover { background: #dddddd; }
@@ -907,11 +945,11 @@ body {
 .ins-search-top-screen-fade { position: absolute; right: 0; bottom: 0; left: 0; z-index: 2; height: 63px; background: linear-gradient(to bottom, rgba(230, 230, 230, 0), #e6e6e6); pointer-events: none; transition: background 160ms ease; }
 .ins-search-top-screens button.is-active .ins-search-top-screen-fade, .ins-search-top-screens button:hover .ins-search-top-screen-fade { background: linear-gradient(to bottom, rgba(221, 221, 221, 0), #dddddd); }
 .ins-search-top-elements { display: flex; flex-wrap: wrap; gap: 12px; }
-.ins-search-top-elements button { display: inline-flex; align-items: center; gap: 4px; height: 48px; padding: 0 20px 0 16px; border-radius: 999px; background: #e6e6e6; color: #000; font-size: 16px; font-weight: 600; white-space: nowrap; transition: background 160ms ease; }
+.ins-search-top-elements button { display: inline-flex; align-items: center; gap: 4px; height: 42px; padding: 0 16px 0 12px; border-radius: 999px; background: #e6e6e6; color: #000; font-size: 15px; font-weight: 500; white-space: nowrap; transition: background 160ms ease; }
 .ins-search-top-elements button.is-active, .ins-search-top-elements button:hover { background: #dddddd; }
 .ins-search-top-elements button > span { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 6px; border-radius: 10px; box-sizing: border-box; overflow: hidden; }
 .ins-search-top-elements button > span img { display: block; width: auto; height: 20px; max-width: 20px; object-fit: contain; }
-.ins-search-top-flows button { padding-right: 24px; }
+.ins-search-top-flows button { padding-right: 20px; }
 .ins-card-link { position: relative; }
 /* No border/box-shadow — a stroke reads as a UI element sitting on top of
    the screenshot; a soft fill alone reads as the text itself glowing.
@@ -14327,6 +14365,8 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
   to { opacity: 1; transform: none; }
 }
 
+.ins-fdrawer-grab { display: none; }
+
 .ins-fdrawer-top {
   display: flex;
   align-items: center;
@@ -14508,18 +14548,42 @@ button.ins-pmenu-edit { cursor: var(--ins-cursor-hand, pointer); }
 }
 
 @media (max-width: 759px) {
+  /* A bottom sheet: edge to edge, flush with the screen's foot, rounded only on top, with a grab handle. */
   .ins-fdrawer {
     top: auto;
-    left: 8px;
-    right: 8px;
-    bottom: 8px;
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: auto;
-    max-height: calc(100dvh - 64px);
+    max-height: calc(100dvh - 56px);
+    border-radius: 28px 28px 0 0;
+    box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.16);
+    padding-bottom: env(safe-area-inset-bottom);
+    animation-duration: 360ms;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   }
+  .ins-fdrawer-grab {
+    display: block;
+    flex: none;
+    height: 24px;
+    user-select: none;
+    touch-action: none;
+    cursor: grab;
+  }
+  .ins-fdrawer-grab::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 5px;
+    margin: 8px auto 0;
+    border-radius: 999px;
+    background: #d6d7da;
+  }
+  .ins-fdrawer .ins-fdrawer-top { padding-top: 4px; touch-action: none; user-select: none; }
 
   @keyframes insFdrawerIn {
-    from { opacity: 0; transform: translateY(16px); }
-    to { opacity: 1; transform: none; }
+    from { transform: translateY(100%); }
+    to { transform: none; }
   }
 }
 .ins-fpanel-body { max-height: min(480px, calc(100vh - 300px)); overflow-y: auto; padding: 4px 18px 8px; }
@@ -17204,7 +17268,7 @@ html.ins-bat-on .ins-search-bat { display: block; }
 }
 @media (max-width: 759px) {
   @keyframes insFdrawerOut {
-    to { opacity: 0; transform: translateY(16px); }
+    to { transform: translateY(100%); }
   }
 }
 
@@ -17770,4 +17834,92 @@ html:has(.ins-search-overlay) {
 /* A phone fits three of the search panel's app icons across. */
 @media (max-width: 759px) {
   .ins-search-app-icons { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* The search panel between phone and desktop: the sidebar gives up some width, and the screen-type cards follow
+   the results column's own width — four across while each card is tall enough for its name above its previews
+   (128px square or more), two across below that (the wide first card then spans the row). */
+.ins-search-modal-results { container-type: inline-size; }
+@media (min-width: 760px) and (max-width: 1100px) {
+  .ins-search-modal-body.has-nav { grid-template-columns: 216px minmax(0, 1fr); }
+  .ins-search-modal-nav { padding: 20px 12px; }
+  .ins-search-modal-nav button { padding: 0 16px; white-space: nowrap; }
+}
+/* A narrow column (a phone, a tablet, the tighter desktop panel) lays the screen types out as Mobbin does: equal,
+   near-square cards, three across (two on a small phone), six of them so the rows come out even, each with its
+   pair of screens large and overlapping at the bottom centre, sized to the card. */
+@container (max-width: 559px) {
+  .ins-search-top-screens { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .ins-search-top-screens button,
+  .ins-search-top-screens button:not(.is-featured),
+  .ins-search-top-screens button.is-featured { grid-column: auto; align-self: stretch; height: auto; aspect-ratio: 0.92; }
+  .ins-search-top-screens button:nth-child(n + 7) { display: none; }
+  .ins-search-top-screens button .ins-search-top-screen-preview,
+  .ins-search-top-screens button.is-featured .ins-search-top-screen-preview { right: auto; left: 50%; bottom: -14px; width: 64%; height: 66%; translate: -50% 0; }
+  .ins-search-top-screens button .ins-search-top-screen-preview img,
+  .ins-search-top-screens button.is-featured .ins-search-top-screen-preview img { width: 56%; height: 100%; border-radius: 6px; }
+  .ins-search-top-screens button .ins-search-top-screen-preview .is-back { bottom: -16px; }
+  .ins-search-top-screens button.is-web .ins-search-top-screen-preview,
+  .ins-search-top-screens button.is-web.is-featured .ins-search-top-screen-preview { width: 84%; height: 50%; bottom: -8px; }
+  .ins-search-top-screens button.is-web .ins-search-top-screen-preview img,
+  .ins-search-top-screens button.is-web.is-featured .ins-search-top-screen-preview img { width: 86%; height: 86%; }
+  .ins-search-top-screen-fade { height: 22%; }
+}
+/* The same layout on the full-screen phone and tablet search (wider than the switch point at tablet sizes). */
+@media (max-width: 759px) {
+  .ins-search-top-screens { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .ins-search-top-screens button,
+  .ins-search-top-screens button:not(.is-featured),
+  .ins-search-top-screens button.is-featured { grid-column: auto; align-self: stretch; height: auto; aspect-ratio: 0.92; }
+  .ins-search-top-screens button:nth-child(n + 7) { display: none; }
+  .ins-search-top-screens button .ins-search-top-screen-preview,
+  .ins-search-top-screens button.is-featured .ins-search-top-screen-preview { right: auto; left: 50%; bottom: -14px; width: 64%; height: 66%; translate: -50% 0; }
+  .ins-search-top-screens button .ins-search-top-screen-preview img,
+  .ins-search-top-screens button.is-featured .ins-search-top-screen-preview img { width: 56%; height: 100%; border-radius: 6px; }
+  .ins-search-top-screens button .ins-search-top-screen-preview .is-back { bottom: -16px; }
+  .ins-search-top-screens button.is-web .ins-search-top-screen-preview,
+  .ins-search-top-screens button.is-web.is-featured .ins-search-top-screen-preview { width: 84%; height: 50%; bottom: -8px; }
+  .ins-search-top-screens button.is-web .ins-search-top-screen-preview img,
+  .ins-search-top-screens button.is-web.is-featured .ins-search-top-screen-preview img { width: 86%; height: 86%; }
+  .ins-search-top-screen-fade { height: 22%; }
+}
+/* Two across on a small phone, or a very narrow column; after the phone rule above, so it wins there. */
+@container (max-width: 400px) {
+  .ins-search-top-screens { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Phone and tablet search: no hover to reveal a name, so the app icons show theirs, Mobbin's way — the top row a
+   single strip that scrolls sideways, the Apps section a grid, each tile with its name always under it. */
+@media (max-width: 759px) {
+  .ins-search-top-apps { display: flex; gap: 14px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-bottom: 2px; }
+  .ins-search-top-apps::-webkit-scrollbar { display: none; }
+  :is(.ins-search-top-apps button, button.ins-app-peek) {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 64px !important;
+    height: auto !important;
+    aspect-ratio: auto;
+    overflow: visible;
+    border-radius: 0;
+    clip-path: none;
+    -webkit-mask-image: none;
+    mask-image: none;
+    transform: none;
+  }
+  :is(.ins-search-top-apps button, button.ins-app-peek) > :is(.ins-app-logo, .ins-app-logo--initials) { width: 64px !important; height: 64px !important; border-radius: 16px; }
+  :is(.ins-search-top-apps, button.ins-app-peek) strong { position: static !important; width: 72px; color: #6f6f6f; font-size: 12px; font-weight: 500; }
+  :is(.ins-search-top-apps button, button.ins-app-peek):is(:hover, :focus-visible, .is-active) > :is(.ins-app-logo, .ins-app-logo--initials, strong) { transform: none; }
+  :is(.ins-search-top-apps button, button.ins-app-peek):active > :is(.ins-app-logo, .ins-app-logo--initials) { transform: scale(0.94); }
+}
+
+/* On the small desktop cards the title fills the top row (a long one, "Onboarding", runs edge to edge), so the
+   open button can't sit beside it; it takes the empty corner at the bottom-left instead, beside the previews.
+   The wide first card, and the roomier cards of the narrow layouts, keep it at the top-right. */
+@media (min-width: 760px) {
+  @container (min-width: 560px) {
+    .ins-search-top-screens button:not(.is-featured) .ins-search-top-screen-go { top: auto; right: auto; bottom: 12px; left: 12px; z-index: 3; }
+  }
 }

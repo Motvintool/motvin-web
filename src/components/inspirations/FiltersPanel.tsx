@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { formatCount } from '@/lib/inspirations/taxonomy';
 import { onTriggerKeyDown, useDismiss } from './FilterToolbar';
@@ -136,6 +136,48 @@ export function FiltersPill({
       return next;
     });
 
+  // On a phone the panel is a bottom sheet: pulled down by its handle or top bar, it follows the finger and
+  // closes once dragged far (or flicked) enough; otherwise it springs back.
+  const onGrab = (e: ReactPointerEvent<HTMLElement>) => {
+    const sheet = drawerRef.current;
+    if (!sheet || e.button !== 0 || !window.matchMedia('(max-width: 759px)').matches) return;
+    if ((e.target as HTMLElement).closest('input, button')) return;
+    // Held by this element until released, so the drag keeps going wherever the pointer goes, and a mouse
+    // drag doesn't select text on the way.
+    e.preventDefault();
+    const handle = e.currentTarget;
+    const pointerId = e.pointerId;
+    try {
+      handle.setPointerCapture(pointerId);
+    } catch {}
+    const startY = e.clientY;
+    const startT = performance.now();
+    let dy = 0;
+    sheet.style.transition = 'none';
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      dy = Math.max(0, ev.clientY - startY);
+      sheet.style.transform = `translateY(${dy}px)`;
+    };
+    const up = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      const speed = dy / Math.max(1, performance.now() - startT);
+      sheet.style.transition = 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1)';
+      if (dy > Math.min(140, sheet.offsetHeight * 0.25) || speed > 0.6) {
+        sheet.style.transform = 'translateY(100%)';
+        window.setTimeout(close, 200);
+      } else {
+        sheet.style.transform = '';
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+
   const search = (
     <div className="ins-uielements-search">
       <SearchIcon size={18} />
@@ -161,7 +203,8 @@ export function FiltersPill({
         <>
           <div className={`ins-fdrawer-backdrop ${closing ? 'is-closing' : ''}`} aria-hidden />
           <aside ref={drawerRef} className={`ins-fdrawer ins-fpanel ${closing ? 'is-closing' : ''}`} role="dialog" aria-modal aria-label="Filters">
-            <div className="ins-fdrawer-top">
+            <div className="ins-fdrawer-grab" aria-hidden onPointerDown={onGrab} />
+            <div className="ins-fdrawer-top" onPointerDown={onGrab}>
               {search}
               <button type="button" className="ins-fdrawer-close" onClick={close} aria-label="Close filters" title="Close">
                 <CloseIcon size={16} />
