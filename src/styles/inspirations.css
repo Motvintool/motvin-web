@@ -10160,6 +10160,8 @@ select.ins-input {
 }
 
 .ins-dock-body {
+  /* Reaching the top or bottom of the conversation doesn't carry on into the page. */
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -10911,6 +10913,11 @@ select.ins-input {
   background: var(--ins-backdrop);
   animation: insFadeIn 160ms var(--ins-ease);
 }
+
+/* The same dim under the Motvin agent. It covers Buddy's button and nudge (z-index 75) too, so the open agent
+   is lifted just above it. */
+.ins-guide-backdrop.ins-dock-backdrop { z-index: 76; }
+.ins-dock-backdrop + .ins-dock { z-index: 77; }
 
 .ins-guide {
   position: fixed;
@@ -17822,11 +17829,12 @@ html.ins-bat-on .ins-search-bat { display: block; }
 }
 
 /* While a popup is open over the page — any modal dialog (the moei studio, a preview, a confirm) or the search
-   panel — the page behind it doesn't scroll: the wheel or a swipe over the backdrop, or past the end of the
+   panel, or the Motvin agent panel — the page behind it doesn't scroll: the wheel or a swipe over the backdrop, or past the end of the
    popup's own list, used to move (and on Explore fold) the page underneath. The scrollbar's space is kept, so
    nothing shifts sideways as it opens. */
 html:has([aria-modal="true"]),
-html:has(.ins-search-overlay) {
+html:has(.ins-search-overlay),
+html:has(aside.ins-dock:not(.ins-dock-user)) {
   overflow: hidden;
   scrollbar-gutter: stable;
 }

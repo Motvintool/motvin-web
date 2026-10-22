@@ -641,6 +641,9 @@ export function AdminChatbot() {
   }
 
   return (
+    <>
+    {/* The page behind is dimmed as under Motvin Buddy; a click on it minimises the agent. */}
+    <div className="ins-guide-backdrop ins-dock-backdrop" onClick={toggle} aria-hidden />
     <aside
       ref={dockRef}
       className={`ins-dock ${dragging ? 'is-dragging' : ''} ${wide ? 'is-wide' : ''}`}
@@ -864,6 +867,7 @@ export function AdminChatbot() {
         )}
       </form>
     </aside>
+    </>
   );
 }
 

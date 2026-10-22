@@ -43,9 +43,9 @@ const FOLDED_LIFT_PX = 8;
 /** How far a finger pulls down at the very top before the heading unfolds. */
 const TOUCH_UNFOLD_PX = 12;
 /** Something laid above the page — the Filters drawer, the search panel, any modal dialog (the moei studio,
- *  a preview…) — owns the wheel, touch and keys while it's open: they scroll it (or nothing), never the page,
+ *  a preview…), the Motvin agent panel — owns the wheel, touch and keys while it's open: they scroll it (or nothing), never the page,
  *  so the heading behind it never folds or unfolds. That's input over its backdrop too, not only over it. */
-const OVERLAY = '.ins-fdrawer, .ins-search-overlay, [aria-modal="true"]';
+const OVERLAY = '.ins-fdrawer, .ins-search-overlay, [aria-modal="true"], aside.ins-dock:not(.ins-dock-user)';
 function overlayInput(target: EventTarget | null): boolean {
   if (document.querySelector(OVERLAY)) return true;
   return target instanceof Element && Boolean(target.closest(`${OVERLAY}, [role="dialog"]`));
