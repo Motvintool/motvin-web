@@ -52,6 +52,9 @@ import { flowCategoryFor, labelFor } from './taxonomy.js';
 /** Types that open a section of their own wherever they are reached from. */
 const SECTION_TYPES = new Set(['profile', 'settings']);
 
+/** A desktop section this long, spread over its page's tabs, is split into one journey per tab. */
+const SPLIT_SECTION_MIN = 8;
+
 /** Types that never start a journey of their own; they ride along. */
 const TRANSPARENT_TYPES = new Set(['loading']);
 
@@ -75,12 +78,29 @@ const TRANSPARENT_TYPES = new Set(['loading']);
  * @returns {Journey[]} parents before children, walk order
  */
 export function buildJourneys(visits, options = {}) {
-  /** `${fromId}->${toId}` → what the person did to get there. */
-  const actions = options.actions ?? new Map();
   const steps = visits
     .map((visit) => visit.node)
     .filter((node) => node && !node.skipPublish && !TRANSPARENT_TYPES.has(node.analysis?.screenType));
   if (!steps.length) return [];
+
+  const withSidebar = steps.filter((node) => isDesktop(node) && hasSidebar(node));
+  if (withSidebar.length) {
+    const counts = new Map();
+    for (const node of withSidebar) for (const label of new Set((node.analysis.signals.navLabels ?? []).map((item) => String(item).toLowerCase()))) counts.set(label, (counts.get(label) ?? 0) + 1);
+    stableNav = new Set([...counts].filter(([, count]) => count >= Math.max(2, withSidebar.length * 0.4)).map(([label]) => label));
+  } else {
+    stableNav = null;
+  }
+  try {
+    return buildFrom(steps, options);
+  } finally {
+    stableNav = null;
+  }
+}
+
+function buildFrom(steps, options) {
+  /** `${fromId}->${toId}` → what the person did to get there. */
+  const actions = options.actions ?? new Map();
 
   const journeys = [];
   let sequence = 0;
@@ -99,7 +119,9 @@ export function buildJourneys(visits, options = {}) {
   };
 
   // ─── 1. Onboarding: everything before the app proper ─────────────────────
-  const firstSection = steps.findIndex((node) => sectionOf(node) !== null);
+  // On desktop, the app proper starts at the first page showing its sidebar;
+  // what comes before (a landing page, signing in) is the onboarding.
+  const firstSection = steps.findIndex((node) => (isDesktop(node) ? hasSidebar(node) : sectionOf(node) !== null));
   const opening = firstSection === -1 ? steps : steps.slice(0, firstSection);
   if (opening.length) {
     const onboarding = make('Onboarding', 'onboarding', null, true);
@@ -137,6 +159,8 @@ export function buildJourneys(visits, options = {}) {
 
   // ─── 2–6. The app proper: a stack of open journeys ───────────────────────
   const roots = new Map(); // section name → journey
+  const titleById = new Map(steps.map((node) => [node.id, cleanTitle(node.analysis?.signals?.title ?? '')?.toLowerCase() ?? null]));
+  const titleOfId = (id) => titleById.get(id) ?? null;
   const stack = [];
   const current = () => stack[stack.length - 1] ?? null;
 
@@ -151,9 +175,27 @@ export function buildJourneys(visits, options = {}) {
     return root;
   };
 
+  let previous = opening.length ? opening[opening.length - 1] : null;
   for (const node of steps.slice(opening.length)) {
-    const section = sectionOf(node);
+    const before = previous;
+    previous = node;
+    let section = sectionOf(node);
     const type = node.analysis?.screenType;
+    // A desktop sidebar item clicked to get here switches section, even when
+    // the page it opens has no heading to say so ("New" back to the home page).
+    if (!section && isDesktop(node) && before && !node.capture?.overlay) {
+      const step = actions.get(`${before.id}->${node.id}`);
+      const label = step && step.kind === 'tap' && step.label ? cleanTitle(step.label) : null;
+      if (label && navOf(node).includes(label.toLowerCase())) section = /^(new|new chat|home)$/i.test(label) ? 'Home' : label;
+    }
+    // Back on a page a section already holds — the same heading as one of its
+    // screens ("Good morning, Motvin" on the home page) — is back in that section.
+    if (!section && isDesktop(node) && !node.capture?.overlay) {
+      const title = cleanTitle(node.analysis?.signals?.title ?? '')?.toLowerCase();
+      if (title && !stack.some((journey) => journey.nodeIds.some((id) => titleOfId(id) === title))) {
+        for (const root of roots.values()) if (root.nodeIds.some((id) => titleOfId(id) === title)) section = root.name;
+      }
+    }
 
     if (section) {
       const root = openRoot(section);
@@ -187,7 +229,7 @@ export function buildJourneys(visits, options = {}) {
     }
 
     // A section of its own kind, wherever it was reached from.
-    if (SECTION_TYPES.has(type)) {
+    if (SECTION_TYPES.has(type) && !(isDesktop(node) && node.capture?.overlay)) {
       const root = openRoot(labelFor(type), flowCategoryFor(type));
       add(root, node);
       continue;
@@ -197,7 +239,8 @@ export function buildJourneys(visits, options = {}) {
     if (!open) {
       // Nothing is open yet and this screen has no tab bar: the app has no
       // tab bar at all. Its first screen stands as the section.
-      const root = openRoot(cleanTitle(node.analysis?.name) || 'Home');
+      // On desktop this is the page the app opens on: its home.
+      const root = openRoot(isDesktop(node) ? 'Home' : cleanTitle(node.analysis?.name) || 'Home');
       add(root, node);
       continue;
     }
@@ -214,7 +257,9 @@ export function buildJourneys(visits, options = {}) {
       const hubTitle = [cleanTitle(node.analysis?.signals?.title ?? ''), tappedLabel, cleanTitle(node.analysis?.name ?? ''), hubMentioned(node, context.hubs)].find(
         (candidate) => candidate && context.hubs.has(candidate.toLowerCase()),
       );
-      if (hubTitle) {
+      // On desktop the sidebar names the sections; a page's own tab row
+      // ("Skills, Connectors, Plugins" on Customize) is tabs within it.
+      if (hubTitle && !isDesktop(node)) {
         const root = openRoot(hubTitle);
         add(root, node);
         continue;
@@ -234,6 +279,40 @@ export function buildJourneys(visits, options = {}) {
     }
   }
 
+  // A long desktop section is several tasks on one page's tabs — Customize's
+  // Skills, Connectors and Plugins. Each tab becomes a journey of its own
+  // under the section, its screens in walk order; the section keeps the
+  // screen it opened on. A screen that names no tab is on the one before it.
+  for (const root of [...journeys]) {
+    if (!root.section || root.parent || root.nodeIds.length < SPLIT_SECTION_MIN) continue;
+    const nodes = root.nodeIds.map((id) => steps.find((candidate) => candidate.id === id)).filter(Boolean);
+    if (!nodes.every(isDesktop)) continue;
+    let tab = null;
+    const tabOf = new Map();
+    for (const node of nodes) {
+      tab = node.analysis?.signals?.activeTab ?? tab;
+      if (tab) tabOf.set(node.id, tab);
+    }
+    const counts = new Map();
+    for (const name of tabOf.values()) counts.set(name, (counts.get(name) ?? 0) + 1);
+    const tabs = [...counts].filter(([, count]) => count >= 2).map(([name]) => name);
+    if (tabs.length < 2) continue;
+    const children = new Map();
+    for (const node of nodes.slice(1)) {
+      const name = tabOf.get(node.id);
+      if (!name || !tabs.includes(name)) continue;
+      let child = children.get(name);
+      if (!child) {
+        child = make(name, root.category, root);
+        add(child, nodes[0]);
+        children.set(name, child);
+      }
+      add(child, node);
+    }
+    const moved = new Set([...children.values()].flatMap((child) => child.nodeIds.slice(1)));
+    root.nodeIds = root.nodeIds.filter((id) => !moved.has(id));
+  }
+
   // A task opened from two different sections belongs to the app, not to
   // either section: "Adding a delivery address" from Food and from Instamart
   // is one top-level journey.
@@ -250,12 +329,34 @@ export function buildJourneys(visits, options = {}) {
   // Only a task is promoted — a verb phrase, or a journey that is not
   // browsing. A feature that exists in two sections ("Reorder" in Food and
   // in Instamart) stays in each and is qualified by section below.
-  const isTask = (journey) => /^[A-Z][a-z]+ing\b/.test(journey.name) || !['discovery'].includes(journey.category);
+  // A placeholder name ("Opening a page", "Browsing") is not a task: two of
+  // them are two different things that just lack a better name yet.
+  const PLACEHOLDER = /^(opening a (page|sheet)|browsing( a category)?|detail|journey|filling in a form|reaching an empty state)\b/i;
+  const isTask = (journey) => !PLACEHOLDER.test(journey.name) && (/^[A-Z][a-z]+ing\b/.test(journey.name) || !['discovery'].includes(journey.category));
   for (const journey of journeys) {
     if (journey.parent && isTask(journey) && (parentsOf.get(journey.name.toLowerCase())?.size ?? 0) >= 2) {
       journey.parent = null;
       journey.section = true;
+      journey.promoted = true;
     }
+  }
+
+  // A task promoted to the top from several places is one flow, not one per
+  // place it was opened from: "Subscribing" from Home, Settings and Customize
+  // is a single "Subscribing", its first walk followed by what the others
+  // added (each one's starting screen is where it was opened from, so it is
+  // left out).
+  const promotedByName = new Map();
+  for (const journey of [...journeys]) {
+    if (journey.parent || !journey.promoted) continue;
+    const first = promotedByName.get(journey.name.toLowerCase());
+    if (!first) {
+      promotedByName.set(journey.name.toLowerCase(), journey);
+      continue;
+    }
+    for (const id of journey.nodeIds.slice(1)) if (!first.nodeIds.includes(id)) first.nodeIds.push(id);
+    for (const child of journeys) if (child.parent === journey.key) child.parent = first.key;
+    journeys.splice(journeys.indexOf(journey), 1);
   }
 
   // The same name in two different places says where it is: "Reorder
@@ -311,8 +412,42 @@ function hubMentioned(node, hubs) {
   return null;
 }
 
-/** The tab a screen is on, when it has a tab bar. */
+/** A desktop web page, laid out with a sidebar rather than a phone's tab bar. */
+function isDesktop(node) {
+  return node.analysis?.signals?.layout === 'desktop';
+}
+
+/** A desktop page showing the app's own sidebar — signed in, inside the app. */
+function hasSidebar(node) {
+  return (node.analysis?.signals?.navLabels?.length ?? 0) > 0;
+}
+
+/**
+ * The tab a screen is on, when it has a tab bar. On a desktop page, the
+ * sidebar is the section switcher instead: a page whose heading repeats one
+ * of its items ("Customize", "Projects") is that section. A dialog or sheet
+ * over a page is never a section of its own.
+ */
+/**
+ * A desktop app's sidebar items that are its real sections: the ones its
+ * sidebar shows on most pages. A column of other links on one page (a
+ * settings sub-menu, a collapsed sidebar's list) is not the app's navigation.
+ * Set per recording by buildJourneys; null outside it.
+ */
+let stableNav = null;
+
+function navOf(node) {
+  const labels = (node.analysis?.signals?.navLabels ?? []).map((label) => String(label).toLowerCase());
+  return stableNav ? labels.filter((label) => stableNav.has(label)) : labels;
+}
+
 function sectionOf(node) {
+  if (isDesktop(node)) {
+    if (node.capture?.overlay || ['dialog', 'bottom_sheet', 'toast'].includes(node.analysis?.screenType)) return null;
+    const title = cleanTitle(node.analysis?.signals?.title ?? '');
+    if (!title) return null;
+    return navOf(node).includes(title.toLowerCase()) ? title : null;
+  }
   const label = node.analysis?.signals?.tabLabels?.[0];
   if (!label || !/^[A-Za-z][A-Za-z' ]{1,13}$/.test(label)) return null;
   return label.charAt(0).toUpperCase() + label.slice(1);

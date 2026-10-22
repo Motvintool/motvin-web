@@ -17,6 +17,7 @@
  * reading tap targets off pixels.
  */
 
+import { layoutOf } from './imagesize.js';
 import { readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -719,7 +720,7 @@ const NAME_SYSTEM = `You name user flows for a design-reference library, the way
 
 Each journey is a real path someone walked in the app: it starts from the screen it was opened from and lists the screens that followed. Name it as the task the person was doing, in two to five words, present participle where it is an action: "Searching dishes & restaurants", "Adding a dish to cart", "Turning on veg mode filter", "Booking a table", "Editing profile", "Subscribing to Swiggy One". A journey that simply opens a feature is named for the feature as the app names it: "Offer Zone", "Eatlist", "Restaurant detail", "Bolt". A section reached from the tab bar keeps its tab name: "Food", "Instamart", "Profile". "Onboarding" stays "Onboarding".
 
-Never name a journey after a screen type ("Detail screen", "Form"). Never invent what you cannot see in the screen names and descriptions given. Keep every id; reuse the given name when nothing better is honest.`;
+The quoted names above are examples from a different app; never copy one. Never name a journey after a screen type ("Detail screen", "Form"). Never invent what you cannot see in the screen names and descriptions given. Keep every id; reuse the given name when nothing better is honest.`;
 
 /**
  * Asks the model to rename a structural journey tree in task language.
@@ -766,8 +767,18 @@ export async function nameJourneys(journeys, graph, options = {}) {
 
   const raw = extractJson(reply);
   const names = raw && typeof raw.names === 'object' ? raw.names : {};
+  // An example from the prompt handed back for an app it has nothing to do
+  // with ("Searching dishes & restaurants" for a chat app) is refused unless
+  // the journey's own screens show its words.
+  const examples = new Set([...NAME_SYSTEM.matchAll(/"([A-Z][^"]{2,40})"/g)].map((match) => match[1].toLowerCase()));
+  const shown = (name, journey) => {
+    const text = journey.nodeIds.map((id) => graph.get(id)).filter(Boolean).map((node) => `${node.analysis.name} ${node.analysis.description ?? ''} ${(node.analysis.lines ?? []).map((line) => line.text).join(' ')}`).join(' ').toLowerCase();
+    const words = name.toLowerCase().split(/[^a-z]+/).filter((word) => word.length > 3 && !/ing$/.test(word));
+    return words.length > 0 && words.every((word) => text.includes(word.replace(/s$/, '')));
+  };
   const renamed = journeys.map((journey, index) => {
-    const proposed = String(names[String(index)] ?? '').trim().slice(0, 60);
+    let proposed = String(names[String(index)] ?? '').trim().slice(0, 60);
+    if (proposed && examples.has(proposed.toLowerCase()) && !shown(proposed, journey)) proposed = '';
     return { ...journey, name: proposed || journey.name };
   });
   // Parents referenced by key stay put; parents referenced by name follow the
@@ -802,7 +813,7 @@ export async function analyseScreen(imagePath, elements = [], options = {}) {
       options.lines ?? readText(imagePath),
       options.luminance !== undefined ? options.luminance : luminance(imagePath).catch(() => null),
     ]);
-    const analysis = classifyScreen(lines, { luminance: brightness, colors: options.colors, context: options.context });
+    const analysis = classifyScreen(lines, { luminance: brightness, colors: options.colors, context: options.context, layout: options.layout ?? layoutOf(imagePath) });
     analysis.lines = lines;
     return analysis;
   }

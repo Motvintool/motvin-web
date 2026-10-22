@@ -128,12 +128,20 @@ export function supportsVision(model) {
 /** Vision models that read phone screens best, most preferred first. */
 const PREFERRED = [/qwen3-vl/i, /qwen2\.5-?vl/i, /gemma3/i, /llava/i];
 
+/** Screens are read one call each, so the screen model stays at or under this size for speed. */
+const SCREEN_MODEL_MAX_B = 12;
+
 export function pickModel(models, configured = '') {
   if (configured) return configured;
   const usable = models.filter((name) => !NOT_FOR_THIS.test(name));
   for (const pattern of PREFERRED) {
-    const hit = usable.find((name) => pattern.test(name));
-    if (hit) return hit;
+    // Within the preferred family, the largest that is still quick enough to
+    // read every screen: qwen3-vl:8b over qwen3-vl:2b when both are installed.
+    const hits = usable.filter((name) => pattern.test(name));
+    if (!hits.length) continue;
+    const sized = hits.map((name) => ({ name, size: modelSize(name) ?? 0 }));
+    const fitting = sized.filter((entry) => entry.size <= SCREEN_MODEL_MAX_B).sort((a, b) => b.size - a.size);
+    return (fitting[0] ?? sized.sort((a, b) => a.size - b.size)[0]).name;
   }
   const vision = usable.find((name) => supportsVision(name));
   return vision ?? usable[0] ?? models[0] ?? null;

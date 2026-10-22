@@ -23,7 +23,7 @@ import { publishCrawl, safeName } from './publish.js';
 import { industryFromStore, resolveIndustry, titleMatches } from './category.js';
 import { ingestFolder, selectStableFrames, slugify, _internals, validateTabBars } from './ingest.js';
 import { parseIdbElements } from './device.js';
-import { buildSections, classifyScreen, cleanTitle, groupFlowsLocally, guessBrand } from './heuristics.js';
+import { buildSections, classifyScreen, cleanTitle, groupFlowsLocally, guessBrand, looksLikeNavTitle } from './heuristics.js';
 import { segmentRecording, _internals as _segmentInternals, _thresholds as _segmentThresholds } from './segment.js';
 import { buildJourneys, journeyName, taskPhrase } from './journeys.js';
 import { describeAction, actionPhrase } from './actions.js';
@@ -1174,6 +1174,63 @@ export async function selfTest() {
       loading.skipReason = 'loading state — not published';
       const out = await publishCrawl({ graph: g, dataDir: loadStore, dryRun: true, app: { appId: 'load-app', name: 'Load App', industry: 'food' } });
       check('a loading state marked for skipping is left out and reported', out.screens.length === 1 && out.skipped[0]?.screenType === 'loading');
+    }
+
+    log.heading('Desktop web pages');
+    {
+      // A desktop page: a left sidebar of navigation, the page to its right.
+      const at = (text, x, y, w = 0.1, h = 0.02) => ({ text, x, y, w, h, confidence: 0.9 });
+      const sidebar = [
+        at('Claude', 0.01, 0.015), at('Q Search', 0.011, 0.067), at('+ New', 0.01, 0.114), at('8b Projects', 0.029, 0.149),
+        at('& Artifacts', 0.029, 0.184), at('E Customize', 0.029, 0.218), at('Recents', 0.009, 0.419), at('Greeting', 0.009, 0.567),
+        // An account menu open over the sidebar, in the same column.
+        at('Settings', 0.015, 0.686), at('Language', 0.032, 0.723), at('Get help', 0.033, 0.758), at('Log out', 0.015, 0.918),
+      ];
+      const page = (title, more = []) => [...sidebar, at(title, 0.27, 0.07, 0.15, 0.035), at('Connectors', 0.32, 0.14), at('Plugins', 0.39, 0.14), ...more];
+      const customize = classifyScreen(page('Customize', [at('GitHub Integration', 0.29, 0.25, 0.2), at('Connect', 0.84, 0.25)]), { layout: 'desktop' });
+      check('a desktop page has no tab bar or keyboard', !customize.signals.tabLabels.length && !customize.signals.keyboard && !customize.elements.includes('tab-bar'));
+      const nav = customize.signals.navLabels;
+      check('its navigation is the sidebar’s top group, icons stripped', ['Search', 'New', 'Projects', 'Artifacts', 'Customize'].every((item) => nav.includes(item)) && !nav.some((item) => /^(recents|greeting|settings|language)$/i.test(item)), nav.join(','));
+      check('a menu over the sidebar is not read as the page', customize.screenType !== 'settings', customize.screenType);
+      check('a heading that repeats a sidebar item is the page title', customize.signals.title === 'Customize', customize.signals.title);
+      check('a phone screen reads the same as before', classifyScreen(page('Customize')).signals.layout === 'phone');
+      check('a dropdown chevron read as a letter is not part of a title', cleanTitle('Greeting v') === 'Greeting');
+      check('a sentence cut off mid-way, a pill and a clipped label are not page names', !looksLikeNavTitle('My downloads folder is a') && !looksLikeNavTitle('Free plan • Upgrade') && !looksLikeNavTitle('Microphone (Buil') && looksLikeNavTitle('Keyboard shortcuts'));
+
+      let n = 0;
+      const node = (screenType, title, nav = true, extra = {}) => ({
+        id: `d${++n}`,
+        analysis: { screenType, name: title || 'Other', signals: { layout: 'desktop', navLabels: nav ? ['Search', 'New', 'Projects', 'Artifacts', 'Customize'] : [], tabLabels: [], title, headline: null, ctas: [] }, tags: [], description: '' },
+        ...extra,
+      });
+      const landing = node('welcome', 'Question what’s next', false);
+      const login = node('login', 'Log in', false);
+      const otp = node('otp', 'Check your inbox', false);
+      const home = node('other', null);
+      const projects = node('category', 'Projects');
+      const project = node('detail', 'Motvin Work');
+      const custom = node('category', 'Customize');
+      const shortcuts = node('dialog', 'Keyboard shortcuts', true, { capture: { overlay: { kind: 'dialog' } } });
+      const tree = buildJourneys([landing, login, otp, home, projects, project, projects, custom, shortcuts, custom].map((node) => ({ node })));
+      const shape = tree.map((j) => `${j.parent ? `${tree.find((c) => c.key === j.parent)?.name} › ` : ''}${j.name}`).join(' | ');
+      const byName = new Map(tree.map((journey) => [journey.name, journey]));
+      check('the signed-out pages before the sidebar are the onboarding', byName.get('Onboarding')?.nodeIds.length === 3, shape);
+      check('the first page with the sidebar is home', byName.get('Home')?.parent === null, shape);
+      check('a page titled by a sidebar item is a section', byName.get('Projects')?.section && byName.get('Customize')?.section, shape);
+      check('a page opened inside a section is a journey under it', tree.some((j) => j.parent === byName.get('Projects')?.key && j.nodeIds.includes(project.id)), shape);
+      check('a dialog over a section is not a section', !tree.some((j) => !j.parent && j.nodeIds[0] === shortcuts.id), shape);
+
+      // A page's own tabs: the one showing is the one its content names.
+      const tabbed = (body) => classifyScreen([...page('Customize'), at('Skills', 0.27, 0.14), ...body], { layout: 'desktop' }).signals.activeTab;
+      check('the showing tab is the one the page names', tabbed([at('Connector', 0.27, 0.22), at('Type', 0.6, 0.22), at('GitHub Integration', 0.29, 0.25, 0.2)]) === 'Connectors' && tabbed([at('Create a skill', 0.27, 0.22), at('Upload skill', 0.4, 0.22)]) === 'Skills');
+      check('an everyday word is not a tab’s name', tabbed([at('Explain your data', 0.27, 0.22)]) === null);
+      const tabNode = (tab) => node('category', 'Customize', true, { analysis: { screenType: 'category', name: 'Customize', signals: { layout: 'desktop', navLabels: ['Search', 'New', 'Projects', 'Artifacts', 'Customize'], tabLabels: [], title: 'Customize', activeTab: tab, ctas: [] }, tags: [], description: '' } });
+      const run = [node('other', null), ...['Skills', 'Skills', null, 'Skills', 'Connectors', 'Connectors', null, 'Connectors', 'Plugins', 'Plugins'].map(tabNode)];
+      const split = buildJourneys(run.map((node) => ({ node })));
+      const section = split.find((j) => j.name === 'Customize');
+      const under = split.filter((j) => j.parent === section?.key).map((j) => `${j.name}:${j.nodeIds.length}`).join(',');
+      check('a long section is split into one journey per tab, each starting on the section', under === 'Skills:4,Connectors:5,Plugins:3', under);
+
     }
 
     log.heading('Journeys from the walk');

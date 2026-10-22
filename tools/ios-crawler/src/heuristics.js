@@ -45,6 +45,53 @@ const KEYBOARD_TOP = 0.55;
 /** Single letters below KEYBOARD_TOP needed before a keyboard is believed. */
 const KEYBOARD_KEYS = 8;
 
+/**
+ * A desktop web page (a screenshot wider than it is tall) has none of a
+ * phone's zones — no status bar, tab bar or on-screen keyboard. Its
+ * navigation is a left sidebar instead: a tall column of short labels whose
+ * right edge sits inside the left SIDEBAR_RIGHT of the width. Like a tab bar,
+ * it reads the same on every page (and a menu popped from it, such as an
+ * account menu, sits in the same column), so its words are chrome, not content.
+ */
+const SIDEBAR_RIGHT = 0.24;
+const SIDEBAR_LEFT_MAX = 0.08;
+const SIDEBAR_MIN_LINES = 6;
+const SIDEBAR_MIN_SPAN = 0.35;
+
+/** A gap this tall between sidebar lines ends one group of items and starts the next. */
+const SIDEBAR_GROUP_GAP = 0.055;
+
+/**
+ * A sidebar's navigation: its first group of three or more items, top down
+ * ("Search, New, Projects, Artifacts, Customize"). The groups below it —
+ * pinned items, recent chats, documents — are lists of things, not places,
+ * and a menu popped open over the sidebar sits further down still.
+ */
+function sidebarNav(column) {
+  const sorted = [...column].sort((a, b) => a.y - b.y);
+  const groups = [];
+  for (const line of sorted) {
+    const group = groups[groups.length - 1];
+    const last = group?.[group.length - 1];
+    if (last && line.y - last.y <= SIDEBAR_GROUP_GAP) group.push(line);
+    else groups.push([line]);
+  }
+  // A sidebar item's icon is read as a stray token in front of its label:
+  // "8b Artifacts", "E Customize", "5 Projects", "+New".
+  const label = (text) => cleanTitle(String(text).replace(/^\S{1,2}\s+(?=[A-Z])/, '').replace(/^[^A-Za-z]+(?=[A-Z])/, ''));
+  const labelled = (group) => group.map((line) => label(line.text)).filter((label) => label && label.length >= 3 && label.length <= 28 && /[a-z]{3}/i.test(label));
+  return labelled(groups.find((group) => labelled(group).length >= 3) ?? []);
+}
+
+/** The lines that make up a desktop page's left sidebar, or [] when it has none. */
+function sidebarLines(lines) {
+  const column = lines.filter((line) => line.x <= SIDEBAR_LEFT_MAX && line.x + (line.w ?? 0) <= SIDEBAR_RIGHT);
+  if (column.length < SIDEBAR_MIN_LINES) return [];
+  const ys = column.map((line) => line.y);
+  if (Math.max(...ys) - Math.min(...ys) < SIDEBAR_MIN_SPAN) return [];
+  return column;
+}
+
 const CURRENCY = /[$€£¥₹]\s?\d|(\d+[.,]\d{2})\s?(usd|eur|gbp|inr)\b|\brs\.?\s?\d/i;
 
 /** Legal boilerplate, which sits under forms and must not type them as settings. */
@@ -79,12 +126,15 @@ export function extractSignals(lines, options = {}) {
     .map((line) => ({ ...line, text: String(line.text || '').trim() }))
     .filter((line) => line.text.length > 0);
 
-  const content = clean.filter((line) => line.y > STATUS_BAR_BOTTOM && line.y < TAB_BAR_TOP);
+  const desktop = options.layout === 'desktop';
+  const sidebar = desktop ? sidebarLines(clean) : [];
+  const page = desktop ? clean.filter((line) => !sidebar.includes(line)) : clean;
+  const content = desktop ? page : clean.filter((line) => line.y > STATUS_BAR_BOTTOM && line.y < TAB_BAR_TOP);
   const header = content.filter((line) => line.y < HEADER_BOTTOM);
   // Tab labels are short words on one row at the very bottom. OCR also reads
   // badges, timers and promo pills down there, so only wordy items on the
   // most populated row count.
-  const bottomWords = clean.filter(
+  const bottomWords = desktop ? [] : clean.filter(
     (line) => line.y >= TAB_BAR_TOP && /^[A-Za-z][A-Za-z' ]{1,13}$/.test(line.text) && !/^[A-Z]{2,5}$/.test(line.text),
   );
   const bottomRows = groupByRow(bottomWords).sort((a, b) => b.length - a.length);
@@ -95,7 +145,7 @@ export function extractSignals(lines, options = {}) {
   const singleLetters = clean.filter((line) => line.y > KEYBOARD_TOP && /^[a-z]$/i.test(line.text)).length;
   const keyRows = clean.filter((line) => line.y > KEYBOARD_TOP && /^(qwertyuiop|asdfghjkl|zxcvbnm)$/i.test(line.text.replace(/\s+/g, ''))).length;
   const numpad = clean.filter((line) => line.y > 0.6 && /^(abc|def|ghi|jkl|mno|pqrs|tuv|wxyz)$/i.test(line.text)).length;
-  const keyboard = singleLetters >= KEYBOARD_KEYS || keyRows >= 2 || numpad >= 4;
+  const keyboard = !desktop && (singleLetters >= KEYBOARD_KEYS || keyRows >= 2 || numpad >= 4);
 
   const rawAll = content.map((line) => line.text).join(' \n ');
   const legalLines = content.filter((line) => line.y > 0.4 && LEGAL.test(line.text));
@@ -123,8 +173,12 @@ export function extractSignals(lines, options = {}) {
   return {
     rawAll,
     all,
-    chrome: bottomItems.map((line) => line.text).join(' ').toLowerCase(),
-    lines: clean,
+    chrome: (desktop ? sidebar : bottomItems).map((line) => line.text).join(' ').toLowerCase(),
+    // On a desktop page, the page itself: titles and headlines are read from
+    // it, never from the sidebar beside it.
+    lines: page,
+    layout: desktop ? 'desktop' : 'phone',
+    navLabels: sidebar.length ? sidebarNav(sidebar) : [],
     content,
     header,
     lineCount: content.length,
@@ -142,6 +196,35 @@ export function extractSignals(lines, options = {}) {
     luminance: options.luminance ?? null,
     colors: options.colors ?? [],
   };
+}
+
+/**
+ * Which of a desktop page's own tabs is showing ("Connectors" on Customize):
+ * the tab whose name the page below the tab row uses most, as a whole word —
+ * a connectors tab lists "Connector / Type / Status", a skills tab offers
+ * "Create a skill". The tab row is read without its highlight, so this is
+ * what tells the tabs apart. Sidebar items are not the page's tabs. Null when
+ * no tab is named on the page.
+ */
+function activeTabOf(content, chipLabels, navLabels) {
+  const strip = (text) => cleanTitle(String(text).replace(/^\S{1,2}\s+(?=[A-Z])/, '')) ?? '';
+  const nav = new Set(navLabels.map((label) => label.toLowerCase()));
+  const tabs = [...new Set(chipLabels.map(strip))].filter((tab) => tab.length >= 4 && !nav.has(tab.toLowerCase()) && !/^search\b/i.test(tab));
+  if (tabs.length < 2) return null;
+  const rowYs = content.filter((line) => tabs.includes(strip(line.text))).map((line) => line.y);
+  const body = content.filter((line) => !rowYs.some((y) => Math.abs(y - line.y) < 0.02)).map((line) => line.text.toLowerCase()).join(' \n ');
+  let best = null;
+  for (const tab of tabs) {
+    const word = tab.toLowerCase();
+    // "Skills" also counts "skill"; a short singular ("your" from "Yours")
+    // is an everyday word, so only the tab's own word counts there.
+    const singular = word.replace(/(e?s)$/, '');
+    const forms = singular !== word && singular.length >= 5 ? [word, singular] : [word];
+    const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const count = (body.match(new RegExp(`\\b(${forms.map(escape).join('|')})\\b`, 'g')) || []).length;
+    if (count > 0 && (!best || count > best.count)) best = { tab, count };
+  }
+  return best?.tab ?? null;
 }
 
 function groupByRow(lines) {
@@ -365,8 +448,13 @@ function titleFrom(lines, box = null, options = {}) {
     if (inside[0]) return cleanTitle(inside[0].text);
   }
 
+  const top = options?.layout === 'desktop' ? 0 : STATUS_BAR_BOTTOM;
+  // A desktop page heading that repeats a sidebar item ("Customize",
+  // "Projects") is that page's name, even as one uncommon word.
+  const nav = new Set((options?.navLabels ?? []).map((label) => label.toLowerCase()));
+  const named = (line) => looksLikeNavTitle(line.text) || nav.has(cleanTitle(line.text)?.toLowerCase());
   const header = lines
-    .filter((line) => line.y > STATUS_BAR_BOTTOM && line.y < HEADER_BOTTOM && wordy(line) && looksLikeNavTitle(line.text))
+    .filter((line) => line.y > top && line.y < HEADER_BOTTOM && wordy(line) && named(line))
     .sort((a, b) => b.h - a.h);
   if (header[0]) return cleanTitle(header[0].text);
   if (options?.headerOnly) return null;
@@ -387,7 +475,8 @@ function titleFrom(lines, box = null, options = {}) {
 export function looksLikeNavTitle(text) {
   const t = String(text || '').trim();
   if (t.length < 3 || t.length > 40) return false;
-  if (/[®™©%₹$€£!?]/.test(t)) return false;
+  if (/[®™©%₹$€£!?•·|]/.test(t)) return false; // "Free plan • Upgrade" is a pill, not a page
+  if ((t.match(/\(/g) || []).length !== (t.match(/\)/g) || []).length) return false; // cut off: "Microphone (Buil
   if (/\d/.test(t)) return false;
   const words = t.split(/\s+/);
   if (words.length > 5) return false;
@@ -396,6 +485,8 @@ export function looksLikeNavTitle(text) {
   if (letters >= 5 && upper / letters > 0.7) return false; // MALAI KULFI
   if (/'s\b/i.test(t) && words.length === 1) return false; // Lay's
   if (words.length === 1 && !COMMON_PAGE_WORDS.test(t)) return false; // Dosa, Biryani, Surf
+  // A sentence cut off mid-way is not a name: "My downloads folder is a".
+  if (words.length > 1 && /\b(and|or|for|the|with|to|of|in|on|at|a|an|is|are|was|be|my|your|our|this|that|from|by)$/i.test(t)) return false;
   return true;
 }
 
@@ -424,6 +515,8 @@ export function cleanTitle(text) {
     // real title: "E Select your location".
     .replace(/^[A-Za-z]\s+(?=[A-Z])/, '')
     .replace(/[›>»&|:;,.\s-]+$/g, '')
+    // A dropdown chevron after a title, read as a letter: "Greeting v".
+    .replace(/\s+[vV˅⌄]$/, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
   if (title.length > 40) {
@@ -557,7 +650,10 @@ export function classifyScreen(lines, options = {}) {
       chipLabels: signals.chipLabels,
       ctas: signals.ctas.slice(0, 4),
       keyboard: signals.keyboard,
-      title: titleFrom(signals.lines, context.overlay?.box ?? null),
+      layout: signals.layout,
+      navLabels: signals.navLabels.slice(0, 24),
+      activeTab: signals.layout === 'desktop' ? activeTabOf(signals.content, signals.chipLabels, signals.navLabels) : null,
+      title: titleFrom(signals.lines, context.overlay?.box ?? null, { layout: signals.layout, navLabels: signals.navLabels }),
       // The largest real words in the body — a section heading or a hero
       // line — kept so a screen can be told apart from siblings that share
       // its navigation title.
@@ -617,7 +713,7 @@ function loginFlavour(signals) {
  * names, and a state (empty, logged out) is said in brackets.
  */
 function nameFor(screenType, signals, context, fallbackName) {
-  const rawTitle = titleFrom(signals.lines, context.overlay?.box ?? null);
+  const rawTitle = titleFrom(signals.lines, context.overlay?.box ?? null, { layout: signals.layout, navLabels: signals.navLabels });
   const title = rawTitle && !isTagline(rawTitle) ? rawTitle : null;
   const text = signals.all;
   const section = signals.tabLabels[0] ? `${signals.tabLabels[0].charAt(0).toUpperCase()}${signals.tabLabels[0].slice(1)}` : null;
@@ -753,6 +849,7 @@ function describe(screenType, signals, context, states) {
 
   const structure = [];
   if (signals.tabBar) structure.push(`a ${signals.tabLabels.length}-item tab bar`);
+  if (signals.layout === 'desktop' && signals.navLabels.length) structure.push('a sidebar');
   if (signals.chips) structure.push(`a row of ${signals.chipLabels.length} category chips`);
   if (/\bsearch\b/.test(signals.all)) structure.push('a search bar');
   if (signals.keyboard) structure.push('the keyboard open');

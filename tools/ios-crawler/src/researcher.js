@@ -48,7 +48,7 @@ const JOURNEY_RULES = `${SHARED_RULES}
 
 Return exactly this shape — a flat map from each journey key given (J0, J1, …) to its new name, one line per journey, and nothing else:
 { "journeys": { "J0": "Onboarding", "J1": "Food", "J2": "Searching dishes & restaurants", "J3": "Adding a dish to cart" } }
-Do not repeat the steps or the machine guesses from the input; the guess is there only to show which journey is meant, and it is usually wrong. Do not add keys that were not given. Every value is a name of two to six words.
+The names in quotes here are examples from a different app; never copy one. Do not repeat the steps or the machine guesses from the input; the guess is there only to show which journey is meant, and it is usually wrong. Do not add keys that were not given. Every value is a name of two to six words.
 
 Journey names read like a professional design-reference library's: the task in the person's own terms, starting with a verb ending in -ing whenever the person is doing something — "Searching dishes & restaurants", "Adding a dish to cart", "Turning on veg mode filter", "Booking a table", "Subscribing to Swiggy One", "Editing profile". A journey that opens a feature is named for the feature as the app names it — "Offer Zone", "Eatlist", "Restaurant detail". A journey inside a section is never named after the section it is in: a journey inside "Food" is the task done there, not "Food". A top-level section keeps its tab name — "Food", "Instamart", "Profile" — and "Onboarding" stays "Onboarding".`;
 
@@ -471,6 +471,30 @@ const clean = (value, max) => {
  * Writes accepted proposals onto the journeys and nodes. Exported for the
  * self-test, which feeds it a hand-made reply.
  */
+/**
+ * The example names the prompts give. A small model sometimes hands one back
+ * verbatim for an app it has nothing to do with ("Searching dishes &
+ * restaurants" for a chat app), so an example is only taken when the
+ * journey's own screens show its words.
+ */
+const EXAMPLE_NAMES = new Set(
+  [...`${JOURNEY_RULES}\n${SHARED_RULES}`.matchAll(/[“"]([A-Z][^“”"]{2,40})[”"]/g)].map((match) => match[1].trim().toLowerCase()),
+);
+
+/** Whether the words of a name (beyond its verb and small words) appear on the journey's screens. */
+function shownOnScreens(name, journey, graph, screenProposals = {}) {
+  const text = journey.nodeIds
+    .map((id) => {
+      const analysis = graph.get(id)?.analysis ?? {};
+      const proposed = screenProposals[id] ?? {};
+      return `${analysis.name ?? ''} ${(analysis.lines ?? []).map((line) => line.text).join(' ')} ${analysis.description ?? ''} ${proposed.name ?? ''} ${proposed.purpose ?? ''} ${proposed.description ?? ''}`;
+    })
+    .join(' ')
+    .toLowerCase();
+  const words = name.toLowerCase().split(/[^a-z]+/).filter((word) => word.length > 3 && !/ing$/.test(word));
+  return words.length > 0 && words.some((word) => text.includes(word.replace(/e?s$/, '')));
+}
+
 export function applyProposals(journeys, graph, proposals) {
   let journeysRenamed = 0;
   let screensUpdated = 0;
@@ -507,13 +531,17 @@ export function applyProposals(journeys, graph, proposals) {
     name = sentenceCase(name, properNouns);
     // A section keeps its tab name and onboarding its own; the model names
     // the journeys inside them.
-    const isSectionName = journey.section && journey.category === 'discovery';
+    // That holds for every top-level section ("Settings", "Projects"), not only
+    // browsing ones; a task promoted to the top ("Subscribing") is still a task
+    // and takes its name.
+    const isSectionName = journey.section && ((!journey.parent && !journey.promoted) || journey.category === 'discovery');
     // A journey named after the section it sits in, or after another
     // section, is the model losing its place; that name is refused.
     const echoesAPlace =
       Boolean(journey.parent) &&
       (name.toLowerCase() === (parentName ?? '').toLowerCase() || sectionNames.has(name.toLowerCase()) || /^onboarding$/i.test(name));
-    if (name && !echoesAPlace && name.split(' ').length <= 7 && !isSectionName && !/^onboarding$/i.test(journey.name)) {
+    const copiedExample = Boolean(name) && EXAMPLE_NAMES.has(name.toLowerCase()) && !shownOnScreens(name, journey, graph, proposals.screens ?? {});
+    if (name && !echoesAPlace && !copiedExample && name.split(' ').length <= 7 && !isSectionName && !/^onboarding$/i.test(journey.name)) {
       if (name.toLowerCase() !== journey.name.toLowerCase()) journeysRenamed++;
       journey.name = name;
     }
