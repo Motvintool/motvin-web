@@ -37,7 +37,7 @@ import { analyseScreen, complete, encodeForModel, groupIntoFlows, identifyApp, p
 import { resolveIndustry } from './category.js';
 import { researchTree } from './researcher.js';
 import { extractJson } from './analyze.js';
-import { mergeSameNamedSiblings, reviewStructure, settleCategories } from './structure.js';
+import { mergeSameNamedSiblings, reviewStructure, settleCategories, splitOnboardingTail } from './structure.js';
 import { buildJourneys } from './journeys.js';
 import { actionPhrase, describeAction } from './actions.js';
 import { isBlockingScreen, isExternalAuthScreen } from './safety.js';
@@ -1713,9 +1713,28 @@ export async function researchStored(options) {
       .filter((step) => step.nodeId),
   }));
 
+  // The moves between screens, as the stored steps recorded them — what the
+  // structure pass keeps on a flow it splits or merges.
+  const actions = new Map();
+  for (const journey of journeys) {
+    for (const [at, step] of journey.steps.entries()) {
+      if (at > 0 && step.action) actions.set(`${journey.steps[at - 1].nodeId}->${step.nodeId}`, step.action);
+    }
+  }
+  const ask = (request) => complete(backend, request);
+  // The structure a recording gets today, for screens stored before it:
+  // every flow checked to be one task (split where it is not), named, the
+  // same task walked twice merged, and each flow filed by what it does.
+  if (options.restructure) {
+    log.heading('Checking the flows');
+    await splitOnboardingTail(journeys, graph, { complete: ask, extractJson, model: options.journeyModel ?? null, actions, log: (message) => log.detail(message) });
+    const review = await reviewStructure(journeys, graph, { complete: ask, extractJson, model: options.journeyModel ?? null, actions, log: (message) => log.detail(message) });
+    log.info(`structure: ${review.reviewed} flow(s) checked, ${review.split} task(s) split off`);
+  }
+
   log.heading('Researching');
   const outcome = await researchTree(journeys, graph, {
-    complete: (request) => complete(backend, request),
+    complete: ask,
     encodeImage: encodeForModel,
     extractJson,
     app,
@@ -1727,10 +1746,46 @@ export async function researchStored(options) {
   });
   log.info(`researcher: ${outcome.journeysRenamed} journey name(s), ${outcome.screensUpdated} screen(s) described in ${outcome.batches} call(s)`);
 
+  let flowsChanged = 0;
+  if (options.restructure) {
+    const merged = mergeSameNamedSiblings(journeys, actions, graph);
+    if (merged) log.info(`structure: ${merged} repeat(s) of the same task merged`);
+    const recategorised = settleCategories(journeys, graph);
+    if (recategorised) log.info(`structure: ${recategorised} flow categor${recategorised === 1 ? 'y' : 'ies'} set from the flows' final names`);
+    // The app's flows on this platform are replaced by the tree as it now
+    // stands; every other app's flows stay exactly as they were.
+    const screenIdOf = (nodeId) => graph.get(nodeId)?.screenId;
+    const rebuilt = journeys
+      .map((journey) => {
+        const screenIds = journey.nodeIds.map(screenIdOf).filter(Boolean);
+        return {
+          id: journey.key,
+          appId: options.appId,
+          name: journey.name,
+          ...(journey.summary ? { summary: journey.summary } : {}),
+          category: journey.category,
+          platform,
+          screenIds,
+          parentId: journey.parent ?? null,
+          steps: (journey.steps ?? []).map((step) => ({ screenId: screenIdOf(step.nodeId), action: step.action ?? null })).filter((step) => step.screenId),
+        };
+      })
+      .filter((flow) => flow.screenIds.length);
+    const kept = new Set(rebuilt.map((flow) => flow.id));
+    // A parent that went away (merged into another) leaves its children at the top.
+    for (const flow of rebuilt) if (flow.parentId && !kept.has(flow.parentId)) flow.parentId = null;
+    for (const flow of rebuilt) {
+      const before = flows.find((entry) => entry.id === flow.id);
+      log.ok(`${flow.parentId ? '  ' : ''}${flow.name}${dim(` — ${flow.screenIds.length} screen${flow.screenIds.length === 1 ? '' : 's'}, ${flow.category}`)}`);
+      if (!before || before.name !== flow.name || before.category !== flow.category || before.parentId !== flow.parentId || before.screenIds.join() !== flow.screenIds.join()) flowsChanged++;
+    }
+    flowsChanged += flows.filter((flow) => !kept.has(flow.id)).length;
+    const others = (flowsDoc.flows || []).filter((flow) => !(flow.appId === options.appId && flow.platform === platform));
+    flowsDoc.flows = [...others, ...rebuilt];
+  }
   // Write back: flow names and summaries, screen names, descriptions,
   // purposes and primary actions, and the analysis records' text.
-  let flowsChanged = 0;
-  for (const journey of journeys) {
+  for (const journey of options.restructure ? [] : journeys) {
     const flow = flows.find((entry) => entry.id === journey.key);
     if (!flow) continue;
     if (flow.name !== journey.name || (journey.summary && flow.summary !== journey.summary)) flowsChanged++;

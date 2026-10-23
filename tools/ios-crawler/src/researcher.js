@@ -135,6 +135,12 @@ const OUTPUT_RULES = `${JOURNEY_RULES}\n${SCREEN_RULES}`;
  * @param {import('./graph.js').ScreenGraph} graph
  * @param {{maxLines?: number, withImages?: boolean, focus?: string[]}} options
  */
+/** A section name that is a misread tab label rather than a word: "Ch", "Ho", "|". */
+export function brokenSectionName(name) {
+  const text = String(name ?? '').trim();
+  return text.replace(/[^a-z]/gi, '').length < 3;
+}
+
 export function describeTree(journeys, graph, options = {}) {
   const maxLines = options.maxLines ?? 30;
   const focus = options.focus ? new Set(options.focus) : null;
@@ -144,7 +150,8 @@ export function describeTree(journeys, graph, options = {}) {
 
   journeys.forEach((journey, index) => {
     const parent = journey.parent ? nameOfKey.get(journey.parent) ?? journey.parent : null;
-    lines.push(`Journey key "${journeyKey(journey, index)}"${parent ? ` — inside "${parent}"` : journey.section ? ' — top-level section' : ' — top level'}`);
+    const misread = !parent && journey.section && brokenSectionName(journey.name) ? ' (its tab name was misread — name the section for the area it is, like "Home" or "Getting started")' : '';
+    lines.push(`Journey key "${journeyKey(journey, index)}"${parent ? ` — inside "${parent}"` : journey.section ? ` — top-level section${misread}` : ' — top level'}`);
     (journey.steps ?? journey.nodeIds.map((nodeId) => ({ nodeId, action: null }))).forEach((step, position) => {
       const node = graph.get(step.nodeId);
       if (!node) return;
@@ -230,7 +237,8 @@ export function describeJourneys(journeys, graph, all = journeys) {
     if (steps.length > 8) steps.splice(5, steps.length - 7, `… ${steps.length - 7} more steps …`);
     // Bare keys on purpose: a key that carried the guessed name came back as
     // the answer, word for word. The guess is given separately, as a guess.
-    lines.push(`J${index} — ${parent ? `inside "${parent}"` : 'top-level section'} — machine guess "${journey.name}" — steps: ${steps.join(' → ')}`);
+    const misread = !parent && brokenSectionName(journey.name) ? ' (its tab name was misread — name the section for the area it is, like "Home" or "Search")' : '';
+    lines.push(`J${index} — ${parent ? `inside "${parent}"` : 'top-level section'}${misread} — machine guess "${journey.name}" — steps: ${steps.join(' → ')}`);
   }
   return lines.join('\n');
 }
@@ -713,7 +721,8 @@ export function applyProposals(journeys, graph, proposals) {
     // That holds for every top-level section ("Settings", "Projects"), not only
     // browsing ones; a task promoted to the top ("Subscribing") is still a task
     // and takes its name.
-    const isSectionName = journey.section && ((!journey.parent && !journey.promoted) || journey.category === 'discovery');
+    // A tab name read wrong ("Ch") is not one to keep.
+    const isSectionName = journey.section && ((!journey.parent && !journey.promoted) || journey.category === 'discovery') && !brokenSectionName(journey.name);
     // A journey named after the section it sits in, or after another
     // section, is the model losing its place; that name is refused.
     const echoesAPlace =

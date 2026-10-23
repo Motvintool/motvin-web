@@ -216,7 +216,10 @@ function findScreen(state: LibraryState | null, appId: string, wanted: string | 
 function findFlow(state: LibraryState | null, appId: string | null, wanted: string | undefined | null): StateFlow | null {
   const needle = norm(wanted ?? '');
   if (!needle) return null;
-  const flows = (state?.flows ?? []).filter((flow) => !appId || flow.appId === appId);
+  // Two versions of an app can each have a flow of the same name; the one
+  // meant is the newest version's, the one the app's page shows first.
+  const dated = (flow: StateFlow) => /-versions-(\d{4}-\d{2}-\d{2})-/.exec(`${flow.id}-${flow.screenIds?.[0] ?? ''}`)?.[1] ?? '';
+  const flows = (state?.flows ?? []).filter((flow) => !appId || flow.appId === appId).sort((a, b) => dated(b).localeCompare(dated(a)));
   return flows.find((flow) => norm(flow.name) === needle || flow.id === needle) ?? flows.find((flow) => norm(flow.name).startsWith(needle)) ?? flows.find((flow) => norm(flow.name).includes(needle)) ?? null;
 }
 
@@ -466,7 +469,7 @@ function validateOp(
       return confirm({ kind: 'add-screen', appId: app.id, name: app.name, platform, versionId: target?.id, versionLabel: target ? versionLabel(target) : undefined });
     }
     case 'research-app':
-      return app ? confirm({ kind: 'research-app', appId: app.id, name: app.name }) : noApp;
+      return app ? confirm({ kind: 'research-app', appId: app.id, name: app.name, ...(op.mode === 'restructure' ? { restructure: true } : {}) }) : noApp;
     case 'stop-run': {
       const running = (grounding.jobs ?? []).find((job) => job.status === 'running' || job.status === 'uploading');
       if (!running) return { note: 'Nothing is running right now, so there is nothing to stop.', settled: true };

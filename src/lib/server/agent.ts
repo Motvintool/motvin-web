@@ -476,7 +476,7 @@ const WRITE_TOOLS: (ToolDef & { kind: string })[] = [
   { kind: 'set-logo', name: 'set_logo', description: "Set an app's logo from the image the admin dropped (or will pick on confirm).", parameters: obj({ app: APP }, ['app']) },
   { kind: 'add-screen', name: 'add_screen', description: 'Add the dropped image to an app as a new screen.', parameters: obj({ app: APP, version: str("The version to add it to — a date or 'latest'; omit for the newest.") }, ['app']) },
   { kind: 'create-flow', name: 'create_flow', description: 'Create a flow (an ordered journey of screens) in an app.', parameters: obj({ app: APP, to: str('The flow’s name.'), category: str('A flow category, if said.'), screens: strList('Screen names in order, if given.') }, ['app', 'to']) },
-  { kind: 'rename-flow', name: 'rename_flow', description: 'Rename a flow.', parameters: obj({ app: str('The app, if known.'), flow: FLOW, to: str('The new name.') }, ['flow', 'to']) },
+  { kind: 'rename-flow', name: 'rename_flow', description: 'Rename one flow or section. When the admin asks for a better or meaningful name without giving one, read the flow\'s steps first (list_flows) and choose a short name for what the person does there — never run fix_flows for one name.', parameters: obj({ app: str('The app, if known.'), flow: FLOW, to: str('The new name.') }, ['flow', 'to']) },
   { kind: 'delete-flow', name: 'delete_flow', description: 'Delete a flow; its screens stay.', parameters: obj({ app: str('The app, if known.'), flow: FLOW }, ['flow']) },
   { kind: 'set-flow-category', name: 'set_flow_category', description: 'File a flow under a category.', parameters: obj({ app: str('The app, if known.'), flow: FLOW, to: str('The category.') }, ['flow', 'to']) },
   { kind: 'set-flow-parent', name: 'set_flow_parent', description: 'Nest a flow under another, or make it top-level.', parameters: obj({ app: str('The app, if known.'), flow: FLOW, parent: str('The parent flow’s name, or "none" for top level.') }, ['flow']) },
@@ -486,7 +486,8 @@ const WRITE_TOOLS: (ToolDef & { kind: string })[] = [
   { kind: 'set-source-status', name: 'set_source_status', description: "Mark an app's source record pending, review, approved or rejected. Approved apps are published.", parameters: obj({ app: APP, to: { type: 'string', enum: ['pending', 'review', 'approved', 'rejected'] }, permission: { type: 'string', enum: ['owner-granted', 'open-source', 'public-domain', 'own-work', 'fair-use-reference'], description: "Approving needs the basis on which the app may be shown, when its record has none — ask the admin which; never guess." } }, ['app', 'to']) },
   { kind: 'rebuild', name: 'rebuild_index', description: 'Rebuild the library index from what is stored. Rarely needed — every change already does it.', parameters: obj({}) },
   { kind: 'stop-run', name: 'stop_run', description: 'Stop the video ingest run that is going.', parameters: obj({}) },
-  { kind: 'research-app', name: 'rewrite_names', description: "Have the AI rewrite an app's screen and flow names from its stored screens.", parameters: obj({ app: APP }, ['app']) },
+  { kind: 'research-app', name: 'rewrite_names', description: "Have the AI rewrite an app's screen and flow names from its stored screens. Names only — the flows stay as they are.", parameters: obj({ app: APP }, ['app']) },
+  { kind: 'research-app', name: 'fix_flows', description: "Rebuild an app's flows from the screens already in the library, the way a new recording's flows are made today: every flow checked to be one task (mixed ones split), the same task walked twice merged, categories set from what each flow does, then the flow and screen names rewritten. Use only when the admin asks to fix, rebuild or redo an app's whole flow structure — the screens they already added, no new upload. It reworks every flow of the app and takes several minutes; renaming one flow is rename_flow, never this.", parameters: obj({ app: APP }, ['app']) },
   { kind: 'set-ai', name: 'set_ai', description: 'Switch the chat AI model, or turn the AI off/on.', parameters: obj({ model: str('A model name the server lists.'), enabled: { type: 'boolean', description: 'false to turn the AI off, true to turn it on.' } }) },
   { kind: 'upload', name: 'upload_recording', description: 'Open the file picker for screenshots or a screen recording. This is how a new app — or new screens for an existing one — gets added; use it for "add an app", "new app", "add screens to X", "upload". Pass app when they named one, so the files go straight to it.', parameters: obj({ app: str('The app the new screens are for, when they named one; omit for a new app.') }) },
   { kind: 'open', name: 'open_page', description: 'Give the admin a button to a page of the library or to an app.', parameters: obj({ page: str('explore, apps, screens, ui elements, flows, patterns, collections or admin.'), app: str('An app, to open its page.') }) },
@@ -681,6 +682,7 @@ function screensToShow(state: LibraryState | null, args: Record<string, unknown>
 function toParsedOp(tool: (typeof WRITE_TOOLS)[number], args: Record<string, unknown>): ParsedOp {
   const text = (key: string) => (typeof args[key] === 'string' ? (args[key] as string) : typeof args[key] === 'number' ? String(args[key]) : undefined);
   const op: ParsedOp = { kind: tool.kind, app: text('app') ?? null };
+  if (tool.name === 'fix_flows') return { ...op, mode: 'restructure' };
   if (tool.name === 'rename_app') return { ...op, fields: { name: text('to') ?? '' } };
   if (tool.kind === 'delete-app-version') op.to = text('version');
   else {
@@ -756,7 +758,7 @@ async function interpret(config: AgentConfig, model: string, history: HistoryLin
 function historyTurns(history: HistoryLine[], lastOp: AdminOp | null): Turn[] {
   const turns: Turn[] = [];
   const lastAssistant = [...history].reverse().find((line) => line.role === 'assistant');
-  const tool = lastOp ? WRITE_TOOLS.find((entry) => entry.kind === lastOp.kind) : null;
+  const tool = lastOp ? WRITE_TOOLS.find((entry) => entry.kind === lastOp.kind && (lastOp.kind !== 'research-app' || (entry.name === 'fix_flows') === ((lastOp as { restructure?: boolean }).restructure === true))) : null;
   for (const line of history) {
     if (line.role === 'user') {
       turns.push({ role: 'user', content: line.text });

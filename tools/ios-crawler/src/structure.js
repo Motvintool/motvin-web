@@ -26,6 +26,9 @@ const SECTION_REVIEW_MIN = 6;
 /** A task split off has at least this many screens; a smaller tail stays with the task before it. */
 const PART_MIN = 2;
 
+/** An Onboarding this long, stored before onboarding was cut off where it ends, is asked where it really ends. */
+const ONBOARDING_TAIL_MIN = 20;
+
 const REVIEW_SYSTEM = `You check flows for a design-reference library like Mobbin, where every flow is exactly one task a person does in an app ("Creating a project", "Connecting GitHub", "Changing the theme").
 
 You get one flow: its steps in the order they were walked, each with its screen type, name and what is on it. Decide whether the steps are one task or several. A new task starts where the person stops doing one thing and starts another: they leave for an unrelated page, open a different feature, or begin a different goal. For example, changing a setting, then looking at subscription plans, then chatting are three tasks, and the plans start a new one even if they were opened from settings. A popup or panel over a page — cookie settings, a feedback form, a menu of tools — is a task of its own, not part of the page under it. Going back to the home page ends the task before it. Moving through the pages, dialogs and confirmations of the same goal is one task, and so is the same page shown again. When unsure, prefer splitting where the page title changes to an unrelated one.
@@ -147,7 +150,8 @@ export async function reviewStructure(journeys, graph, options) {
       reply = await complete({
         system: REVIEW_SYSTEM,
         blocks: [{ type: 'text', text: `${isSection ? `Section "${journey.name}" — a whole area of the app, holding everything done in it, so it nearly always holds several tasks; list each one (sending a message, giving feedback, opening a menu, using voice input are different tasks)` : `Flow "${journey.name}"`}, ${journey.nodeIds.length} steps:\n${steps}` }],
-        maxTokens: 500,
+        // A long section has many tasks to list; a short budget cuts the JSON off.
+        maxTokens: Math.min(1500, 400 + journey.nodeIds.length * 15),
         json: true,
         temperature: 0,
         ...(model ? { model } : {}),
@@ -161,6 +165,7 @@ export async function reviewStructure(journeys, graph, options) {
     try {
       parsed = extractJson(reply);
     } catch {
+      log(`structure: the check of "${journey.name}" came back unreadable — left as it is`);
       continue;
     }
 
@@ -192,7 +197,10 @@ export async function reviewStructure(journeys, graph, options) {
     }
 
     const parts = taskParts(parsed?.tasks, ids.length);
-    if (parts.length < 2) continue;
+    if (parts.length < 2) {
+      if (isSection && ids.length >= 20) log(`structure: "${journey.name}" (${ids.length} steps) read as one task — ${JSON.stringify(parsed?.tasks ?? null).slice(0, 200)}`);
+      continue;
+    }
 
     // A section keeps its name and the screen it opened on; every task in it,
     // the first one too, becomes a flow under it. A flow splits into
@@ -215,6 +223,71 @@ export async function reviewStructure(journeys, graph, options) {
     log(`structure: "${journey.name}" was ${isSection ? created.length : created.length + 1} tasks — ${isSection ? 'each is now a flow under it' : 'split'}`);
   }
   return { reviewed, split };
+}
+
+const ONBOARDING_END_SYSTEM = `You read the steps of an app's "Onboarding" section, in the order they were walked, for a design-reference library like Mobbin. Onboarding is everything before the person starts using the app: splash, sign-in or sign-up, verification, welcome and tour pages, setup questions, plan offers shown before the app opens. Once they reach the app's own home page or start using a feature (searching, chatting, creating something), onboarding is over and the rest belongs elsewhere in the app.
+
+Return JSON only, no prose, no markdown fence:
+{ "end": <index of the first step that is no longer onboarding, or null when every step is onboarding>, "section": "<the app area those later steps are in, 1-2 words as the app's tab bar would say it, like Home or Search>" }`;
+
+/**
+ * Screens stored before onboarding was cut off where it ends: an
+ * "Onboarding" section that runs on into the app itself (home, search, a
+ * chat) is asked where it really ends, and everything after becomes a
+ * section of its own, with the flows that sit wholly inside that part. The
+ * new section is then checked like any other (reviewStructure splits it into
+ * its tasks).
+ * @returns {Promise<number>} sections created
+ */
+export async function splitOnboardingTail(journeys, graph, options) {
+  const { complete, extractJson, model = null, actions = new Map(), log = () => {} } = options;
+  let created = 0;
+  for (const journey of [...journeys]) {
+    if (journey.parent || !(journey.category === 'onboarding' || /^onboarding$/i.test(journey.name))) continue;
+    if (journey.nodeIds.length < ONBOARDING_TAIL_MIN) continue;
+    const ids = journey.nodeIds;
+    const shared = sharedLines(ids.map((id) => graph.get(id)));
+    const steps = ids.map((id, at) => stepLine(graph.get(id), at, shared)).join('\n');
+    let parsed = null;
+    try {
+      const reply = await complete({
+        system: ONBOARDING_END_SYSTEM,
+        blocks: [{ type: 'text', text: `Section "${journey.name}", ${ids.length} steps:\n${steps}` }],
+        maxTokens: 200,
+        json: true,
+        temperature: 0,
+        ...(model ? { model } : {}),
+      });
+      parsed = extractJson(reply);
+    } catch (error) {
+      log(`structure: could not find where "${journey.name}" ends — ${String(error.message).split('\n')[0]}`);
+      continue;
+    }
+    const end = Number(parsed?.end);
+    // Onboarding keeps at least a few steps, and the part after it is worth a section.
+    if (!Number.isInteger(end) || end < PART_MIN || ids.length - end < SECTION_REVIEW_MIN) continue;
+    const tail = new Set(ids.slice(end));
+    const name = String(parsed?.section ?? '').trim().replace(/^./, (c) => c.toUpperCase()) || 'Home';
+    const section = {
+      key: `${journey.key}-app`,
+      name: name.split(/\s+/).length <= 3 ? name : 'Home',
+      category: 'discovery',
+      parent: null,
+      section: true,
+      nodeIds: ids.slice(end),
+    };
+    section.steps = stepsOf(section.nodeIds, actions);
+    journey.nodeIds = ids.slice(0, end);
+    journey.steps = stepsOf(journey.nodeIds, actions);
+    // A flow under Onboarding made only of the later steps moves with them.
+    for (const child of journeys) {
+      if (child.parent === journey.key && child.nodeIds.length && child.nodeIds.every((id) => tail.has(id))) child.parent = section.key;
+    }
+    journeys.splice(journeys.indexOf(journey) + 1, 0, section);
+    created += 1;
+    log(`structure: "${journey.name}" ended at step ${end} — the ${section.nodeIds.length} steps after it are now "${section.name}"`);
+  }
+  return created;
 }
 
 function stepsOf(nodeIds, actions) {

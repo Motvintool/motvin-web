@@ -49,6 +49,7 @@ ${bold('Commands')}
   ask                       one question to the AI, JSON on stdin             ${dim('used by the admin assistant')}
   research --app-id <id>    rewrite an app's flow names, summaries and screen   ${dim('--only journeys|screens')}
                             content with the AI, from what is already stored ${dim('needs a model')}
+                            ${dim('--restructure also re-checks the flows: splits, merges, categories')}
   describe --app-id <id> --files <a,b>
                             fill in screenshots added by hand: type, states,  ${dim('--platform ios')}
                             elements and style from the rules, the name from the AI when one answers
@@ -694,6 +695,7 @@ async function runResearch(flags) {
     journeyModel: probe.journeyModel ?? null,
     dryRun: flags.dryRun === true,
     only: flags.only === 'journeys' || flags.only === 'screens' ? flags.only : null,
+    restructure: flags.restructure === true,
   });
   log.raw('');
   log.info(`${result.flowsChanged} flow(s) and ${result.screensChanged} screen(s) rewritten${flags.dryRun ? dim(' (dry run — nothing written)') : ''}`);

@@ -50,7 +50,8 @@ export type AdminOp =
   /** The same rename the Apps tab's "Edit date" does: the version folder, its analysis and flow ids all move. */
   | { kind: 'rename-app-version'; appId: string; name: string; versionId: string; versionLabel: string; newVersionId: string; newVersionLabel: string }
   | { kind: 'stop-run'; jobId: string; title: string }
-  | { kind: 'research-app'; appId: string; name: string }
+  /** restructure: also re-check the flows (split, merge, categories), as a new recording gets. */
+  | { kind: 'research-app'; appId: string; name: string; restructure?: boolean }
   | { kind: 'set-ai'; chatModel?: string | null; enabled?: boolean }
   /** Needs an image, like set-logo: it becomes a screen of the app, in the version named (else the newest). */
   | { kind: 'add-screen'; appId: string; name: string; platform: string; versionId?: string; versionLabel?: string };
@@ -144,7 +145,7 @@ export function labelFor(op: AdminOp): string {
     case 'stop-run':
       return `Stop “${op.title}”`;
     case 'research-app':
-      return `Rewrite ${op.name}’s names with AI`;
+      return op.restructure ? `Fix ${op.name}’s flows with AI` : `Rewrite ${op.name}’s names with AI`;
     case 'set-ai':
       return op.enabled === false ? 'Turn the AI off' : op.enabled === true && !op.chatModel ? 'Turn the AI on' : `Use ${op.chatModel} for chat`;
     case 'add-screen':
@@ -216,7 +217,9 @@ export function describeOp(op: AdminOp, extra: { screens?: number; flows?: numbe
     case 'stop-run':
       return `Stop the run “${op.title}”? Screens it has already published stay; the rest of the run is abandoned.`;
     case 'research-app':
-      return `Have the AI rewrite ${op.name}’s flow and screen names from the stored screens? It takes a few minutes and runs as a job you can watch here.`;
+      return op.restructure
+        ? `Have the AI rebuild ${op.name}’s flows from its stored screens — each flow checked to be one task (mixed ones split), repeats merged, categories set — and rewrite the flow and screen names? The screens themselves stay. It takes a few minutes and runs as a job you can watch here.`
+        : `Have the AI rewrite ${op.name}’s flow and screen names from the stored screens? It takes a few minutes and runs as a job you can watch here.`;
     case 'set-ai':
       return op.enabled === false ? 'Turn the AI off? Names will come from the on-device rules until it is turned on again.' : op.enabled === true && !op.chatModel ? 'Turn the AI back on?' : `Use ${op.chatModel} for the chat and journey names?`;
     case 'add-screen':
@@ -282,7 +285,7 @@ export function doneText(op: AdminOp, result: { screens?: number; flows?: number
     case 'stop-run':
       return `Stopped “${op.title}”.`;
     case 'research-app':
-      return `Started rewriting ${op.name}’s names — watch it above.`;
+      return op.restructure ? `Started fixing ${op.name}’s flows — watch it above.` : `Started rewriting ${op.name}’s names — watch it above.`;
     case 'set-ai':
       return op.enabled === false ? 'The AI is off.' : op.chatModel ? `${op.chatModel} now handles the chat and journey names.` : 'The AI is on.';
     case 'add-screen':

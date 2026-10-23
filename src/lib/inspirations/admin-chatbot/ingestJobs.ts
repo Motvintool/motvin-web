@@ -1231,7 +1231,7 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         const tally = new Map<string, number>();
         for (const file of stored) tally.set(file.platform, (tally.get(file.platform) ?? 0) + 1);
         const platform = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'ios';
-        const res = await fetch('/api/crawler/research', { method: 'POST', headers: await authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ appId: op.appId, name: op.name, platform }) });
+        const res = await fetch('/api/crawler/research', { method: 'POST', headers: await authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ appId: op.appId, name: op.name, platform, restructure: op.restructure === true }) });
         if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { message?: string }).message ?? `Could not start the rewrite (${res.status}).`);
         void refreshIngestJobs();
         break;
