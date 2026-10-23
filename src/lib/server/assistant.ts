@@ -315,6 +315,8 @@ function unquote(value: string): string {
  * come up with ("suggest one", "your wish", "another").
  */
 function grounded(value: string, saidByAdmin: string, askedToInvent: boolean): boolean {
+  // "Proceed" after the assistant suggested a value: the admin took that value.
+  if (acceptedSuggestion && norm(acceptedSuggestion).includes(norm(value)) && norm(value).length >= 3) return true;
   const said = norm(saidByAdmin);
   const wanted = norm(value);
   if (/^https?:\/\//i.test(value) || /\.[a-z]{2,}(\/|$)/i.test(value)) {
@@ -328,7 +330,35 @@ function grounded(value: string, saidByAdmin: string, askedToInvent: boolean): b
   return askedToInvent;
 }
 
+/** The assistant's last line, while the admin's message agrees to it ("proceed"): values in it count as theirs. Set per turn. */
+let acceptedSuggestion = '';
+
 const INVENT = /\b(suggest|your wish|you decide|you choose|pick one|another|options?|ideas?|best one|something (good|better|catchy)|come up with|propose|recommend|whatever you think)\b/i;
+
+/**
+ * The admin handing the wording over — "your wish", "yourwish", "up to you",
+ * "you pick", "anything", "surprise me" — however it is typed: spaced, run
+ * together, or as a one-word answer to a question the assistant just asked.
+ * Not a value to save, but a request to write one.
+ */
+const HANDED_OVER = /^(yourwish|yourchoice|yourcall|uptoyou|itsuptoyou|youdecide|youchoose|youpick|youtell|yousay|yourpick|surpriseme|asyouwish|asyoulike|asyouplease|anything|anythingisfine|anythingworks|anythinggood|anythingnice|whatever|whateveryoulike|whateveryouwant|whateveryouthink|whateverisbest|dealerschoice|makeoneup|makeitup|writeone|giveone|giveoneyourself|youwrite|youwriteit|yourself|bestone|somethinggood|somethingnice|somethingcatchy|any|anyone)$/;
+/** Texting shorthand spelt out: "u decide" → "you decide", "ur wish" → "your wish", "pls" → "please". */
+function spelledOut(text: string): string {
+  return String(text)
+    .replace(/\bu\b/gi, 'you')
+    .replace(/\bur\b/gi, 'your')
+    .replace(/\bpl[sz]\b/gi, 'please')
+    .replace(/\bthx\b/gi, 'thanks')
+    .replace(/\bwht\b/gi, 'what');
+}
+
+function asksToInvent(raw: string): boolean {
+  const text = spelledOut(raw);
+  if (INVENT.test(text)) return true;
+  const compact = String(text).toLowerCase().replace(/[^a-z]/g, '');
+  if (HANDED_OVER.test(compact)) return true;
+  return /(yourwish|uptoyou|youdecide|youchoose|surpriseme|asyouwish|yourchoice|yourcall|makeoneup)/.test(compact);
+}
 
 function validateOp(
   op: ParsedOp,
@@ -666,8 +696,13 @@ function validateOp(
         return { note: `${app.name}’s ${unchanged.join(' and ')} already ${unchanged.length === 1 ? 'is' : 'are'} ${unchanged.map((key) => `“${current[key]}”`).join(' and ')} — nothing to change there.`, settled: true };
       }
       // Industry is picked from a list; everything else must come from the admin.
+      // "Your wish" handed back as the value is the admin's request, not a value.
       for (const key of Object.keys(fields)) {
         if (key === 'industry') continue;
+        if (isEcho(fields[key])) {
+          delete fields[key];
+          continue;
+        }
         if (!grounded(fields[key], grounding.saidByAdmin, key !== 'website' && grounding.askedToInvent)) delete fields[key];
       }
       if (!Object.keys(fields).length) return {};
@@ -775,7 +810,7 @@ function readOp(text: string): ParsedOp | null {
 /** A small model asked to make a tagline up sometimes writes the request back ("Your wish"); that is not a value. */
 function isEcho(value: string): boolean {
   const words = norm(value).split(/[^a-z0-9]+/).filter(Boolean);
-  return words.length <= 3 && INVENT.test(value);
+  return words.length <= 3 && asksToInvent(value);
 }
 
 const INVENTOR = `You write one value for an app's field in a design-reference library, as JSON only: {"value": "..."}. A tagline is one short line in the app's own voice, under 60 characters, no trailing period, not a slogan already in use by the app. A name is the app's proper name. Write something fresh: the list "Already suggested" must not be repeated or lightly reworded.`;
@@ -796,7 +831,6 @@ const CHANGE_VERB = /\b(change|update|set|rename|call|delete|remove|drop|erase|a
 const QUESTION = /^(how|what|which|where|when|why|who|is|are|do|does|did|can|could|should|will|would|tell me|explain|list|count)\b|\?\s*$/i;
 
 /** "I'll type my own", "let me write it", "I'll give you the text". */
-const OWN_VALUE = /^(?:(?:ok|okay|no)[,\s]+)?(?:i(?:'|’)?ll|i will|let me|i want to|i'd like to|i’d like to|can i)\s+(?:type|write|give|enter|send|share|provide)\b|\bmy own\b|\bi(?:'|’)ll (?:do|write) it\b/i;
 
 /**
  * The value in a message that was written as an answer: quotes come off,
@@ -823,7 +857,6 @@ function valueFromAnswer(question: string, field: Expect['field']): string {
 }
 
 /** Words that back out of an offer. */
-const BACK_OUT = /^(?:(?:ok|okay|no|nah)[,\s]+)*(?:cancel(?: that| it)?|never ?mind|forget (?:it|that)|stop|don'?t(?: do (?:it|that))?|leave it|skip(?: it)?)\s*[.!?]*$/i;
 
 /**
  * Whether the reader's operation is about what the admin actually wrote.
@@ -918,56 +951,21 @@ export async function answerQuestion(
   onToken?: TokenSink,
 ): Promise<AssistantAnswer> {
   const question = input.question.trim();
-  const history = (input.history ?? []).slice(-12);
+  const history = (input.history ?? []).slice(-20);
   const lastOp = input.lastOp ?? null;
-  let expecting = input.expecting ?? null;
-  // Quoted text, or "use this / go with …", right after an offer is the
-  // admin's own value for that offer's field.
-  if (!expecting && lastOp?.kind === 'update-app') {
-    const field = Object.keys(lastOp.fields).find((key) => key === 'tagline' || key === 'name' || key === 'website') as Expect['field'] | undefined;
-    const quoted = /[“"'][^”"']{2,}[”"']/.test(question);
-    const useThis = /^(?:(?:ok|okay|no)[,\s]+)?(?:use|go with|take|set it to|make it|put)\b/i.test(question) && !/\b(another|different|suggest|your)\b/i.test(question);
-    if (field && (quoted || useThis)) expecting = { kind: 'update-app', appId: lastOp.appId, app: lastOp.name, field };
-  }
-
-  // "I'll type my own" with nothing to type it for.
-  if (OWN_VALUE.test(question) && !(lastOp?.kind === 'update-app' || expecting)) {
-    const text = 'Sure. Which app and which field — for example “Swiggy tagline” — and then type the text.';
-    onToken?.(text);
-    return { source: 'rules', text, actions: [], streamed: false };
-  }
-  // "I'll type my own": say go ahead, and take the next message as the value.
-  if (OWN_VALUE.test(question) && (lastOp?.kind === 'update-app' || expecting)) {
-    const field = expecting?.field ?? ((Object.keys((lastOp as Extract<AdminOp, { kind: 'update-app' }>).fields)[0] as Expect['field'] | undefined) ?? 'tagline');
-    const app = expecting ? { id: expecting.appId, name: expecting.app } : { id: (lastOp as Extract<AdminOp, { kind: 'update-app' }>).appId, name: (lastOp as Extract<AdminOp, { kind: 'update-app' }>).name };
-    const text = `Sure — type the ${field} you want for ${app.name} and I’ll set it up for you to confirm. Whatever you write next is taken as the ${field}, word for word.`;
-    onToken?.(text);
-    return { source: 'rules', text, actions: [{ type: 'cancel' }], expect: { kind: 'update-app', appId: app.id, app: app.name, field }, streamed: false };
-  }
-
-  // A bare yes needs no model either. When an offer is waiting the dock
-  // settles it before asking here, so reaching this means the Confirm button
-  // is the way; with nothing waiting there is nothing to agree to.
-  if (/^(yes|y|yeah|yep|ok|okay|sure|confirm|do it|go ahead|proceed|update|done)\s*[.!]?$/i.test(question)) {
-    const text = input.pending ? `To go ahead with “${input.pending}”, press Confirm on it above — I only act on that button, or a typed yes while it is showing.` : 'Nothing is waiting for a yes right now. Tell me what you’d like to change, or ask me anything about the library.';
-    onToken?.(text);
-    return { source: 'rules', text, actions: input.pending ? [] : [{ type: 'reply', text: 'What can you do?' }], streamed: false };
-  }
-
-  // Backing out needs no model: the offer is dropped, and that is all.
-  if (BACK_OUT.test(question)) {
-    const text = input.pending ? `Okay — “${input.pending}” is off the table. Nothing changed.` : 'Okay, nothing to cancel — nothing was waiting. What would you like to do?';
-    onToken?.(text);
-    return { source: 'rules', text, actions: [{ type: 'cancel' }], streamed: false };
-  }
+  const expecting = input.expecting ?? null;
+  // No fixed replies and no keyword rules: every message goes to the model
+  // with the whole conversation, and the model decides what it means and
+  // writes the answer. The one guard is the Confirm button — nothing in the
+  // library changes until the admin presses it — so a value the model writes
+  // (a tagline it suggested, one it reworked) is the admin's to accept.
+  const lastAssistant = [...history].reverse().find((line) => line.role === 'assistant')?.text ?? '';
+  acceptedSuggestion = lastAssistant;
+  const handedOver = true;
+  const accepting = false;
   const now = Date.now();
   const jobs = listJobs();
   const active = jobs.find((job) => job.status === 'running' || job.status === 'uploading') ?? null;
-
-  // The one shortcut: the word "upload" just opens the picker.
-  if (/^(upload|upload (a |another )?(video|recording))\s*[.!]?$/i.test(question)) {
-    return { source: 'rules', text: active ? `A run is already going — ${describeJob(active, now)} One at a time keeps the Mac usable.` : 'Sure — pick a screen recording (MOV or MP4) and I’ll get going on it.', actions: active ? [] : [{ type: 'upload' }] };
-  }
 
   const [ai, state] = await Promise.all([cachedAiStatus(), libraryState(input.authorization)]);
 
@@ -992,8 +990,9 @@ export async function answerQuestion(
         state,
         ai,
         jobs,
-        askedToInvent: INVENT.test(question),
-        validate: (op) => validateOp(op, state, mentioned, { saidByAdmin: adminWords, askedToInvent: INVENT.test(question), fallbackApp: mentioned[0]?.name ?? (lastOp && 'appId' in lastOp ? lastOp.appId : null), jobs, ai, question }),
+        askedToInvent: handedOver,
+        accepting,
+        validate: (op) => validateOp(op, state, mentioned, { saidByAdmin: adminWords, askedToInvent: handedOver, fallbackApp: mentioned[0]?.name ?? (lastOp && 'appId' in lastOp ? lastOp.appId : null), jobs, ai, question }),
         describeJob,
         describeAi,
         unclaim,
@@ -1133,7 +1132,7 @@ export async function answerQuestion(
     if (parsedOp && !relevant(parsedOp, question, answering)) parsedOp = null;
   }
   // Only this message decides whether the assistant may make a value up.
-  const askedToInvent = followUp || INVENT.test(question);
+  const askedToInvent = followUp || handedOver;
   const banned = alreadySuggested(history, lastOp);
   // A tagline asked for without a value gets a suggestion — that is what a
   // helpful colleague would do — and the admin can type their own instead.

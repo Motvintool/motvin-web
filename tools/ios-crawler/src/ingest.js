@@ -37,7 +37,7 @@ import { analyseScreen, complete, encodeForModel, groupIntoFlows, identifyApp, p
 import { resolveIndustry } from './category.js';
 import { researchTree } from './researcher.js';
 import { extractJson } from './analyze.js';
-import { mergeSameNamedSiblings, reviewStructure } from './structure.js';
+import { mergeSameNamedSiblings, reviewStructure, settleCategories } from './structure.js';
 import { buildJourneys } from './journeys.js';
 import { actionPhrase, describeAction } from './actions.js';
 import { isBlockingScreen, isExternalAuthScreen } from './safety.js';
@@ -676,6 +676,8 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
           journeysNamed = true;
           const merged = mergeSameNamedSiblings(journeys, graph.actions, graph);
           if (merged) log.info(`structure: ${merged} repeat(s) of the same task merged`);
+          const recategorised = settleCategories(journeys, graph);
+          if (recategorised) log.info(`structure: ${recategorised} flow categor${recategorised === 1 ? 'y' : 'ies'} set from the flows' final names`);
         } catch (error) {
           log.warn(`could not name the flows yet — ${error.message.split('\n')[0]}; the researcher will try after publishing`);
         }

@@ -55,7 +55,51 @@ const SCREEN_BATCH = 3;
 const SCREEN_TOKENS = 4000;
 
 /** A placeholder rather than a name: the journey builder's fallbacks, which say nothing about what was done. */
-const VAGUE_NAME = /^(opening a (page|sheet)|browsing( a category)?|detail|journey|filling in a form|reaching an empty state)\b/i;
+const PLACEHOLDER_NAME = /^(opening a (page|sheet)|browsing( a category)?|detail|journey|filling in a form|reaching an empty state)\b/i;
+
+/**
+ * A verb and a generic word, nothing that says which ("Editing settings" for
+ * a cookie banner, "Opening a chat", "Viewing a page"): a name that fits half
+ * the flows in any app. Specific words after it ("Editing cookie settings",
+ * "Opening chat options") make it a name.
+ */
+const GENERIC_NAME = /^((opening|viewing|accessing|editing|starting|managing|using|browsing|exploring|checking|visiting|reviewing|going to|navigating to)\s+(an?\s+|the\s+|your\s+)?(settings?|page|screen|chat|chats|menu|options?|details?|item|items|content|feature|features|section|view|panel|popup|dialog|modal|app|information|info|list)|chatting|browsing|viewing|using the app)$/i;
+
+/** A placeholder, or a name too generic to tell this flow from others. */
+function isVagueName(name) {
+  const text = String(name ?? '').trim();
+  return PLACEHOLDER_NAME.test(text) || GENERIC_NAME.test(text);
+}
+const VAGUE_NAME = { test: isVagueName };
+
+/**
+ * When the model still names a flow vaguely, the screens often say plainly
+ * what was done: the same interface patterns in any app. Read in order of how
+ * decisive they are; the first that shows on a step names the flow.
+ */
+const CUES = [
+  { test: /\b(delete|remove)\s+([a-z ]{2,20}?)\s*\?/i, name: (m) => `Deleting a ${m[2].trim().toLowerCase().replace(/^(this|the|a|an)\s+/, '')}` },
+  { test: /\b(microphones?|dictat|listening\.\.\.)/i, name: () => 'Using voice input' },
+  { test: /\bwants to\b.*\b(camera)/i, name: () => 'Allowing camera access' },
+  { test: /\bwants to\b.*\b(location)/i, name: () => 'Allowing location access' },
+  { test: /\b(upload or add files|add files|attach (a )?file)/i, name: () => 'Adding files to a message' },
+  { test: /\b(give (negative |positive )?feedback|report (a |an )?(issue|problem))/i, name: () => 'Giving feedback' },
+  { test: /\b(rename|edit name)\b/i, name: () => 'Renaming an item' },
+  { test: /\b(copy link|share link|invite)\b/i, name: () => 'Sharing a link' },
+];
+
+/** A name for the flow from what its screens plainly show, or null. */
+function nameFromCues(journey, graph) {
+  const steps = journey.nodeIds.map((id) => graph.get(id)).filter(Boolean);
+  for (const cue of CUES) {
+    for (const node of steps) {
+      const text = pageLines(node.analysis?.lines ?? [], node.analysis?.signals?.layout).map((line) => line.text).join(' \n ');
+      const match = cue.test.exec(text);
+      if (match) return cue.name(match);
+    }
+  }
+  return null;
+}
 
 /** What both passes share: the grouping is fixed, the words are the job. */
 const SHARED_RULES = `
@@ -134,6 +178,18 @@ export function describeTree(journeys, graph, options = {}) {
  * across several calls, so a child whose parent sits in a different batch
  * still says what it is inside, not the parent's raw key.
  */
+/** Lowercased page lines shown on most of these screens. */
+function sharedPageWords(nodes) {
+  if (nodes.length < 3) return new Set();
+  const counts = new Map();
+  for (const node of nodes) {
+    const seen = new Set(pageLines(node.analysis?.lines ?? [], node.analysis?.signals?.layout).map((line) => String(line.text || '').trim().toLowerCase()));
+    for (const text of seen) counts.set(text, (counts.get(text) ?? 0) + 1);
+  }
+  const most = Math.ceil(nodes.length * 0.6);
+  return new Set([...counts].filter(([, count]) => count >= most).map(([text]) => text));
+}
+
 export function describeJourneys(journeys, graph, all = journeys) {
   const nameOfKey = new Map(all.map((journey) => [journey.key ?? journey.name, journey.name]));
   const indexOfJourney = new Map(all.map((journey, index) => [journey, index]));
@@ -141,6 +197,10 @@ export function describeJourneys(journeys, graph, all = journeys) {
   for (const journey of journeys) {
     const index = indexOfJourney.get(journey);
     const parent = journey.parent ? nameOfKey.get(journey.parent) ?? journey.parent : null;
+    // Words on most of the journey's steps (a chat's header and greeting, the
+    // page under a popup) say nothing about any one step; each step shows
+    // what it adds — the cookie banner's own words, not the home page's.
+    const shared = sharedPageWords(journey.nodeIds.map((id) => graph.get(id)).filter(Boolean));
     // A screen that names no tab is on the tab of the step before it.
     let lastTab = null;
     const steps = (journey.steps ?? journey.nodeIds.map((nodeId) => ({ nodeId, action: null })))
@@ -156,8 +216,8 @@ export function describeJourneys(journeys, graph, all = journeys) {
         const signals = analysis.signals ?? {};
         const words = pageLines(analysis.lines ?? [], signals.layout)
           .map((line) => String(line.text || '').trim())
-          .filter((text) => text.length >= 4 && /[a-z]{3}/i.test(text) && text !== signals.title)
-          .slice(0, 3)
+          .filter((text) => text.length >= 4 && /[a-z]{3}/i.test(text) && text !== signals.title && !shared.has(text.toLowerCase()))
+          .slice(0, 4)
           .join('; ');
         const entry = signals.listedInSidebar ? ' (an item from the sidebar’s list, such as a chat or document)' : '';
         const page = signals.title ? ` page "${signals.title}"${entry}` : '';
@@ -426,7 +486,11 @@ export async function researchTree(journeys, graph, options) {
       log?.(`researcher: ${vague.length} journey name(s) came back vague; asking once more for those`);
       try {
         const tree = describeJourneys(vague, graph, journeys);
-        const note = 'These journeys were named "Opening a page" or similar, which says nothing. Give each a specific name from what its pages show — the feature, the page title or the task — never "Opening a page", "Browsing" or "Detail".\n\n';
+        const note = [
+          'These journeys were given names that could fit any flow — "Opening a page", "Editing settings", "Opening a chat", "Viewing a chat". Give each a specific name: the action its steps show, on the very thing used, in the words on its pages.',
+          'Read what each step adds: a confirmation ("Delete …?", "Remove …?") means the task is deleting or removing it ("Deleting a chat"); a browser or system prompt asking for the microphone, camera or location is allowing that access ("Allowing microphone access"); a menu of files, connectors or tools is adding them ("Adding files to a message"); a form being filled is what it saves ("Renaming a chat", "Editing a message"); a list of settings toggled is that setting ("Managing cookie settings").',
+          'Never a bare "settings", "chat", "page" or "menu", and never "Viewing", "Opening" or "Accessing" when a step shows something being done.\n\n',
+        ].join(' ');
         const reply = await complete({ system: `${BRIEF}\n${JOURNEY_RULES}`, blocks: [{ type: 'text', text: `${header}${note}${tree}` }], maxTokens: 800, temperature: 0, ...(journeyModel ? { model: journeyModel } : {}) });
         debug(reply);
         const raw = parse(reply);
@@ -438,6 +502,16 @@ export async function researchTree(journeys, graph, options) {
         }
       } catch (error) {
         log?.(`researcher: asking again for vague names failed — ${String(error.message).split('\n')[0]}`);
+      }
+      // Still vague after asking twice: named from what the screens show.
+      for (const journey of vague) {
+        const index = journeys.indexOf(journey);
+        if (!VAGUE_NAME.test(String(nameOf(journey)).trim())) continue;
+        const cued = nameFromCues(journey, graph);
+        if (cued) {
+          proposals.journeys[`J${index}`] = cued;
+          log?.(`researcher: “${journey.name}” named “${cued}” from what its screens show`);
+        }
       }
     }
   }
@@ -589,7 +663,8 @@ function openedEntry(journey, graph) {
   if (/presentation|slides?|deck/.test(title)) return 'Editing a presentation';
   if (/design/.test(title)) return 'Editing a design';
   if (/document|doc\b|untitled/.test(title)) return 'Editing a document';
-  return 'Chatting';
+  // What was done in the chat, when its screens show it, before a bare "Chatting".
+  return nameFromCues(journey, graph) ?? 'Chatting';
 }
 
 export function oneTask(name) {
@@ -650,10 +725,12 @@ export function applyProposals(journeys, graph, proposals) {
     const opened = openedEntry(journey, graph);
     const entryWord = String(journey.nodeIds.map((id) => graph.get(id)?.analysis?.signals).find((signals) => signals?.listedInSidebar)?.title ?? '').toLowerCase();
     const aboutTitle = entryWord.length >= 4 && name.toLowerCase().includes(entryWord);
-    if (name && opened && (aboutTitle || !/(chat|conversation|messag|document|presentation|design|slides?|sheet|file|note|draft|edit|writ|read)/i.test(name))) name = opened;
+    // Only a name built on the chat's own title ("Reporting a greeting issue")
+    // is replaced; a task done in the chat ("Giving negative feedback") stays.
+    if (name && opened && aboutTitle && /^[a-z]+ing\b/i.test(name) && name.toLowerCase().replace(/^[a-z]+ing\s+(a |an |the )?/, '').startsWith(entryWord)) name = opened;
     // A chat's own title is not a feature: "Opening Greeting options" is
     // "Opening chat options".
-    else if (name && aboutTitle && !/(document|presentation|design|untitled)/i.test(entryWord)) {
+    else if (name && aboutTitle && !/(document|presentation|design|untitled)/i.test(entryWord) && !name.toLowerCase().startsWith(entryWord)) {
       name = name.replace(new RegExp(`\\b${escapeRegExp(entryWord)}\\b`, 'i'), 'chat').replace(/\bchat chat\b/i, 'chat');
     }
     if (name && !echoesAPlace && !copiedExample && name.split(' ').length <= 7 && !isSectionName && !/^onboarding$/i.test(journey.name)) {

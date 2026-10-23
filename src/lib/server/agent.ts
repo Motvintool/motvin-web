@@ -41,6 +41,8 @@ export type AgentDeps = {
   jobs: IngestJob[];
   /** Whether this message asked the assistant to make a value up ("suggest a tagline"). */
   askedToInvent: boolean;
+  /** Whether this message agrees to what the assistant just said or suggested ("proceed", "yes, use that"). */
+  accepting?: boolean;
   /** assistant.ts's validateOp, bound to the library and this turn's grounding. */
   validate: (op: ParsedOp) => { action?: AssistantAction; note?: string; settled?: boolean; missingApp?: boolean };
   describeJob: (job: IngestJob, now?: number) => string;
@@ -276,7 +278,7 @@ async function chat(config: AgentConfig, model: string, messages: Turn[], tools:
     const response = await fetch(`${base}/api/chat`, {
       method: 'POST',
       headers: headers(config),
-      body: JSON.stringify({ model, stream: streaming, messages, tools: toolSpecs, think: false, keep_alive: '30m', options: { temperature: 0.1, num_ctx: 16384, num_predict: 500 } }),
+      body: JSON.stringify({ model, stream: streaming, messages, tools: toolSpecs, think: false, keep_alive: '30m', options: { temperature: 0.1, num_ctx: 16384, num_predict: 1000 } }),
       signal: callSignal(options.signal),
     });
     if (!response.ok) throw new Error(`ollama ${response.status}: ${(await response.text()).slice(0, 300)}`);
@@ -447,12 +449,15 @@ const READ_TOOLS: ToolDef[] = [
   { name: 'get_app', description: "One app in full: name, tagline, industry, website, logo, source status, versions, flows with their steps, and screen names grouped by version.", parameters: obj({ app: APP }, ['app']) },
   { name: 'list_screens', description: "An app's screens by name, with type and version — all versions, or one.", parameters: obj({ app: APP, version: str("A version — date or 'latest' — to limit to; omit for all.") }, ['app']) },
   { name: 'list_flows', description: "An app's flows, each with its steps in order.", parameters: obj({ app: APP }, ['app']) },
-  { name: 'show_screens', description: "Show the admin an app's screens as thumbnails they can look at and tap to pick — all versions, or one. Use it whenever they need to choose screens (to delete, rename, reorder) or ask to see them. This is how they see images.", parameters: obj({ app: APP, version: str("A version — a date or 'latest' — to show only that one; omit for all.") }, ['app']) },
+  { name: 'show_screens', description: "Show the admin an app's screens as thumbnails they can look at and tap to pick — all versions, or one. Use it whenever they need to choose screens (to delete, rename, reorder) or ask to see them. This is how they see images.", parameters: obj({ app: APP, version: str("A version — a date or 'latest' — to show only that one; omit for all."), kind: str("Only screens of one kind, when the admin asks for some — a screen type, state, element or part of the name, like 'bottom sheet', 'login', 'paywall', 'settings'. Omit for all.") }, ['app']) },
   { name: 'get_runs', description: 'The video ingest runs — what is running now and how far, and recent finished ones.', parameters: obj({}) },
   { name: 'get_ai', description: 'Which AI models are connected and what each does.', parameters: obj({}) },
 ];
 
 /** Write tools: never run here — validated, then offered to the admin as one Confirm button. */
+/** Drops the change waiting for the admin's Confirm, when they back out of it in any words. */
+const CANCEL_TOOL: ToolDef = { name: 'cancel_offer', description: "Withdraw the change you proposed that is waiting for the admin's Confirm, when they back out of it ('no', 'cancel', 'leave it', 'not that'). Nothing changes.", parameters: obj({}, []) };
+
 const WRITE_TOOLS: (ToolDef & { kind: string })[] = [
   { kind: 'remove-app', name: 'remove_app', description: 'Remove an entire app: all its screens, flows and versions. For "delete X" with no version, screen or flow named.', parameters: obj({ app: APP }, ['app']) },
   { kind: 'delete-app-version', name: 'delete_version', description: "Delete one dated version (capture) of an app and its screens. Only when a version is meant — 'the Sep 29 version', 'the latest capture'.", parameters: obj({ app: APP, version: str("Which version — a date like '29 Sep 2026', '2026-09-29', or 'latest'.") }, ['app', 'version']) },
@@ -486,23 +491,32 @@ const WRITE_TOOLS: (ToolDef & { kind: string })[] = [
   { kind: 'open', name: 'open_page', description: 'Give the admin a button to a page of the library or to an app.', parameters: obj({ page: str('explore, apps, screens, ui elements, flows, patterns, collections or admin.'), app: str('An app, to open its page.') }) },
 ];
 
-const SYSTEM = `You are the Motvin assistant — the helper inside Motvin Inspirations, a design-reference library of real app screens — talking with the library's admin. You sound like a sharp, friendly colleague: warm, brief, specific, plain English. No markdown headings, tables or code; never write a URL or a file path (links come as buttons).
+const SYSTEM = `You are the Motvin assistant — the helper inside Motvin Inspirations, a design-reference library of real app screens and flows — talking with the library's admin. Talk the way a thoughtful, capable colleague does in chat: warm, natural, clear and helpful, like ChatGPT. Plain text only: no markdown headings, tables or code, and never write a URL or a file path (links come as buttons).
 
-You act through tools, and only through tools.
+You are talking to the admin directly: call them "you", never "the admin". A greeting gets a friendly greeting back; bring up earlier work only when it matters to what they just said.
+
+Understand people the way a person would:
+- Read the whole conversation, not just the last message. Short replies ("yes", "the second one", "that", "no, the other", "same for Notion", "again") answer or continue what was just said; work out what they refer to from your last message and act on that.
+- Read through typos, missing spaces and casual wording: "yourwish", "ur wish", "u decide", "up to u", "whatever", "anything", "surprise me" all mean "you choose — do it for me". "tagline txt", "chnge", "delte", "screnshots" are tagline, change, delete, screenshots.
+- When the admin leaves the wording to you, write it yourself — a good one that fits the app — and say it is your suggestion. When a value is needed and they gave none, offer a suggestion and ask if it works, or ask naturally what they would like ("Got a line in mind, or shall I suggest one?"). Never demand they "type it exactly".
+- When a message could mean two different changes, ask one short question offering both. Otherwise just do the most likely thing.
+- A general question ("what is a bottom sheet?", "how should onboarding work?") is answered in words, from what you know — don't show screens or propose a change unless they ask for it.
+- Answer any question helpfully, not only questions about the library: design and UX advice, how an app works, what a pattern is called, how to use this tool, or simple chat. Use what you know; for facts about the library, look them up with the read tools first.
+- Match the length to the message: a sentence or two for an action or a quick answer, a short paragraph or a few lines when they ask for an explanation, ideas or advice.
+
+You act on the library through tools, and only through tools.
 - Read tools (list_apps, get_app, list_screens, list_flows, get_runs, get_ai) tell you what exists. Call them whenever you are not certain of a name, a version, a count or a run — never guess or invent an app, screen, flow, date or number.
 - Write tools propose ONE change. You never perform it: the admin sees your proposal with a Confirm button, and nothing happens until they press it. So never say a change is done, saved or removed — say what will happen once they confirm.
 - If a write tool comes back with a problem (not found, ambiguous, a value missing), do not retry the same call: look it up with a read tool, or ask the admin one short question.
-
-Understand what is meant, from the whole conversation:
 - "delete Swiggy" / "remove the app" is remove_app. "Sorry, version" or "I mean the version" right after that is delete_version for the same app — carry the subject over from your last proposal. A screen, flow, tagline or logo named makes it about that part, not the app.
 - "Add an app", "add a new app", "new app", "another app", "upload" is upload_recording, at once — the app, its name and its screens all come from the screen recording, so never ask for a name or industry first. Only "create an app called X" (a name given, no recording) is create_app.
-- Names, taglines and links must be the admin's own words; only when they ask you to suggest one may you write one, and then say it is a suggestion.
-- A bare "yes" or "ok" means nothing here; the Confirm button is how things go ahead.
+- Names and links must be the admin's own words. A tagline or description may be yours when they ask for one or leave it to you — then say it is a suggestion.
+- A bare "yes" or "ok" with nothing proposed means nothing; the Confirm button is how things go ahead.
 - Never announce that you will look something up or do something — call the tool in this same turn instead. Words without a tool call change nothing.
 - To see screens, the admin needs show_screens — it puts thumbnails in the chat that they can tap to select and delete. Call it when they ask to see, list or pick screens, or when they want to delete or rename screens without saying which. Never say you cannot show images.
 - A screen link the admin pastes (…/api/inspirations/screens/…) names that screen exactly; pass it unchanged as the screen.
 
-Reply in one or two sentences. If you proposed a change, describe it as what will happen when they confirm and invite them to confirm. If you asked a read tool something, answer from what it returned. If nothing needs changing, just answer, or ask.`;
+If you proposed a change, say plainly what will happen when they confirm. If you looked something up, answer from what it returned. If nothing needs changing, just answer, or ask.`;
 
 // ─── The turn ────────────────────────────────────────────────────────────────
 
@@ -517,6 +531,22 @@ function findApp(state: LibraryState | null, wanted: unknown) {
 
 function screenNameOf(file: { file: string; sidecar?: { name?: string } | null }): string {
   return file.sidecar?.name || file.file.replace(/\.[^.]+$/, '').replace(/[-_/]+/g, ' ');
+}
+
+/**
+ * What became of a proposal that is no longer waiting, read off the library
+ * itself rather than guessed: a change to an app's details shows in its
+ * record once it was confirmed.
+ */
+function outcomeOf(op: AdminOp, state: LibraryState | null): string {
+  if (op.kind === 'update-app') {
+    const app = (state?.apps ?? []).find((entry) => entry.id === op.appId);
+    const record = (app ?? {}) as unknown as Record<string, unknown>;
+    const applied = Object.entries(op.fields).every(([key, value]) => norm(String(record[key] ?? '')) === norm(String(value ?? '')));
+    const now = Object.keys(op.fields).map((key) => `${key} “${String(record[key] ?? '')}”`).join(', ');
+    return applied ? `it was confirmed — the library shows it` : `it was NOT applied (the admin cancelled it or never confirmed) — the library still shows ${app?.name ?? 'the app'}'s ${now}`;
+  }
+  return 'whether it was confirmed or cancelled shows only in the conversation — do not guess';
 }
 
 /** What a read tool says, as text for the model. */
@@ -616,8 +646,20 @@ function screensToShow(state: LibraryState | null, args: Record<string, unknown>
   const versions = app.versions ?? [];
   const version = wanted ? versions.find((v) => v.id === wanted || norm(v.label) === norm(wanted) || (/^(latest|newest|new|current)$/i.test(wanted) && v.isLatest) || norm(v.label).includes(norm(wanted))) ?? null : null;
   if (wanted && !version) return { note: `${app.name} has no version like “${wanted}”. Its versions: ${versions.map((v) => (v.isLatest ? `Latest (${v.label})` : v.label)).join(', ') || 'none'}.` };
-  const pool = version ? own.filter((file) => file.version === version.id) : own;
-  if (!pool.length) return { note: `${app.name} has no screens${version ? ` in its ${version.label} version` : ''}.` };
+  const inVersion = version ? own.filter((file) => file.version === version.id) : own;
+  // Only screens of one kind, when asked for ("bottom sheets", "login",
+  // "paywalls"): matched on the screen's type, states, elements, name and flow.
+  const kind = typeof args.kind === 'string' ? norm(args.kind).replace(/[_-]+/g, ' ').replace(/s$/, '') : '';
+  const words = kind.split(' ').filter((word) => word.length >= 3);
+  const about = (file: (typeof own)[number]) => {
+    const sidecar = (file.sidecar ?? {}) as Record<string, unknown>;
+    const bits = [sidecar.screenType, sidecar.fineType, ...(Array.isArray(sidecar.states) ? sidecar.states : []), ...(Array.isArray(sidecar.elements) ? sidecar.elements : []), ...(Array.isArray(sidecar.tags) ? sidecar.tags : []), screenNameOf(file), splitScreenFile(file.file, file.version ?? '').flow ?? '']
+      .map((bit) => norm(String(bit ?? '')).replace(/[_-]+/g, ' '))
+      .join(' | ');
+    return bits;
+  };
+  const pool = words.length ? inVersion.filter((file) => words.every((word) => about(file).includes(word))) : inVersion;
+  if (!pool.length) return { note: `${app.name} has no ${kind ? `${kind} screens` : 'screens'}${version ? ` in its ${version.label} version` : ''}.` };
   const platform = pool[0].platform;
   const screens = pool
     .filter((file) => file.platform === platform)
@@ -626,7 +668,7 @@ function screensToShow(state: LibraryState | null, args: Record<string, unknown>
       const part = splitScreenFile(file.file, file.version ?? '');
       return { id: file.id ?? file.file, name: screenNameOf(file), path: `/api/inspirations/screens/${file.platform}/${file.appId}/${file.file}`, file: part.name, version: part.version, flow: part.flow };
     });
-  const label = version ? (version.isLatest ? `Latest (${version.label})` : version.label) : 'all versions';
+  const label = `${version ? (version.isLatest ? `Latest (${version.label})` : version.label) : 'all versions'}${kind ? `, ${kind} screens only` : ''}`;
   return {
     action: { type: 'screens', appId: app.id, appName: app.name, platform, versionId: version?.id, versionLabel: version?.label, screens },
     note: `${screens.length} screen${screens.length === 1 ? '' : 's'} of ${app.name}, ${label}.`,
@@ -671,6 +713,43 @@ function toParsedOp(tool: (typeof WRITE_TOOLS)[number], args: Record<string, unk
  * the most recent proposal is shown as the tool call it was, with its
  * result, before the line that described it.
  */
+const INTERPRET = `You read one message in a chat between an app-library admin and their assistant, and say in one plain sentence what the admin means and wants — reading it against the conversation before it, the way a thoughtful person would.
+
+Resolve what the message refers to ("the second one", "that", "same for Notion"), what question of the assistant's it answers, typos and texting shorthand ("u" is you, "ur" is your, "yourwish" or "ur wish" or "up to u" means "you choose it for me"), and agreement or refusal ("proceed", "go ahead", "nah"). If they leave a choice to the assistant, say so plainly: "They want you to write the tagline yourself." If the message is a greeting or a general question, say that. Write only the sentence.`;
+
+const PROMISE_CHECK = `You check one reply an assistant wrote to an app-library admin. The assistant can only change the library by proposing the change with a tool (which shows a Confirm button). Answer "yes" if the reply says it will make, is making or has made a specific change to the library — set, update, rename, delete, add, move a particular thing — or that it will cancel or drop a waiting change, or asks the admin to confirm one. Answer "no" if it only answers, explains, suggests ideas, or asks a question. Answer with one word: yes or no.`;
+
+/** Whether a reply in words promises a library change (one that must have a proposal behind it). */
+async function promisedWithoutActing(config: AgentConfig, model: string, meaning: string, reply: string, signal?: AbortSignal): Promise<boolean> {
+  const verdict = await chat(
+    config,
+    model,
+    [
+      { role: 'system', content: PROMISE_CHECK },
+      { role: 'user', content: `${meaning ? `What the admin wanted: ${meaning}\n\n` : ''}The reply: ${reply.slice(0, 800)}` },
+    ],
+    [],
+    { signal },
+  );
+  return /^\s*yes\b/i.test(verdict.content);
+}
+
+/** One short call: the admin's message restated as what they mean, against the conversation. */
+async function interpret(config: AgentConfig, model: string, history: HistoryLine[], question: string, signal?: AbortSignal): Promise<string> {
+  const convo = history.map((line) => `${line.role === 'user' ? 'Admin' : 'Assistant'}: ${line.text.slice(0, 400)}`).join('\n');
+  const reply = await chat(
+    config,
+    model,
+    [
+      { role: 'system', content: INTERPRET },
+      { role: 'user', content: `${convo ? `The conversation so far:\n${convo}\n\n` : ''}The admin's new message: ${question}` },
+    ],
+    [],
+    { signal },
+  );
+  return reply.content.trim().replace(/\s+/g, ' ').slice(0, 300);
+}
+
 function historyTurns(history: HistoryLine[], lastOp: AdminOp | null): Turn[] {
   const turns: Turn[] = [];
   const lastAssistant = [...history].reverse().find((line) => line.role === 'assistant');
@@ -719,7 +798,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
   ].join('\n');
   const rightNow = [
     input.pending ? `an earlier proposal is still waiting for the admin's Confirm: “${input.pending}” — it has not happened` : 'nothing is waiting for confirmation',
-    input.lastOp ? `your most recent proposal was ${JSON.stringify(input.lastOp)}, and a short correction refers to it` : null,
+    input.lastOp && input.pending ? `that waiting proposal is ${JSON.stringify(input.lastOp)}, and a short correction refers to it` : null,
     input.heldImage ? `the admin has dropped an image named “${input.heldImage}” — “this” or “this image” means it (set_logo or add_screen)` : null,
     input.expecting ? `you asked the admin to type the ${input.expecting.field} for ${input.expecting.app}; unless this message is clearly something else, it is that ${input.expecting.field}, word for word — call update_app with it` : null,
     deps.jobs.some((job) => job.status === 'running' || job.status === 'uploading') ? 'a run is in progress' : 'no run is in progress',
@@ -728,20 +807,33 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
     .filter(Boolean)
     .join('; ');
 
+  // First, what they mean. A person reads a message against what came
+  // before it — "yourwish" after "what tagline?", "the second one", "proceed"
+  // after a suggestion — and so does the model, in one short call of its own,
+  // before it decides what to do. Its reading goes along with their words.
+  const meaning = await interpret(config, model, input.history.slice(-8), input.question, deps.signal).catch(() => '');
   const messages: Turn[] = [
-    { role: 'system', content: `${SYSTEM}\n\nStanding facts:\n${standing}` },
-    ...historyTurns(input.history.slice(-10), input.lastOp),
-    { role: 'user', content: `${input.question}\n\n[Note, not from the admin — right now: ${rightNow}.]` },
+    {
+      role: 'system',
+      content: `${SYSTEM}\n\nStanding facts:\n${standing}${
+        input.lastOp && !input.pending
+          ? `\n\nBackground — use only if they ask about it or refer back to it ("that tagline", "the one before"): your last proposal was ${JSON.stringify(input.lastOp)}; ${outcomeOf(input.lastOp, deps.state)}. Don't bring it up otherwise.`
+          : ''
+      }`,
+    },
+    ...historyTurns(input.history.slice(-20), input.lastOp),
+    {
+      role: 'user',
+      content: `${input.question}\n\n[Note, not from the admin — ${meaning ? `what they mean, read against the conversation: ${meaning} — ` : ''}right now: ${rightNow}.]`,
+    },
   ];
-  const tools = [...READ_TOOLS, ...WRITE_TOOLS];
+  const tools = [...READ_TOOLS, ...WRITE_TOOLS, CANCEL_TOOL];
 
   let action: AssistantAction | undefined;
+  let reminded = false;
   let note: string | undefined;
   let lastContent = '';
-  let settled = false;
-  let nudged = 0;
   let lastNote: string | undefined;
-  let narratedAtEnd = false;
   // Each round streams its words as they come. Words written on the way to
   // a tool call, or before a reminder, were the model working rather than
   // answering: they are folded into the reply's thinking thread, where each
@@ -776,37 +868,17 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
     // thinking, or one that does not really follow tools — is the caller's
     // cue to use the older pipeline instead.
     if (round === 0 && !reply.toolCalls.length && !lastContent) return null;
+    // No tool called: the model answered in words. Unless those words promise
+    // a change it never proposed ("I'll update the tagline to …" with no
+    // Confirm behind it) — judged by the model itself, not by keywords — they
+    // are the reply. A promise gets one reminder to make the proposal.
     if (!reply.toolCalls.length) {
-      // A small model sometimes narrates the lookup ("I'll list its
-      // screens") instead of making it. One reminder, then take its words.
-      const narrated = /\b(?:I(?:'|’)ll|I will|let me|let(?:'|’)?s|I(?:'|’)m going to|I am going to|I can|we can)\s+(?:now\s+|just\s+|start by\s+|begin by\s+|go ahead and\s+)?(?:call|use|invoke|run|list|check|look|find|get|fetch|retrieve|see|show|display|present|bring up|pull up|propose|delete|remove|rename|set|update|change|create|add|try)\w*\b/i.test(reply.content);
-      const toldToUpload = /\b(?:upload|drop|provide|share)\b[^.]*\b(?:recording|video)\b/i.test(reply.content);
-      // "Confirm to remove …" / "… will be renamed once you confirm" with no
-      // call behind it: the model copied the shape of its earlier answers
-      // and proposed nothing.
-      const describedChange = /\bconfirm\b/i.test(reply.content) && /\b(remov|delet|renam|set|updat|chang|add|creat|mov|reorder|approv|mark|switch|stop|rebuil)\w*\b/i.test(reply.content);
-      // "Here are the screens…" / "I'll show you the screens" with nothing shown.
-      const offeredToShow = /\b(?:show|display|list|here are|here is|these are)\b/i.test(reply.content) && /\b(?:screens?|screenshots?|images?|thumbnails?)\b/i.test(reply.content) && !/\bwhich app\b/i.test(reply.content);
-      // Asking what a new app is called: the recording answers that.
-      const askedAppName = /\b(?:name|title|industry)\b/i.test(reply.content) && /\bnew app\b|\badd (?:an? |the )?app\b/i.test(input.question) && /\?|please/i.test(reply.content);
-      narratedAtEnd = narrated || describedChange;
-      if (nudged < 2 && (narrated || toldToUpload || describedChange || askedAppName || offeredToShow)) {
-        nudged++;
+      if (!reminded && !action && lastContent && (await promisedWithoutActing(config, model, meaning, lastContent, deps.signal).catch(() => false))) {
+        reminded = true;
         messages.push({ role: 'assistant', content: reply.content });
-        messages.push({
-          role: 'user',
-          content: `[Note, not from the admin: ${
-            offeredToShow && !toldToUpload
-              ? 'the admin sees no screens until you call show_screens — call it now for that app (and version, if one was meant), without any words.'
-              : toldToUpload || askedAppName
-              ? 'the admin cannot upload until you call upload_recording — it opens their file picker. Call it now, without any words.'
-              : describedChange
-                ? 'you described a change but called no write tool, so nothing was proposed and there is no Confirm button. Call the matching tool now (look the app up first if you must), without any words.'
-                : 'you said what you would do but called no tool, so nothing happened. Call the tool now, in this turn, without any words.'
-          }]`,
-        });
+        messages.push({ role: 'user', content: '[Note, not from the admin: you said you would do something, but you called no tool, so nothing happened. Call the tool that does exactly what you said — cancel_offer if you said you would cancel or drop the waiting change, otherwise the write tool for the change, with exactly the value you described — without any words.]' });
         fold();
-        step('Reminded myself to act, not describe');
+        step('Reminded myself to act on what I said');
         lastContent = '';
         continue;
       }
@@ -832,6 +904,11 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
         messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: shown.note ?? 'Nothing to show.' });
         continue;
       }
+      if (call.name === 'cancel_offer') {
+        action = { type: 'cancel' };
+        messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: input.pending ? `Withdrawn: “${input.pending}” will not happen.` : 'Nothing was waiting for a Confirm.' });
+        continue;
+      }
       const read = READ_TOOLS.find((tool) => tool.name === call.name);
       if (read) {
         messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: answerRead(call.name, call.args, deps) });
@@ -855,7 +932,6 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
         break;
       }
       if (checked.settled) {
-        settled = true;
         note = checked.note;
         messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `Nothing to change: ${checked.note}` });
         continue;
@@ -871,8 +947,8 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
         role: 'user',
         content:
           action?.type === 'screens'
-            ? `[Note, not from the admin: in one short sentence, say the screens are shown below and they can tap the ones to delete. Do not list the names. Do not call tools, do not repeat this note.]`
-            : `[Note, not from the admin: tell them, in one or two plain sentences and your own words, what will happen when they press Confirm — nothing has happened yet — and invite them to confirm. Do not call tools, do not repeat this note, do not say "proposal".]`,
+            ? `[Note, not from the admin: the screens you asked for are now shown to them as thumbnails they can tap. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`
+            : `[Note, not from the admin: your proposal is now in front of them with a Confirm button; nothing has happened yet. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`,
       });
       try {
         spokeThisRound = false;
@@ -891,19 +967,20 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
   // check" with no check behind it — are not for the admin; the
   // validation's own sentence, or a plain question, is.
   if (/`|\bfunction\b|\btool\b|\b[a-z]+_(?:app|screen|flow|version|recording|page|index|run|names|ai|status|date|type|tags|description|details|category|parent|logo)\b/i.test(lastContent)) lastContent = '';
-  if (!action && narratedAtEnd) lastContent = lastNote ?? '';
   let text = deps.unclaim(lastContent).replace(/\s*(?:—|-|:|at|here)?\s*\[[^\]]{2,60}\]\s*[.,]?/g, '').replace(/\s*(?:—|-|:|at)?\s*https?:\/\/\S+/gi, '').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
-  if (action?.type === 'confirm') {
-    if (!text) text = note ?? action.label;
-    if (!/confirm/i.test(text)) text = `${text} Confirm and it’s set.`;
-  } else if (action?.type === 'screens') {
-    if (!text || /\b(?:splash|home|login|onboarding)\b.*,.*,/i.test(text)) text = `${note ?? 'Here are the screens.'} Tap the ones to delete, then press the button under them.`;
-  } else if (!text) {
-    text = note ?? (settled ? 'Nothing needs changing there.' : 'Could you say that another way? Tell me the app and what should change.');
+  // No words yet (the model only called tools): it is asked once to reply,
+  // in its own words, to what the conversation now holds.
+  if (!text) {
+    messages.push({ role: 'user', content: `[Note, not from the admin: reply to them now, naturally and in your own words, from what you found${note || lastNote ? ` (${note ?? lastNote})` : ''}. No tool calls.]` });
+    try {
+      spokeThisRound = false;
+      const words = await chat(config, model, messages, [], sink);
+      text = deps.unclaim(words.content.trim());
+    } catch {
+      text = note ?? lastNote ?? '';
+    }
   }
   const actions: AssistantAction[] = action ? [action] : [];
-  if (action?.type === 'confirm' && !action.destructive) actions.push({ type: 'reply', text: 'Cancel that' });
-  if (action?.type === 'upload') actions.push({ type: 'reply', text: 'What should I record?' });
   // The words that streamed are the model's as written; the text here is
   // the same words tidied, which the dock swaps in when the reply settles.
   return { text, source: 'ai', actions, model, streamed: streamedRounds > 0 };

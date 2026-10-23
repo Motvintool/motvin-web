@@ -1358,6 +1358,8 @@ function ChatBubble({
                   </button>
                 );
               }
+              // Withdrawing an offer is done the moment it arrives; nothing to press.
+              if (action.type === 'cancel') return null;
               return (
                 <button key={index} type="button" className="ins-chip-btn" onClick={() => onAction(action)}>
                   <UploadIcon size={13} /> Upload a video

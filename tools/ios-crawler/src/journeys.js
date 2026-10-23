@@ -104,16 +104,20 @@ function buildFrom(steps, options) {
   // The tab each desktop screen was on, carried along the walk: a screen
   // that names no tab (an empty search on Connectors) is still on the one
   // last seen.
+  // Only on the same page: a tab seen on Customize says nothing about a chat
+  // opened next.
   let walkTab = null;
-  let walkSection = null;
+  let walkTitle = null;
   for (const node of steps) {
     if (!isDesktop(node)) continue;
-    const here = sectionOf(node);
-    if (here && here !== walkSection) {
-      walkSection = here;
+    const title = cleanTitle(node.analysis?.signals?.title ?? '')?.toLowerCase() ?? null;
+    if (node.analysis?.signals?.activeTab) {
+      walkTab = node.analysis.signals.activeTab;
+      walkTitle = title;
+    } else if (title !== walkTitle) {
       walkTab = null;
+      walkTitle = title;
     }
-    walkTab = node.analysis?.signals?.activeTab ?? walkTab;
     if (walkTab && node.analysis?.signals) node.analysis.signals.walkTab = walkTab;
   }
 

@@ -26,7 +26,7 @@ import { parseIdbElements } from './device.js';
 import { buildSections, classifyScreen, cleanTitle, groupFlowsLocally, guessBrand, looksLikeNavTitle } from './heuristics.js';
 import { segmentRecording, _internals as _segmentInternals, _thresholds as _segmentThresholds } from './segment.js';
 import { buildJourneys, journeyName, taskPhrase } from './journeys.js';
-import { mergeSameNamedSiblings, taskParts } from './structure.js';
+import { mergeSameNamedSiblings, settleCategories, taskParts } from './structure.js';
 import { describeAction, actionPhrase } from './actions.js';
 import { applyProposals, describeTree, oneTask, researchTree, salvageJson, BRIEF } from './researcher.js';
 import { pickModel, supportsVision, ollamaReplyText, pickJourneyModel } from './ai.js';
@@ -1244,8 +1244,11 @@ export async function selfTest() {
         { key: 'c', name: 'Opening a page', category: 'discovery', parent: 'p', nodeIds: ['c1', 'c2', 'c3'] },
         { key: 'w', name: 'Subscribing', category: 'checkout', parent: 'p', nodeIds: ['w1', 'w2'] },
       ];
-      applyProposals(chats, chatGraph, { journeys: { J0: 'Reporting an issue', J1: 'Viewing plans' }, screens: {} });
-      check('a chat opened from the sidebar is named as a chat, whatever words are in it', chats[0].name === 'Chatting', chats[0].name);
+      applyProposals(chats, chatGraph, { journeys: { J0: 'Reporting a greeting issue', J1: 'Viewing plans' }, screens: {} });
+      check('a chat opened from the sidebar is not named after its own title', chats[0].name === 'Chatting', chats[0].name);
+      const task = [{ key: 'c', name: 'Opening a page', category: 'discovery', parent: 'p', nodeIds: ['c1', 'c2', 'c3'] }];
+      applyProposals(task, chatGraph, { journeys: { J0: 'Giving negative feedback' }, screens: {} });
+      check('a task done in a chat keeps its own name', task[0].name === 'Giving negative feedback', task[0].name);
       check('a paywall shown over a chat is still a paywall', chats[1].name === 'Viewing plans', chats[1].name);
       check('a name is one task', oneTask('Adding to a project and accessing support') === 'Adding to a project' && oneTask('Creating and exporting a presentation') === 'Creating and exporting a presentation');
 
@@ -1262,9 +1265,24 @@ export async function selfTest() {
       const left = tree.map((j) => `${j.name}:${j.nodeIds.join('')}`).join(' | ');
       check('the same task walked again, however its name is qualified, is one flow', tree.filter((j) => j.parent === 'r' && /^Opening a page/.test(j.name)).length === 1 && tree.find((j) => j.key === 'o1').nodeIds.join('') === 'abcd', left);
       check('a paywall opened from a section is the app’s one subscribing flow', !tree.some((j) => j.key === 'v') && tree.find((j) => j.key === 's').nodeIds.join(',') === 'p1,p2,x1,p3', left);
-      const onboarding = [{ key: 'on', name: 'Onboarding', section: true, parent: null, nodeIds: ['l1', 'l2'] }, { key: 'si', name: 'Signing in', parent: 'on', nodeIds: ['l1', 'l2'] }];
-      mergeSameNamedSiblings(onboarding, new Map(), new Map(['l1', 'l2'].map((id) => [id, { analysis: { screenType: 'login' } }])));
+      const onboarding = [{ key: 'on', name: 'Onboarding', section: true, parent: null, nodeIds: ['s0', 'l1', 'l2'] }, { key: 'si', name: 'Signing in', parent: 'on', nodeIds: ['l1', 'l2'] }];
+      mergeSameNamedSiblings(onboarding, new Map(), new Map(['s0', 'l1', 'l2'].map((id) => [id, { analysis: { screenType: id === 's0' ? 'splash' : 'login' } }])));
       check('a section’s own sign-in stays its child', onboarding.length === 2);
+      const filed = [
+        { key: 'on', name: 'Onboarding', category: 'onboarding', parent: null, nodeIds: ['a'] },
+        { key: 'li', name: 'Logging in with email', category: 'authentication', parent: 'on', nodeIds: ['a'] },
+        { key: 'ch', name: 'Chats', category: 'discovery', parent: null, nodeIds: ['a'] },
+        { key: 'w', name: 'Deleting a session', category: 'onboarding', parent: 'ch', nodeIds: ['a'] },
+        { key: 'c', name: 'Managing cookie settings', category: 'discovery', parent: 'ch', nodeIds: ['a'] },
+        { key: 'p', name: 'Creating a project', category: 'onboarding', parent: 'ch', nodeIds: ['a'] },
+        { key: 'f', name: 'Giving negative feedback', category: 'discovery', parent: 'ch', nodeIds: ['a'] },
+      ];
+      settleCategories(filed, new Map([['a', { analysis: { screenType: 'welcome' } }]]));
+      const cat = Object.fromEntries(filed.map((j) => [j.key, j.category]));
+      check('onboarding is only the Onboarding section and what sits in it; other flows are filed by their task', cat.on === 'onboarding' && cat.li === 'authentication' && cat.w === 'discovery' && cat.c === 'settings' && cat.p === 'creation' && cat.f === 'discovery', JSON.stringify(cat));
+      const twin = [{ key: 'on', name: 'Onboarding', section: true, parent: null, nodeIds: ['l1', 'l2'] }, { key: 'si', name: 'Signing in', parent: 'on', nodeIds: ['l1', 'l2'] }, { key: 'x', name: 'Verifying', parent: 'si', nodeIds: ['l2'] }];
+      mergeSameNamedSiblings(twin, new Map(), new Map());
+      check('a flow holding exactly its parent’s screens goes, its children moving up', twin.map((j) => `${j.key}:${j.parent ?? '-'}`).join(' ') === 'on:- x:on', twin.map((j) => `${j.key}:${j.parent ?? '-'}`).join(' '));
     }
 
     log.heading('Journeys from the walk');

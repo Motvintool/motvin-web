@@ -806,7 +806,7 @@ type AssistantEvent =
 export async function askAssistant(question: string): Promise<ChatMessage> {
   const trimmed = question.trim();
   const stamp = Date.now().toString(36);
-  const history = chat.messages.filter((message) => !message.pending && message.text).slice(-12).map((message) => ({ role: message.role, text: message.text }));
+  const history = chat.messages.filter((message) => !message.pending && message.text).slice(-20).map((message) => ({ role: message.role, text: message.text }));
   const user: ChatMessage = { id: `u-${stamp}`, role: 'user', text: trimmed, at: new Date().toISOString() };
   const pending: ChatMessage = { id: `a-${stamp}`, role: 'assistant', text: '', at: new Date().toISOString(), pending: true };
   emitChat({ ...chat, messages: [...chat.messages.slice(-60), user, pending] });
