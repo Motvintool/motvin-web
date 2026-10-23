@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   if (!admin) return fail('This account may not administer the library.', 403);
   const running = activeJob();
   if (running) return fail(`A run is already in progress (${running.title}).`, 409);
-  let body: { appId?: string; name?: string };
+  let body: { appId?: string; name?: string; platform?: string };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -19,12 +19,14 @@ export async function POST(request: Request) {
   }
   const appId = String(body.appId ?? '').trim();
   if (!/^[a-z0-9][a-z0-9-]*$/.test(appId)) return fail('appId must be a slug.', 400);
+  const platform = String(body.platform ?? 'ios').trim();
+  if (!['ios', 'webapp', 'web'].includes(platform)) return fail('platform must be ios, webapp or web.', 400);
   const job = startJob({
     title: `Rewriting ${body.name?.trim() || appId}’s names`,
     sizeBytes: null,
     startedBy: admin.email,
     workDir: null,
-    args: ['research', '--app-id', appId],
+    args: ['research', '--app-id', appId, '--platform', platform],
     mode: 'research',
   });
   return Response.json({ success: true, jobId: job.id, job }, { headers: { 'Cache-Control': 'no-store' } });

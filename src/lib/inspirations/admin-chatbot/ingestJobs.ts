@@ -186,24 +186,8 @@ export type AiSettingsInput = {
   enabled: boolean;
 };
 
-/** Stages in the order a run goes through them. */
-export const INGEST_STAGES: { id: string; label: string }[] = [
-  { id: 'upload', label: 'Uploading' },
-  { id: 'extract', label: 'Reading frames' },
-  { id: 'segment', label: 'Finding screens' },
-  { id: 'review', label: 'Waiting for your choice' },
-  { id: 'classify', label: 'Naming and typing' },
-  { id: 'identify', label: 'Identifying the app' },
-  { id: 'flows', label: 'Grouping journeys' },
-  { id: 'publish', label: 'Publishing' },
-  { id: 'published', label: 'In the library' },
-  { id: 'research', label: 'AI writing content' },
-  { id: 'manifest', label: 'Rebuilding index' },
-];
-
-export function stageIndex(stage: string): number {
-  return INGEST_STAGES.findIndex((entry) => entry.id === stage);
-}
+export { INGEST_STAGES, platformIn, stageIndex } from './shared';
+import { INGEST_STAGES, platformIn, stageIndex } from './shared';
 
 export function isActive(job: IngestJob): boolean {
   return job.status === 'uploading' || job.status === 'running';
@@ -340,14 +324,6 @@ export const PLATFORM_CHOICES: { id: 'ios' | 'webapp' | 'web'; label: string }[]
 ];
 
 /** The platform named in a message, if any. */
-export function platformIn(text: string): 'ios' | 'webapp' | 'web' | null {
-  const t = text.toLowerCase();
-  if (/\b(ios|iphone|ipad|apple)\b/.test(t)) return 'ios';
-  // "Web Apps" (online applications) before "Webs" (websites), since both start with "web".
-  if (/\b(web ?apps?|web applications?|online apps?|saas)\b/.test(t)) return 'webapp';
-  if (/\b(webs|web|websites?|browser|desktop|chrome|safari)\b/.test(t)) return 'web';
-  return null;
-}
 
 /**
  * Uploads a recording and starts its run. The upload itself is shown as a
@@ -1230,7 +1206,7 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         const state = await adminApi.getState();
         const previous = state.sources[op.appId]?.status;
         if (previous === 'pending' || previous === 'review' || previous === 'approved' || previous === 'rejected') inverse = { ...op, status: previous };
-        await adminApi.saveSource(op.appId, { ...(state.sources[op.appId] ?? {}), status: op.status });
+        await adminApi.saveSource(op.appId, { ...(state.sources[op.appId] ?? {}), ...(op.permission ? { permission: op.permission } : {}), status: op.status });
         break;
       }
       case 'delete-app-version': {
@@ -1249,7 +1225,13 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         break;
       }
       case 'research-app': {
-        const res = await fetch('/api/crawler/research', { method: 'POST', headers: await authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ appId: op.appId, name: op.name }) });
+        // The platform the app's screens are stored under — the most of them —
+        // so a web app's screens are read where they are, not under iOS.
+        const stored = (await adminApi.getState()).files.filter((file) => file.appId === op.appId);
+        const tally = new Map<string, number>();
+        for (const file of stored) tally.set(file.platform, (tally.get(file.platform) ?? 0) + 1);
+        const platform = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'ios';
+        const res = await fetch('/api/crawler/research', { method: 'POST', headers: await authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ appId: op.appId, name: op.name, platform }) });
         if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { message?: string }).message ?? `Could not start the rewrite (${res.status}).`);
         void refreshIngestJobs();
         break;

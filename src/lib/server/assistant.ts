@@ -1,5 +1,5 @@
 import type { AiStatus, IngestJob } from '@/lib/inspirations/admin-chatbot/ingestJobs';
-import { INGEST_STAGES, platformIn, stageIndex } from '@/lib/inspirations/admin-chatbot/ingestJobs';
+import { INGEST_STAGES, platformIn, stageIndex } from '@/lib/inspirations/admin-chatbot/shared';
 import { describeOp, isDestructive, labelFor, type AdminOp, type AssistantAction, type Expect } from '@/lib/inspirations/admin-chatbot/assistantActions';
 import { askModel, cachedAiStatus } from '@/lib/server/ai';
 import { backendBase } from '@/lib/server/adminAuth';
@@ -178,7 +178,8 @@ function findApp(state: LibraryState | null, wanted: string | undefined | null):
 }
 
 function screenName(file: StateFile): string {
-  return file.sidecar?.name || file.file.replace(/\.[^.]+$/, '').replace(/[-_/]+/g, ' ');
+  // Without a saved name, the file's own name — not its version folder ("versions/2026-10-23/home.webp" is "home").
+  return file.sidecar?.name || file.file.replace(/^versions\/[^/]+\//, '').replace(/\.[^.]+$/, '').replace(/[-_/]+/g, ' ');
 }
 
 /**
@@ -281,6 +282,8 @@ export type ParsedOp = {
   to?: string;
   /** For screen ops, the version the screen is in; for rename-app-version, the version to change. */
   version?: string | null;
+  /** For set-source-status: the basis an approved app may be shown on. */
+  permission?: string;
   tags?: unknown;
   mode?: string;
   screens?: unknown;
@@ -328,6 +331,18 @@ function grounded(value: string, saidByAdmin: string, askedToInvent: boolean): b
   const hit = words.filter((word) => said.includes(word)).length;
   if (words.length && hit / words.length >= 0.7) return true;
   return askedToInvent;
+}
+
+/** A flow's category from its name: the same reading the upload pipeline uses for the flows it builds. */
+function categoryFromName(name: string): string | null {
+  const text = String(name);
+  if (/^(signing (in|up|out)|logging (in|out)|verifying|creating an account|authenticating|resetting (a |your )?password)\b|\bwith (google|apple|email)\b/i.test(text)) return 'authentication';
+  if (/^(subscribing|upgrading|paying|checking out|buying|ordering|purchasing)\b|\b(plan|subscription|checkout|payment)s?\b/i.test(text)) return 'checkout';
+  if (/^search(ing)?\b/i.test(text)) return 'search';
+  if (/\b(settings?|preferences|appearance|profile|notifications|permissions?|privacy|access|account)\b/i.test(text)) return 'settings';
+  if (/^(creating|adding|editing|writing|sending|uploading|composing|drafting|making|building|renaming)\b/i.test(text)) return 'creation';
+  if (/^onboarding\b|\b(welcome|getting started|first run)\b/i.test(text)) return 'onboarding';
+  return null;
 }
 
 /** The assistant's last line, while the admin's message agrees to it ("proceed"): values in it count as theirs. Set per turn. */
@@ -421,9 +436,18 @@ function validateOp(
   switch (op.kind) {
     case 'rebuild':
       return confirm({ kind: 'rebuild' });
-    case 'upload':
-      return { action: { type: 'upload' } };
+    case 'upload': {
+      // An app named: the files go to it, on the platform its screens are on.
+      if (!app) return { action: { type: 'upload' } };
+      const tally = new Map<string, number>();
+      for (const file of (state?.files ?? []).filter((entry) => entry.appId === app.id)) tally.set(file.platform, (tally.get(file.platform) ?? 0) + 1);
+      const platform = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+      return { action: { type: 'upload', appId: app.id, appName: app.name, ...(platform ? { platform } : {}) } };
+    }
     case 'open': {
+      // An app named is that app's page — "open the Motvin page" read as
+      // page "apps" plus the app still means the app, not the list of apps.
+      if (app && (!op.page || /^(apps?|app page|page)$/.test(norm(op.page)))) return { action: { type: 'open', href: appHref(app.id), label: `Open ${app.name}` } };
       const page = op.page ? PAGES[norm(op.page)] : null;
       if (page) return { action: { type: 'open', href: page, label: `Open ${norm(op.page!)}` } };
       return app ? { action: { type: 'open', href: appHref(app.id), label: `Open ${app.name}` } } : noApp;
@@ -465,7 +489,16 @@ function validateOp(
       if (!match) return { note: `A source status is one of ${statuses.join(', ')}.` };
       const current = state?.sources?.[app.id]?.status;
       if (current === match) return { note: `${app.name} is already marked ${match}.`, settled: true };
-      return confirm({ kind: 'set-source-status', appId: app.id, name: app.name, status: match });
+      // Approving publishes the app, so its record must say on what basis it
+      // may be shown. One that has none yet needs the admin to say which.
+      const permissions = ['owner-granted', 'open-source', 'public-domain', 'own-work', 'fair-use-reference'];
+      const said = norm(String(op.permission ?? '')).replace(/\s+/g, '-');
+      const permission = permissions.find((entry) => entry === said || said.includes(entry) || entry.includes(said) && said.length >= 4);
+      const recorded = (state?.sources?.[app.id] as { permission?: string } | undefined)?.permission;
+      if (match === 'approved' && !recorded && !permission) {
+        return { note: `To approve ${app.name}, its record needs a permission basis — one of owner granted, open source, public domain, own work or fair use reference. Ask the admin which applies.` };
+      }
+      return confirm({ kind: 'set-source-status', appId: app.id, name: app.name, status: match, ...(permission && permission !== recorded ? { permission } : {}) });
     }
     case 'delete-app-version': {
       if (!app) return noApp;
@@ -553,7 +586,13 @@ function validateOp(
       if (!name || !grounded(name, grounding.saidByAdmin, grounding.askedToInvent)) return {};
       if (findFlow(state, app.id, name)?.name.toLowerCase() === name.toLowerCase()) return { note: `${app.name} already has a flow called “${name}”.`, settled: true };
       const categories = state?.vocabulary?.flowCategories ?? [];
-      const category = categories.find((entry) => norm(entry) === norm(String(op.category ?? ''))) ?? (categories.includes('other') ? 'other' : categories[0] ?? 'other');
+      // Not given: read off the flow's name, as the upload pipeline files its
+      // flows ("Signing in" is authentication, "Changing settings" is settings),
+      // else browsing — never the first category in the list.
+      const byName = categoryFromName(name);
+      const category =
+        categories.find((entry) => norm(entry) === norm(String(op.category ?? ''))) ??
+        (byName && categories.includes(byName) ? byName : categories.includes('discovery') ? 'discovery' : categories[0] ?? 'other');
       const { found } = screensNamed(app.id, names(op.screens).length ? names(op.screens) : op.screen ? [String(op.screen)] : []);
       // A flow is one app on one platform: the platform of the screens it
       // starts with, else the one named, else the app's own.

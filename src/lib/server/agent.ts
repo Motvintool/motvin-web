@@ -449,6 +449,7 @@ const READ_TOOLS: ToolDef[] = [
   { name: 'get_app', description: "One app in full: name, tagline, industry, website, logo, source status, versions, flows with their steps, and screen names grouped by version.", parameters: obj({ app: APP }, ['app']) },
   { name: 'list_screens', description: "An app's screens by name, with type and version — all versions, or one.", parameters: obj({ app: APP, version: str("A version — date or 'latest' — to limit to; omit for all.") }, ['app']) },
   { name: 'list_flows', description: "An app's flows, each with its steps in order.", parameters: obj({ app: APP }, ['app']) },
+  { name: 'reorder_screens', description: "Lay out one version of an app's screens so the admin can drag them into a new order and save it. Use it when they want to reorder, rearrange or change the order or position of screens.", parameters: obj({ app: APP, version: str("The version — a date or 'latest'; omit for the latest.") }, ['app']) },
   { name: 'show_screens', description: "Show the admin an app's screens as thumbnails they can look at and tap to pick — all versions, or one. Use it whenever they need to choose screens (to delete, rename, reorder) or ask to see them. This is how they see images.", parameters: obj({ app: APP, version: str("A version — a date or 'latest' — to show only that one; omit for all."), kind: str("Only screens of one kind, when the admin asks for some — a screen type, state, element or part of the name, like 'bottom sheet', 'login', 'paywall', 'settings'. Omit for all.") }, ['app']) },
   { name: 'get_runs', description: 'The video ingest runs — what is running now and how far, and recent finished ones.', parameters: obj({}) },
   { name: 'get_ai', description: 'Which AI models are connected and what each does.', parameters: obj({}) },
@@ -482,12 +483,12 @@ const WRITE_TOOLS: (ToolDef & { kind: string })[] = [
   { kind: 'add-to-flow', name: 'add_to_flow', description: 'Add screens to a flow.', parameters: obj({ app: APP, flow: FLOW, screens: strList('Screen names.') }, ['app', 'flow', 'screens']) },
   { kind: 'remove-from-flow', name: 'remove_from_flow', description: 'Take screens out of a flow; they stay in the library.', parameters: obj({ app: APP, flow: FLOW, screens: strList('Screen names.') }, ['app', 'flow', 'screens']) },
   { kind: 'reorder-flow', name: 'reorder_flow', description: 'Reorder the steps of a flow: move one step (to a position, or before/after another step), or give the full new order.', parameters: obj({ app: str('The app, if known.'), flow: FLOW, screen: str('The one step to move, if moving one.'), position: str("1-based position, or 'first'/'last'."), before: str('The step it should go before.'), after: str('The step it should go after.'), screens: strList('Every step in the new order, if giving the whole order.') }, ['flow']) },
-  { kind: 'set-source-status', name: 'set_source_status', description: "Mark an app's source record pending, review, approved or rejected. Approved apps are published.", parameters: obj({ app: APP, to: { type: 'string', enum: ['pending', 'review', 'approved', 'rejected'] } }, ['app', 'to']) },
+  { kind: 'set-source-status', name: 'set_source_status', description: "Mark an app's source record pending, review, approved or rejected. Approved apps are published.", parameters: obj({ app: APP, to: { type: 'string', enum: ['pending', 'review', 'approved', 'rejected'] }, permission: { type: 'string', enum: ['owner-granted', 'open-source', 'public-domain', 'own-work', 'fair-use-reference'], description: "Approving needs the basis on which the app may be shown, when its record has none — ask the admin which; never guess." } }, ['app', 'to']) },
   { kind: 'rebuild', name: 'rebuild_index', description: 'Rebuild the library index from what is stored. Rarely needed — every change already does it.', parameters: obj({}) },
   { kind: 'stop-run', name: 'stop_run', description: 'Stop the video ingest run that is going.', parameters: obj({}) },
   { kind: 'research-app', name: 'rewrite_names', description: "Have the AI rewrite an app's screen and flow names from its stored screens.", parameters: obj({ app: APP }, ['app']) },
   { kind: 'set-ai', name: 'set_ai', description: 'Switch the chat AI model, or turn the AI off/on.', parameters: obj({ model: str('A model name the server lists.'), enabled: { type: 'boolean', description: 'false to turn the AI off, true to turn it on.' } }) },
-  { kind: 'upload', name: 'upload_recording', description: 'Open the file picker for a screen recording. This is how a new app — or new screens for one — gets added; use it for "add an app", "new app", "upload".', parameters: obj({}) },
+  { kind: 'upload', name: 'upload_recording', description: 'Open the file picker for screenshots or a screen recording. This is how a new app — or new screens for an existing one — gets added; use it for "add an app", "new app", "add screens to X", "upload". Pass app when they named one, so the files go straight to it.', parameters: obj({ app: str('The app the new screens are for, when they named one; omit for a new app.') }) },
   { kind: 'open', name: 'open_page', description: 'Give the admin a button to a page of the library or to an app.', parameters: obj({ page: str('explore, apps, screens, ui elements, flows, patterns, collections or admin.'), app: str('An app, to open its page.') }) },
 ];
 
@@ -530,7 +531,8 @@ function findApp(state: LibraryState | null, wanted: unknown) {
 }
 
 function screenNameOf(file: { file: string; sidecar?: { name?: string } | null }): string {
-  return file.sidecar?.name || file.file.replace(/\.[^.]+$/, '').replace(/[-_/]+/g, ' ');
+  // Without a saved name, the file's own name — not its version folder ("versions/2026-10-23/home.webp" is "home").
+  return file.sidecar?.name || file.file.replace(/^versions\/[^/]+\//, '').replace(/\.[^.]+$/, '').replace(/[-_/]+/g, ' ');
 }
 
 /**
@@ -703,6 +705,7 @@ function toParsedOp(tool: (typeof WRITE_TOOLS)[number], args: Record<string, unk
   if (args.elements !== undefined) op.elements = args.elements;
   if (args.style !== undefined) op.style = args.style;
   if (args.industry !== undefined) op.industry = text('industry') ?? null;
+  if (typeof args.permission === 'string') op.permission = args.permission;
   return op;
 }
 
@@ -717,7 +720,7 @@ const INTERPRET = `You read one message in a chat between an app-library admin a
 
 Resolve what the message refers to ("the second one", "that", "same for Notion"), what question of the assistant's it answers, typos and texting shorthand ("u" is you, "ur" is your, "yourwish" or "ur wish" or "up to u" means "you choose it for me"), and agreement or refusal ("proceed", "go ahead", "nah"). If they leave a choice to the assistant, say so plainly: "They want you to write the tagline yourself." If the message is a greeting or a general question, say that. Write only the sentence.`;
 
-const PROMISE_CHECK = `You check one reply an assistant wrote to an app-library admin. The assistant can only change the library by proposing the change with a tool (which shows a Confirm button). Answer "yes" if the reply says it will make, is making or has made a specific change to the library — set, update, rename, delete, add, move a particular thing — or that it will cancel or drop a waiting change, or asks the admin to confirm one. Answer "no" if it only answers, explains, suggests ideas, or asks a question. Answer with one word: yes or no.`;
+const PROMISE_CHECK = `You check one reply an assistant wrote to an app-library admin. The assistant can only change the library by proposing the change with a tool (which shows a Confirm button). Answer "yes" if the reply says it will make, is making or has made a specific change to the library — set, update, rename, delete, add, move a particular thing — or that it will cancel or drop a waiting change, or asks the admin to confirm one, or that it will open or show something for them (the file picker or an upload, a page, screens to look at or put in order). Answer "no" if it only answers, explains, suggests ideas, or asks a question. Answer with one word: yes or no.`;
 
 /** Whether a reply in words promises a library change (one that must have a proposal behind it). */
 async function promisedWithoutActing(config: AgentConfig, model: string, meaning: string, reply: string, signal?: AbortSignal): Promise<boolean> {
@@ -830,7 +833,10 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
   const tools = [...READ_TOOLS, ...WRITE_TOOLS, CANCEL_TOOL];
 
   let action: AssistantAction | undefined;
-  let reminded = false;
+  // Reminders to act on words — one more after a failed attempt (a wrong
+  // name, corrected from the tool's answer) is allowed.
+  let reminders = 0;
+  let retriedEmpty = false;
   let note: string | undefined;
   let lastContent = '';
   let lastNote: string | undefined;
@@ -867,16 +873,25 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
     // Nothing at all on the first round — a model that spent its budget
     // thinking, or one that does not really follow tools — is the caller's
     // cue to use the older pipeline instead.
-    if (round === 0 && !reply.toolCalls.length && !lastContent) return null;
+    if (round === 0 && !reply.toolCalls.length && !lastContent) {
+      // An empty first reply now and then is the model, not the question:
+      // asked once more before the older pipeline takes the turn.
+      if (!retriedEmpty) {
+        retriedEmpty = true;
+        round--;
+        continue;
+      }
+      return null;
+    }
     // No tool called: the model answered in words. Unless those words promise
     // a change it never proposed ("I'll update the tagline to …" with no
     // Confirm behind it) — judged by the model itself, not by keywords — they
     // are the reply. A promise gets one reminder to make the proposal.
     if (!reply.toolCalls.length) {
-      if (!reminded && !action && lastContent && (await promisedWithoutActing(config, model, meaning, lastContent, deps.signal).catch(() => false))) {
-        reminded = true;
+      if (reminders < 2 && !action && lastContent && (await promisedWithoutActing(config, model, meaning, lastContent, deps.signal).catch(() => false))) {
+        reminders++;
         messages.push({ role: 'assistant', content: reply.content });
-        messages.push({ role: 'user', content: '[Note, not from the admin: you said you would do something, but you called no tool, so nothing happened. Call the tool that does exactly what you said — cancel_offer if you said you would cancel or drop the waiting change, otherwise the write tool for the change, with exactly the value you described — without any words.]' });
+        messages.push({ role: 'user', content: '[Note, not from the admin: you said you would do something, but you called no tool, so nothing happened. Call the tool that does exactly what you said — cancel_offer if you said you would cancel or drop the waiting change, upload_recording if you said you would open the file picker, the tool that opens or shows what you said you would show, otherwise the write tool for the change, with exactly the value you described — without any words.]' });
         fold();
         step('Reminded myself to act on what I said');
         lastContent = '';
@@ -892,6 +907,19 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
     let stop = false;
     for (const call of reply.toolCalls) {
       step(stepText(call, deps.state));
+      if (call.name === 'reorder_screens') {
+        const shown = screensToShow(deps.state, { app: call.args.app, version: call.args.version ?? 'latest' });
+        const grid = shown.action?.type === 'screens' ? shown.action : null;
+        if (grid && grid.versionId) {
+          action = { type: 'reorder', appId: grid.appId, appName: grid.appName, platform: grid.platform, versionId: grid.versionId, versionLabel: grid.versionLabel ?? grid.versionId, screens: grid.screens };
+          note = `${grid.screens.length} screens of ${grid.appName}, ${grid.versionLabel ?? grid.versionId}, laid out to reorder.`;
+          stop = true;
+          messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `Shown to the admin to drag into order: ${note} Nothing changes until they press Save order.` });
+          break;
+        }
+        messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: shown.note ?? 'That app has no screens in a version to reorder.' });
+        continue;
+      }
       if (call.name === 'show_screens') {
         const shown = screensToShow(deps.state, call.args);
         if (shown.action) {
@@ -946,9 +974,15 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
       messages.push({
         role: 'user',
         content:
-          action?.type === 'screens'
+          action?.type === 'reorder'
+            ? `[Note, not from the admin: the screens are now laid out for them to drag into a new order; it is saved when they press Save order. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`
+            : action?.type === 'screens'
             ? `[Note, not from the admin: the screens you asked for are now shown to them as thumbnails they can tap. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`
-            : `[Note, not from the admin: your proposal is now in front of them with a Confirm button; nothing has happened yet. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`,
+            : action?.type === 'open'
+              ? `[Note, not from the admin: a button that opens “${action.label}” is now under your reply — no Confirm is involved. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`
+              : action?.type === 'upload'
+                ? `[Note, not from the admin: their file picker is opening so they can choose a screen recording. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`
+                : `[Note, not from the admin: your proposal is now in front of them with a Confirm button; nothing has happened yet. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`,
       });
       try {
         spokeThisRound = false;

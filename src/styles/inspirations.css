@@ -18003,3 +18003,120 @@ html:has(aside.ins-dock:not(.ins-dock-user)) {
 .ins-chat-step:has(.ins-chat-step-tagline) {
   flex-wrap: wrap;
 }
+
+/* Chat: put one version's screens in order (drag, or the ‹ › arrows). */
+.ins-chat-reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.ins-chat-reorder-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 8px;
+  font-size: 13px;
+  color: var(--ins-text);
+}
+
+.ins-chat-reorder-head > span {
+  color: var(--ins-muted);
+  font-size: 12px;
+}
+
+.ins-chat-reorder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.ins-chat-reorder-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius);
+  background: var(--ins-card);
+  cursor: grab;
+  transition: opacity var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease);
+}
+
+.ins-chat-reorder-tile:hover {
+  border-color: var(--ins-border-strong);
+}
+
+.ins-chat-reorder-tile.is-dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.ins-chat-reorder-tile img {
+  width: 100%;
+  aspect-ratio: 9 / 19.5;
+  object-fit: cover;
+  object-position: top;
+  border-radius: calc(var(--ins-radius) - 2px);
+  background: var(--ins-card-alt);
+  pointer-events: none;
+}
+
+.ins-chat-reorder-num {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: var(--ins-radius-pill);
+  background: var(--ins-text);
+  color: var(--ins-page);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+}
+
+.ins-chat-reorder-name {
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--ins-sub);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ins-chat-reorder-arrows {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.ins-chat-reorder-arrows button {
+  flex: 1;
+  height: 22px;
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius-pill);
+  background: transparent;
+  color: var(--ins-text);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ins-chat-reorder-arrows button:hover:not(:disabled) {
+  background: var(--ins-hover);
+}
+
+.ins-chat-reorder-arrows button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

@@ -45,7 +45,7 @@ export type AdminOp =
   /** Dropped screenshots, every question answered — uploaded on Confirm, creating the app first when it is new. */
   | { kind: 'upload-screens'; count: number; platform: 'ios' | 'webapp' | 'web'; appId: string; appName: string; version: string; versionLabel: string; newApp?: { id: string; name: string; industry?: string }; logoName?: string }
   | { kind: 'set-flow-parent'; flowId: string; name: string; parentId: string | null; parentName: string | null }
-  | { kind: 'set-source-status'; appId: string; name: string; status: 'pending' | 'review' | 'approved' | 'rejected' }
+  | { kind: 'set-source-status'; appId: string; name: string; status: 'pending' | 'review' | 'approved' | 'rejected'; permission?: string }
   | { kind: 'delete-app-version'; appId: string; name: string; versionId: string; versionLabel: string; screens: number }
   /** The same rename the Apps tab's "Edit date" does: the version folder, its analysis and flow ids all move. */
   | { kind: 'rename-app-version'; appId: string; name: string; versionId: string; versionLabel: string; newVersionId: string; newVersionLabel: string }
@@ -56,7 +56,10 @@ export type AdminOp =
   | { kind: 'add-screen'; appId: string; name: string; platform: string; versionId?: string; versionLabel?: string };
 
 export type AssistantAction =
-  | { type: 'upload' }
+  /** Opens the file picker — for screenshots or a recording; with an app, the files go to that app without asking which. */
+  | { type: 'upload'; appId?: string; appName?: string; platform?: string }
+  /** A version's screens laid out to drag into a new order, saved with one press. */
+  | { type: 'reorder'; appId: string; appName: string; platform: string; versionId: string; versionLabel: string; screens: ShownScreen[] }
   | { type: 'open'; href: string; label: string }
   | { type: 'confirm'; op: AdminOp; label: string; destructive: boolean }
   /** A suggested next message, shown as a chip; pressing it sends it. */
@@ -205,7 +208,7 @@ export function describeOp(op: AdminOp, extra: { screens?: number; flows?: numbe
     case 'set-flow-parent':
       return op.parentName ? `Nest the flow “${op.name}” under “${op.parentName}”?` : `Make the flow “${op.name}” a top-level section?`;
     case 'set-source-status':
-      return `Mark ${op.name}’s source record as ${op.status}?${op.status === 'approved' ? ' Approved apps are published.' : op.status === 'rejected' ? ' Rejected apps are held back from the public library.' : ''}`;
+      return `Mark ${op.name}’s source record as ${op.status}${op.permission ? ` (permission: ${op.permission.replace(/-/g, ' ')})` : ''}?${op.status === 'approved' ? ' Approved apps are published.' : op.status === 'rejected' ? ' Rejected apps are held back from the public library.' : ''}`;
     case 'delete-app-version':
       return `Delete ${op.name}’s ${op.versionLabel} version? Its ${op.screens} screen${op.screens === 1 ? '' : 's'} are removed for good.`;
     case 'rename-app-version':

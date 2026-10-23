@@ -399,7 +399,7 @@ export async function ingestFolder(options) {
       const fps = options.fps ?? DEFAULT_FPS;
       log.heading(`Reading ${basename(source)}`);
       log.detail(`extracting frames at ${fps}/second…`);
-      report(options, 'extract', `Reading ${basename(source)} at ${fps} frames a second`);
+      report(options, 'extract', `Reading ${basename(source)} at ${Number(Number(fps).toFixed(1))} frames a second`);
 
       // Pass one reads every frame small; the segmenter picks the few that
       // are screens; pass two reads only those at full size. A long recording
@@ -1508,15 +1508,16 @@ export async function classifyStored(options) {
   if (!existsSync(appDir)) throw new Error(`no screens stored at ${appDir}`);
 
   const analysisDir = join(dataDir, 'analysis');
+  // Every level, dated captures included (versions/<date>/<flow>/<n>.png).
   const images = [];
-  for (const entry of readdirSync(appDir, { withFileTypes: true })) {
-    if (entry.isFile() && READABLE.includes(extname(entry.name).toLowerCase())) images.push(entry.name);
-    else if (entry.isDirectory()) {
-      for (const inner of readdirSync(join(appDir, entry.name))) {
-        if (READABLE.includes(extname(inner).toLowerCase())) images.push(`${entry.name}/${inner}`);
-      }
+  const walk = (dir, prefix) => {
+    for (const entry of readdirSync(join(appDir, dir), { withFileTypes: true })) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isFile() && READABLE.includes(extname(entry.name).toLowerCase())) images.push(rel);
+      else if (entry.isDirectory()) walk(join(dir, entry.name), rel);
     }
-  }
+  };
+  walk('', '');
   images.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   if (!images.length) throw new Error(`no images in ${appDir}`);
 
@@ -1672,15 +1673,17 @@ export async function researchStored(options) {
   // Screens, with their text read again.
   const graph = new ScreenGraph();
   const nodeByScreenId = new Map();
+  // Every level: a dated capture keeps its screens under
+  // versions/<date>/ and versions/<date>/<flow>/, not just one folder down.
   const files = [];
-  for (const entry of readdirSync(appDir, { withFileTypes: true })) {
-    if (entry.isFile() && READABLE.includes(extname(entry.name).toLowerCase())) files.push(entry.name);
-    else if (entry.isDirectory()) {
-      for (const inner of readdirSync(join(appDir, entry.name))) {
-        if (READABLE.includes(extname(inner).toLowerCase())) files.push(`${entry.name}/${inner}`);
-      }
+  const walk = (dir, prefix) => {
+    for (const entry of readdirSync(join(appDir, dir), { withFileTypes: true })) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isFile() && READABLE.includes(extname(entry.name).toLowerCase())) files.push(rel);
+      else if (entry.isDirectory()) walk(join(dir, entry.name), rel);
     }
-  }
+  };
+  walk('', '');
   log.heading(`Reading ${files.length} stored screen(s) of ${app.name}`);
   for (const file of files) {
     const withoutExt = file.slice(0, file.length - extname(file).length);

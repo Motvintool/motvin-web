@@ -1,6 +1,6 @@
 'use client';
 
-import { isDesktopPlatform } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type Platform } from '@/lib/inspirations/types';
 import Link from 'next/link';
 import { useEffect, useRef, useState, type DragEvent, type FormEvent, type Ref } from 'react';
 import { createPortal } from 'react-dom';
@@ -11,6 +11,7 @@ import { useIsLibraryAdmin } from '../useIsLibraryAdmin';
 import { dayLabel, localDateString, parseDateInput } from '@/lib/inspirations/dates';
 import { describeOp, labelFor, type AdminOp, type ScreensAction } from '@/lib/inspirations/admin-chatbot/assistantActions';
 import { inspirationsApi, invalidateInspirationsCache } from '@/lib/inspirations/api';
+import { splitScreenFile } from '@/lib/inspirations/screenPaths';
 import {
   INGEST_STAGES,
   adminSays,
@@ -142,7 +143,10 @@ function matchHeldVersion(versions: { id: string; label: string; isLatest: boole
 /** Apps that already have at least one screen filed under the given platform — an app's platform isn't a field on AdminAppRecord itself, only on its screen files. */
 function appsOnPlatform(state: AdminState, platform: 'ios' | 'webapp' | 'web'): AdminAppRecord[] {
   const ids = new Set(state.files.filter((file) => file.platform === platform).map((file) => file.appId));
-  return state.apps.filter((app) => ids.has(app.id));
+  // An app with no screens anywhere yet (one just created empty) belongs to no
+  // platform so far: it can take its first screens on any of them.
+  const withScreens = new Set(state.files.map((file) => file.appId));
+  return state.apps.filter((app) => ids.has(app.id) || !withScreens.has(app.id));
 }
 
 export function AdminChatbot() {
@@ -187,6 +191,8 @@ export function AdminChatbot() {
   const [question, setQuestion] = useState('');
   const [asking, setAsking] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  /** The app an upload was opened for, when the admin named one: its files skip the platform and app questions. */
+  const uploadTargetRef = useRef<{ appId: string; appName: string; platform?: string } | null>(null);
   /** The new app's logo, picked during an upload's questions. */
   const logoRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -352,6 +358,30 @@ export function AdminChatbot() {
     if (!user || !picked.length) return;
     const images = picked.filter(isImage);
     const videos = picked.filter((file) => file.type.startsWith('video/') || /\.(mov|mp4|m4v|avi|mkv)$/i.test(file.name));
+    // Opened for a named app: screenshots (even one) or a recording go to it —
+    // straight to which of its versions, the platform being the app's own.
+    const target = uploadTargetRef.current;
+    uploadTargetRef.current = null;
+    if (target && (images.length || videos.length)) {
+      const state = await library();
+      const app = state.apps.find((entry) => entry.id === target.appId);
+      if (app) {
+        const platform = (target.platform as 'ios' | 'webapp' | 'web' | undefined) ?? 'ios';
+        if (images.length) {
+          holdUpload('screens', images);
+          adminSays(`${images.length} screenshot${images.length === 1 ? '' : 's'} for ${app.name}`);
+        } else {
+          if (running) {
+            assistantSays('A run is already going. One at a time keeps the Mac usable — drop the next recording when it finishes.');
+            return;
+          }
+          holdUpload('video', [videos[0]]);
+          adminSays(`“${videos[0].name}” for ${app.name}`);
+        }
+        askVersion({ step: 'platform', platform }, app);
+        return;
+      }
+    }
     if (images.length === 1 && !videos.length) {
       const file = images[0];
       // Picked for a logo or a screen the admin just confirmed, or for one waiting.
@@ -630,9 +660,34 @@ export function AdminChatbot() {
     await send(question);
   };
 
+  /** After new screens land, lays out that version so they can be put in order. */
+  const offerReorder = async (op: Extract<AdminOp, { kind: 'upload-screens' }>) => {
+    try {
+      const state = await adminApi.getState();
+      libraryRef.current = state;
+      const app = state.apps.find((entry) => entry.id === op.appId);
+      const version = app?.versions?.find((v) => v.id === op.version || v.label === op.versionLabel);
+      const screens = state.files
+        .filter((file) => file.appId === op.appId && file.platform === op.platform && (!version || file.version === version.id))
+        .map((file) => {
+          const part = splitScreenFile(file.file, file.version ?? '');
+          const sidecar = file.sidecar as { name?: string } | null | undefined;
+          const name = sidecar?.name || file.file.replace(/^versions\/[^/]+\//, '').replace(/\.[^.]+$/, '').replace(/[-_/]+/g, ' ');
+          return { id: file.id ?? file.file, name, path: `/api/inspirations/screens/${file.platform}/${file.appId}/${file.file}`, file: part.name, version: part.version, flow: part.flow };
+        });
+      if (screens.length < 2) return;
+      assistantSays(`Drag ${op.appName}’s screens into the order you want, then save it.`, [
+        { type: 'reorder', appId: op.appId, appName: op.appName, platform: op.platform, versionId: version?.id ?? op.version, versionLabel: version?.label ?? op.versionLabel, screens },
+      ]);
+    } catch {
+      // The upload itself went through; the order can still be set from the admin page.
+    }
+  };
+
   /** Runs a confirmed operation; a logo without an image opens the picker. */
   const run = async (action: ConfirmAction) => {
     const outcome = await performAction(action);
+    if (outcome === 'done' && action.op.kind === 'upload-screens') await offerReorder(action.op);
     if (outcome === 'needs-image') {
       setLogoFor(action);
       assistantSays(action.op.kind === 'add-screen' ? `Choose the screenshot to add to ${action.op.name} — PNG, JPG or WebP.` : `Choose the image for ${action.op.kind === 'set-logo' ? action.op.name : 'the app'}’s logo — PNG, SVG or WebP.`);
@@ -667,13 +722,18 @@ export function AdminChatbot() {
     setAsking(true);
     const answer = await askAssistant(text);
     setAsking(false);
-    if (answer.actions?.some((action) => action.type === 'upload') && /\b(upload|new video|add)\b/i.test(text)) fileRef.current?.click();
+    const upload = answer.actions?.find((action) => action.type === 'upload');
+    if (upload && /\b(upload|new video|add)\b/i.test(text)) act(upload);
   };
 
   const act = (action: AssistantAction) => {
     // A picked date is answered exactly as if it had been typed.
     if (action.type === 'date') return act({ type: 'reply', text: action.value });
-    if (action.type === 'upload') fileRef.current?.click();
+    if (action.type === 'upload') {
+      // Named an app ("add screens to Swiggy"): what is picked goes to it.
+      uploadTargetRef.current = action.appId ? { appId: action.appId, appName: action.appName ?? action.appId, platform: action.platform } : null;
+      fileRef.current?.click();
+    }
     else if (action.type === 'confirm') void run(action);
     else if (action.type === 'reply') {
       if (heldUploadFilesNow().length) {
@@ -826,7 +886,7 @@ export function AdminChatbot() {
               </p>
               <div className="ins-chat-actions">
                 <button type="button" className="ins-chip-btn" onClick={() => fileRef.current?.click()}>
-                  <UploadIcon size={13} /> Upload a video
+                  <UploadIcon size={13} /> Upload screens or a video
                 </button>
                 {SUGGESTIONS.slice(0, 2).map((text) => (
                   <button key={text} type="button" className="ins-chip-btn" onClick={() => setQuestion(text)}>
@@ -1071,6 +1131,107 @@ function DatePick({ action, disabled, onPick }: { action: Extract<AssistantActio
       </button>
       {clash && <span className="ins-chat-date-note">A version already has this date</span>}
     </span>
+  );
+}
+
+/**
+ * One version's screens, in order, to rearrange right in the chat — the admin
+ * page's reorder: drag a tile onto another to put it there, or nudge it with
+ * its arrows; Save order writes the lot in one go.
+ */
+function ReorderScreens({ action, disabled }: { action: Extract<AssistantAction, { type: 'reorder' }>; disabled: boolean }) {
+  const [order, setOrder] = useState(action.screens);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [state, setState] = useState<'editing' | 'saving' | 'saved' | 'failed'>('editing');
+  const [error, setError] = useState('');
+  const changed = order.some((screen, index) => screen.id !== action.screens[index]?.id);
+  const move = (from: number, to: number) => {
+    if (to < 0 || to >= order.length || from === to) return;
+    setOrder((list) => {
+      const next = [...list];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  };
+  const save = async () => {
+    setState('saving');
+    try {
+      await adminApi.saveVersionOrder(action.appId, action.versionId, order.map((screen) => ({ platform: action.platform as Platform, file: screen.file, ...(screen.flow ? { flow: screen.flow } : {}) })));
+      setState('saved');
+      invalidateInspirationsCache();
+      window.dispatchEvent(new CustomEvent('motvin:admin-changed'));
+    } catch (err) {
+      setError((err as Error).message);
+      setState('failed');
+    }
+  };
+  const locked = disabled || state === 'saving' || state === 'saved';
+  return (
+    <div className="ins-chat-reorder">
+      <div className="ins-chat-reorder-head">
+        <strong>
+          {order.length} screens · {action.appName} · {action.versionLabel}
+        </strong>
+        <span>{state === 'saved' ? 'Order saved' : 'Drag to reorder, or use the arrows'}</span>
+      </div>
+      <ol className="ins-chat-reorder-grid">
+        {order.map((screen, index) => (
+          <li
+            key={screen.id}
+            className={`ins-chat-reorder-tile ${dragId === screen.id ? 'is-dragging' : ''}`}
+            draggable={!locked}
+            onDragStart={() => setDragId(screen.id)}
+            onDragEnd={() => setDragId(null)}
+            onDragOver={(e) => {
+              if (!dragId || dragId === screen.id) return;
+              e.preventDefault();
+              move(order.findIndex((entry) => entry.id === dragId), index);
+            }}
+          >
+            <span className="ins-chat-reorder-num">{index + 1}</span>
+            <img
+              src={inspirationsApi.mediaUrl(screen.path) ?? undefined}
+              alt=""
+              loading="lazy"
+              draggable={false}
+              onError={(e) => {
+                // Screens shown the moment they were uploaded can miss the first
+                // request; asked again shortly, a couple of times at most.
+                const img = e.currentTarget;
+                const tries = Number(img.dataset.tries ?? 0);
+                if (tries >= 2) return;
+                img.dataset.tries = String(tries + 1);
+                const base = inspirationsApi.mediaUrl(screen.path) ?? '';
+                window.setTimeout(() => (img.src = `${base}${base.includes('?') ? '&' : '?'}r=${tries + 1}`), 700);
+              }}
+            />
+            <span className="ins-chat-reorder-name" title={screen.name}>
+              {screen.name}
+            </span>
+            <span className="ins-chat-reorder-arrows">
+              <button type="button" aria-label={`Move ${screen.name} earlier`} disabled={locked || index === 0} onClick={() => move(index, index - 1)}>
+                ‹
+              </button>
+              <button type="button" aria-label={`Move ${screen.name} later`} disabled={locked || index === order.length - 1} onClick={() => move(index, index + 1)}>
+                ›
+              </button>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <span className="ins-chat-actions">
+        <button type="button" className="ins-chip-btn ins-chip-btn--primary" disabled={locked || !changed} onClick={() => void save()}>
+          <CheckIcon size={13} /> {state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : 'Save order'}
+        </button>
+        {changed && state === 'editing' && (
+          <button type="button" className="ins-chip-btn ins-chip-btn--quiet" onClick={() => setOrder(action.screens)}>
+            Reset
+          </button>
+        )}
+      </span>
+      {state === 'failed' && <span className="ins-chat-date-note">The order was not saved: {error}</span>}
+    </div>
   );
 }
 
@@ -1334,6 +1495,9 @@ function ChatBubble({
               if (action.type === 'screens') {
                 return <ScreenPicker key={index} action={action} live={isLatestGrid} disabled={busy} />;
               }
+              if (action.type === 'reorder') {
+                return <ReorderScreens key={index} action={action} disabled={busy} />;
+              }
               if (action.type === 'date') {
                 // Answered: the question has moved on, so the calendar goes.
                 if (answeredWith !== undefined) return null;
@@ -1362,7 +1526,7 @@ function ChatBubble({
               if (action.type === 'cancel') return null;
               return (
                 <button key={index} type="button" className="ins-chip-btn" onClick={() => onAction(action)}>
-                  <UploadIcon size={13} /> Upload a video
+                  <UploadIcon size={13} /> {action.type === 'upload' && action.appName ? `Upload screens to ${action.appName}` : 'Upload screens or a video'}
                 </button>
               );
             })}
