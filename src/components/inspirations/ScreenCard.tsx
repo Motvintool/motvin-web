@@ -12,6 +12,7 @@ import { SCREEN_PARAM } from './ScreenPreviewModal';
 import { Screenshot } from './Screenshot';
 import { useScreenContextMenu } from './useScreenContextMenu';
 import { CloseIcon } from './Icons';
+import { screenTitle } from '@/lib/inspirations/screenNaming';
 
 /** A plain left-click with no modifier opens the preview modal in place;
  * anything else (middle-click, cmd/ctrl-click, shift-click) is the visitor
@@ -183,7 +184,7 @@ function ScreenCardImpl({
           <button
             type="button"
             className={`ins-card-select-ring ${selected ? 'is-selected' : ''}`}
-            aria-label={selected ? `Deselect ${screen.name}` : `Select ${screen.name}`}
+            aria-label={selected ? `Deselect ${screenTitle(screen)}` : `Select ${screenTitle(screen)}`}
             aria-pressed={selected}
             onClick={(event) => {
               event.preventDefault();
@@ -198,7 +199,7 @@ function ScreenCardImpl({
           <button
             type="button"
             className="ins-card-remove-btn"
-            aria-label={`Remove ${screen.name}`}
+            aria-label={`Remove ${screenTitle(screen)}`}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();

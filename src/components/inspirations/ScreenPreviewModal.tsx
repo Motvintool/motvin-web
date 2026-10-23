@@ -22,6 +22,7 @@ import { useScreenContextMenu } from './useScreenContextMenu';
 import { useAsync } from './useAsync';
 import { SHEET_QUERY, useMediaQuery, useSheet } from './useSheet';
 import { useSwipeStep } from './useSwipeStep';
+import { flowOfScreen, screenTitleIn, screenTrail } from '@/lib/inspirations/screenNaming';
 
 /** Search-param name that opens the overlay — see FLOW_PARAM in FlowPreview.tsx. */
 export const SCREEN_PARAM = 'screen';
@@ -401,9 +402,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   // The flow this screen is a step of (a top-level one first, over a detour),
   // opened in FlowPreview on this screen's step, in place of this preview.
   // `flow` / `step` are FlowPreview's params, written out: it imports this file.
-  const viewFlow =
-    appFlows.find((f) => !f.parentId && f.screenIds.includes(view.id)) ??
-    appFlows.find((f) => f.screenIds.includes(view.id));
+  const viewFlow = flowOfScreen(appFlows, view.id);
   const flowHref = (() => {
     if (!viewFlow) return null;
     const sp = new URLSearchParams(params.toString());
@@ -525,7 +524,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
           {...sheetDrag}
           role="dialog"
           aria-modal="true"
-          aria-label={`${view.name}${app ? ` — ${app.name}` : ''}`}
+          aria-label={screenTrail(app, viewFlow, view).join(' / ')}
           onClick={(e) => e.stopPropagation()}
         >
           {sheetHandle}
@@ -537,10 +536,19 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                     <AppLogo app={app} size={40} className="ins-screen-preview-head-logo" />
                   </Link>
                 )}
+                {/* Named the way the flow preview names the same screen: the
+                    app, the flow it is a step of, then the screen — its type,
+                    or its own name when its type is only "Other". */}
                 <div className="ins-screen-preview-head-title">
                   {app && <span>{app.name}</span>}
                   {app && <span className="ins-screen-preview-head-sep">/</span>}
-                  <span>{screenTypeLabel(view.screenType)}</span>
+                  {viewFlow && (
+                    <>
+                      <span>{viewFlow.name}</span>
+                      <span className="ins-screen-preview-head-sep">/</span>
+                    </>
+                  )}
+                  <span className={viewFlow ? 'ins-flow-head-step' : undefined}>{screenTitleIn(viewFlow, view)}</span>
                 </div>
               </div>
               <div className="ins-flow-head-actions">

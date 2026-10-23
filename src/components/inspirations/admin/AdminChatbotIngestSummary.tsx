@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { clock, type IngestResult, type IngestScreen } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 import { fineTypeLabel, screenStateLabel } from '@/lib/inspirations/taxonomy';
+import { screenTitle } from '@/lib/inspirations/screenNaming';
 import { CheckIcon, ExternalIcon, UploadIcon } from '../Icons';
 import { SCREEN_PARAM } from '../ScreenPreviewModal';
 
@@ -98,7 +99,21 @@ export function AdminChatbotIngestSummary({
             <strong>{result.researched.screens}</strong> screen{result.researched.screens === 1 ? '' : 's'} written by the AI
           </span>
         )}
+        {result.researched?.typesRechecked ? (
+          <span>
+            <strong>{result.researched.typesRechecked}</strong> type{result.researched.typesRechecked === 1 ? '' : 's'} double-checked, <strong>{result.researched.typesFixed ?? 0}</strong> fixed on its own
+          </span>
+        ) : null}
       </div>
+
+      {/* The tree's last check: clean, or what is still worth a look. */}
+      {result.checks && (
+        <p className="ins-admin-note">
+          {result.checks.length
+            ? <>Worth a look: {result.checks.join('; ')}. Ask me to rename, move or merge any of them.</>
+            : 'Checked: no duplicate names, oversized flows or unnamed screens.'}
+        </p>
+      )}
 
       {result.identified && !result.identified.confident && (
         <p className="ins-admin-note">
@@ -175,7 +190,7 @@ function IngestShot({ screen, index }: { screen: IngestScreen; index: number }) 
     return `${pathname}?${sp.toString()}`;
   })();
   return (
-    <Link href={screenHref} scroll={false} className="ins-ingest-shot" title={screen.name}>
+    <Link href={screenHref} scroll={false} className="ins-ingest-shot" title={screenTitle(screen)}>
       <span className="ins-ingest-shot-img">
         {src && <img src={src} alt="" loading="lazy" />}
         <span className="ins-ingest-shot-num">{index + 1}</span>
@@ -187,7 +202,7 @@ function IngestShot({ screen, index }: { screen: IngestScreen; index: number }) 
           </span>
         )}
       </span>
-      <span className="ins-ingest-shot-name">{screen.name}</span>
+      <span className="ins-ingest-shot-name">{screenTitle(screen)}</span>
       <span className="ins-ingest-shot-sub">
         {fineTypeLabel(screen.screenType)}
         {screen.atSeconds !== null && ` · ${clock(screen.atSeconds)}`}

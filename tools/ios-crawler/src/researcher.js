@@ -20,6 +20,7 @@
  */
 
 import { pageLines } from './heuristics.js';
+import { ELEMENTS, typeFromName } from './taxonomy.js';
 
 /** The brief, as written for the researcher. Sent verbatim as the system prompt. */
 export const BRIEF = `Analyze the uploaded app screenshots as a UX/UI researcher and product designer.
@@ -116,11 +117,56 @@ Name each journey from what its steps show: the page titles, the tab and the wor
 
 Journey names read like a professional design-reference library's: the task in the person's own terms, starting with a verb ending in -ing whenever the person is doing something — "Searching dishes & restaurants", "Adding a dish to cart", "Turning on veg mode filter", "Booking a table", "Subscribing to Swiggy One", "Editing profile". A journey that opens a feature is named for the feature as the app names it — "Offer Zone", "Eatlist", "Restaurant detail". A journey inside a section is never named after the section it is in: a journey inside "Food" is the task done there, not "Food". A top-level section keeps its tab name — "Food", "Instamart", "Profile" — and "Onboarding" stays "Onboarding".`;
 
+/**
+ * The library's screen types, each with what it means, for the model to
+ * choose from. A screen's type decides where it is filed — the Screens
+ * filters, "Compare … with" — so it is the model's call from the picture,
+ * not the on-device rules' guess from the words on it.
+ */
+const SCREEN_TYPE_MEANINGS = {
+  splash: 'the launch screen, a logo and little else',
+  landing: 'a welcome page before sign-in, with sign-in or sign-up buttons',
+  onboarding: 'intro, tour or setup steps before the app is used — "how will you use it?", feature slides',
+  permission: 'a system or in-app request for access — photos, notifications, location',
+  login: 'signing in: email or password entry, a verification code, sign-in options',
+  signup: 'creating an account',
+  home: 'the app\'s main page after sign-in',
+  dashboard: 'an overview of numbers, charts or status',
+  feed: 'a scrolling list of posts, items or content',
+  search: 'searching, search results, or sorting and filtering them',
+  detail: 'one item, document, page or record opened',
+  product: 'one product for sale',
+  cart: 'items gathered to buy',
+  checkout: 'paying or confirming a purchase',
+  pricing: 'plans, prices, a paywall or an upgrade offer',
+  profile: 'a person\'s profile',
+  settings: 'settings, preferences, account, workspace or member management',
+  notifications: 'an inbox of notifications or activity',
+  messages: 'a chat or conversation — with people or with an AI assistant',
+  map: 'a map',
+  calendar: 'a calendar, schedule or date picking',
+  player: 'playing video or audio',
+  form: 'filling in fields — a name, an address, details — outside signing in',
+  modal: 'a sheet, menu, dialog or popup over a page',
+  success: 'a confirmation that something worked',
+  error: 'something failed',
+  empty: 'a page with nothing in it yet',
+  loading: 'a page still loading',
+  other: 'none of these',
+};
+const SCREEN_TYPE_GUIDE = Object.entries(SCREEN_TYPE_MEANINGS)
+  .map(([type, meaning]) => `"${type}" (${meaning})`)
+  .join('; ');
+
 /** Pass two: the screens of one batch, with their images. */
 const SCREEN_RULES = `${SHARED_RULES}
 
 Return exactly this shape, one entry per screen id given, and nothing else:
-{ "screens": { "<screen id exactly as given, e.g. s004>": { "name": "...", "purpose": "...", "primaryAction": "..." } } }
+{ "screens": { "<screen id exactly as given, e.g. s004>": { "name": "...", "type": "...", "elements": ["..."], "purpose": "...", "primaryAction": "..." } } }
+
+The type is the one word from this list that says what the screen is, judged from the screenshot, not from single words on it: ${SCREEN_TYPE_GUIDE}
+
+The elements are the UI parts clearly visible on the screenshot, only from this list, most prominent first, at most six: ${ELEMENTS.join(', ')}. A row of buttons at the bottom is a "tab-bar" only when it switches between the app's main sections; a keyboard on screen is "keyboard".
 
 Screen names are short plain nouns a designer would file the screen under — "Phone number entry", "Restaurant detail", "Filter sheet", "Location picker (logged out)", "Order placed" — never the marketing line or a fragment of visible text. A purpose is one short sentence (under 15 words) on what the screen is for. The primary action is the one thing the person mostly does there, as a short imperative — "Enter mobile number", "Add to cart", "Apply filters" — or "" when there is none (a splash, a loading state). Write no descriptions and no other fields. Be brief; every field is one line.`;
 
@@ -610,12 +656,119 @@ export async function researchTree(journeys, graph, options) {
   }
   onBatch?.(nodes.length, nodes.length, 0, 'done');
 
-  const applied = applyProposals(journeys, graph, proposals);
+  const applied = applyProposals(journeys, graph, proposals, { appName: app?.name ?? null });
+  // The self-review: a type that does not fit its screen's own name or the
+  // parts on it gets a second look at the screenshot before anything is kept.
+  if (vision && only !== 'journeys') {
+    const audit = await auditTypes(nodes, { complete, encodeImage, extractJson, log }).catch((error) => {
+      log?.(`researcher: could not double-check the types — ${String(error.message).split('\n')[0]}`);
+      return { checked: 0, changed: 0, calls: 0 };
+    });
+    calls += audit.calls;
+    applied.typesRechecked = audit.checked;
+    applied.typesFixed = audit.changed;
+    harmonizeTypes(graph);
+  }
   for (const id of Object.keys(proposals.screens)) {
     const node = graph.get(id);
     if (node && node.analysis.viaHeuristics === false) node.analysis.analyzer = analyzer;
   }
   return { ...applied, batches: calls };
+}
+
+/**
+ * Why a screen's type deserves a second look, or null: it disagrees with
+ * what the screen's own name says, or the parts that type always has are not
+ * on the screen (a "search" screen with no search bar).
+ */
+function doubtAbout(node) {
+  const analysis = node.analysis ?? {};
+  const type = analysis.modelType;
+  if (!type) return null;
+  const name = String(analysis.name ?? '');
+  const elements = analysis.modelElements ?? analysis.elements ?? [];
+  const named = typeFromName(name);
+  // A weak word in a name ("details", "page", "entry") says less than the picture.
+  if (named && named !== type && !['detail', 'form', 'home', 'onboarding'].includes(named)) return { why: `its name "${name}" suggests ${named}`, also: named };
+  if (type === 'search' && !elements.includes('search-bar') && !/search|filter|sort|result|find/i.test(name)) return { why: 'no search bar is on it and its name is not about searching', also: null };
+  if (type === 'pricing' && !elements.includes('price') && !/plan|pric|subscri|upgrade|premium|trial|pay|offer/i.test(name)) return { why: 'no prices are on it and its name is not about plans', also: null };
+  if (type === 'login' && !/sign|log ?in|password|verif|code|otp|email|account/i.test(name)) return { why: 'its name is not about signing in', also: null };
+  if (type === 'messages' && !/chat|message|conversation|thread|inbox|reply|comment|assistant|ai\b/i.test(name) && !elements.includes('text-field')) return { why: 'no message field is on it and its name is not about a conversation', also: null };
+  return null;
+}
+
+/**
+ * The second look: screens whose type is in doubt, three at a time with
+ * their pictures, each with the type it was given and why it is in doubt.
+ * The model's answer stands; a type outside the list is ignored.
+ */
+async function auditTypes(nodes, { complete, encodeImage, extractJson, log }) {
+  const doubtful = nodes.map((node) => ({ node, doubt: doubtAbout(node) })).filter((entry) => entry.doubt);
+  let changed = 0;
+  let calls = 0;
+  for (let at = 0; at < doubtful.length; at += 3) {
+    const batch = doubtful.slice(at, at + 3);
+    const blocks = [];
+    for (const { node } of batch) {
+      try {
+        blocks.push({ type: 'image', base64: await encodeImage(node.screenshot) });
+      } catch {
+        // Judged from its name alone.
+      }
+    }
+    const lines = batch.map(({ node, doubt }) => `${node.id}: "${node.analysis.name}" was filed as ${node.analysis.modelType}${doubt.also ? ` (or ${doubt.also}?)` : ''} — ${doubt.why}`);
+    blocks.push({ type: 'text', text: `The images attached are, in order, these screens:\n${lines.join('\n')}` });
+    calls += 1;
+    let reply;
+    try {
+      reply = extractJson(await complete({ system: AUDIT_RULES, blocks, maxTokens: 300, json: true, temperature: 0 }));
+    } catch {
+      continue;
+    }
+    for (const { node } of batch) {
+      const type = String(reply?.types?.[node.id] ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+      // "Other" gives up; the type it had stands then.
+      if (!type || type === 'other' || !Object.hasOwn(SCREEN_TYPE_MEANINGS, type) || type === node.analysis.modelType) continue;
+      log?.(`researcher: "${node.analysis.name}" is ${type}, not ${node.analysis.modelType}`);
+      node.analysis.modelType = type;
+      changed += 1;
+    }
+  }
+  if (doubtful.length) log?.(`researcher: ${doubtful.length} type(s) double-checked, ${changed} corrected`);
+  return { checked: doubtful.length, changed, calls };
+}
+
+const AUDIT_RULES = `You double-check how screens of an app are filed in a design-reference library like Mobbin. For each screen you get its picture, its name, the type it was filed as and why that type is in doubt. Look at the picture and give the type that says what the screen is, from this list only — choose the closest one; every screen fits one of them: ${Object.entries(SCREEN_TYPE_MEANINGS)
+  .filter(([type]) => type !== 'other')
+  .map(([type, meaning]) => `"${type}" (${meaning})`)
+  .join('; ')}. Keep the type it was given when it is right.
+
+Return JSON only, no prose, no markdown fence:
+{ "types": { "<screen id>": "<type>" } }`;
+
+/** One name, one type (see applyProposals). */
+function harmonizeTypes(graph) {
+  // One name, one type: "AI chat input" twice is the same kind of screen,
+  // whatever each picture was judged as alone — the type most of them got,
+  // or on a tie the one the name itself says.
+  const byName = new Map();
+  for (const node of graph.nodes?.values?.() ?? []) {
+    const key = String(node.analysis?.name ?? '').trim().toLowerCase();
+    if (!key || !node.analysis?.modelType) continue;
+    if (!byName.has(key)) byName.set(key, []);
+    byName.get(key).push(node);
+  }
+  for (const [key, nodes] of byName) {
+    if (nodes.length < 2) continue;
+    const votes = new Map();
+    for (const node of nodes) votes.set(node.analysis.modelType, (votes.get(node.analysis.modelType) ?? 0) + 1);
+    const ranked = [...votes].sort((a, b) => b[1] - a[1]);
+    const tied = ranked.filter(([, count]) => count === ranked[0][1]).map(([type]) => type);
+    const named = typeFromName(key);
+    const type = tied.length > 1 && tied.includes(named) ? named : ranked[0][0];
+    for (const node of nodes) node.analysis.modelType = type;
+  }
+
 }
 
 const clean = (value, max) => {
@@ -681,7 +834,7 @@ export function oneTask(name) {
   return match[1].trim();
 }
 
-export function applyProposals(journeys, graph, proposals) {
+export function applyProposals(journeys, graph, proposals, context = {}) {
   let journeysRenamed = 0;
   let screensUpdated = 0;
 
@@ -695,6 +848,8 @@ export function applyProposals(journeys, graph, proposals) {
       for (const label of [...(signals.tabLabels ?? []), ...(signals.chipLabels ?? [])]) properNouns.add(String(label).toLowerCase());
     }
   }
+  const appName = String(context.appName ?? '').trim();
+  if (appName) properNouns.add(appName.toLowerCase());
 
   journeys.forEach((journey, index) => {
     const entries = proposals.journeys ?? {};
@@ -715,6 +870,7 @@ export function applyProposals(journeys, graph, proposals) {
       if (bare !== name && bare.split(' ').length >= 2) name = bare.charAt(0).toUpperCase() + bare.slice(1);
     }
     name = sentenceCase(name, properNouns);
+    name = fixReadErrors(name, appName);
     name = oneTask(name);
     // A section keeps its tab name and onboarding its own; the model names
     // the journeys inside them.
@@ -776,11 +932,25 @@ export function applyProposals(journeys, graph, proposals) {
     }
     const primaryAction = clean(proposal.primaryAction, 60);
     analysis.primaryAction = primaryAction || null;
+    // The model saw the screenshot; its type stands over the rules' guess.
+    const type = String(proposal.type ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (type && type !== 'other' && Object.hasOwn(SCREEN_TYPE_MEANINGS, type)) {
+      analysis.modelType = type;
+      changed = true;
+    }
+    // And the UI parts it saw, from the library's list only.
+    const elements = [...new Set((Array.isArray(proposal.elements) ? proposal.elements : []).map((element) => String(element).trim().toLowerCase().replace(/[\s_]+/g, '-')).filter((element) => ELEMENTS.includes(element)))].slice(0, 6);
+    if (elements.length) {
+      analysis.modelElements = elements;
+      changed = true;
+    }
     if (changed) {
       analysis.viaHeuristics = false;
       screensUpdated++;
     }
   }
+
+  harmonizeTypes(graph);
 
   return { journeysRenamed, screensUpdated };
 }
@@ -820,6 +990,17 @@ function findByLooseKey(entries, index, name) {
 }
 
 /** "Phone Number Entry" → "Phone number entry", keeping the app's own names capitalised. */
+/**
+ * What reading a screen gets wrong in a name: "AI" read as "al" ("Using
+ * notion al"), and the app's own name lower-cased ("notion").
+ */
+export function fixReadErrors(name, appName = '') {
+  if (!name) return name;
+  let fixed = String(name).replace(/(\S) [aA]l\b/g, '$1 AI');
+  if (appName && /^[A-Za-z][A-Za-z0-9 ]+$/.test(appName)) fixed = fixed.replace(new RegExp(`\\b${appName}\\b`, 'gi'), appName);
+  return fixed;
+}
+
 function sentenceCase(name, properNouns) {
   if (!name) return name;
   const parts = name.split(' ');

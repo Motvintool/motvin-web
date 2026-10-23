@@ -9,7 +9,7 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
-import { flowCategoryLabel, PLATFORM_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
+import { flowCategoryLabel, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type App, type Flow, type Platform, type Screen } from '@/lib/inspirations/types';
 import type { StoreAction } from '@/lib/inspirations/storeAction';
 import { AppLogo } from './AppLogo';
@@ -25,6 +25,7 @@ import { useScreenContextMenu } from './useScreenContextMenu';
 import { SHEET_QUERY, useMediaQuery, useSheet } from './useSheet';
 import { useLibrary } from './useLibrary';
 import { useSwipeStep } from './useSwipeStep';
+import { screenTitleIn } from '@/lib/inspirations/screenNaming';
 
 /** Search-param name that opens the overlay — see SCREEN_PARAM in ScreenPreviewModal.tsx. */
 export const FLOW_PARAM = 'flow';
@@ -75,9 +76,6 @@ const parseSpeed = (raw: string | null) => {
 };
 
 /** "Login" for a step's label; a screen with no real type falls back to its own name. */
-function stepLabel(screen: Screen): string {
-  return screen.screenType && screen.screenType !== 'other' ? screenTypeLabel(screen.screenType) : screen.name;
-}
 
 /** The mounted flag never changes after hydration, so nothing to subscribe to. */
 function subscribeNever() {
@@ -563,7 +561,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
             key={s.id}
             type="button"
             className={`ins-flow-step ${i < activeIndex ? 'is-done' : ''} ${i === activeIndex ? 'is-current' : ''}`}
-            aria-label={`Step ${i + 1}: ${stepLabel(s)}`}
+            aria-label={`Step ${i + 1}: ${screenTitleIn(flow, s)}`}
             aria-current={i === activeIndex ? 'step' : undefined}
             onPointerEnter={(e) => e.pointerType === 'mouse' && showStepPeek(bar, i, e.currentTarget)}
             onFocus={(e) => e.currentTarget.matches(':focus-visible') && showStepPeek(bar, i, e.currentTarget)}
@@ -667,7 +665,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                   {showPlayer && active && (
                     <span className="ins-flow-head-step">
                       <span className="ins-screen-preview-head-sep">/</span>
-                      <span>{stepLabel(active)}</span>
+                      <span>{screenTitleIn(flow, active)}</span>
                     </span>
                   )}
                 </div>
@@ -886,7 +884,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
               )}
             </button>
             <p className="ins-flow-present-label" aria-live="polite">
-              <b>{activeIndex + 1}</b> / {screens.length} · {stepLabel(active)}
+              <b>{activeIndex + 1}</b> / {screens.length} · {screenTitleIn(flow, active)}
             </p>
             <button type="button" className="ins-flow-present-btn" aria-label={`Playback speed ${speed}×, change`} onClick={cycleSpeed}>
               {speed}×

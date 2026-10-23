@@ -61,6 +61,7 @@ import { ArrowRightIcon, CheckIcon, ChevronDownIcon, CloseIcon, CopyIcon, Expand
 import { tone } from './AdminChatbotAiPicker';
 import { cupFor as rankCup, MAX_RANK as MAX_STORE_RANK } from '../StoreRankBadge';
 import { forgetStoreStats } from '../useStoreStats';
+import { screenLabel } from './screenFiles';
 
 /**
  * The assistant in the corner — the library owner's helper on every page.
@@ -363,7 +364,12 @@ export function AdminChatbot() {
     const target = uploadTargetRef.current;
     uploadTargetRef.current = null;
     if (target && (images.length || videos.length)) {
-      const state = await library();
+      let state = await library();
+      // An app made a moment ago is not in a library read before it existed.
+      if (!state.apps.some((entry) => entry.id === target.appId)) {
+        libraryRef.current = null;
+        state = await library();
+      }
       const app = state.apps.find((entry) => entry.id === target.appId);
       if (app) {
         const platform = (target.platform as 'ios' | 'webapp' | 'web' | undefined) ?? 'ios';
@@ -377,6 +383,13 @@ export function AdminChatbot() {
           }
           holdUpload('video', [videos[0]]);
           adminSays(`“${videos[0].name}” for ${app.name}`);
+        }
+        // An app with no screens yet has no platform to go by: asked, then
+        // straight on to its versions.
+        if (!target.platform) {
+          setUploadPlan({ step: 'platform', appId: app.id, appName: app.name });
+          assistantSays(`Which platform is it from — iOS, Web Apps or Webs?`, [...PLATFORM_CHOICES.map((choice) => chip(choice.label)), chip('Cancel')]);
+          return;
         }
         askVersion({ step: 'platform', platform }, app);
         return;
@@ -566,6 +579,12 @@ export function AdminChatbot() {
         assistantSays('Which platform — iOS, Web Apps or Webs?', [...PLATFORM_CHOICES.map((choice) => chip(choice.label)), chip('Cancel')]);
         return;
       }
+      // Opened for a named app: its versions next, no question about which app.
+      const named = plan.appId ? (await library()).apps.find((entry) => entry.id === plan.appId) : undefined;
+      if (named) {
+        askVersion({ ...plan, platform }, named);
+        return;
+      }
       await askApp({ ...plan, platform });
       return;
     }
@@ -671,8 +690,7 @@ export function AdminChatbot() {
         .filter((file) => file.appId === op.appId && file.platform === op.platform && (!version || file.version === version.id))
         .map((file) => {
           const part = splitScreenFile(file.file, file.version ?? '');
-          const sidecar = file.sidecar as { name?: string } | null | undefined;
-          const name = sidecar?.name || file.file.replace(/^versions\/[^/]+\//, '').replace(/\.[^.]+$/, '').replace(/[-_/]+/g, ' ');
+          const name = screenLabel(file);
           return { id: file.id ?? file.file, name, path: `/api/inspirations/screens/${file.platform}/${file.appId}/${file.file}`, file: part.name, version: part.version, flow: part.flow };
         });
       if (screens.length < 2) return;

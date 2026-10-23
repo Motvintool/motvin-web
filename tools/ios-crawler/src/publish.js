@@ -54,6 +54,7 @@ import {
   isPublishable,
   publishedTypeFor,
   stateFor,
+  settledType,
 } from './taxonomy.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -147,10 +148,19 @@ function idFor(appId, platform, relativePath) {
  * (which names the section), then the body headline. Only when neither
  * separates them does a running number.
  */
+/** A name that says nothing ("Other", "Screen") gives way to the title printed on the page, when there is one. */
+function nameOf(node) {
+  const name = String(node.analysis?.name || '').trim();
+  if (name && !/^(other|screen|untitled)$/i.test(name)) return name;
+  const signals = node.analysis?.signals ?? {};
+  const printed = String(signals.title || signals.headline || '').replace(/\s+/g, ' ').trim();
+  return printed && printed.length <= 40 && /[a-z]{3}/i.test(printed) ? printed : name || 'Screen';
+}
+
 function uniqueNames(nodes) {
   const groups = new Map();
   for (const node of nodes) {
-    const base = String(node.analysis?.name || 'Screen').trim() || 'Screen';
+    const base = nameOf(node);
     const key = base.toLowerCase();
     if (!groups.has(key)) groups.set(key, { base, nodes: [] });
     groups.get(key).nodes.push(node);
@@ -177,14 +187,14 @@ function uniqueNames(nodes) {
     });
     const counts = new Map();
     for (const label of labels) if (label) counts.set(label.toLowerCase(), (counts.get(label.toLowerCase()) ?? 0) + 1);
-    let n = 0;
     members.forEach((node, index) => {
       const label = labels[index];
       if (label && counts.get(label.toLowerCase()) === 1) {
         names.set(node.id, `${base} · ${label}`);
       } else {
-        n++;
-        names.set(node.id, n === 1 ? base : `${base} (${n})`);
+        // Same-named steps keep the same name: the step number tells them
+        // apart where they are shown, and "Welcome screen (5)" is not a name.
+        names.set(node.id, base);
       }
     });
   }
@@ -293,11 +303,14 @@ export async function publishCrawl(options) {
     const original = (options.flows ?? []).find((candidate) => keyOf(candidate) === keyOf(group));
     if (original) original.folder = group.folder;
   }
+  // Stored in the most specific flow that holds it — the task, not the area
+  // around it — so the folders read like the tree's leaves ("connecting-a-
+  // calendar/1.webp"), and a feature made of tasks holds no files of its own.
   for (const group of flowGroups) {
     const owned = group.nodeIds.filter((nodeId) => {
-      const shallower = flowGroups.find((other) => other !== group && other.depth < group.depth && other.nodeIds.includes(nodeId));
+      const deeper = flowGroups.find((other) => other !== group && other.depth > group.depth && other.nodeIds.includes(nodeId));
       const earlier = flowGroups.find((other) => other !== group && other.depth === group.depth && flowGroups.indexOf(other) < flowGroups.indexOf(group) && other.nodeIds.includes(nodeId));
-      return !shallower && !earlier;
+      return !deeper && !earlier;
     });
     if (!owned.length) continue;
     if (!options.dryRun) mkdirSync(join(appDir, group.folder), { recursive: true });
@@ -651,11 +664,15 @@ export function updatePublishedContent(options) {
       sidecar.description = analysis.description || sidecar.description || '';
       if (analysis.purpose) sidecar.purpose = analysis.purpose;
       if (analysis.primaryAction) sidecar.primaryAction = analysis.primaryAction;
+      // The model's type from the screenshot, else the name's for an "other".
+      sidecar.screenType = settledType({ classified: sidecar.screenType, modelType: analysis.modelType, name });
+      if (analysis.modelElements?.length) sidecar.elements = analysis.modelElements;
       writeJson(sidecarPath, sidecar);
     }
     const recordPath = join(analysisDir, `${entry.screenId}.json`);
     if (existsSync(recordPath)) {
       const record = readJson(recordPath, {});
+      record.published_as = settledType({ classified: record.published_as, modelType: analysis.modelType, name });
       record.name = name;
       record.description = analysis.description;
       record.purpose = analysis.purpose ?? null;

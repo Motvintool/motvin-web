@@ -164,3 +164,57 @@ export function filterStyles(styles) {
 export function filterStates(states) {
   return [...new Set((states || []).filter((state) => PUBLISHED_STATES.includes(state)))];
 }
+
+/**
+ * The type a screen's name says it is, for a screen the rules could only
+ * call "other": "Actions menu" is a modal, "AI chat interface" messages,
+ * "Enter your password" a login. Earlier words decide over later ones only
+ * through the order below — a sheet or menu first (it sits over a page,
+ * whatever the page is), then what the page is for. Returns a published
+ * type, or null when the name says nothing a library files by.
+ */
+const TYPE_BY_NAME = [
+  ['loading', /\b(loading|thinking|syncing|processing|spinner)\b/],
+  // A permission prompt is a permission before it is a prompt.
+  ['permission', /\b(permissions?|allow access|access request)\b/],
+  ['modal', /\b(menu|actions?|options|sheet|picker|selector|dropdown|popup|pop-up|dialog|prompt|share settings|context menu|action sheet|overlay)\b/],
+  ['error', /\b(error|failed|failure|went wrong)\b/],
+  ['empty', /\b(empty|no results|nothing here)\b/],
+  ['success', /\b(success|confirmed|confirmation|done|booked|completed|all set)\b/],
+  ['splash', /\b(splash|launch screen)\b/],
+  ['signup', /\b(sign ?up|create (an )?account|registration|register)\b/],
+  ['login', /\b(log ?in|sign ?in|password|verification|otp|passcode|authenticat\w*)\b/],
+  ['checkout', /\b(checkout|payment|pay now|billing)\b/],
+  ['pricing', /\b(pricing|plans?|subscription|upgrade|premium|super \w+|pro plan|trial)\b/],
+  ['cart', /\b(cart|basket|bag)\b/],
+  ['notifications', /\b(notifications?|alerts?|activity|inbox)\b/],
+  ['messages', /\b(chat|conversation|thread|messages?|comments?|ai assistant)\b/],
+  ['search', /\b(search|filters?|sort|results)\b/],
+  ['settings', /\b(settings|preferences|language|members|account|privacy|appearance|theme)\b/],
+  ['profile', /\b(profile|my account)\b/],
+  ['calendar', /\b(calendar|schedule|date|time of day|booking dates?)\b/],
+  ['map', /\b(map|location|address|directions)\b/],
+  ['player', /\b(player|video|audio|now playing|lesson)\b/],
+  ['onboarding', /\b(welcome|onboarding|intro|tour|get(ting)? started|tutorial|goal|level|guide)\b/],
+  ['form', /\b(form|entry|input|enter|edit|compose|new item|naming)\b/],
+  ['home', /\b(home( screen| feed)?|dashboard|recents?|recently viewed)\b/],
+  ['detail', /\b(details?|overview|page|note|notes|summary|item|listing)\b/],
+];
+
+export function typeFromName(name) {
+  const text = String(name ?? '').toLowerCase().replace(/\s*\(\d+\)\s*$/, '').replace(/\s+—.*$/, '');
+  if (!text || /^other$/.test(text)) return null;
+  for (const [type, test] of TYPE_BY_NAME) if (test.test(text)) return type;
+  return null;
+}
+
+/**
+ * The type a screen is filed under, from the strongest word on it: the model
+ * that saw the screenshot, else — when the rules could only say "other" —
+ * what its name says, else the rules' own guess.
+ */
+export function settledType({ classified, modelType, name }) {
+  if (modelType && PUBLISHED_TYPES.includes(modelType) && modelType !== 'other') return modelType;
+  if (!classified || classified === 'other') return typeFromName(name) ?? classified ?? 'other';
+  return classified;
+}

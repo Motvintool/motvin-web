@@ -16,6 +16,7 @@
 
 import { pageLines } from './heuristics.js';
 import { flowCategoryFor } from './taxonomy.js';
+import { brokenSectionName, fixReadErrors } from './researcher.js';
 
 /** A journey needs at least this many screens before it is worth asking whether it holds two tasks. */
 const REVIEW_MIN = 4;
@@ -25,6 +26,9 @@ const SECTION_REVIEW_MIN = 6;
 
 /** A task split off has at least this many screens; a smaller tail stays with the task before it. */
 const PART_MIN = 2;
+
+/** A flow this long is asked a second time whether it is really one task. */
+const OVERSIZED = 16;
 
 /** An Onboarding this long, stored before onboarding was cut off where it ends, is asked where it really ends. */
 const ONBOARDING_TAIL_MIN = 20;
@@ -196,7 +200,25 @@ export async function reviewStructure(journeys, graph, options) {
       log(`structure: ${moved.length} screen(s) in "${journey.name}" belonged to no task there — moved up to "${parent.name}"`);
     }
 
-    const parts = taskParts(parsed?.tasks, ids.length);
+    let parts = taskParts(parsed?.tasks, ids.length);
+    // A flow this long is almost never one task ("Customizing a page" of 47
+    // steps was home, chats, meetings, inbox, accounts and plans). Asked once
+    // more, with that said.
+    if (parts.length < 2 && ids.length >= OVERSIZED) {
+      try {
+        const again = await complete({
+          system: REVIEW_SYSTEM,
+          blocks: [{ type: 'text', text: `${isSection ? `Section "${journey.name}"` : `Flow "${journey.name}"`}, ${ids.length} steps — far more than one task ever takes, so it holds several; list each one where the page changes to a different feature:\n${steps}` }],
+          maxTokens: Math.min(1500, 400 + ids.length * 15),
+          json: true,
+          temperature: 0,
+          ...(model ? { model } : {}),
+        });
+        parts = taskParts(extractJson(again)?.tasks, ids.length);
+      } catch {
+        // The first answer stands.
+      }
+    }
     if (parts.length < 2) {
       if (isSection && ids.length >= 20) log(`structure: "${journey.name}" (${ids.length} steps) read as one task — ${JSON.stringify(parsed?.tasks ?? null).slice(0, 200)}`);
       continue;
@@ -268,22 +290,42 @@ export async function splitOnboardingTail(journeys, graph, options) {
     if (!Number.isInteger(end) || end < PART_MIN || ids.length - end < SECTION_REVIEW_MIN) continue;
     const tail = new Set(ids.slice(end));
     const name = String(parsed?.section ?? '').trim().replace(/^./, (c) => c.toUpperCase()) || 'Home';
-    const section = {
+    const wanted = name.split(/\s+/).length <= 3 ? name : 'Home';
+    // The later steps join the section of that name when the tree has one;
+    // a second "Home" beside the first says the same place twice.
+    const existing = journeys.find((other) => !other.parent && other !== journey && other.name.toLowerCase() === wanted.toLowerCase());
+    const section = existing ?? {
       key: `${journey.key}-app`,
-      name: name.split(/\s+/).length <= 3 ? name : 'Home',
+      name: wanted,
       category: 'discovery',
       parent: null,
       section: true,
-      nodeIds: ids.slice(end),
+      nodeIds: [],
     };
+    for (const id of ids.slice(end)) if (!section.nodeIds.includes(id)) section.nodeIds.push(id);
     section.steps = stepsOf(section.nodeIds, actions);
     journey.nodeIds = ids.slice(0, end);
     journey.steps = stepsOf(journey.nodeIds, actions);
-    // A flow under Onboarding made only of the later steps moves with them.
+    // A flow under Onboarding made of the later steps moves with them; one
+    // that runs across the cut is cut too, its later part a flow of the new
+    // section ("Entering personal information" ran on into the app's home).
+    const crossing = [];
     for (const child of journeys) {
-      if (child.parent === journey.key && child.nodeIds.length && child.nodeIds.every((id) => tail.has(id))) child.parent = section.key;
+      if (child.parent !== journey.key || !child.nodeIds.length) continue;
+      const after = child.nodeIds.filter((id) => tail.has(id));
+      if (!after.length) continue;
+      if (after.length === child.nodeIds.length || child.nodeIds.length - after.length < PART_MIN) {
+        child.parent = section.key;
+        continue;
+      }
+      if (after.length < PART_MIN) continue;
+      child.nodeIds = child.nodeIds.filter((id) => !tail.has(id));
+      child.steps = stepsOf(child.nodeIds, actions);
+      const rest = { key: `${child.key}-app`, name: child.name, category: 'discovery', parent: section.key, section: false, nodeIds: after };
+      rest.steps = stepsOf(after, actions);
+      crossing.push(rest);
     }
-    journeys.splice(journeys.indexOf(journey) + 1, 0, section);
+    journeys.splice(journeys.indexOf(journey) + 1, 0, ...(existing ? [] : [section]), ...crossing);
     created += 1;
     log(`structure: "${journey.name}" ended at step ${end} — the ${section.nodeIds.length} steps after it are now "${section.name}"`);
   }
@@ -307,6 +349,8 @@ function bareName(name, parentName) {
   }
   // Coming back to something is looking at it again.
   bare = bare.replace(/^(returning to|going back to|reopening|revisiting)\s+/, 'viewing ');
+  // "Copying a block link" and "Copying block link" are one task.
+  bare = bare.replace(/\b(a|an|the|your)\s+/g, '');
   return bare.replace(/\s+/g, ' ').trim();
 }
 
@@ -406,13 +450,400 @@ export function mergeSameNamedSiblings(journeys, actions = new Map(), graph = nu
   return merged;
 }
 
+const GROUP_SYSTEM = `You arrange one area of an app's flow tree for a design-reference library like Mobbin. Mobbin nests flows: an area ("Home") holds a few features, and each feature holds the smaller tasks done inside it, which can hold their own steps in turn. For a fitness app: "Home" › "Chatting with the coach" › "Uploading a PDF file", "Sending a voice message", "Giving feedback".
+
+You get the flows directly inside one area, in walk order, each with an index, its name and its first screens. Find every feature that several of these flows are part of — talking to an assistant, taking meeting notes, searching and filtering, editing a page, managing members — and group its flows under it. Flows of one feature share what they are about (a chat, a meeting, a search, a page), even when their verbs differ. A flow that is a feature on its own stays out of every group. Never put one flow in two groups; a group has at least two flows. Name a feature in the app's own words, using the app's name only when the feature is named for it.
+
+Return JSON only, no prose, no markdown fence:
+{ "groups": [ { "name": "<feature in 2-5 words, a verb ending in -ing>", "flows": [<indexes>] } ] }
+Return { "groups": [] } when nothing groups.`;
+
+/** An area with at least this many flows directly inside it is asked to group them into features. */
+const GROUP_MIN = 6;
+
+/**
+ * Mobbin's depth: an area's many small flows grouped under the features
+ * they belong to ("Home" › "Chatting with Notion AI" › "Giving feedback").
+ * Each group is a flow of its own, made of its flows' screens in walk order,
+ * and those flows move inside it.
+ * @returns {Promise<number>} groups made
+ */
+export async function groupIntoFeatures(journeys, graph, options) {
+  const { complete, extractJson, model = null, actions = new Map(), log = () => {} } = options;
+  let made = 0;
+  for (const area of journeys.filter((journey) => !journey.parent)) {
+    const inside = journeys.filter((journey) => journey.parent === area.key);
+    if (inside.length < GROUP_MIN) continue;
+    const lines = inside.map((flow, at) => {
+      const firsts = flow.nodeIds
+        .slice(0, 3)
+        .map((id) => graph.get(id)?.analysis?.name)
+        .filter(Boolean)
+        .join(', ');
+      return `${at}: "${flow.name}" — ${flow.nodeIds.length} screens: ${firsts}`;
+    });
+    let parsed = null;
+    try {
+      const reply = await complete({
+        system: GROUP_SYSTEM,
+        blocks: [{ type: 'text', text: `${options.appName ? `App: ${options.appName}\n` : ''}Area "${area.name}", ${inside.length} flows:\n${lines.join('\n')}` }],
+        maxTokens: Math.min(1500, 300 + inside.length * 30),
+        json: true,
+        temperature: 0,
+        ...(model ? { model } : {}),
+      });
+      parsed = extractJson(reply);
+    } catch (error) {
+      log(`structure: could not group the flows in "${area.name}" — ${String(error.message).split('\n')[0]}`);
+      continue;
+    }
+    const used = new Set();
+    const features = [];
+    for (const [n, group] of (Array.isArray(parsed?.groups) ? parsed.groups : []).entries()) {
+      const members = [...new Set((Array.isArray(group?.flows) ? group.flows : []).map(Number))]
+        .filter((at) => Number.isInteger(at) && at >= 0 && at < inside.length && !used.has(at))
+        .map((at) => inside[at]);
+      const name = fixReadErrors(String(group?.name ?? '').trim().replace(/^./, (c) => c.toUpperCase()), options.appName ?? '');
+      // Grouping every flow under one feature says nothing the area does not.
+      if (members.length < 2 || members.length === inside.length || !name || name.split(/\s+/).length > 7) continue;
+      // The prompt's own example, copied, is not this app's feature.
+      if (/\bthe coach\b/i.test(name) && !lines.join(' ').toLowerCase().includes('coach')) continue;
+      // A group named like one of its flows is that flow, with the rest inside it.
+      const host = members.find((member) => member.name.toLowerCase() === name.toLowerCase());
+      // Named like a flow elsewhere in the app, it would read as that flow twice.
+      if (!host && journeys.some((journey) => journey.name.toLowerCase() === name.toLowerCase())) continue;
+      for (const member of members) used.add(inside.indexOf(member));
+      const feature = host ?? {
+        key: `${area.key}-feature-${n + 1}`,
+        name,
+        category: members[0].category,
+        parent: area.key,
+        section: false,
+        nodeIds: [],
+      };
+      for (const member of members) {
+        if (member === host) continue;
+        member.parent = feature.key;
+        for (const id of member.nodeIds) if (!feature.nodeIds.includes(id)) feature.nodeIds.push(id);
+      }
+      feature.steps = stepsOf(feature.nodeIds, actions);
+      if (!host) journeys.splice(journeys.indexOf(members[0]), 0, feature);
+      made += 1;
+      features.push(feature);
+      log(`structure: ${members.length} flows in "${area.name}" are parts of "${feature.name}" — now inside it`);
+    }
+
+    // Two features about one thing are one feature before anything else is placed.
+    if (mergeSameSubjectFeatures(journeys, actions)) {
+      for (let k = features.length - 1; k >= 0; k--) if (!journeys.includes(features[k])) features.splice(k, 1);
+      log(`structure: features about the same thing in "${area.name}" merged`);
+    }
+    // What was left out is offered to the features once more: "Sorting
+    // search results" belongs with searching even when the first answer
+    // missed it.
+    const left = inside.filter((flow, at) => !used.has(at) && !features.includes(flow));
+    if (!features.length || !left.length) continue;
+    try {
+      const reply = await complete({
+        system: ASSIGN_SYSTEM,
+        blocks: [
+          {
+            type: 'text',
+            text: `Features:\n${features.map((feature, at) => `F${at}: "${feature.name}" — holds ${journeys.filter((flow) => flow.parent === feature.key).map((flow) => `"${flow.name}"`).join(', ')}`).join('\n')}\n\nFlows:\n${left.map((flow, at) => `${at}: "${flow.name}"`).join('\n')}`,
+          },
+        ],
+        maxTokens: Math.min(1000, 200 + left.length * 25),
+        json: true,
+        temperature: 0,
+        ...(model ? { model } : {}),
+      });
+      const answer = extractJson(reply);
+      for (const entry of Array.isArray(answer?.assign) ? answer.assign : []) {
+        const flow = left[Number(entry?.flow)];
+        const feature = features[Number(String(entry?.feature ?? '').replace(/^F/i, ''))];
+        if (!flow || !feature || flow === feature || flow.parent !== area.key) continue;
+        flow.parent = feature.key;
+        for (const id of flow.nodeIds) if (!feature.nodeIds.includes(id)) feature.nodeIds.push(id);
+        feature.steps = stepsOf(feature.nodeIds, actions);
+        log(`structure: "${flow.name}" is part of "${feature.name}" too — moved inside it`);
+      }
+    } catch (error) {
+      log(`structure: could not place the rest of "${area.name}" — ${String(error.message).split('\n')[0]}`);
+    }
+    // Still left: a flow about the same thing as exactly one feature —
+    // "Sorting search results" beside the flows of searching — goes inside it.
+    for (let changed = true; changed; ) {
+      changed = false;
+      for (const flow of journeys.filter((entry) => entry.parent === area.key && !features.includes(entry))) {
+        // The app's own name ("Notion") is in half the flows and says nothing
+        // about which feature one belongs to; the word shared must name the
+        // feature itself, not only something inside it.
+        const appWords = subjectWords(options.appName ?? '');
+        const own = new Set([...subjectWords(flow.name)].filter((word) => !appWords.has(word)));
+        const matches = features
+          .map((feature) => {
+            const named = subjectWords(feature.name);
+            const words = new Set([feature.name, ...journeys.filter((entry) => entry.parent === feature.key).map((entry) => entry.name)].flatMap((name) => [...subjectWords(name)]));
+            const shared = [...own].filter((word) => words.has(word));
+            return { feature, shared: shared.some((word) => named.has(word)) ? shared.length : 0 };
+          })
+          .filter((match) => match.shared > 0)
+          .sort((a, b) => b.shared - a.shared);
+        if (!matches.length || (matches[1] && matches[1].shared === matches[0].shared)) continue;
+        const { feature } = matches[0];
+        flow.parent = feature.key;
+        for (const id of flow.nodeIds) if (!feature.nodeIds.includes(id)) feature.nodeIds.push(id);
+        feature.steps = stepsOf(feature.nodeIds, actions);
+        changed = true;
+        log(`structure: "${flow.name}" is about the same thing as "${feature.name}" — moved inside it`);
+      }
+    }
+  }
+  return made;
+}
+
+/**
+ * A small flow that is the same screens as a sibling's — "Chatting with
+ * Claude" holding "Chat with voice input" and the microphone prompt beside
+ * "Using voice input" — is that sibling walked on a step: it folds into it.
+ * Permission prompts and loading states are the step on; they never make a
+ * flow of their own.
+ * @returns {number} flows folded
+ */
+export function foldSmallRepeats(journeys, graph, actions = new Map()) {
+  const nameOf = (id) => String(graph?.get(id)?.analysis?.name ?? '').trim().toLowerCase();
+  const typeOf = (id) => graph?.get(id)?.analysis?.modelType ?? graph?.get(id)?.analysis?.screenType;
+  const along = new Set(['permission', 'loading']);
+  let folded = 0;
+  for (const small of [...journeys]) {
+    if (!small.parent || small.nodeIds.length > 3 || journeys.some((child) => child.parent === small.key)) continue;
+    const own = small.nodeIds.filter((id) => !along.has(typeOf(id))).map(nameOf).filter(Boolean);
+    if (!journeys.includes(small)) continue;
+    // Only a prompt or a loading state: the step on from the flow before it.
+    if (!own.length) {
+      const siblings = journeys.filter((other) => other.parent === small.parent);
+      const before = siblings[siblings.indexOf(small) - 1];
+      if (before && !journeys.some((child) => child.parent === before.key)) {
+        fold(journeys, before, small, actions);
+        folded += 1;
+      }
+      continue;
+    }
+    // The one walked on a step folds into the other: it holds the prompt, or
+    // fewer of the screens they share.
+    const stepped = small.nodeIds.some((id) => along.has(typeOf(id)));
+    const host = journeys.find((other) => {
+      if (other === small || other.parent !== small.parent || journeys.some((child) => child.parent === other.key)) return false;
+      const theirs = other.nodeIds.filter((id) => !along.has(typeOf(id))).map(nameOf);
+      if (!own.every((name) => theirs.includes(name))) return false;
+      return stepped ? theirs.length >= own.length : theirs.length > own.length;
+    });
+    if (!host) continue;
+    fold(journeys, host, small, actions);
+    folded += 1;
+  }
+  return folded;
+}
+
+/**
+ * Two features of one area about the same thing ("Creating meeting notes"
+ * and "Managing meeting actions") are one feature: the second folds into the
+ * first, its flows with it. A feature is a flow other flows sit inside.
+ * @returns {number} features folded away
+ */
+export function mergeSameSubjectFeatures(journeys, actions = new Map()) {
+  let merged = 0;
+  for (const area of journeys.filter((journey) => !journey.parent)) {
+    const features = journeys.filter((journey) => journey.parent === area.key && journeys.some((child) => child.parent === journey.key));
+    for (let i = 0; i < features.length; i++) {
+      for (let j = i + 1; j < features.length; j++) {
+        const [keep, other] = [features[i], features[j]];
+        if (!journeys.includes(keep) || !journeys.includes(other)) continue;
+        const words = (feature) => new Set([feature.name, ...journeys.filter((child) => child.parent === feature.key).map((child) => child.name)].flatMap((name) => [...subjectWords(name)]));
+        const a = subjectWords(keep.name);
+        const b = subjectWords(other.name);
+        // Named for the same thing, or each holding flows about it.
+        const shared = [...a].filter((word) => b.has(word));
+        const sharedInside = [...words(keep)].filter((word) => words(other).has(word));
+        if (!shared.length && sharedInside.length < 2) continue;
+        fold(journeys, keep, other, actions);
+        merged += 1;
+      }
+    }
+  }
+  return merged;
+}
+
+/** Areas an app has as tabs of their own; a flow that is one of them is a section, wherever the walk reached it from. */
+const AREA_WORDS = new Map([
+  ['inbox', 'Inbox'],
+  ['notification', 'Notifications'],
+  ['librar', 'Library'],
+  ['explore', 'Explore'],
+  ['discover', 'Discover'],
+  ['profile', 'Profile'],
+  ['account', 'Account'],
+]);
+
+/**
+ * "Viewing inbox" under Settings is the app's Inbox, and Inbox is a section,
+ * like Home and Settings: such a flow becomes a top-level section, and the
+ * flows beside it about the same area ("Filtering the inbox") move into it.
+ * @returns {number} sections made
+ */
+export function promoteAreas(journeys) {
+  let made = 0;
+  const topNames = () => new Set(journeys.filter((journey) => !journey.parent).map((journey) => journey.name.toLowerCase()));
+  for (const journey of [...journeys]) {
+    if (!journey.parent || journey.section) continue;
+    const bare = journey.name.toLowerCase().replace(/^(viewing|opening|browsing|checking|using|going to|navigating to)\s+(the\s+|your\s+)?/, '');
+    const area = [...AREA_WORDS].find(([stem]) => bare.startsWith(stem) && bare.split(/\s+/).length <= 2)?.[1];
+    if (!area || topNames().has(area.toLowerCase())) continue;
+    const stem = [...AREA_WORDS].find(([, label]) => label === area)[0];
+    const section = { key: `${journey.key}-area`, name: area, category: 'discovery', parent: null, section: true, nodeIds: journey.nodeIds.slice(0, 1) };
+    section.steps = stepsOf(section.nodeIds, new Map());
+    const oldParent = journey.parent;
+    journey.parent = section.key;
+    for (const sibling of journeys) {
+      if (sibling !== journey && sibling.parent === oldParent && sibling.name.toLowerCase().includes(stem)) sibling.parent = section.key;
+    }
+    journeys.push(section);
+    made += 1;
+  }
+  return made;
+}
+
+/**
+ * A flow filed under Onboarding whose screens are mostly not the onboarding's
+ * own ("Using Notion AI", 37 screens of the app in use) is a task of the app:
+ * it moves to the area the app opens on — Home, made when there is none —
+ * with everything inside it.
+ * @returns {number} flows moved
+ */
+export function liftAppTasksOutOfOnboarding(journeys, actions = new Map()) {
+  const onboarding = journeys.find((journey) => !journey.parent && (journey.category === 'onboarding' || /^onboarding$/i.test(journey.name)));
+  if (!onboarding) return 0;
+  const own = new Set(onboarding.nodeIds);
+  const leaking = journeys.filter((journey) => journey.parent === onboarding.key && journey.nodeIds.length >= PART_MIN && journey.nodeIds.filter((id) => !own.has(id)).length / journey.nodeIds.length > 0.5);
+  if (!leaking.length) return 0;
+  let home = journeys.find((journey) => !journey.parent && /^home$/i.test(journey.name));
+  if (!home) {
+    home = { key: `${onboarding.key}-app`, name: 'Home', category: 'discovery', parent: null, section: true, nodeIds: [leaking[0].nodeIds[0]] };
+    home.steps = stepsOf(home.nodeIds, actions);
+    journeys.splice(journeys.indexOf(onboarding) + 1, 0, home);
+  }
+  for (const journey of leaking) {
+    journey.parent = home.key;
+    if (journey.category === 'onboarding') journey.category = 'discovery';
+  }
+  return leaking.length;
+}
+
+/**
+ * A section still named by a misread tab label ("Ch") after the model has
+ * named the tree is named from its first page instead — "Welcome to
+ * Notion!" is the getting-started page — or, failing a title, "Home".
+ * @returns {number} sections named
+ */
+export function nameBrokenSections(journeys, graph, appName = '') {
+  let named = 0;
+  const taken = new Set(journeys.filter((journey) => !journey.parent).map((journey) => journey.name.toLowerCase()));
+  for (const section of journeys.filter((journey) => !journey.parent && brokenSectionName(journey.name))) {
+    const first = graph?.get(section.nodeIds[0])?.analysis ?? {};
+    const title = String(first.signals?.title || first.signals?.headline || first.name || '').replace(/[!?.]+$/, '').trim();
+    let name = /^welcome\b/i.test(title) || /^(onboarding|getting started)\b/i.test(title) ? 'Getting started' : title.split(/\s+/).length <= 4 && /[a-z]{3}/i.test(title) ? title : 'Home';
+    name = fixReadErrors(name, appName);
+    if (taken.has(name.toLowerCase())) name = name === 'Home' ? 'Browse' : `${name} area`;
+    taken.add(name.toLowerCase());
+    section.name = name;
+    named += 1;
+  }
+  return named;
+}
+
+/**
+ * The names as a last pass, every one of them — those the model gave and
+ * those it never saw: read errors fixed ("Notion Al" is "Notion AI"), and
+ * top-level sections of one name made one (two "Home"s are one Home).
+ * @returns {number} names or sections changed
+ */
+export function tidyNames(journeys, actions = new Map(), appName = '') {
+  let changed = 0;
+  for (const journey of journeys) {
+    const fixed = fixReadErrors(journey.name, appName);
+    if (fixed !== journey.name) {
+      journey.name = fixed;
+      changed += 1;
+    }
+  }
+  const seen = new Map();
+  for (const section of journeys.filter((journey) => !journey.parent)) {
+    const key = section.name.toLowerCase();
+    const first = seen.get(key);
+    if (!first) {
+      seen.set(key, section);
+      continue;
+    }
+    fold(journeys, first, section, actions);
+    changed += 1;
+  }
+  return changed;
+}
+
+/**
+ * The last look before the tree is kept: what would still need a correction
+ * by hand. Nothing is changed here; the caller logs it and shows it to the
+ * admin with the finished tree.
+ */
+export function checkTree(journeys, graph) {
+  const issues = [];
+  const byParent = new Map();
+  for (const journey of journeys) {
+    const key = `${journey.parent ?? ''}\u0000${journey.name.toLowerCase()}`;
+    byParent.set(key, (byParent.get(key) ?? 0) + 1);
+  }
+  for (const [key, count] of byParent) if (count > 1) issues.push(`"${key.split('\u0000')[1]}" appears ${count} times in one place`);
+  for (const journey of journeys) {
+    const isFeature = journeys.some((child) => child.parent === journey.key);
+    if (!isFeature && journey.nodeIds.length >= OVERSIZED * 1.5) issues.push(`"${journey.name}" has ${journey.nodeIds.length} screens — likely several tasks`);
+  }
+  const ids = new Set(journeys.flatMap((journey) => journey.nodeIds));
+  const unnamed = [...ids].filter((id) => /^(other|screen)$/i.test(String(graph.get(id)?.analysis?.name ?? '').trim()));
+  if (unnamed.length) issues.push(`${unnamed.length} screen(s) still have no real name`);
+  for (const area of journeys.filter((journey) => !journey.parent)) {
+    const loose = journeys.filter((journey) => journey.parent === area.key && !journeys.some((child) => child.parent === journey.key));
+    if (loose.length > 12) issues.push(`"${area.name}" has ${loose.length} flows not in any feature`);
+  }
+  return issues;
+}
+
+/** Words that would match any flow: verbs of looking and doing, places, filler. */
+const GENERIC_WORDS = new Set(['view', 'open', 'use', 'manag', 'select', 'add', 'creat', 'set', 'start', 'provid', 'chang', 'edit', 'new', 'item', 'option', 'screen', 'page', 'home', 'detail', 'with', 'from', 'into', 'your', 'the', 'and', 'for', 'ai', 'app', 'setting', 'input']);
+
+/** A flow name's subject words, stemmed: "Sorting search results" → search, result, sort. */
+function subjectWords(name) {
+  return new Set(
+    String(name)
+      .toLowerCase()
+      .split(/[^a-z]+/)
+      .map((word) => word.replace(/(ing|es|s)$/, ''))
+      .filter((word) => word.length >= 3 && !GENERIC_WORDS.has(word)),
+  );
+}
+
+const ASSIGN_SYSTEM = `You finish arranging an app's flow tree for a design-reference library like Mobbin. You get the features of one area, each with the flows already inside it, and flows not yet placed. Put a flow inside a feature only when it is clearly part of it — about the same thing (a search, a meeting, a chat, a member list) — and leave it out otherwise.
+
+Return JSON only, no prose, no markdown fence:
+{ "assign": [ { "flow": <flow index>, "feature": "F<feature index>" } ] }
+Return { "assign": [] } when none fit.`;
+
 /** What a flow's named task is, read off its name: the verb and what it is done to. */
 const CATEGORY_BY_NAME = [
   { category: 'authentication', test: /^(signing (in|up|out)|logging (in|out)|verifying|creating an account|authenticating|resetting (a |your )?password)\b|\bwith (google|apple|email)\b/i },
   { category: 'checkout', test: /^(subscribing|upgrading|paying|checking out|buying|ordering|purchasing|selecting a (plan|subscription))\b|\b(plan|subscription|checkout|payment)s?\b/i },
   { category: 'search', test: /^search(ing)?\b/i },
   { category: 'settings', test: /\b(settings?|preferences|appearance|profile|notifications|permissions?|privacy|access|account)\b/i },
-  { category: 'creation', test: /^(creating|adding|editing|writing|sending|uploading|composing|drafting|making|building|renaming)\b/i },
+  { category: 'creation', test: /^(creating|adding|editing|writing|sending|uploading|composing|drafting|making|building|renaming|sharing|copying|moving|customizing|choosing|naming|taking|starting|setting up a)\b/i },
 ];
 
 /**

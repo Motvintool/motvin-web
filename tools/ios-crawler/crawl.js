@@ -23,6 +23,7 @@ import { Crawler, DEFAULTS } from './src/crawler.js';
 import { assertAuthorized } from './src/safety.js';
 import { localDateString, publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
 import { classifyStored, describeStored, ingestFolder, researchStored, resumeIngest } from './src/ingest.js';
+import { syncFolders } from './src/folders.js';
 import { extractJson, pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
 import { AI_PROVIDERS, aiChat, aiChatStream, aiConfig, aiStatus, canStream, readAiSettings, writeAiSettings } from './src/ai.js';
 
@@ -50,6 +51,8 @@ ${bold('Commands')}
   research --app-id <id>    rewrite an app's flow names, summaries and screen   ${dim('--only journeys|screens')}
                             content with the AI, from what is already stored ${dim('needs a model')}
                             ${dim('--restructure also re-checks the flows: splits, merges, categories')}
+  sync-folders --app-id <id> --version <date>
+                            put a version's files in folders named for its flows ${dim('--dry-run')}
   describe --app-id <id> --files <a,b>
                             fill in screenshots added by hand: type, states,  ${dim('--platform ios')}
                             elements and style from the rules, the name from the AI when one answers
@@ -383,6 +386,7 @@ async function reportIngestResult(result, flags, app) {
         status: result.status,
         classified: ['api', 'cli', 'ai'].includes(result.backend),
         researched: result.researched ?? null,
+        checks: result.checks ?? [],
         backend: result.backend,
         grouped: result.grouped,
         app: result.app,
@@ -696,10 +700,26 @@ async function runResearch(flags) {
     dryRun: flags.dryRun === true,
     only: flags.only === 'journeys' || flags.only === 'screens' ? flags.only : null,
     restructure: flags.restructure === true,
+    version: typeof flags.version === 'string' ? flags.version : null,
   });
   log.raw('');
   log.info(`${result.flowsChanged} flow(s) and ${result.screensChanged} screen(s) rewritten${flags.dryRun ? dim(' (dry run — nothing written)') : ''}`);
   if (!flags.dryRun && (result.flowsChanged || result.screensChanged)) await rebuildManifest(result.dataDir);
+  // A rebuilt tree gets folders to match.
+  if (!flags.dryRun && flags.restructure === true && typeof flags.version === 'string') {
+    await syncFolders({ appId: flags.appId, platform: flags.platform, version: flags.version, dataDir: flags.dataDir });
+  }
+  return 0;
+}
+
+/** Puts a version's files in the folders its flow tree names (see folders.js). */
+async function runSyncFolders(flags) {
+  if (!flags.appId || typeof flags.version !== 'string') {
+    log.error('--app-id and --version are required. See `node crawl.js` for usage.');
+    return 1;
+  }
+  const result = await syncFolders({ appId: flags.appId, platform: flags.platform, version: flags.version, dataDir: flags.dataDir, dryRun: flags.dryRun === true });
+  log.info(`${result.moved} screen(s) ${flags.dryRun ? 'would move' : 'moved'}`);
   return 0;
 }
 
@@ -780,6 +800,8 @@ async function main() {
         return await runResearch(flags);
       case 'describe':
         return await runDescribe(flags);
+      case 'sync-folders':
+        return await runSyncFolders(flags);
       case 'ai':
         return await runAi(flags);
       case 'ask':

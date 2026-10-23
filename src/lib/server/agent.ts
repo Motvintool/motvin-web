@@ -4,6 +4,7 @@ import type { AdminOp, AssistantAction, Expect } from '@/lib/inspirations/admin-
 import { localDateString } from '@/lib/inspirations/dates';
 import { splitScreenFile } from '@/lib/inspirations/screenPaths';
 import type { AssistantAnswer, HistoryLine, LibraryState, ParsedOp, TokenSink } from '@/lib/server/assistant';
+import { screenTitle } from '@/lib/inspirations/screenNaming';
 
 /**
  * The admin assistant as an agent: a model that can look things up and
@@ -669,7 +670,8 @@ function screensToShow(state: LibraryState | null, args: Record<string, unknown>
     .slice(0, 60)
     .map((file) => {
       const part = splitScreenFile(file.file, file.version ?? '');
-      return { id: file.id ?? file.file, name: screenNameOf(file), path: `/api/inspirations/screens/${file.platform}/${file.appId}/${file.file}`, file: part.name, version: part.version, flow: part.flow };
+      const type = (file.sidecar as { screenType?: string } | null | undefined)?.screenType;
+      return { id: file.id ?? file.file, name: screenTitle({ name: screenNameOf(file), screenType: type }), path: `/api/inspirations/screens/${file.platform}/${file.appId}/${file.file}`, file: part.name, version: part.version, flow: part.flow };
     });
   const label = `${version ? (version.isLatest ? `Latest (${version.label})` : version.label) : 'all versions'}${kind ? `, ${kind} screens only` : ''}`;
   return {

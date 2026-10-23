@@ -18,6 +18,7 @@ import { FLOW_PARAM } from './FlowPreview';
 import { AppleIcon, ChevronDownIcon, CloseIcon, SearchIcon, WebIcon } from './Icons';
 import { SCREEN_PARAM } from './ScreenPreviewModal';
 import { SHEET_QUERY, useMediaQuery } from './useSheet';
+import { screenTitle } from '@/lib/inspirations/screenNaming';
 
 const FIGMA_APP_ART = '/ASSET/search-modal/figma-02.png';
 /** Lives under the shared Motvin icon set (`/ASSET/Icons/Motvin/`), not
@@ -1060,7 +1061,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       onFocus={() => setBrowseActive(index)}
                       onClick={() => { close(); router.push(screenPreviewHref(screen)); }}
                     >
-                      <strong>{screen.name}</strong>
+                      <strong>{screenTitle(screen)}</strong>
                       <span>{screen.elements.length}</span>
                     </button>
                   ))}

@@ -6,6 +6,7 @@ import { isDesktopPlatform, type Screen } from '@/lib/inspirations/types';
 import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { CloseIcon } from './Icons';
 import { Screenshot } from './Screenshot';
+import { screenTitle } from '@/lib/inspirations/screenNaming';
 
 /**
  * Full-screen enlarged view of a single screenshot, opened from the "expand"
@@ -65,7 +66,7 @@ export function ScreenLightbox({ screen, onClose }: { screen: Screen; onClose: (
   return createPortal(
     <div className="ins-portal ins-lightbox" role="presentation">
       <div className="ins-lightbox-backdrop" onClick={onClose} />
-      <div className="ins-lightbox-dialog" role="dialog" aria-modal="true" aria-label={`${screen.name} — enlarged`}>
+      <div className="ins-lightbox-dialog" role="dialog" aria-modal="true" aria-label={`${screenTitle(screen)} — enlarged`}>
         <button ref={closeRef} type="button" className="ins-lightbox-close" aria-label="Close" onClick={onClose}>
           <CloseIcon size={18} />
         </button>

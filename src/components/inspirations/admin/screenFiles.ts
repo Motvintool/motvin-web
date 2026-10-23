@@ -1,6 +1,6 @@
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { adminScreenImagePath, type AdminScreenFile } from '@/lib/inspirations/admin';
-import { screenTypeLabel } from '@/lib/inspirations/taxonomy';
+import { screenTitle } from '@/lib/inspirations/screenNaming';
 
 /**
  * How a stored screen file is named and pictured in the admin tabs — shared
@@ -8,12 +8,11 @@ import { screenTypeLabel } from '@/lib/inspirations/taxonomy';
  * picker so a screen reads the same wherever an admin meets it.
  */
 
-/** The sidecar's name, else its type, else the bare file name. */
+/** The library's one naming rule (see screenNaming), else the bare file name. */
 export function screenLabel(file: AdminScreenFile): string {
   const sidecar = file.sidecar ?? {};
-  if (sidecar.name) return sidecar.name;
-  if (sidecar.screenType) return screenTypeLabel(sidecar.screenType);
-  return file.file.replace(/\.[^.]+$/, '');
+  if (sidecar.name || sidecar.screenType) return screenTitle({ name: sidecar.name, screenType: sidecar.screenType });
+  return file.file.replace(/^versions\/[^/]+\//, '').replace(/\.[^.]+$/, '');
 }
 
 /** The thumbnail URL, or null for a file the public API does not serve yet. */

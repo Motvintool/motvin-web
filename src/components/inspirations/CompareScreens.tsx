@@ -16,6 +16,7 @@ import { Screenshot } from './Screenshot';
 import { useAsync } from './useAsync';
 import { useScreenContextMenu } from './useScreenContextMenu';
 import { useSheet } from './useSheet';
+import { screenTitle } from '@/lib/inspirations/screenNaming';
 
 /** `?compare=<screen type>` opens the compare view on an app page; `&with=<app slug>` picks the other app. */
 export const COMPARE_PARAM = 'compare';
@@ -784,7 +785,7 @@ function ThumbStrip({
             className={`ins-compare-thumb ${i === index ? 'is-current' : ''}`}
             // Steps from the current one (capped): each step smaller, like a dock.
             style={{ '--d': Math.min(Math.abs(i - index), 4) } as CSSProperties}
-            aria-label={`${name} ${i + 1}: ${s.name}`}
+            aria-label={`${name} ${i + 1}: ${screenTitle(s)}`}
             aria-current={i === index ? 'true' : undefined}
             tabIndex={i === index ? 0 : -1}
             onPointerEnter={(e) => e.pointerType === 'mouse' && show(i, e.currentTarget)}

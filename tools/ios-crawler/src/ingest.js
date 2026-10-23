@@ -37,13 +37,14 @@ import { analyseScreen, complete, encodeForModel, groupIntoFlows, identifyApp, p
 import { resolveIndustry } from './category.js';
 import { researchTree } from './researcher.js';
 import { extractJson } from './analyze.js';
-import { mergeSameNamedSiblings, reviewStructure, settleCategories, splitOnboardingTail } from './structure.js';
+import { syncFolders } from './folders.js';
+import { checkTree, foldSmallRepeats, groupIntoFeatures, liftAppTasksOutOfOnboarding, mergeSameNamedSiblings, nameBrokenSections, promoteAreas, tidyNames, reviewStructure, settleCategories, splitOnboardingTail } from './structure.js';
 import { buildJourneys } from './journeys.js';
 import { actionPhrase, describeAction } from './actions.js';
 import { isBlockingScreen, isExternalAuthScreen } from './safety.js';
 import { localDateString, publishCrawl, rebuildManifest, resolveDataDir, resolveVersionId, safeName, updatePublishedContent } from './publish.js';
 import { readText } from './ocr.js';
-import { filterStyles, isPublishable, labelFor, publishedTypeFor, PUBLISHED_TYPES, stateFor } from './taxonomy.js';
+import { filterStyles, isPublishable, labelFor, publishedTypeFor, PUBLISHED_TYPES, settledType, stateFor } from './taxonomy.js';
 
 /** What a phone or a Finder export might hand us. */
 const READABLE = ['.png', '.jpg', '.jpeg', '.heic', '.heif', '.webp', '.tiff'];
@@ -641,6 +642,8 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
     // so the journey reads straight through them.
     const ordered = [...graph.nodes.values()].filter((node) => !node.skipPublish);
     let flowGroups = [];
+    /** What the last look at the tree found, shown with the finished run. */
+    let treeChecks = [];
     if (visits && analyzer.usable && ordered.length >= 1) {
       // A recording says how the person moved, so the tree comes from the
       // walk itself: sections, the journeys opened from them, the journeys
@@ -664,9 +667,19 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
       if (researchBackend !== 'local' && researchBackend !== 'none') {
         const ask = (request) => complete(researchBackend, request);
         report(options, 'flows', 'AI is checking that every flow is one task');
+        // An app with no tab bar (Notion's top pills) never shows the walk
+        // where onboarding ends, so all of it lands in Onboarding; a long one
+        // is asked, and the rest becomes the section it really is.
+        try {
+          await splitOnboardingTail(journeys, graph, { complete: ask, extractJson, model: options.journeyModel ?? null, actions: graph.actions, log: (message) => log.detail(message) });
+        } catch (error) {
+          log.warn(`could not check where onboarding ends — ${error.message.split('\n')[0]}`);
+        }
         try {
           const review = await reviewStructure(journeys, graph, { complete: ask, extractJson, model: options.journeyModel ?? null, actions: graph.actions, log: (message) => log.detail(message) });
           log.info(`structure: ${review.reviewed} flow(s) checked, ${review.split} task(s) split off`);
+          const lifted = liftAppTasksOutOfOnboarding(journeys, graph.actions);
+          if (lifted) log.info(`structure: ${lifted} flow(s) under Onboarding were the app in use — moved to Home`);
         } catch (error) {
           log.warn(`could not check the flows — ${error.message.split('\n')[0]}`);
         }
@@ -674,10 +687,20 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
         try {
           await researchTree(journeys, graph, { complete: ask, encodeImage: encodeForModel, extractJson, app: resolvedApp, vision: false, only: 'journeys', journeyModel: options.journeyModel ?? null, log: (message) => log.detail(message) });
           journeysNamed = true;
-          const merged = mergeSameNamedSiblings(journeys, graph.actions, graph);
+          const merged = mergeSameNamedSiblings(journeys, graph.actions, graph) + foldSmallRepeats(journeys, graph, graph.actions);
           if (merged) log.info(`structure: ${merged} repeat(s) of the same task merged`);
+          const grouped = await groupIntoFeatures(journeys, graph, { complete: ask, extractJson, model: options.journeyModel ?? null, actions: graph.actions, appName: resolvedApp?.name ?? null, log: (message) => log.detail(message) }).catch(() => 0);
+          if (grouped) log.info(`structure: ${grouped} feature(s) made from the flows inside them`);
+          const areas = promoteAreas(journeys);
+          if (areas) log.info(`structure: ${areas} app area(s) made sections of their own`);
+          const renamedSections = nameBrokenSections(journeys, graph, resolvedApp?.name ?? '');
+          if (renamedSections) log.info(`structure: ${renamedSections} misread section name(s) replaced`);
+          if (tidyNames(journeys, graph.actions, resolvedApp?.name ?? '')) log.info('structure: names tidied — read errors fixed, same-named sections joined');
           const recategorised = settleCategories(journeys, graph);
           if (recategorised) log.info(`structure: ${recategorised} flow categor${recategorised === 1 ? 'y' : 'ies'} set from the flows' final names`);
+          const issues = checkTree(journeys, graph);
+          treeChecks = issues;
+          log.info(issues.length ? `check: ${issues.join('; ')}` : 'check: tree is clean — no duplicates, oversized flows or unnamed screens');
         } catch (error) {
           log.warn(`could not name the flows yet — ${error.message.split('\n')[0]}; the researcher will try after publishing`);
         }
@@ -796,8 +819,21 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
         log.warn(`the researcher could not run — ${error.message.split('\n')[0]}; keeping the names read off the screens`);
       }
     }
+    // The check ran before the screens were named; what the researcher named
+    // since is no longer "unnamed".
+    treeChecks = treeChecks.flatMap((issue) => {
+      if (!/still have no real name/.test(issue)) return [issue];
+      const left = [...graph.nodes.values()].filter((node) => /^(other|screen)$/i.test(String(node.analysis?.name ?? '').trim())).length;
+      return left ? [`${left} screen(s) still have no real name`] : [];
+    });
+    // The researcher may have renamed flows after the files were written:
+    // the folders are put in step with the tree as it finally stands.
+    if (!options.dryRun && result.version && flowGroups.length) {
+      await syncFolders({ appId: resolvedApp.appId, platform: options.platform || 'ios', version: result.version, dataDir: options.dataDir }).catch((error) => log.warn(`could not line the folders up with the flows — ${error.message.split('\n')[0]}`));
+    }
     return {
       ...result,
+      checks: treeChecks,
       app: { id: resolvedApp.appId, name: resolvedApp.name, industry: resolvedApp.industry },
       identified,
       grouped: flowGroups.length > 0,
@@ -1665,7 +1701,10 @@ export async function researchStored(options) {
   if (backend === 'local' || backend === 'none') throw new Error('research needs a model backend — set up Ollama or MOTVIN_AI_URL, or pass --backend');
 
   const flowsDoc = JSON.parse(readFileSync(join(dataDir, 'flows.json'), 'utf-8'));
-  const flows = (flowsDoc.flows || []).filter((flow) => flow.appId === options.appId && flow.platform === platform);
+  // One version at a time when asked: its flows and its screens, nothing of the others.
+  const versionTag = options.version ? `${options.appId}-${platform}-versions-${options.version}-` : null;
+  const inScope = (flow) => flow.appId === options.appId && flow.platform === platform && (!versionTag || `${flow.id}-`.startsWith(versionTag) || (flow.screenIds ?? []).some((id) => id.startsWith(versionTag)));
+  const flows = (flowsDoc.flows || []).filter(inScope);
   if (!flows.length) throw new Error(`no flows stored for ${options.appId}`);
   const appsDoc = JSON.parse(readFileSync(join(dataDir, 'apps.json'), 'utf-8'));
   const app = (appsDoc.apps || []).find((entry) => entry.id === options.appId) ?? { id: options.appId, name: options.appId };
@@ -1683,8 +1722,8 @@ export async function researchStored(options) {
       else if (entry.isDirectory()) walk(join(dir, entry.name), rel);
     }
   };
-  walk('', '');
-  log.heading(`Reading ${files.length} stored screen(s) of ${app.name}`);
+  walk(options.version ? join('versions', options.version) : '', options.version ? `versions/${options.version}` : '');
+  log.heading(`Reading ${files.length} stored screen(s) of ${app.name}${options.version ? `, version ${options.version}` : ''}`);
   for (const file of files) {
     const withoutExt = file.slice(0, file.length - extname(file).length);
     const screenId = `${options.appId}-${platform}-${withoutExt.split('/').join('-')}`;
@@ -1730,6 +1769,8 @@ export async function researchStored(options) {
     await splitOnboardingTail(journeys, graph, { complete: ask, extractJson, model: options.journeyModel ?? null, actions, log: (message) => log.detail(message) });
     const review = await reviewStructure(journeys, graph, { complete: ask, extractJson, model: options.journeyModel ?? null, actions, log: (message) => log.detail(message) });
     log.info(`structure: ${review.reviewed} flow(s) checked, ${review.split} task(s) split off`);
+    const lifted = liftAppTasksOutOfOnboarding(journeys, actions);
+    if (lifted) log.info(`structure: ${lifted} flow(s) under Onboarding were the app in use — moved to Home`);
   }
 
   log.heading('Researching');
@@ -1748,8 +1789,15 @@ export async function researchStored(options) {
 
   let flowsChanged = 0;
   if (options.restructure) {
-    const merged = mergeSameNamedSiblings(journeys, actions, graph);
+    const merged = mergeSameNamedSiblings(journeys, actions, graph) + foldSmallRepeats(journeys, graph, actions);
     if (merged) log.info(`structure: ${merged} repeat(s) of the same task merged`);
+    const grouped = await groupIntoFeatures(journeys, graph, { complete: ask, extractJson, model: options.journeyModel ?? null, actions, appName: app.name, log: (message) => log.detail(message) }).catch(() => 0);
+    if (grouped) log.info(`structure: ${grouped} feature(s) made from the flows inside them`);
+    const areas = promoteAreas(journeys);
+    if (areas) log.info(`structure: ${areas} app area(s) made sections of their own`);
+    const renamedSections = nameBrokenSections(journeys, graph, app.name);
+    if (renamedSections) log.info(`structure: ${renamedSections} misread section name(s) replaced`);
+    if (tidyNames(journeys, actions, app.name)) log.info('structure: names tidied — read errors fixed, same-named sections joined');
     const recategorised = settleCategories(journeys, graph);
     if (recategorised) log.info(`structure: ${recategorised} flow categor${recategorised === 1 ? 'y' : 'ies'} set from the flows' final names`);
     // The app's flows on this platform are replaced by the tree as it now
@@ -1774,13 +1822,21 @@ export async function researchStored(options) {
     const kept = new Set(rebuilt.map((flow) => flow.id));
     // A parent that went away (merged into another) leaves its children at the top.
     for (const flow of rebuilt) if (flow.parentId && !kept.has(flow.parentId)) flow.parentId = null;
+    const issues = checkTree(journeys, graph);
+    log.info(issues.length ? `check: ${issues.join('; ')}` : 'check: tree is clean — no duplicates, oversized flows or unnamed screens');
+    const printTree = (parentId, depth) => {
+      for (const flow of rebuilt.filter((entry) => (entry.parentId ?? null) === parentId)) {
+        log.ok(`${'  '.repeat(depth)}${flow.name}${dim(` — ${flow.screenIds.length} screen${flow.screenIds.length === 1 ? '' : 's'}, ${flow.category}`)}`);
+        printTree(flow.id, depth + 1);
+      }
+    };
+    printTree(null, 0);
     for (const flow of rebuilt) {
       const before = flows.find((entry) => entry.id === flow.id);
-      log.ok(`${flow.parentId ? '  ' : ''}${flow.name}${dim(` — ${flow.screenIds.length} screen${flow.screenIds.length === 1 ? '' : 's'}, ${flow.category}`)}`);
       if (!before || before.name !== flow.name || before.category !== flow.category || before.parentId !== flow.parentId || before.screenIds.join() !== flow.screenIds.join()) flowsChanged++;
     }
     flowsChanged += flows.filter((flow) => !kept.has(flow.id)).length;
-    const others = (flowsDoc.flows || []).filter((flow) => !(flow.appId === options.appId && flow.platform === platform));
+    const others = (flowsDoc.flows || []).filter((flow) => !inScope(flow));
     flowsDoc.flows = [...others, ...rebuilt];
   }
   // Write back: flow names and summaries, screen names, descriptions,
@@ -1798,8 +1854,13 @@ export async function researchStored(options) {
   for (const node of graph.nodes.values()) {
     if (node.analysis.viaHeuristics !== false) continue;
     screensChanged++;
+    // The model's type from the screenshot, else the name's for an "other".
+    const settled = settledType({ classified: node.sidecar.screenType, modelType: node.analysis.modelType, name: node.analysis.name });
+    const namedType = settled !== node.sidecar.screenType ? settled : null;
     const sidecar = {
       ...node.sidecar,
+      ...(namedType ? { screenType: namedType } : {}),
+      ...(node.analysis.modelElements?.length ? { elements: node.analysis.modelElements } : {}),
       name: node.analysis.name,
       description: node.analysis.description || node.sidecar.description || '',
       ...(node.analysis.purpose ? { purpose: node.analysis.purpose } : {}),
@@ -1811,6 +1872,7 @@ export async function researchStored(options) {
       if (existsSync(recordPath)) {
         const record = JSON.parse(readFileSync(recordPath, 'utf-8'));
         record.name = sidecar.name;
+        if (namedType) record.published_as = namedType;
         record.description = sidecar.description;
         record.purpose = node.analysis.purpose ?? record.purpose ?? null;
         record.primary_action = node.analysis.primaryAction ?? record.primary_action ?? null;

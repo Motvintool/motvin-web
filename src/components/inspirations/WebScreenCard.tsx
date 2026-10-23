@@ -7,6 +7,7 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { AppLogo } from './AppLogo';
 import { Screenshot } from './Screenshot';
 import { SCREEN_PARAM } from './ScreenPreviewModal';
+import { screenTitle } from '@/lib/inspirations/screenNaming';
 
 function isPlainClick(event: React.MouseEvent) {
   return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
@@ -45,7 +46,7 @@ export function WebScreenCard({
           <button
             type="button"
             className={`ins-card-select-ring ${selected ? 'is-selected' : ''}`}
-            aria-label={selected ? `Deselect ${screen.name}` : `Select ${screen.name}`}
+            aria-label={selected ? `Deselect ${screenTitle(screen)}` : `Select ${screenTitle(screen)}`}
             aria-pressed={selected}
             onClick={(event) => {
               event.preventDefault();
@@ -82,7 +83,7 @@ export function WebScreenCard({
               </div>
             </>
           ) : (
-            <Link href={href} className="ins-web-card-name">{screen.name}</Link>
+            <Link href={href} className="ins-web-card-name">{screenTitle(screen)}</Link>
           )}
         </div>
       )}

@@ -218,7 +218,7 @@ export function describeOp(op: AdminOp, extra: { screens?: number; flows?: numbe
       return `Stop the run “${op.title}”? Screens it has already published stay; the rest of the run is abandoned.`;
     case 'research-app':
       return op.restructure
-        ? `Have the AI rebuild ${op.name}’s flows from its stored screens — each flow checked to be one task (mixed ones split), repeats merged, categories set — and rewrite the flow and screen names? The screens themselves stay. It takes a few minutes and runs as a job you can watch here.`
+        ? `Have the AI rebuild the flows of ${op.name}’s latest version from its stored screens — onboarding cut off where it ends, each flow checked to be one task (mixed ones split), repeats merged, categories set — and rewrite the flow and screen names? The screens themselves stay. It takes a few minutes and runs as a job you can watch here.`
         : `Have the AI rewrite ${op.name}’s flow and screen names from the stored screens? It takes a few minutes and runs as a job you can watch here.`;
     case 'set-ai':
       return op.enabled === false ? 'Turn the AI off? Names will come from the on-device rules until it is turned on again.' : op.enabled === true && !op.chatModel ? 'Turn the AI back on?' : `Use ${op.chatModel} for the chat and journey names?`;

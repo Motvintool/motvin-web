@@ -10,7 +10,7 @@
  */
 
 import { deflateSync } from 'node:zlib';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { log, bold, dim } from './log.js';
@@ -465,6 +465,10 @@ export async function selfTest() {
     check(
       'unclassified screens still reach the store',
       existsSync(join(ingestStore, 'screens', 'ios', 'ingest-selftest', 'versions', ingested.version, 'other.webp')),
+      (() => {
+        const at = join(ingestStore, 'screens', 'ios', 'ingest-selftest', 'versions', String(ingested.version));
+        return existsSync(at) ? readdirSync(at).join(' ') : `no folder for version ${ingested.version}`;
+      })(),
     );
     check('ingested screens publish immediately', ingested.status === 'approved');
     check('classification being off is reported', ingested.analyzerUsable === false);

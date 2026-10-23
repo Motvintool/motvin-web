@@ -58,7 +58,10 @@ export type IngestResult = {
     durationSeconds: number;
     dropped: { transitions: number; blank: number; scrims: number; revisits: number; merged: number };
   } | null;
-  researched: { journeysRenamed: number; screensUpdated: number; batches: number; screens: number; flows: number } | null;
+  /** typesRechecked / typesFixed: the self-review's second look at doubtful types. */
+  researched: { journeysRenamed: number; screensUpdated: number; batches: number; screens: number; flows: number; typesRechecked?: number; typesFixed?: number } | null;
+  /** What the tree's last check found — empty when it is clean; absent from runs before the check existed. */
+  checks?: string[];
   flows: IngestFlow[];
   screens: IngestScreen[];
 };
@@ -996,6 +999,29 @@ function tellAdminChanged() {
  * admin, and reports what happened. A logo needs an image: the one dropped
  * earlier, or the one passed in from the picker.
  */
+/** The flow edits that change which folder a screen belongs in. */
+const FLOW_EDITS = new Set(['rename-flow', 'delete-flow', 'set-flow-parent', 'add-to-flow', 'remove-from-flow', 'create-flow', 'reorder-flow']);
+
+/**
+ * After a flow edit, the files of that version are moved to the folders the
+ * tree now names (POST /api/crawler/sync-folders). The app, platform and
+ * version are read off the flow's id, or a screen's, which carry all three.
+ * Never in the way: when a run is going it is simply skipped.
+ */
+async function lineUpFolders(op: AdminOp) {
+  if (!FLOW_EDITS.has(op.kind)) return;
+  const ref = 'flowId' in op && op.flowId ? op.flowId : 'screenIds' in op ? op.screenIds?.[0] : undefined;
+  const match = /^([a-z0-9][a-z0-9-]*?)-(ios|webapp|web)-versions-(\d{4}-\d{2}-\d{2})-/.exec(String(ref ?? ''));
+  if (!match) return;
+  const [, appId, platform, version] = match;
+  try {
+    const res = await fetch('/api/crawler/sync-folders', { method: 'POST', headers: await authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ appId, platform, version }) });
+    if (res.ok) void refreshIngestJobs();
+  } catch {
+    // The tree is saved either way; the folders catch up on the next sync.
+  }
+}
+
 export async function performAction(action: ConfirmAction, image?: File | null): Promise<'done' | 'needs-image' | 'failed'> {
   const { op } = action;
   if ((op.kind === 'set-logo' || op.kind === 'add-screen') && !(image ?? heldFile)) return 'needs-image';
@@ -1227,11 +1253,14 @@ export async function performAction(action: ConfirmAction, image?: File | null):
       case 'research-app': {
         // The platform the app's screens are stored under — the most of them —
         // so a web app's screens are read where they are, not under iOS.
-        const stored = (await adminApi.getState()).files.filter((file) => file.appId === op.appId);
+        const library = await adminApi.getState();
+        const stored = library.files.filter((file) => file.appId === op.appId);
+        // Rebuilding flows works on the version the app's page shows — the latest — and leaves older captures as they are.
+        const latest = op.restructure ? library.apps.find((app) => app.id === op.appId)?.versions?.find((v) => v.isLatest)?.id : undefined;
         const tally = new Map<string, number>();
         for (const file of stored) tally.set(file.platform, (tally.get(file.platform) ?? 0) + 1);
         const platform = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'ios';
-        const res = await fetch('/api/crawler/research', { method: 'POST', headers: await authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ appId: op.appId, name: op.name, platform, restructure: op.restructure === true }) });
+        const res = await fetch('/api/crawler/research', { method: 'POST', headers: await authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ appId: op.appId, name: op.name, platform, restructure: op.restructure === true, ...(latest ? { version: latest } : {}) }) });
         if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { message?: string }).message ?? `Could not start the rewrite (${res.status}).`);
         void refreshIngestJobs();
         break;
@@ -1257,6 +1286,7 @@ export async function performAction(action: ConfirmAction, image?: File | null):
     }
     patchMessage(working.id, { pending: false, text: done, actions: [], undo: inverse ? { op: inverse, label: labelFor(inverse) } : undefined });
     tellAdminChanged();
+    void lineUpFolders(op);
     return 'done';
   } catch (error) {
     patchMessage(working.id, { pending: false, text: `That did not go through: ${(error as Error).message}`, actions: [] });

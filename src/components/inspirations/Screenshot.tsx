@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import type { Screen } from '@/lib/inspirations/types';
+import { screenTitle } from '@/lib/inspirations/screenNaming';
 
 /**
  * A stored screenshot.
@@ -34,7 +35,7 @@ export function Screenshot({
 
   if (failed || !src) {
     return (
-      <div className={`ins-shot-missing ${className}`} style={{ aspectRatio: ratio }} role="img" aria-label={`${screen.name} — image unavailable`}>
+      <div className={`ins-shot-missing ${className}`} style={{ aspectRatio: ratio }} role="img" aria-label={`${screenTitle(screen)} — image unavailable`}>
         <span className="ins-shot-missing-text">Image unavailable</span>
       </div>
     );
@@ -43,7 +44,7 @@ export function Screenshot({
   return (
     <img
       src={src}
-      alt={`${screen.name} screen`}
+      alt={`${screenTitle(screen)} screen`}
       className={`ins-shot-img ${loaded ? 'is-loaded' : ''} ${className}`}
       style={{ aspectRatio: ratio }}
       width={screen.width || undefined}
