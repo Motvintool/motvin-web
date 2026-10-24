@@ -879,7 +879,8 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
         copyFileSync(options.recordingPath, join(reviewFolder, `recording${extname(options.recordingPath).toLowerCase()}`));
       }
       // Ready for Claude's review: contact sheets, the screen list, the doubts.
-      await writeReviewPack({ appId: resolvedApp.appId, platform: options.platform || 'ios', version: result.version, dataDir: options.dataDir }).catch((error) => log.warn(`could not write the review package — ${error.message.split('\n')[0]}`));
+      // Light: the screens and the check now; the frame strips and the scan wait for the review to start.
+      await writeReviewPack({ appId: resolvedApp.appId, platform: options.platform || 'ios', version: result.version, dataDir: options.dataDir, light: true }).catch((error) => log.warn(`could not write the review package — ${error.message.split('\n')[0]}`));
     }
     return {
       ...result,

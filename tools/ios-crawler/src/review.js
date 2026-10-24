@@ -188,7 +188,8 @@ export async function writeReviewPack(options) {
   const dir = reviewDir(dataDir, appId, platform, version);
   mkdirSync(dir, { recursive: true });
   for (const entry of readdirSync(dir)) if (/^sheet-\d+\.png$/.test(entry)) rmSync(join(dir, entry));
-  rmSync(join(dir, 'frames'), { recursive: true, force: true });
+  // A light package (right after an upload) leaves the frame strips and the scan to the review itself.
+  if (!options.light) rmSync(join(dir, 'frames'), { recursive: true, force: true });
 
   const tag = `${appId}-${platform}-${VERSIONS_DIR_NAME}-${version}-`;
   const flows = (readJson(join(dataDir, 'flows.json'), { flows: [] }).flows || []).filter((flow) => flow.appId === appId && flow.platform === platform && (flow.screenIds ?? []).some((id) => id.startsWith(tag)));
@@ -262,8 +263,10 @@ export async function writeReviewPack(options) {
       }
     }
   }
-  await writeFrameStrips(dir, screens, flows);
-  await writeMissedMoments(dir, screens);
+  if (!options.light) {
+    await writeFrameStrips(dir, screens, flows);
+    await writeMissedMoments(dir, screens);
+  }
   // A screen with almost nothing drawn on it — a blank loading page, a white flash — is no step.
   screens.forEach((screen, i) => {
     const print = prints[i];
@@ -619,7 +622,7 @@ export async function applyReview(options) {
   // the package with review-pack.
   if (!problems.length) {
     for (const entry of readdirSync(dir)) {
-      const working = /^recording\./.test(entry) || entry === 'frames' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || entry === 'missed.json' || entry === 'decided.json' || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
+      const working = /^recording\./.test(entry) || entry === 'frames' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || entry === 'missed.json' || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
       const olderBackup = entry.startsWith('backup-') && join(dir, entry) !== backup;
       if (working || olderBackup) rmSync(join(dir, entry), { recursive: true, force: true });
     }
@@ -633,7 +636,7 @@ export async function applyReview(options) {
   else marks[`${appId}-${platform}-${version}`] = { reviewedAt: new Date().toISOString(), by: 'Claude', fixes };
   writeJson(join(dataDir, 'reviewed.json'), marks);
   // Problems left: a fresh package for the next pass. None: nothing to review again.
-  if (problems.length) await writeReviewPack({ appId, platform, version, dataDir }).catch(() => null);
+  if (problems.length) await writeReviewPack({ appId, platform, version, dataDir, light: true }).catch(() => null);
   log.ok(`review applied: ${fixes} fix(es), ${kept} new rule(s) kept; backup in ${backup}`);
   if (problems.length) {
     log.warn(`review check: ${problems.length} problem(s) left — fix them and apply again:`);
@@ -872,9 +875,9 @@ async function takeFrame(recording, image, seconds, scratch) {
 }
 
 /** Frames a second the recording is scanned at for missed moments. */
-const SCAN_FPS = 4;
-/** A still moment lasts at least this many scanned frames (a second). */
-const STILL_FRAMES = 4;
+const SCAN_FPS = 8;
+/** A still moment lasts at least this many scanned frames (about 0.4s — a quick toast or banner counts). */
+const STILL_FRAMES = 3;
 
 function changedShare(a, b, level) {
   let n = 0;

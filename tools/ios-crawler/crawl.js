@@ -733,10 +733,14 @@ async function runReview(command, flags) {
   }
   const options = { appId: flags.appId, platform: flags.platform, version: flags.version, dataDir: flags.dataDir };
   if (command === 'review-pack') {
+    // Run by hand, this is a review starting: the Motvin agent shows "Agent is reviewing…" at once, on
+    // step 2 while the package is built (minutes for a long recording), then step 3, the screens.
+    const reviewFolder = reviewDir(flags.dataDir, flags.appId, flags.platform || 'ios', flags.version);
+    mkdirSync(reviewFolder, { recursive: true });
+    const startedAt = new Date().toISOString();
+    writeFileSync(join(reviewFolder, 'reviewing.json'), `${JSON.stringify({ startedAt, step: 2 })}\n`);
     const pack = await writeReviewPack(options);
-    // Run by hand, this is a review starting: the Motvin agent shows "Agent is reviewing…" with its steps —
-    // the instructions read and the package built, the screens next.
-    writeFileSync(join(pack.dir, 'reviewing.json'), `${JSON.stringify({ startedAt: new Date().toISOString(), step: 3 })}\n`);
+    writeFileSync(join(pack.dir, 'reviewing.json'), `${JSON.stringify({ startedAt, step: 3 })}\n`);
     process.stdout.write(`${pack.dir}\n`);
   } else if (command === 'review-progress') {
     // The review reached a step: the Motvin agent's card ticks off the ones before it.

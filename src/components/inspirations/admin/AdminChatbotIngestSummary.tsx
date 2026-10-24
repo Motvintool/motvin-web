@@ -78,6 +78,13 @@ export function ClaudeReview({ appId, appName, platform, version }: { appId: str
       setRemoving(false);
     }
   };
+  // A live clock while the review runs, ticking each second like the upload's.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!status?.reviewing) return;
+    const tick = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(tick);
+  }, [status?.reviewing]);
   const left = status?.problems ?? [];
   // Where this upload is: uploaded, Claude's review, then the admin's check and clean-up.
   const stage = status?.reviewed && !left.length ? (status.hasBackup ? 2 : 3) : 1;
@@ -91,7 +98,8 @@ export function ClaudeReview({ appId, appName, platform, version }: { appId: str
     </ol>
   );
   if (status?.reviewing) {
-    const minutes = status.startedAt ? Math.max(0, Math.round((Date.now() - Date.parse(status.startedAt)) / 60000)) : null;
+    const seconds = status.startedAt ? Math.max(0, Math.floor((now - Date.parse(status.startedAt)) / 1000)) : null;
+    const clock = seconds === null ? null : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
     return (
       <div className="ins-review-card">
         {steps}
@@ -99,7 +107,7 @@ export function ClaudeReview({ appId, appName, platform, version }: { appId: str
           <span className="ins-review-card-spinner" aria-hidden /> Agent is reviewing…
         </p>
         <p className="ins-review-card-text">
-          {minutes === null ? 'Started just now.' : minutes < 1 ? 'Started less than a minute ago.' : `Started ${minutes} minute${minutes === 1 ? '' : 's'} ago.`}
+          {clock === null ? 'Started just now.' : `Reviewing for ${clock}`}
         </p>
         {/* The review's own steps, ticked off as it reports them (crawl.js review-progress). */}
         <ol className="ins-review-progress">
