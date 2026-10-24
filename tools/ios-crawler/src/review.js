@@ -24,7 +24,8 @@ import sharp from 'sharp';
 import { syncFolders } from './folders.js';
 import { log } from './log.js';
 import { rebuildManifest, resolveDataDir, VERSIONS_DIR_NAME } from './publish.js';
-import { extractFramesAt } from './frames.js';
+import { extractFramesAt, extractThumbs } from './frames.js';
+import { fingerprintFromThumb } from './hash.js';
 import { ELEMENTS, INDUSTRIES, PUBLISHED_FLOW_CATEGORIES, PUBLISHED_TYPES, STYLES, typeFromName } from './taxonomy.js';
 
 const IMAGES = new Set(['.webp', '.png', '.jpg', '.jpeg']);
@@ -262,6 +263,7 @@ export async function writeReviewPack(options) {
     }
   }
   await writeFrameStrips(dir, screens, flows);
+  await writeMissedMoments(dir, screens);
   // A screen with almost nothing drawn on it — a blank loading page, a white flash — is no step.
   screens.forEach((screen, i) => {
     const print = prints[i];
@@ -285,6 +287,8 @@ export async function writeReviewPack(options) {
         ? 'almost nothing on it — a blank loading page to remove?'
         : screen.cleanerAt !== undefined
           ? `first step of its flow, and the picture at ${screen.cleanerAt}s (just before) may be the clean start — see frames/${screen.n}.png`
+        : screen.changesAt !== undefined && screen.clearerAt === undefined
+          ? `something on it changes at ${screen.changesAt}s (an error, a state, a filled field?) — a step of its own to add? see frames/${screen.n}.png`
         : screen.clearerAt !== undefined
           ? `a clearer picture of it at ${screen.clearerAt}s (sharper or fully loaded) — see frames/${screen.n}.png`
         : screen.looksLike
@@ -297,7 +301,8 @@ export async function writeReviewPack(options) {
   // The app's own category (industry), what the Categories list files it under.
   const appsDoc = readJson(join(dataDir, 'apps.json'), { apps: [] });
   const appRecord = (Array.isArray(appsDoc) ? appsDoc : appsDoc.apps ?? []).find((entry) => entry.id === appId);
-  writeJson(join(dir, 'screens.json'), { app: appId, platform, version, generatedAt: new Date().toISOString(), appName: appRecord?.name ?? null, tagline: appRecord?.tagline ?? null, industry: appRecord?.industry ?? null, cardScreens: appRecord?.cardScreens ?? [], industries: INDUSTRIES, flowCategories: PUBLISHED_FLOW_CATEGORIES, types: PUBLISHED_TYPES, elements: ELEMENTS, tags: tagList, tree, patterns, problems: checkVersion({ appId, platform, version, dataDir }), screens });
+  writeJson(join(dir, 'screens.json'), { app: appId, platform, version, generatedAt: new Date().toISOString(), appName: appRecord?.name ?? null, tagline: appRecord?.tagline ?? null, industry: appRecord?.industry ?? null, cardScreens: appRecord?.cardScreens ?? [], industries: INDUSTRIES, flowCategories: PUBLISHED_FLOW_CATEGORIES, types: PUBLISHED_TYPES, elements: ELEMENTS, tags: tagList, tree, patterns, problems: checkVersion({ appId, platform, version, dataDir }), missed: readJson(join(dir, 'missed.json'), []), screens });
+  for (const moment of readJson(join(dir, 'missed.json'), [])) doubts.push({ n: null, id: null, name: null, type: null, why: `a moment at ${moment.at}s that no screen shows (after #${moment.afterN ?? '?'}) — add it or skip it; see ${moment.picture}` });
   writeJson(join(dir, 'doubts.json'), doubts);
 
   // Contact sheets: twelve numbered screenshots each, number and type under each.
@@ -343,6 +348,8 @@ export async function writeReviewPack(options) {
  *     "merges":  [ { "from": flow id, "into": flow id } ],
  *     "remove":  [ screen id, … ]  (duplicates and bad frames; undo puts them back),
  *     "frames":  [ { "id": screen id, "at": seconds } ]  (a better picture from the kept recording),
+ *     "add":     [ { "after": screen id, "at": seconds, "name", "type", … } ]  (a step the upload missed, from the recording),
+ *     "skip":    [ seconds, … ]  (missed moments looked at and not worth a screen),
  *     "rules":   { "screenTypes"?: [...], "nameFixes"?: [...], "wordTypes"?: [...] } }
  *
  * Everything it touches is backed up first; then the folders are lined up
@@ -359,6 +366,8 @@ export async function applyReview(options) {
   const versionDir = join(appDir, VERSIONS_DIR_NAME, version);
   const dir = reviewDir(dataDir, appId, platform, version);
   const backup = join(dir, `backup-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+  // Applying: the agent's card shows step 6 under way.
+  if (existsSync(join(dir, 'reviewing.json'))) writeJson(join(dir, 'reviewing.json'), { ...readJson(join(dir, 'reviewing.json'), {}), step: 6 });
   mkdirSync(backup, { recursive: true });
   cpSync(versionDir, join(backup, 'version'), { recursive: true });
   cpSync(join(dataDir, 'flows.json'), join(backup, 'flows.json'));
@@ -424,6 +433,54 @@ export async function applyReview(options) {
   }
   const flowsFile = join(dataDir, 'flows.json');
   const flowsDoc = readJson(flowsFile, { version: 1, flows: [] });
+  // Decisions on missed moments: added (below) or skipped.
+  const decided = readJson(join(dir, 'decided.json'), []);
+  for (const at of Array.isArray(corrections.skip) ? corrections.skip : []) if (typeof at === 'number') decided.push(at);
+  for (const add of Array.isArray(corrections.add) ? corrections.add : []) if (typeof add.at === 'number') decided.push(add.at);
+  writeJson(join(dir, 'decided.json'), decided);
+  // A step the upload missed (an error, a state held on one page), taken from the
+  // kept recording and put in its flow right after the screen it follows.
+  for (const add of Array.isArray(corrections.add) ? corrections.add : []) {
+    const after = fileOfId.get(add.after);
+    const flow = (flowsDoc.flows || []).find((entry) => entry.appId === appId && entry.platform === platform && entry.screenIds.includes(add.after));
+    if (!after || !flow || typeof add.at !== 'number') {
+      log.warn(`review: cannot add a screen after ${add.after} — it is not in this version's flows`);
+      continue;
+    }
+    if (!recording) {
+      log.warn('review: no recording kept for this upload — a missed step cannot be added');
+      continue;
+    }
+    const folder = dirname(after);
+    const ext = extname(after);
+    let n = 1;
+    while (existsSync(join(folder, `added-${n}${ext}`))) n += 1;
+    const image = join(folder, `added-${n}${ext}`);
+    cpSync(after, image);
+    try {
+      await takeFrame(recording, image, add.at, join(dir, 'frames', 'take'));
+    } catch (error) {
+      rmSync(image, { force: true });
+      log.warn(`review: could not take the frame at ${add.at}s — ${String(error.message).split('\n')[0]}`);
+      continue;
+    }
+    const sidecar = { ...readJson(after.replace(/\.[^.]+$/, '.json'), {}) };
+    if (typeof add.name === 'string' && add.name.trim()) sidecar.name = add.name.trim();
+    if (add.type && PUBLISHED_TYPES.includes(add.type)) sidecar.screenType = sidecar.fineType = add.type;
+    if (Array.isArray(add.extraTypes)) sidecar.extraTypes = add.extraTypes.filter((t) => PUBLISHED_TYPES.includes(t) && t !== 'other' && t !== sidecar.screenType).slice(0, 4);
+    if (Array.isArray(add.elements)) sidecar.elements = add.elements.filter((e) => ELEMENTS.includes(e)).slice(0, 6);
+    if (Array.isArray(add.tags)) sidecar.tags = add.tags.slice(0, 5);
+    if (Array.isArray(add.style)) sidecar.style = add.style.filter((style) => STYLES.includes(style));
+    sidecar.capture = { ...(sidecar.capture ?? {}), atSeconds: add.at };
+    writeJson(image.replace(/\.[^.]+$/, '.json'), sidecar);
+    const rel = `${VERSIONS_DIR_NAME}/${version}/${image.slice(versionDir.length + 1)}`;
+    const id = `${appId}-${platform}-${rel.replace(/\.[^.]+$/, '').split('/').join('-')}`;
+    fileOfId.set(id, image);
+    const at = flow.screenIds.indexOf(add.after) + 1;
+    flow.screenIds.splice(at, 0, id);
+    flow.steps = flow.screenIds.map((sid) => ({ screenId: sid, action: (flow.steps ?? []).find((step) => step.screenId === sid)?.action ?? null }));
+    fixes += 1;
+  }
   // Screens the review takes out — a duplicate of the one before it, a frame
   // caught mid-transition, a blank or broken capture. The backup above holds
   // the files and records, so undo puts them back.
@@ -550,8 +607,11 @@ export async function applyReview(options) {
   await syncFolders({ appId, platform, version, dataDir });
   await rebuildManifest(dataDir);
   const problems = checkVersion({ appId, platform, version, dataDir });
-  // A finished pass ends the "reviewing" state; with problems left the next pass starts it again.
-  rmSync(join(dir, 'reviewing.json'), { force: true });
+  // A clean pass ends the "reviewing" state; with problems left the review is back on its last step, fixing them.
+  if (problems.length) {
+    const started = readJson(join(dir, 'reviewing.json'), { startedAt: new Date().toISOString() });
+    writeJson(join(dir, 'reviewing.json'), { ...started, step: 7 });
+  } else rmSync(join(dir, 'reviewing.json'), { force: true });
   // Done: the screens are right, so the review's working files are no longer
   // needed — the recording, frame strips, contact sheets, screen list and
   // corrections go. Kept: reviewed.json (the "Reviewed by Claude" mark) and
@@ -559,7 +619,7 @@ export async function applyReview(options) {
   // the package with review-pack.
   if (!problems.length) {
     for (const entry of readdirSync(dir)) {
-      const working = /^recording\./.test(entry) || entry === 'frames' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
+      const working = /^recording\./.test(entry) || entry === 'frames' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || entry === 'missed.json' || entry === 'decided.json' || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
       const olderBackup = entry.startsWith('backup-') && join(dir, entry) !== backup;
       if (working || olderBackup) rmSync(join(dir, entry), { recursive: true, force: true });
     }
@@ -656,6 +716,11 @@ export function checkVersion(options) {
   const ids = new Set(screens.map((screen) => screen.id));
   const listed = new Set(flows.flatMap((flow) => flow.screenIds));
   for (const { id } of screens) if (!listed.has(id)) problems.push(`screen ${id.slice(tag.length)} is in no flow`);
+  // One screen, one flow: a screen listed in an area and again in a flow inside it shows twice.
+  for (const { id } of screens) {
+    const holders = flows.filter((flow) => flow.screenIds.includes(id));
+    if (holders.length > 1) problems.push(`screen ${id.slice(tag.length)} is in ${holders.length} flows (${holders.map((flow) => `"${flow.name}"`).join(', ')}) — keep it only in the one it belongs to`);
+  }
   const byId = new Map(flows.map((flow) => [flow.id, flow]));
   const typeOf = new Map(screens.map(({ id, sidecar }) => [id, sidecar.screenType]));
   const seen = new Map();
@@ -672,6 +737,9 @@ export function checkVersion(options) {
     if (/ - |\(|\)|\bflow\b/i.test(flow.name)) problems.push(`flow "${flow.name}" is not a plain task name`);
   }
 
+  for (const moment of undecidedMoments(reviewDir(dataDir, appId, platform, version))) {
+    problems.push(`a moment at ${moment.at}s in the recording is in no screen — add it ("add") or skip it ("skip")`);
+  }
   const appsDoc = readJson(join(dataDir, 'apps.json'), { apps: [] });
   const record = (Array.isArray(appsDoc) ? appsDoc : appsDoc.apps ?? []).find((entry) => entry.id === appId);
   if (!record) problems.push(`app ${appId} has no record in apps.json`);
@@ -679,6 +747,9 @@ export function checkVersion(options) {
     if (!INDUSTRIES.includes(record.industry) || record.industry === 'other') problems.push(`app ${appId} has no proper category (industry "${record.industry}")`);
     if (!String(record.name ?? '').trim()) problems.push(`app ${appId} has no name`);
     if (!String(record.tagline ?? '').trim()) problems.push(`app ${appId} has no tagline`);
+    // The logo is a file named for the app in logos/ — none means the app shows its initials.
+    const logos = existsSync(join(dataDir, 'logos')) ? readdirSync(join(dataDir, 'logos')) : [];
+    if (!logos.some((entry) => entry.replace(/\.[^.]+$/, '') === appId)) problems.push(`app ${appId} has no logo — add one with the Logo button in the admin, or ask the agent`);
     const appIds = new Set(readdirSync(join(appDir, VERSIONS_DIR_NAME)).filter((v) => statSync(join(appDir, VERSIONS_DIR_NAME, v)).isDirectory()).flatMap((v) => listImages(join(appDir, VERSIONS_DIR_NAME, v)).map((rel) => idOf(`${VERSIONS_DIR_NAME}/${v}/${rel}`))));
     const cards = Array.isArray(record.cardScreens) ? record.cardScreens : [];
     if (cards.some((sid) => !appIds.has(sid))) problems.push(`app ${appId} card pictures point at screens that are gone`);
@@ -690,7 +761,7 @@ export function checkVersion(options) {
 }
 
 /** Seconds around a screen's moment shown in its frame strip. */
-const STRIP_OFFSETS = [-0.9, -0.6, -0.3, 0, 0.3, 0.6, 0.9, 1.5];
+const STRIP_OFFSETS = [-0.9, -0.6, -0.3, 0, 0.3, 0.6, 1, 1.5, 2.2, 3];
 /** Frames a second the strip is read at. */
 const STRIP_FPS = 10;
 
@@ -761,6 +832,10 @@ async function writeFrameStrips(dir, screens, flows) {
     const same = cells.filter((cell) => grayDiff(cell.gray, own.gray) < 30);
     const best = same.reduce((a, b) => (b.score > a.score ? b : a), own);
     if (best !== own && best.score >= own.score * 1.15) screen.clearerAt = best.seconds;
+    // The same page, but something on it changes and stays — an error line, a filled field, a toggle:
+    // likely a step of its own the upload folded into this one.
+    const changed = same.find((cell) => cell.offset > 0 && grayDiff(cell.gray, own.gray) >= 2 && grayDiff(cell.gray, own.gray) < 30);
+    if (changed) screen.changesAt = changed.seconds;
     if (firstOfFlow.has(screen.id)) {
       const before = same.filter((cell) => cell.offset < 0 && grayDiff(cell.gray, own.gray) > 1 && cell.score >= own.score * 0.9);
       if (before.length) screen.cleanerAt = before[0].seconds;
@@ -794,4 +869,85 @@ async function takeFrame(recording, image, seconds, scratch) {
   await out.toFile(temp);
   cpSync(temp, image);
   rmSync(temp, { force: true });
+}
+
+/** Frames a second the recording is scanned at for missed moments. */
+const SCAN_FPS = 4;
+/** A still moment lasts at least this many scanned frames (a second). */
+const STILL_FRAMES = 4;
+
+function changedShare(a, b, level) {
+  let n = 0;
+  for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > level) n += 1;
+  return n / a.length;
+}
+
+/**
+ * Share of the page that changed, the status bar and the home indicator left
+ * out — a clock, a battery or the bar shown on one frame and hidden on the
+ * next is not a new step.
+ */
+function pageChange(a, b) {
+  const width = 48;
+  const rows = a.length / width;
+  const from = Math.ceil(rows * 0.07) * width;
+  const to = Math.floor(rows * 0.95) * width;
+  let n = 0;
+  for (let i = from; i < to; i++) if (Math.abs(a[i] - b[i]) > 30) n += 1;
+  return n / (to - from);
+}
+
+const compareGray = (path) => sharp(path).resize(48, 96, { fit: 'fill' }).greyscale().raw().toBuffer();
+
+/**
+ * Every moment of the recording that holds still for a second yet matches no
+ * kept screen — an error line that appeared, an empty state, a picker the
+ * upload folded away — written to missed.json (with frames/missed-<k>.png) so
+ * the review has to add or skip each one; the final check lists any left.
+ */
+async function writeMissedMoments(dir, screens) {
+  rmSync(join(dir, 'missed.json'), { force: true });
+  const recording = recordingIn(dir);
+  if (!recording || !screens.length) return;
+  const scratch = join(dir, 'frames', 'scan');
+  let thumbs;
+  try {
+    ({ thumbs } = await extractThumbs(recording, scratch, SCAN_FPS));
+  } catch (error) {
+    log.warn(`review: could not scan the recording — ${String(error.message).split('\n')[0]}`);
+    return;
+  }
+  const prints = thumbs.map((thumb) => fingerprintFromThumb(thumb).gray);
+  const stills = [];
+  let start = 0;
+  for (let i = 1; i <= prints.length; i++) {
+    if (i === prints.length || changedShare(prints[i], prints[i - 1], 25) > 0.003) {
+      if (i - start >= STILL_FRAMES) stills.push(Math.floor((start + i - 1) / 2));
+      start = i;
+    }
+  }
+  const paths = await extractFramesAt(recording, scratch, SCAN_FPS, stills.map((i) => Math.max(1, i)));
+  const kept = await Promise.all(screens.map(async (screen) => ({ screen, gray: await compareGray(screen.file).catch(() => null) })));
+  const missed = [];
+  for (const index of stills) {
+    const path = paths.get(Math.max(1, index));
+    if (!path) continue;
+    const gray = await compareGray(path);
+    const closest = Math.min(...kept.filter((entry) => entry.gray).map((entry) => pageChange(entry.gray, gray)));
+    if (closest <= 0.004) continue;
+    const at = Math.round((index / SCAN_FPS) * 100) / 100;
+    const before = screens.filter((screen) => typeof screen.atSeconds === 'number' && screen.atSeconds <= at).sort((a, b) => b.atSeconds - a.atSeconds)[0] ?? null;
+    const k = missed.length + 1;
+    await sharp(path).resize({ width: 360 }).png().toFile(join(dir, 'frames', `missed-${k}.png`));
+    missed.push({ k, at, after: before?.id ?? null, afterN: before?.n ?? null, picture: `frames/missed-${k}.png` });
+  }
+  rmSync(scratch, { recursive: true, force: true });
+  writeJson(join(dir, 'missed.json'), missed);
+}
+
+/** The missed moments the review has not yet added or skipped. */
+function undecidedMoments(dir) {
+  const missed = readJson(join(dir, 'missed.json'), []);
+  const decided = readJson(join(dir, 'decided.json'), []);
+  return missed.filter((moment) => !decided.some((at) => Math.abs(at - moment.at) <= 1.5));
 }

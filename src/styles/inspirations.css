@@ -8054,6 +8054,12 @@ select.ins-input {
 .ins-review-card-details summary { cursor: pointer; margin-top: 2px; }
 .ins-review-card-details ul { margin: 6px 0 0; padding-left: 18px; max-height: 180px; overflow-y: auto; }
 .ins-review-card-details li { margin: 2px 0; }
+.ins-review-progress { margin: 4px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--ins-sub); }
+.ins-review-progress li { display: flex; align-items: center; gap: 8px; }
+.ins-review-progress li.is-done { color: var(--ins-text, inherit); }
+.ins-review-progress li.is-done svg { color: #16a34a; }
+.ins-review-progress li.is-current { color: var(--ins-text, inherit); font-weight: 600; }
+.ins-review-progress-dot { width: 13px; height: 13px; border-radius: 50%; border: 1.5px dashed currentColor; display: inline-block; }
 .ins-review-badge {
   display: inline-block;
   margin-left: 6px;

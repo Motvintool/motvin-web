@@ -24,10 +24,21 @@ import { useToast } from '../Toast';
  * the review package and applies its corrections; once it has, this shows
  * "Reviewed by Claude" with the number of fixes.
  */
+/** The steps a review goes through, as docs/review-motvin.md numbers them for `crawl.js review-progress`. */
+const REVIEW_STEPS = [
+  'Read the review steps',
+  'Build the review package',
+  'Pick screens and best pictures',
+  'Check names, types and elements',
+  'Check flows, patterns and app info',
+  'Apply the corrections',
+  'Final check',
+];
+
 export function ClaudeReview({ appId, appName, platform, version }: { appId: string; appName?: string; platform: string; version: string }) {
   const { show } = useToast();
   const seenUnreviewed = useRef(false);
-  const [status, setStatus] = useState<{ reviewed: boolean; reviewing?: boolean; startedAt?: string | null; fixes?: number; problems?: string[]; hasBackup?: boolean } | null>(null);
+  const [status, setStatus] = useState<{ reviewed: boolean; reviewing?: boolean; startedAt?: string | null; step?: number; fixes?: number; problems?: string[]; hasBackup?: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
   // Names the steps file, so any AI tool opens it from the message alone.
   const request = `Follow docs/review-motvin.md to review ${appId} ${platform} ${version}`;
@@ -37,7 +48,7 @@ export function ClaudeReview({ appId, appName, platform, version }: { appId: str
       try {
         const res = await fetch(`/api/crawler/review-status?${new URLSearchParams({ app: appId, platform, version })}`, { headers: await authHeaders(), cache: 'no-store' });
         if (!res.ok || !live) return;
-        const next = (await res.json()) as { reviewed: boolean; reviewing?: boolean; startedAt?: string | null; fixes?: number; problems?: string[]; hasBackup?: boolean };
+        const next = (await res.json()) as { reviewed: boolean; reviewing?: boolean; startedAt?: string | null; step?: number; fixes?: number; problems?: string[]; hasBackup?: boolean };
         // The review just finished: say so, even if the admin is looking elsewhere.
         if (next.reviewed && seenUnreviewed.current) {
           seenUnreviewed.current = false;
@@ -88,8 +99,21 @@ export function ClaudeReview({ appId, appName, platform, version }: { appId: str
           <span className="ins-review-card-spinner" aria-hidden /> Agent is reviewing…
         </p>
         <p className="ins-review-card-text">
-          {minutes === null ? 'Started just now.' : minutes < 1 ? 'Started less than a minute ago.' : `Started ${minutes} minute${minutes === 1 ? '' : 's'} ago.`} You’ll see a note here when it’s done.
+          {minutes === null ? 'Started just now.' : minutes < 1 ? 'Started less than a minute ago.' : `Started ${minutes} minute${minutes === 1 ? '' : 's'} ago.`}
         </p>
+        {/* The review's own steps, ticked off as it reports them (crawl.js review-progress). */}
+        <ol className="ins-review-progress">
+          {REVIEW_STEPS.map((label, i) => {
+            const at = status.step ?? 3;
+            const state = i + 1 < at ? 'is-done' : i + 1 === at ? 'is-current' : '';
+            return (
+              <li key={label} className={state}>
+                {state === 'is-done' ? <CheckIcon size={13} /> : state === 'is-current' ? <span className="ins-review-card-spinner" aria-hidden /> : <span className="ins-review-progress-dot" aria-hidden />}
+                {label}
+              </li>
+            );
+          })}
+        </ol>
       </div>
     );
   }

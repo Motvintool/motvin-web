@@ -24,7 +24,7 @@ import { assertAuthorized } from './src/safety.js';
 import { localDateString, publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
 import { classifyStored, describeStored, ingestFolder, researchStored, resumeIngest } from './src/ingest.js';
 import { syncFolders } from './src/folders.js';
-import { applyReview, undoReview, writeReviewPack } from './src/review.js';
+import { applyReview, reviewDir, undoReview, writeReviewPack } from './src/review.js';
 import { extractJson, pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
 import { AI_PROVIDERS, aiChat, aiChatStream, aiConfig, aiStatus, canStream, readAiSettings, writeAiSettings } from './src/ai.js';
 
@@ -52,6 +52,8 @@ ${bold('Commands')}
   research --app-id <id>    rewrite an app's flow names, summaries and screen   ${dim('--only journeys|screens')}
                             content with the AI, from what is already stored ${dim('needs a model')}
                             ${dim('--restructure also re-checks the flows: splits, merges, categories')}
+  review-progress --app-id <id> --version <date> --step <1-7>
+                            tell the Motvin agent which review step is under way
   review-pack --app-id <id> --version <date>
                             write Claude's review package: contact sheets, screen list, doubts
   apply-review --app-id <id> --version <date> --file <corrections.json>
@@ -732,9 +734,22 @@ async function runReview(command, flags) {
   const options = { appId: flags.appId, platform: flags.platform, version: flags.version, dataDir: flags.dataDir };
   if (command === 'review-pack') {
     const pack = await writeReviewPack(options);
-    // Run by hand, this is a review starting: the Motvin agent shows "Claude is reviewing…".
-    writeFileSync(join(pack.dir, 'reviewing.json'), `${JSON.stringify({ startedAt: new Date().toISOString(), by: 'Claude' })}\n`);
+    // Run by hand, this is a review starting: the Motvin agent shows "Agent is reviewing…" with its steps —
+    // the instructions read and the package built, the screens next.
+    writeFileSync(join(pack.dir, 'reviewing.json'), `${JSON.stringify({ startedAt: new Date().toISOString(), step: 3 })}\n`);
     process.stdout.write(`${pack.dir}\n`);
+  } else if (command === 'review-progress') {
+    // The review reached a step: the Motvin agent's card ticks off the ones before it.
+    const step = Number(flags.step);
+    if (!Number.isInteger(step) || step < 1 || step > 7) {
+      log.error('--step must be 1–7 (see docs/review-motvin.md).');
+      return 1;
+    }
+    const dir = reviewDir(flags.dataDir, flags.appId, flags.platform || 'ios', flags.version);
+    const file = join(dir, 'reviewing.json');
+    const current = existsSync(file) ? JSON.parse(readFileSync(file, 'utf-8')) : { startedAt: new Date().toISOString() };
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(file, `${JSON.stringify({ ...current, step })}\n`);
   } else if (command === 'apply-review') {
     if (typeof flags.file !== 'string') {
       log.error('--file is required: the corrections JSON.');
@@ -838,6 +853,7 @@ async function main() {
       case 'sync-folders':
         return await runSyncFolders(flags);
       case 'review-pack':
+      case 'review-progress':
       case 'apply-review':
       case 'undo-review':
         return await runReview(command, flags);

@@ -165,7 +165,17 @@ export function AdminChatbot() {
   // has since moved on — the chat's next message is the chip's own text,
   // sent as if typed (see `act`'s 'reply' branch) — so the chosen one can be
   // shown picked instead of every option still looking equally pickable.
+  // The newest assistant message asks an upload question, yet no file is held: the page was reloaded.
+  const staleQuestion = heldUpload ? null : [...messages].reverse().find((entry) => entry.role === 'assistant') ?? null;
+  const staleUpload = Boolean(staleQuestion?.actions?.some((action) => action.type === 'reply' && /^(upload logo|skip|new app|update latest|new version|ios|web apps|webs)$/i.test(action.text)));
+  // Stopped at the logo question: the logo waits on the recording, which is what the reload cleared.
+  const staleAtLogo = Boolean(staleQuestion?.actions?.some((action) => action.type === 'reply' && /^upload logo$/i.test(action.text)));
   const answeredReply = new Map<string, string>();
+  // The logo question stays open — its buttons clickable — while the held upload is still on that step:
+  // a picker closed by mistake is opened again from the same button.
+  const openLogoQuestion = heldUpload?.plan.step === 'logo'
+    ? [...messages].reverse().find((entry) => entry.role === 'assistant' && entry.actions?.some((action) => action.type === 'reply' && /^upload logo$/i.test(action.text)))?.id ?? null
+    : null;
   messages.forEach((message, index) => {
     if (message.role !== 'assistant' || !message.actions?.some((action) => action.type === 'reply' || action.type === 'date')) return;
     const next = messages[index + 1];
@@ -198,6 +208,27 @@ export function AdminChatbot() {
   const uploadTargetRef = useRef<{ appId: string; appName: string; platform?: string } | null>(null);
   /** The new app's logo, picked during an upload's questions. */
   const logoRef = useRef<HTMLInputElement>(null);
+  // "Pick the recording again": videos only, so a logo can't land there by mistake.
+  const videoRef = useRef<HTMLInputElement>(null);
+  // A picker closed without a pick: offer it again, so the conversation is never left stuck on it.
+  const pickerStep = useRef<string | null>(null);
+  pickerStep.current = heldUpload?.plan.step ?? null;
+  useEffect(() => {
+    const logo = logoRef.current;
+    const files = fileRef.current;
+    const onLogoCancel = () => {
+      if (pickerStep.current === 'logo') assistantSays('Logo not picked.', [chip('Upload logo'), chip('Skip')]);
+    };
+    const onFilesCancel = () => {
+      if (!heldUploadFilesNow().length) assistantSays('No file picked.', [{ type: 'upload' }]);
+    };
+    logo?.addEventListener('cancel', onLogoCancel);
+    files?.addEventListener('cancel', onFilesCancel);
+    return () => {
+      logo?.removeEventListener('cancel', onLogoCancel);
+      files?.removeEventListener('cancel', onFilesCancel);
+    };
+  }, []);
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const focusWhenOpen = useRef(false);
@@ -754,6 +785,30 @@ export function AdminChatbot() {
       fileRef.current?.click();
       return;
     }
+    // Adding an app or screens needs no guess from the model: the picker opens at
+    // once (still inside the admin's own key press, so the browser allows it), with
+    // the button beside it in case they close it. "yes", "show me" and the like
+    // right after the agent offered the picker count the same.
+    const said = text.trim();
+    const lastSaid = [...messages].reverse().find((entry) => entry.role === 'assistant')?.text ?? '';
+    const wantsUpload =
+      (/\b(add|upload|new)\b/i.test(said) && /\b(app|apps|screens?|video|recording|screenshots?)\b/i.test(said) && !/\b(to|for|into)\s+[A-Z]/.test(said)) ||
+      (/^(yes|yeah|yep|ok|okay|sure|show me|go ahead|open( it)?|do it)\b/i.test(said) && /file picker|upload/i.test(lastSaid));
+    // An answer to an upload question whose file is gone — the page was reloaded, which drops a picked
+    // file: say so and open the picker again, instead of sending a stray "Skip" to the model.
+    const uploadAnswer = /^(upload logo|choose logo|skip|new app|update latest|new version|ios|web apps|webs)$/i.test(said);
+    if (uploadAnswer && !heldUploadFilesNow().length && !getPending()) {
+      adminSays(said);
+      assistantSays('The file was cleared when the page reloaded — pick the recording or screenshots again and I’ll carry on.', [{ type: 'upload' }]);
+      fileRef.current?.click();
+      return;
+    }
+    if (wantsUpload && !heldUploadFilesNow().length && !getPending()) {
+      adminSays(said);
+      assistantSays('Pick the screen recording or screenshots of the app — I’ll ask its name next.', [{ type: 'upload' }]);
+      fileRef.current?.click();
+      return;
+    }
     // A held upload is part-way through its questions — platform, app,
     // version, date, Confirm; whatever is typed answers the one it is on.
     if (heldUploadFilesNow().length) {
@@ -837,6 +892,17 @@ export function AdminChatbot() {
         const file = e.target.files?.[0] ?? null;
         e.target.value = '';
         if (file) chooseUploadLogo(file);
+      }}
+    />
+    <input
+      ref={videoRef}
+      type="file"
+      accept="video/*,.mov,.mp4,.m4v"
+      hidden
+      onChange={(e) => {
+        const files = Array.from(e.target.files ?? []);
+        e.target.value = '';
+        if (files.length) void upload(files);
       }}
     />
     <input
@@ -963,9 +1029,23 @@ export function AdminChatbot() {
               canRetry={!asking && !liveJob && item.message.id === lastAnswerId}
               busy={asking || Boolean(liveJob)}
               newest={item.message.id === lastAnswerId}
-              answeredWith={answeredReply.get(item.message.id)}
+              answeredWith={item.message.id === openLogoQuestion ? undefined : answeredReply.get(item.message.id)}
             />
           ),
+        )}
+        {/* An upload's questions with no file behind them any more — the page was reloaded, which drops a
+            picked file: say so, with the way to pick it again, instead of leaving dead buttons. */}
+        {staleUpload && (
+          <div className="ins-chat-msg ins-chat-msg--assistant">
+            <p className="ins-chat-line">
+              {staleAtLogo ? 'Page reloaded — pick the recording again, then the logo.' : 'Page reloaded — pick the recording again.'}
+            </p>
+            <div className="ins-chat-actions">
+              <button type="button" className="ins-chip-btn" onClick={() => videoRef.current?.click()}>
+                <UploadIcon size={13} /> Pick the recording again
+              </button>
+            </div>
+          </div>
         )}
         {dragging && <div className="ins-dock-drop">Drop to start a run</div>}
       </div>
@@ -1002,7 +1082,18 @@ export function AdminChatbot() {
               : heldUpload.plan.step === 'app'
                 ? 'a new app, or which existing one?'
                 : heldUpload.plan.step === 'logo'
-                  ? 'a logo for the new app, or skip?'
+                  ? (
+                    <>
+                      a logo for the new app, or skip?{' '}
+                      {/* Always here, so a picker closed by mistake can be opened again. */}
+                      <button type="button" className="ins-linkbtn" onClick={() => logoRef.current?.click()}>
+                        Choose logo
+                      </button>{' '}
+                      <button type="button" className="ins-linkbtn" onClick={() => void answerHeld('skip')}>
+                        Skip
+                      </button>
+                    </>
+                  )
                 : heldUpload.plan.step === 'name'
                   ? 'what is the new app called?'
                   : heldUpload.plan.step === 'version'

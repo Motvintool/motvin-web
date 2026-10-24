@@ -71,6 +71,26 @@ export async function syncFolders(options) {
   for (const flow of mine) if (!order.includes(flow)) order.push(flow);
   const rank = new Map(order.map((flow, at) => [flow.id, at]));
 
+  // One screen, one flow. The upload's tree lists a sub-flow's screens in its
+  // area too ("Onboarding" holding every "Logging in" screen), so they would
+  // show twice: each screen stays only in the deepest flow that lists it.
+  let deduped = 0;
+  for (const flow of mine) {
+    const keep = flow.screenIds.filter((id) => {
+      const deeper = mine.some((other) => other !== flow && depth(other) > depth(flow) && other.screenIds.includes(id));
+      if (deeper) deduped += 1;
+      return !deeper;
+    });
+    if (keep.length !== flow.screenIds.length) {
+      flow.screenIds = keep;
+      flow.steps = (flow.steps ?? []).filter((step) => keep.includes(step.screenId));
+    }
+  }
+  if (deduped) {
+    writeFileSync(flowsFile, `${JSON.stringify(flowsDoc, null, 2)}\n`);
+    log.info(`folders: ${deduped} screen(s) listed in an area and again in a flow inside it — kept only in the flow`);
+  }
+
   // No flows, nothing to line up with.
   if (!mine.length) return { moved: 0, folders: 0, backup: null };
   const files = listImages(versionDir).map((rel) => `${VERSIONS_DIR_NAME}/${version}/${rel.split('\\').join('/')}`);
