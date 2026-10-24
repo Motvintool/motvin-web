@@ -15,7 +15,7 @@ import { RotatingTitle } from '../RotatingTitle';
 import { usePlatformMeta } from '../useMeta';
 import { ExploreSkeleton } from '../Skeletons';
 import { useAsync } from '../useAsync';
-import { useFitResults } from '../useFitResults';
+import { contentKey, useFitResults } from '../useFitResults';
 import { AppLogo } from '../AppLogo';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { EMPTY_FILTERS, browsedPlatforms } from '@/lib/inspirations/filters';
@@ -494,7 +494,8 @@ export function ExploreView() {
 
   // A filter, sort or category picked while scrolled into the gallery brings the new results to the fitted
   // view (useFitResults). Explore's heading folds for it, instantly, so what's measured is what will show.
-  const query = params.toString();
+  // Opening a screen or flow over Explore is not a change of content (contentKey leaves it out).
+  const query = contentKey(params);
   useFitResults(query, () => viewRef.current, '.ins-app-grid', {
     prepare: () => {
       const view = viewRef.current;

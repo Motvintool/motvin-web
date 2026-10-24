@@ -83,7 +83,7 @@ export function WebScreenCard({
               </div>
             </>
           ) : (
-            <Link href={href} className="ins-web-card-name">{screenTitle(screen)}</Link>
+            <Link href={href} scroll={false} className="ins-web-card-name">{screenTitle(screen)}</Link>
           )}
         </div>
       )}

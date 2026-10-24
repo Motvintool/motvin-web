@@ -1,5 +1,31 @@
 import { useEffect, useRef } from 'react';
 
+/**
+ * Address parts that only open something over the page — a screen, a flow,
+ * a compare view, the logo view, the admin drawer, the assistant — and do
+ * not change the page's content. A fit key leaves them out, so opening or
+ * closing one never scrolls the page behind it.
+ */
+const OVERLAY_PARAMS = ['screen', 'logo', 'flow', 'step', 'play', 'compare', 'with', 'admin', 'buddy'];
+
+/**
+ * Whether going to `href` from the page at `pathname` only opens or closes
+ * something over it (same page, same content): such a move must not scroll
+ * the page, so callers pass `{ scroll: false }` for it.
+ */
+export function isOverlayMove(href: string, pathname: string, current: URLSearchParams | { toString(): string }): boolean {
+  if (typeof window === 'undefined') return false;
+  const url = new URL(href, window.location.origin + pathname);
+  return url.pathname === pathname && contentKey(url.searchParams) === contentKey(current);
+}
+
+/** The page's content key from its address: everything but the overlay parts. */
+export function contentKey(params: URLSearchParams | { toString(): string }): string {
+  const sp = new URLSearchParams(params.toString());
+  for (const name of OVERLAY_PARAMS) sp.delete(name);
+  return sp.toString();
+}
+
 /** A scroll this small is "the very top": a change made there moves nothing. */
 const TOP_ZONE_PX = 24;
 /** After a change, the first results settle this far under the docked bar (within the dock's hold). */

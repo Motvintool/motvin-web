@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
+import { isOverlayMove } from './useFitResults';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { askConfirm } from './ConfirmDialog';
@@ -427,7 +428,8 @@ export function UserChatbot() {
 
   const go = (target: NavTarget) => {
     if (target.href === '__back__') router.back();
-    else router.push(target.href);
+    // A screen or flow the assistant opens on this page lays over it, without scrolling the page.
+    else router.push(target.href, isOverlayMove(target.href, pathname, new URLSearchParams(window.location.search)) ? { scroll: false } : undefined);
     setDimmed(false);
     if (window.matchMedia('(max-width: 900px)').matches) setOpen(false);
   };

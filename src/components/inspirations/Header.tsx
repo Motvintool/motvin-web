@@ -21,6 +21,15 @@ export function Header() {
   const pathname = usePathname();
   const params = useSearchParams();
   const [menuOpen, setMenuOpen] = useState(false);
+  // Tells a dockable toolbar the header is hydrated, so it can portal into it
+  // without React finding content it did not render (see useDockingRow).
+  useEffect(() => {
+    document.documentElement.dataset.insHeader = 'ready';
+    window.dispatchEvent(new Event('ins-header-ready'));
+    return () => {
+      delete document.documentElement.dataset.insHeader;
+    };
+  }, []);
 
   const activePlatforms = (params.get('platform') ?? '').split(',').filter(Boolean);
   // iOS highlighted with no param is the truth, not a visual default: every

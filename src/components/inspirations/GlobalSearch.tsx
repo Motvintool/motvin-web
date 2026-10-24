@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { isOverlayMove } from './useFitResults';
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { EMPTY_FILTERS, WEBS_PLATFORMS, browsedPlatforms, isWebsPlatforms } from '@/lib/inspirations/filters';
@@ -201,6 +202,8 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // A phone's search field is too narrow for the whole line: the short one there.
   const placeholder = useMediaQuery(SHEET_QUERY) ? 'Search apps…' : 'Search apps, flows & screens';
   const router = useRouter();
+  // Opening a screen or flow from search lays it over this page: the page behind stays where it was.
+  const pushTo = (href: string) => router.push(href, isOverlayMove(href, pathname, params) ? { scroll: false } : undefined);
   const params = useSearchParams();
   const pathname = usePathname();
   /** Opens a screen in place via `?screen=<id>` (see SCREEN_PARAM in
@@ -551,7 +554,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
       if (!q) return;
       addRecentSearch(q);
       setOpen(false);
-      router.push(INSPIRATIONS_ROUTES.searchFor(q, mode));
+      pushTo(INSPIRATIONS_ROUTES.searchFor(q, mode));
     },
     [addRecentSearch, router],
   );
@@ -640,21 +643,21 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   const browseItems: { onActivate: () => void }[] =
     section === 'top'
       ? [
-          ...visibleTopApps.map((app) => ({ onActivate: () => { close(); router.push(INSPIRATIONS_ROUTES.app(app)); } })),
-          ...typeCards.map((card) => ({ onActivate: () => { close(); router.push(typeHref(card.type)); } })),
-          ...previewElements.map((el) => ({ onActivate: () => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(el.kind)}`); } })),
-          ...previewFlows.map((flow) => ({ onActivate: () => { close(); router.push(flowPreviewHref(flow)); } })),
+          ...visibleTopApps.map((app) => ({ onActivate: () => { close(); pushTo(INSPIRATIONS_ROUTES.app(app)); } })),
+          ...typeCards.map((card) => ({ onActivate: () => { close(); pushTo(typeHref(card.type)); } })),
+          ...previewElements.map((el) => ({ onActivate: () => { close(); pushTo(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(el.kind)}`); } })),
+          ...previewFlows.map((flow) => ({ onActivate: () => { close(); pushTo(flowPreviewHref(flow)); } })),
         ]
       : section === 'apps'
-      ? visibleApps.map((app) => ({ onActivate: () => { close(); router.push(INSPIRATIONS_ROUTES.app(app)); } }))
+      ? visibleApps.map((app) => ({ onActivate: () => { close(); pushTo(INSPIRATIONS_ROUTES.app(app)); } }))
       : section === 'categories'
-      ? categories.map((c) => ({ onActivate: () => { close(); router.push(`${INSPIRATIONS_ROUTES.screens}?industry=${c.value}`); } }))
+      ? categories.map((c) => ({ onActivate: () => { close(); pushTo(`${INSPIRATIONS_ROUTES.screens}?industry=${c.value}`); } }))
       : section === 'screens'
-        ? visibleScreens.map((s) => ({ onActivate: () => { close(); router.push(screenPreviewHref(s)); } }))
+        ? visibleScreens.map((s) => ({ onActivate: () => { close(); pushTo(screenPreviewHref(s)); } }))
         : section === 'elements'
-          ? elements.map((el) => ({ onActivate: () => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(el.kind)}`); } }))
+          ? elements.map((el) => ({ onActivate: () => { close(); pushTo(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(el.kind)}`); } }))
           : section === 'flows'
-            ? visibleFlows.map((f) => ({ onActivate: () => { close(); router.push(flowPreviewHref(f)); } }))
+            ? visibleFlows.map((f) => ({ onActivate: () => { close(); pushTo(flowPreviewHref(f)); } }))
             : [];
 
   handleKeyDownRef.current = (e: globalThis.KeyboardEvent | React.KeyboardEvent) => {
@@ -718,7 +721,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
       e.preventDefault();
       addRecentSearch(modalSuggestions[active].label, modalSuggestions[active]);
       setOpen(false);
-      router.push(modalSuggestions[active].href);
+      pushTo(modalSuggestions[active].href);
     } else if (e.key === 'Enter') {
       // No suggestion highlighted — run the plain query. Handled explicitly
       // rather than left to the browser's implicit submit-on-Enter, which
@@ -905,7 +908,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             onMouseEnter={() => setBrowseActive(itemIndex)}
                             onMouseLeave={() => setBrowseActive((current) => (current === itemIndex ? -1 : current))}
                             onFocus={() => setBrowseActive(itemIndex)}
-                            onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.app(app)); }}
+                            onClick={() => { close(); pushTo(INSPIRATIONS_ROUTES.app(app)); }}
                           >
                             <AppLogo app={app} size={76} />
                             <strong>{app.name}</strong>
@@ -931,7 +934,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             onMouseEnter={() => setBrowseActive(itemIndex)}
                             onMouseLeave={() => setBrowseActive((current) => (current === itemIndex ? -1 : current))}
                             onFocus={() => setBrowseActive(itemIndex)}
-                            onClick={() => { close(); router.push(typeHref(type)); }}
+                            onClick={() => { close(); pushTo(typeHref(type)); }}
                           >
                             <strong>{label}</strong>
                             <span className="ins-search-top-screen-go" aria-hidden="true">
@@ -961,7 +964,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             onMouseEnter={() => setBrowseActive(itemIndex)}
                             onMouseLeave={() => setBrowseActive((current) => (current === itemIndex ? -1 : current))}
                             onFocus={() => setBrowseActive(itemIndex)}
-                            onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}
+                            onClick={() => { close(); pushTo(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}
                           >
                             <span><img src="/ASSET/search-modal/top-rated/element.svg" alt="" width={20} height={20} /></span>{elementLabel(element.kind)}
                             {element.count > 0 && <em className="ins-search-top-count">{formatCount(element.count)}</em>}
@@ -984,7 +987,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             onMouseEnter={() => setBrowseActive(itemIndex)}
                             onMouseLeave={() => setBrowseActive((current) => (current === itemIndex ? -1 : current))}
                             onFocus={() => setBrowseActive(itemIndex)}
-                            onClick={() => { close(); router.push(flowPreviewHref(flow)); }}
+                            onClick={() => { close(); pushTo(flowPreviewHref(flow)); }}
                           >
                             <span><img src="/ASSET/search-modal/top-rated/flow.svg" alt="" width={20} height={20} /></span>{flow.name}
                           </button>
@@ -1008,7 +1011,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             onMouseEnter={() => setBrowseActive(index)}
                             onMouseLeave={() => setBrowseActive((current) => (current === index ? -1 : current))}
                             onFocus={() => setBrowseActive(index)}
-                            onClick={() => { close(); router.push(INSPIRATIONS_ROUTES.app(app)); }}
+                            onClick={() => { close(); pushTo(INSPIRATIONS_ROUTES.app(app)); }}
                           >
                             <AppLogo app={app} size={76} />
                             <strong>{app.name}</strong>
@@ -1039,7 +1042,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       onMouseEnter={() => setBrowseActive(index)}
                       onMouseLeave={() => setBrowseActive((current) => (current === index ? -1 : current))}
                       onFocus={() => setBrowseActive(index)}
-                      onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.screens}?industry=${value}`); }}
+                      onClick={() => { close(); pushTo(`${INSPIRATIONS_ROUTES.screens}?industry=${value}`); }}
                     >
                       <strong>{label}</strong>
                       <span>{count}</span>
@@ -1059,7 +1062,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       onMouseEnter={() => setBrowseActive(index)}
                       onMouseLeave={() => setBrowseActive((current) => (current === index ? -1 : current))}
                       onFocus={() => setBrowseActive(index)}
-                      onClick={() => { close(); router.push(screenPreviewHref(screen)); }}
+                      onClick={() => { close(); pushTo(screenPreviewHref(screen)); }}
                     >
                       <strong>{screenTitle(screen)}</strong>
                       <span>{screen.elements.length}</span>
@@ -1087,7 +1090,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       onMouseEnter={() => setBrowseActive(index)}
                       onMouseLeave={() => setBrowseActive((current) => (current === index ? -1 : current))}
                       onFocus={() => setBrowseActive(index)}
-                      onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}
+                      onClick={() => { close(); pushTo(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}
                     >
                       <strong>{elementLabel(element.kind)}</strong>
                       <span>{element.count}</span>
@@ -1107,7 +1110,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       onMouseEnter={() => setBrowseActive(index)}
                       onMouseLeave={() => setBrowseActive((current) => (current === index ? -1 : current))}
                       onFocus={() => setBrowseActive(index)}
-                      onClick={() => { close(); router.push(flowPreviewHref(flow)); }}
+                      onClick={() => { close(); pushTo(flowPreviewHref(flow)); }}
                     >
                       <strong>{flow.name}</strong>
                       <span>{flow.screenIds.length}</span>
@@ -1156,7 +1159,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                         aria-selected={i === active}
                         onMouseEnter={() => { setActive(i); setActiveSearchAction(null); }}
                         onFocus={() => { setActive(i); setActiveSearchAction(null); }}
-                        onClick={() => { addRecentSearch(s.label, s); close(); router.push(s.href); }}
+                        onClick={() => { addRecentSearch(s.label, s); close(); pushTo(s.href); }}
                       >
                         <span className="ins-search-modal-item-mark">{s.iconSrc ? <img src={s.iconSrc} alt="" /> : s.label.slice(0, 1)}</span>
                         <span><strong>{s.label}</strong><small>{s.hint}</small></span>
@@ -1171,7 +1174,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                     <section className="ins-search-suggestion-section ins-search-suggestion-elements">
                       <div className="ins-search-suggestion-heading">UI Elements</div>
                       <div className="ins-search-top-elements">
-                        {matchingElements.map((element) => <button key={element.kind} type="button" onClick={() => { close(); router.push(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}><span><img src="/ASSET/search-modal/top-rated/element.svg" alt="" width={20} height={20} /></span>{elementLabel(element.kind)}</button>)}
+                        {matchingElements.map((element) => <button key={element.kind} type="button" onClick={() => { close(); pushTo(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(element.kind)}`); }}><span><img src="/ASSET/search-modal/top-rated/element.svg" alt="" width={20} height={20} /></span>{elementLabel(element.kind)}</button>)}
                       </div>
                     </section>
                   )}

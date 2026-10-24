@@ -456,8 +456,22 @@ export function useDockingRow(enabled = true) {
 
   // The header listens for this body class to swap its content with the
   // portaled toolbar while the in-flow placeholder keeps the page stable.
+  // The header sits in its own Suspense boundary and can hydrate after the page:
+  // a page that opens already scrolled docks at once, and a portal into a
+  // header still hydrating makes React throw a hydration mismatch. So the
+  // docked copy waits until the header says it is ready.
+  const [headerReady, setHeaderReady] = useState(false);
+  useEffect(() => {
+    if (document.documentElement.dataset.insHeader === 'ready') {
+      setHeaderReady(true);
+      return;
+    }
+    const ready = () => setHeaderReady(true);
+    window.addEventListener('ins-header-ready', ready);
+    return () => window.removeEventListener('ins-header-ready', ready);
+  }, []);
   const headerContent =
-    typeof document === 'undefined' ? null : document.querySelector<HTMLElement>('.ins-header-content');
+    !headerReady || typeof document === 'undefined' ? null : document.querySelector<HTMLElement>('.ins-header-content');
 
   useEffect(() => {
     document.body.classList.toggle('ins-toolbar-docked', docked);

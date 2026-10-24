@@ -36,7 +36,7 @@ import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, CloseIcon, ExternalIcon, Sea
 
 import { ScreenGrid } from '../ScreenGrid';
 import { ScreenGridSkeleton } from '../Skeletons';
-import { useFitResults } from '../useFitResults';
+import { contentKey, useFitResults } from '../useFitResults';
 import { useAsync } from '../useAsync';
 import { SHEET_QUERY, useMediaQuery } from '../useSheet';
 
@@ -589,13 +589,10 @@ export function AppDetailView({
   // read the "past the header edge" boundary identically.
   const { docked, leaving, anchorRef, rowRef, headerContent } = useDockingRow();
   // A tab, version or filter changed while scrolled into the content: once the new panel is in, bring it to
-  // the fitted view under the docked tab bar. Opening a screen or the logo view (`screen`, `logo`) is not a
-  // change of content, so those are left out of the key. The tab bar's parent holds the panels too.
-  const fitParams = new URLSearchParams(params.toString());
-  fitParams.delete('screen');
-  fitParams.delete('logo');
+  // the fitted view under the docked tab bar. Opening a screen, a flow or the logo view is not a change of
+  // content, so those are left out of the key (contentKey). The tab bar's parent holds the panels too.
   // The page's own filters live in state, not the URL, so they're part of the key too.
-  const fitKey = `${fitParams.toString()}|${version}|${elementFilter.join(',')}|${patternFilter.join(',')}|${flowFilter.join(',')}|${debouncedTextQuery}`;
+  const fitKey = `${contentKey(params)}|${version}|${elementFilter.join(',')}|${patternFilter.join(',')}|${flowFilter.join(',')}|${debouncedTextQuery}`;
   useFitResults(fitKey, () => anchorRef.current?.parentElement ?? null, '.ins-tabpanel');
 
   const renderTabbarRow = (inHeader = false) => (

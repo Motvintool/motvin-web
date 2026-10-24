@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fail, verifyAdmin } from '@/lib/server/adminAuth';
 
 /**
@@ -18,10 +18,20 @@ export async function GET(request: Request) {
   // The library's data folder, as the crawler finds it.
   const dataDir = process.env.INSPIRATIONS_DATA_DIR ? resolve(process.env.INSPIRATIONS_DATA_DIR) : resolve(process.cwd(), '..', 'motvin-backend', 'data', 'inspirations');
   const file = join(dataDir, '..', 'reviews', `${app}-${platform}-${version}`, 'reviewed.json');
-  if (!existsSync(file)) return Response.json({ reviewed: false }, { headers: { 'Cache-Control': 'no-store' } });
+  if (!existsSync(file)) {
+    // Not reviewed yet: what the automatic check already finds in the upload's package, so the admin sees it at once.
+    let problems: string[] = [];
+    try {
+      const pack = JSON.parse(readFileSync(join(dirname(file), 'screens.json'), 'utf-8')) as { problems?: string[] };
+      problems = Array.isArray(pack.problems) ? pack.problems : [];
+    } catch {
+      // No package yet.
+    }
+    return Response.json({ reviewed: false, problems }, { headers: { 'Cache-Control': 'no-store' } });
+  }
   try {
-    const status = JSON.parse(readFileSync(file, 'utf-8')) as { reviewedAt?: string; fixes?: number; rulesAdded?: number };
-    return Response.json({ reviewed: true, reviewedAt: status.reviewedAt ?? null, fixes: status.fixes ?? 0, rulesAdded: status.rulesAdded ?? 0 }, { headers: { 'Cache-Control': 'no-store' } });
+    const status = JSON.parse(readFileSync(file, 'utf-8')) as { reviewedAt?: string; fixes?: number; rulesAdded?: number; problems?: string[] };
+    return Response.json({ reviewed: true, reviewedAt: status.reviewedAt ?? null, fixes: status.fixes ?? 0, rulesAdded: status.rulesAdded ?? 0, problems: Array.isArray(status.problems) ? status.problems : [] }, { headers: { 'Cache-Control': 'no-store' } });
   } catch {
     return Response.json({ reviewed: false }, { headers: { 'Cache-Control': 'no-store' } });
   }

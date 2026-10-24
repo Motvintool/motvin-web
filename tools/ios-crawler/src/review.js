@@ -24,7 +24,7 @@ import sharp from 'sharp';
 import { syncFolders } from './folders.js';
 import { log } from './log.js';
 import { rebuildManifest, resolveDataDir, VERSIONS_DIR_NAME } from './publish.js';
-import { ELEMENTS, PUBLISHED_TYPES, typeFromName } from './taxonomy.js';
+import { ELEMENTS, INDUSTRIES, PUBLISHED_FLOW_CATEGORIES, PUBLISHED_TYPES, STYLES, typeFromName } from './taxonomy.js';
 
 const IMAGES = new Set(['.webp', '.png', '.jpg', '.jpeg']);
 const SHEET_COLUMNS = 6;
@@ -219,6 +219,7 @@ export async function writeReviewPack(options) {
       type: sidecar.screenType ?? 'other',
       extraTypes: Array.isArray(sidecar.extraTypes) ? sidecar.extraTypes : [],
       elements: sidecar.elements ?? [],
+      style: Array.isArray(sidecar.style) ? sidecar.style : [],
       tags: Array.isArray(sidecar.tags) ? sidecar.tags : [],
       flow: holders[0] ? pathOf(holders[0]) : null,
       flowId: holders[0]?.id ?? null,
@@ -239,7 +240,10 @@ export async function writeReviewPack(options) {
   const doubts = screens.map((screen) => ({ n: screen.n, id: screen.id, name: screen.name, type: screen.type, why: doubtOf(screen) })).filter((entry) => entry.why);
   const tree = order.map((flow) => ({ id: flow.id, path: pathOf(flow), category: flow.category, screens: flow.screenIds.length }));
   const tagList = (readJson(join(dataDir, 'tags.json'), { tags: [] }).tags || []).map((tag) => (typeof tag === 'string' ? tag : tag?.slug)).filter(Boolean);
-  writeJson(join(dir, 'screens.json'), { app: appId, platform, version, generatedAt: new Date().toISOString(), types: PUBLISHED_TYPES, elements: ELEMENTS, tags: tagList, tree, patterns, screens });
+  // The app's own category (industry), what the Categories list files it under.
+  const appsDoc = readJson(join(dataDir, 'apps.json'), { apps: [] });
+  const appRecord = (Array.isArray(appsDoc) ? appsDoc : appsDoc.apps ?? []).find((entry) => entry.id === appId);
+  writeJson(join(dir, 'screens.json'), { app: appId, platform, version, generatedAt: new Date().toISOString(), appName: appRecord?.name ?? null, tagline: appRecord?.tagline ?? null, industry: appRecord?.industry ?? null, cardScreens: appRecord?.cardScreens ?? [], industries: INDUSTRIES, flowCategories: PUBLISHED_FLOW_CATEGORIES, types: PUBLISHED_TYPES, elements: ELEMENTS, tags: tagList, tree, patterns, problems: checkVersion({ appId, platform, version, dataDir }), screens });
   writeJson(join(dir, 'doubts.json'), doubts);
 
   // Contact sheets: twelve numbered screenshots each, number and type under each.
@@ -302,6 +306,7 @@ export async function applyReview(options) {
   mkdirSync(backup, { recursive: true });
   cpSync(versionDir, join(backup, 'version'), { recursive: true });
   cpSync(join(dataDir, 'flows.json'), join(backup, 'flows.json'));
+  if (existsSync(join(dataDir, 'apps.json'))) cpSync(join(dataDir, 'apps.json'), join(backup, 'apps.json'));
   // The rules as they were — none yet is a set too, so undo takes away what this review added.
   writeJson(join(backup, 'review-rules.json'), readRules(dataDir));
   // The screens' records too: lining the folders up renames them.
@@ -324,7 +329,12 @@ export async function applyReview(options) {
     const sidecarPath = image.replace(/\.[^.]+$/, '.json');
     const sidecar = readJson(sidecarPath, {});
     if (typeof fix.name === 'string' && fix.name.trim()) sidecar.name = fix.name.trim();
-    if (fix.type && PUBLISHED_TYPES.includes(fix.type)) sidecar.screenType = fix.type;
+    if (fix.type && PUBLISHED_TYPES.includes(fix.type)) {
+      sidecar.screenType = fix.type;
+      // The finer label search ranks by follows the corrected type.
+      sidecar.fineType = fix.type;
+    }
+    if (Array.isArray(fix.style)) sidecar.style = [...new Set(fix.style.filter((style) => STYLES.includes(style)))];
     if (Array.isArray(fix.elements)) sidecar.elements = fix.elements.filter((element) => ELEMENTS.includes(element));
     if (Array.isArray(fix.extraTypes)) sidecar.extraTypes = [...new Set(fix.extraTypes.filter((t) => PUBLISHED_TYPES.includes(t) && t !== 'other' && t !== sidecar.screenType))].slice(0, 4);
     else if (Array.isArray(sidecar.extraTypes)) sidecar.extraTypes = sidecar.extraTypes.filter((t) => t !== sidecar.screenType);
@@ -354,7 +364,7 @@ export async function applyReview(options) {
     const flow = flowById.get(fix.id);
     if (!owned(flow)) continue;
     if (typeof fix.name === 'string' && fix.name.trim()) flow.name = fix.name.trim();
-    if (fix.category) flow.category = fix.category;
+    if (fix.category && PUBLISHED_FLOW_CATEGORIES.includes(fix.category)) flow.category = fix.category;
     if (fix.parent === null || (fix.parent && owned(flowById.get(fix.parent)) && fix.parent !== flow.id)) flow.parentId = fix.parent;
     fixes += 1;
   }
@@ -389,6 +399,15 @@ export async function applyReview(options) {
     for (const child of flowsDoc.flows) if (child.parentId === flow.id) child.parentId = flow.parentId ?? null;
     flowsDoc.flows = flowsDoc.flows.filter((entry) => entry !== flow);
   }
+  // A flow's step order, when the review gives it: the flow's own screens, in order.
+  for (const fix of Array.isArray(corrections.flows) ? corrections.flows : []) {
+    const flow = flowById.get(fix.id);
+    if (!owned(flow) || !Array.isArray(fix.order)) continue;
+    const order = fix.order.filter((id) => flow.screenIds.includes(id));
+    const rest = flow.screenIds.filter((id) => !order.includes(id));
+    flow.screenIds = [...new Set([...order, ...rest])];
+    flow.steps = flow.screenIds.map((id) => ({ screenId: id, action: (flow.steps ?? []).find((step) => step.screenId === id)?.action ?? null }));
+  }
   // The flows the corrections list are shown in the order they are listed;
   // every other flow keeps its place.
   const listed = (Array.isArray(corrections.flows) ? corrections.flows : []).map((fix) => flowById.get(fix.id)).filter((flow) => owned(flow) && flowsDoc.flows.includes(flow));
@@ -396,13 +415,49 @@ export async function applyReview(options) {
   slots.forEach((at, n) => { flowsDoc.flows[at] = listed[n]; });
   writeJson(flowsFile, flowsDoc);
 
+  // The app's category and its card pictures, when the review corrects them.
+  // Card pictures name screens by their ids as the package lists them; the
+  // folder sync below renames them along with the screens.
+  if (corrections.app) {
+    const appsFile = join(dataDir, 'apps.json');
+    const appsDoc = readJson(appsFile, { apps: [] });
+    const record = (Array.isArray(appsDoc) ? appsDoc : appsDoc.apps ?? []).find((entry) => entry.id === appId);
+    let changed = false;
+    if (record && INDUSTRIES.includes(corrections.app.industry) && record.industry !== corrections.app.industry) {
+      record.industry = corrections.app.industry;
+      changed = true;
+    }
+    for (const key of ['name', 'tagline']) {
+      const value = typeof corrections.app[key] === 'string' ? corrections.app[key].trim() : '';
+      if (record && value && record[key] !== value) {
+        record[key] = value;
+        changed = true;
+      }
+    }
+    if (record && Array.isArray(corrections.app.cardScreens)) {
+      const cards = corrections.app.cardScreens.filter((id) => fileOfId.has(id)).slice(0, 4);
+      if (cards.length) {
+        record.cardScreens = cards;
+        changed = true;
+      }
+    }
+    if (changed) {
+      writeJson(appsFile, appsDoc);
+      fixes += 1;
+    }
+  }
   const kept = corrections.rules ? addRules(dataDir, corrections.rules) : 0;
   await syncFolders({ appId, platform, version, dataDir });
   await rebuildManifest(dataDir);
-  writeJson(join(dir, 'reviewed.json'), { reviewedAt: new Date().toISOString(), by: 'Claude', fixes, rulesAdded: kept, backup });
+  const problems = checkVersion({ appId, platform, version, dataDir });
+  writeJson(join(dir, 'reviewed.json'), { reviewedAt: new Date().toISOString(), by: 'Claude', fixes, rulesAdded: kept, backup, problems });
   await writeReviewPack({ appId, platform, version, dataDir }).catch(() => null);
   log.ok(`review applied: ${fixes} fix(es), ${kept} new rule(s) kept; backup in ${backup}`);
-  return { fixes, rulesAdded: kept, backup };
+  if (problems.length) {
+    log.warn(`review check: ${problems.length} problem(s) left — fix them and apply again:`);
+    for (const problem of problems) log.warn(`  - ${problem}`);
+  } else log.ok('review check: no problems left');
+  return { fixes, rulesAdded: kept, backup, problems };
 }
 
 /** Puts back what the last applied review replaced. */
@@ -418,6 +473,7 @@ export async function undoReview(options) {
   rmSync(versionDir, { recursive: true, force: true });
   cpSync(join(backup, 'version'), versionDir, { recursive: true });
   cpSync(join(backup, 'flows.json'), join(dataDir, 'flows.json'));
+  if (existsSync(join(backup, 'apps.json'))) cpSync(join(backup, 'apps.json'), join(dataDir, 'apps.json'));
   if (existsSync(join(backup, 'review-rules.json'))) cpSync(join(backup, 'review-rules.json'), rulesFile(dataDir));
   const tag = `${appId}-${platform}-${VERSIONS_DIR_NAME}-${version}-`;
   for (const kind of ['analysis', 'words']) {
@@ -431,4 +487,77 @@ export async function undoReview(options) {
   await rebuildManifest(dataDir);
   log.ok(`review undone from ${backup}`);
   return { restored: backup };
+}
+
+/**
+ * Everything a finished review must leave right, checked on the stored data:
+ * the version's screens, its flow tree and the app record. Returns plain
+ * sentences, one per problem; an empty list means the upload is clean. The
+ * review package carries the list, and apply-review prints it afterwards.
+ */
+export function checkVersion(options) {
+  const dataDir = resolveDataDir(options.dataDir);
+  const { appId, version } = options;
+  const platform = options.platform || 'ios';
+  const appDir = join(dataDir, 'screens', platform, appId);
+  const versionDir = join(appDir, VERSIONS_DIR_NAME, version);
+  if (!existsSync(versionDir)) return [`no ${version} version stored`];
+  const problems = [];
+  const tag = `${appId}-${platform}-${VERSIONS_DIR_NAME}-${version}-`;
+  const files = listImages(versionDir).map((rel) => `${VERSIONS_DIR_NAME}/${version}/${rel}`);
+  const idOf = (rel) => `${appId}-${platform}-${rel.replace(/\.[^.]+$/, '').split('/').join('-')}`;
+  const tagList = new Set((readJson(join(dataDir, 'tags.json'), { tags: [] }).tags || []).map((entry) => (typeof entry === 'string' ? entry : entry?.slug)));
+  const screens = files.map((rel) => ({ id: idOf(rel), sidecar: readJson(join(appDir, rel.replace(/\.[^.]+$/, '.json')), {}) }));
+
+  for (const { id, sidecar } of screens) {
+    const short = id.slice(tag.length);
+    const name = String(sidecar.name ?? '').trim();
+    if (!name) problems.push(`screen ${short} has no name`);
+    else if (/\(\d+\)$|\s\d+$/.test(name)) problems.push(`screen ${short} "${name}" has a number at the end of its name`);
+    else if (/[·|]| - |\bscreen$/i.test(name)) problems.push(`screen ${short} "${name}" is not a plain name (no "·", " - " or trailing "screen")`);
+    if (!sidecar.screenType || sidecar.screenType === 'other') problems.push(`screen ${short} "${name}" has no type (other)`);
+    else if (!PUBLISHED_TYPES.includes(sidecar.screenType)) problems.push(`screen ${short} "${name}" has an unknown type "${sidecar.screenType}"`);
+    const extras = Array.isArray(sidecar.extraTypes) ? sidecar.extraTypes : [];
+    if (extras.includes(sidecar.screenType) || extras.includes('other') || extras.length > 4) problems.push(`screen ${short} "${name}" has bad extra types`);
+    const elements = Array.isArray(sidecar.elements) ? sidecar.elements : [];
+    if (elements.some((element) => !ELEMENTS.includes(element)) || elements.length > 6) problems.push(`screen ${short} "${name}" has unknown or too many elements`);
+    const tags = Array.isArray(sidecar.tags) ? sidecar.tags : [];
+    if ((tagList.size && tags.some((t) => !tagList.has(t))) || tags.length > 5) problems.push(`screen ${short} "${name}" has unknown or too many tags`);
+  }
+
+  const flows = (readJson(join(dataDir, 'flows.json'), { flows: [] }).flows || []).filter((flow) => flow.appId === appId && flow.platform === platform && (flow.screenIds ?? []).some((sid) => sid.startsWith(tag)));
+  const ids = new Set(screens.map((screen) => screen.id));
+  const listed = new Set(flows.flatMap((flow) => flow.screenIds));
+  for (const { id } of screens) if (!listed.has(id)) problems.push(`screen ${id.slice(tag.length)} is in no flow`);
+  const byId = new Map(flows.map((flow) => [flow.id, flow]));
+  const typeOf = new Map(screens.map(({ id, sidecar }) => [id, sidecar.screenType]));
+  const seen = new Map();
+  for (const flow of flows) {
+    const own = flow.screenIds.filter((sid) => ids.has(sid));
+    if (flow.screenIds.some((sid) => sid.startsWith(tag) && !ids.has(sid))) problems.push(`flow "${flow.name}" lists screens that are not stored`);
+    if (!PUBLISHED_FLOW_CATEGORIES.includes(flow.category)) problems.push(`flow "${flow.name}" has an unknown category "${flow.category}"`);
+    if (flow.parentId && !byId.has(flow.parentId)) problems.push(`flow "${flow.name}" has a parent that is gone`);
+    const key = `${flow.parentId ?? ''}|${String(flow.name).trim().toLowerCase()}`;
+    if (seen.has(key)) problems.push(`two flows named "${flow.name}" in one place`);
+    seen.set(key, flow);
+    const hasChildren = flows.some((other) => other.parentId === flow.id);
+    if (own.length && !hasChildren && own.every((sid) => ['permission', 'loading', 'splash'].includes(typeOf.get(sid)))) problems.push(`flow "${flow.name}" holds only a prompt or loading screen — it belongs to the flow before it`);
+    if (/ - |\(|\)|\bflow\b/i.test(flow.name)) problems.push(`flow "${flow.name}" is not a plain task name`);
+  }
+
+  const appsDoc = readJson(join(dataDir, 'apps.json'), { apps: [] });
+  const record = (Array.isArray(appsDoc) ? appsDoc : appsDoc.apps ?? []).find((entry) => entry.id === appId);
+  if (!record) problems.push(`app ${appId} has no record in apps.json`);
+  else {
+    if (!INDUSTRIES.includes(record.industry) || record.industry === 'other') problems.push(`app ${appId} has no proper category (industry "${record.industry}")`);
+    if (!String(record.name ?? '').trim()) problems.push(`app ${appId} has no name`);
+    if (!String(record.tagline ?? '').trim()) problems.push(`app ${appId} has no tagline`);
+    const appIds = new Set(readdirSync(join(appDir, VERSIONS_DIR_NAME)).filter((v) => statSync(join(appDir, VERSIONS_DIR_NAME, v)).isDirectory()).flatMap((v) => listImages(join(appDir, VERSIONS_DIR_NAME, v)).map((rel) => idOf(`${VERSIONS_DIR_NAME}/${v}/${rel}`))));
+    const cards = Array.isArray(record.cardScreens) ? record.cardScreens : [];
+    if (cards.some((sid) => !appIds.has(sid))) problems.push(`app ${appId} card pictures point at screens that are gone`);
+    else if (cards.length < 4) problems.push(`app ${appId} has fewer than four card pictures`);
+    const weak = cards.filter((sid) => ['splash', 'loading', 'permission', 'error'].includes(typeOf.get(sid)));
+    if (weak.length) problems.push(`app ${appId} card pictures include a splash, loading, permission or error screen`);
+  }
+  return problems;
 }
