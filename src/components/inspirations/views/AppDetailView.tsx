@@ -15,6 +15,7 @@ import { AppMenu } from '../AppMenu';
 import { COMPARE_PARAM, CompareScreens, defaultCompareType } from '../CompareScreens';
 import { AppPaletteMenu, useAppPalette } from '../AppPalette';
 import { AppRating } from '../AppRating';
+import { ReviewBadge } from '../admin/ReviewBadge';
 import { StoreStrip } from '../StoreStrip';
 import { StoreRankBadge } from '../StoreRankBadge';
 import { useDownloadAllScreens } from '../useDownloadAllScreens';
@@ -810,7 +811,10 @@ export function AppDetailView({
         <dl className="ins-masthead-facts">
           <div className="ins-fact">
             <dt>Platform</dt>
-            <dd>{app.platforms.map((p) => PLATFORM_LABEL[p] ?? p).join(', ')}</dd>
+            <dd>
+              {app.platforms.map((p) => PLATFORM_LABEL[p] ?? p).join(', ')}{' '}
+              <ReviewBadge appId={app.id} platform={appPlatform(app)} version={version || app.currentVersion} />
+            </dd>
           </div>
 
           <div className="ins-fact">

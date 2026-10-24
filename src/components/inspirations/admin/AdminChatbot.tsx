@@ -1038,7 +1038,7 @@ export function AdminChatbot() {
         <div className="ins-dock-held">
           <div className="ins-dock-held-row">
             <span>
-              <strong>{reviewJob.title}</strong> — clean up its screens automatically? Claude’s review takes out any duplicates or bad frames afterwards, so there is no need to pick them yourself.
+              <strong>{reviewJob.title}</strong> — clean up its screens automatically? The agent’s review takes out any duplicates or bad frames afterwards, so there is no need to pick them yourself.
             </span>
             <button type="button" className="ins-linkbtn" onClick={() => void dismissIngestJob(reviewJob.id)}>
               Dismiss
@@ -1927,7 +1927,7 @@ export function ReviewGrid({ job, slot }: { job: IngestJob; slot?: HTMLDivElemen
             .{' '}
             {picking
               ? `Repeats and blank frames are already ticked to leave out — tap any thumbnail to add or drop it. ${toRemove.length} removed, ${toRecover.length} recovered.`
-              : 'Claude’s review takes out any extra ones afterwards.'}
+              : 'The agent’s review takes out any extra ones afterwards.'}
           </span>
         </p>
         <button
@@ -2201,7 +2201,7 @@ export function JobThread({ job, now, reviewSlot }: { job: IngestJob; now: numbe
               </p>
             )}
             {/* The upload is in: Claude's review is the next step — the automatic check's findings, the button, then "Reviewed by Claude". */}
-            {job.result.version && <ClaudeReview appId={job.result.app.id} platform={job.result.platform ?? 'ios'} version={job.result.version} />}
+            {job.result.version && <ClaudeReview appId={job.result.app.id} appName={job.result.app.name} platform={job.result.platform ?? 'ios'} version={job.result.version} />}
           </>
         )}
 

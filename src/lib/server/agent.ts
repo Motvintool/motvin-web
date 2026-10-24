@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join as joinPath, resolve as resolvePath } from 'node:path';
 import { readSettings } from '@/lib/server/ai';
 import type { AiStatus, IngestJob } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 import type { AdminOp, AssistantAction, Expect } from '@/lib/inspirations/admin-chatbot/assistantActions';
@@ -450,9 +452,10 @@ const READ_TOOLS: ToolDef[] = [
   { name: 'get_app', description: "One app in full: name, tagline, industry, website, logo, source status, versions, flows with their steps, and screen names grouped by version.", parameters: obj({ app: APP }, ['app']) },
   { name: 'list_screens', description: "An app's screens by name, with type and version — all versions, or one.", parameters: obj({ app: APP, version: str("A version — date or 'latest' — to limit to; omit for all.") }, ['app']) },
   { name: 'list_flows', description: "An app's flows, each with its steps in order.", parameters: obj({ app: APP }, ['app']) },
-  { name: 'ask_claude_review', description: "Give the admin the \"Ask Claude to review\" button for one version of an app already in the library, so Claude (or another AI tool) checks every screen's name, type and elements and the flows, and fixes them. Use when they ask to review, check, audit or correct an app's screens or names with Claude, or ask how to get an app reviewed.", parameters: obj({ app: APP, version: str("The version — a date or 'latest'; omit for the latest.") }, ['app']) },
+  { name: 'ask_claude_review', description: "Give the admin the \"Ask agent to review\" button for one version of an app already in the library, so the review checks every screen's name, type and elements and the flows, and fixes them. Use when they ask to review, check, audit or correct an app's screens or names with Claude, or ask how to get an app reviewed.", parameters: obj({ app: APP, version: str("The version — a date or 'latest'; omit for the latest.") }, ['app']) },
   { name: 'reorder_screens', description: "Lay out one version of an app's screens so the admin can drag them into a new order and save it. Use it when they want to reorder, rearrange or change the order or position of screens.", parameters: obj({ app: APP, version: str("The version — a date or 'latest'; omit for the latest.") }, ['app']) },
   { name: 'show_screens', description: "Show the admin an app's screens as thumbnails they can look at and tap to pick — all versions, or one. Use it whenever they need to choose screens (to delete, rename, reorder) or ask to see them. This is how they see images.", parameters: obj({ app: APP, version: str("A version — a date or 'latest' — to show only that one; omit for all."), kind: str("Only screens of one kind, when the admin asks for some — a screen type, state, element or part of the name, like 'bottom sheet', 'login', 'paywall', 'settings'. Omit for all.") }, ['app']) },
+  { name: 'list_unreviewed', description: "The uploads (an app's dated version on one platform) have not been reviewed yet. Use when the admin asks what needs review, what is not reviewed, or which apps still need checking.", parameters: obj({}) },
   { name: 'get_runs', description: 'The video ingest runs — what is running now and how far, and recent finished ones.', parameters: obj({}) },
   { name: 'get_ai', description: 'Which AI models are connected and what each does.', parameters: obj({}) },
 ];
@@ -597,6 +600,20 @@ function answerRead(name: string, args: Record<string, unknown>, deps: AgentDeps
       const now = Date.now();
       return deps.jobs.length ? deps.jobs.slice(0, 5).map((job) => `- ${deps.describeJob(job, now)}`).join('\n') : 'No runs since the server started.';
     }
+    case 'list_unreviewed': {
+      // Every app version that has screens, less the ones in the library's reviewed list.
+      const reviewed = new Set(readReviewedMarks());
+      const uploads = new Map<string, { app: string; platform: string; version: string }>();
+      for (const file of files) {
+        if (!file.version) continue;
+        const app = apps.find((entry) => entry.id === file.appId);
+        uploads.set(`${file.appId}-${file.platform}-${file.version}`, { app: app?.name ?? file.appId, platform: file.platform, version: file.version });
+      }
+      const waiting = [...uploads.entries()].filter(([key]) => !reviewed.has(key)).map(([, upload]) => upload);
+      return waiting.length
+        ? `Not reviewed yet:\n${waiting.map((upload) => `- ${upload.app} — ${upload.platform}, version ${upload.version}`).join('\n')}\nUse ask_claude_review to give the admin the review button for one.`
+        : 'Every upload in the library has been reviewed.';
+    }
     case 'get_ai':
       return deps.describeAi(deps.ai);
     default:
@@ -621,6 +638,8 @@ function stepText(call: ToolCall, state: LibraryState | null): string {
       return `Listed ${app || 'the app'}’s flows`;
     case 'get_runs':
       return 'Checked the runs';
+    case 'list_unreviewed':
+      return 'Checked which uploads still need a review';
     case 'get_ai':
       return 'Checked the AI';
     case 'show_screens':
@@ -953,7 +972,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
           action = { type: 'review', appId: grid.appId, appName: grid.appName, platform: grid.platform, versionId: grid.versionId, versionLabel: grid.versionLabel ?? grid.versionId };
           note = `The review button for ${grid.appName}, ${grid.versionLabel ?? grid.versionId}.`;
           stop = true;
-          messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `${note} It copies a one-line request; they paste it to Claude, which checks every screen and the flows and applies the fixes itself — you do nothing after. Call Claude "Claude" or "it", never "he" or "she". Nothing changes until then.` });
+          messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `${note} It copies a one-line request they paste into their AI chat, which checks every screen and the flows and applies the fixes itself — you do nothing after. Call it the agent's review; never name another product or AI. Nothing changes until then.` });
           break;
         }
         messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: shown.note ?? 'That app has no screens in a version to review.' });
@@ -1027,7 +1046,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
         role: 'user',
         content:
           action?.type === 'review'
-            ? `[Note, not from the admin: a button that copies the review request for Claude is now under your reply — they paste it to Claude, which checks every screen and applies the fixes itself; you do nothing afterwards. Call Claude "Claude" or "it", never "he". Reply to them naturally, in one or two sentences — no tool calls.]`
+            ? `[Note, not from the admin: a button that copies the review request is now under your reply — they paste it into their AI chat, which checks every screen and applies the fixes itself; you do nothing afterwards. Call it the agent's review; never name another product or AI. Reply to them naturally, in one or two sentences — no tool calls.]`
             : action?.type === 'reorder'
             ? `[Note, not from the admin: the screens are now laid out for them to drag into a new order; it is saved when they press Save order. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`
             : action?.type === 'screens'
@@ -1072,4 +1091,14 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
   // The words that streamed are the model's as written; the text here is
   // the same words tidied, which the dock swaps in when the reply settles.
   return { text, source: 'ai', actions, model, streamed: streamedRounds > 0 };
+}
+
+/** Keys ("app-platform-version") of the uploads Claude has reviewed, from the library's own list. */
+function readReviewedMarks(): string[] {
+  const dataDir = process.env.INSPIRATIONS_DATA_DIR ? resolvePath(process.env.INSPIRATIONS_DATA_DIR) : resolvePath(process.cwd(), '..', 'motvin-backend', 'data', 'inspirations');
+  try {
+    return Object.keys(JSON.parse(readFileSync(joinPath(dataDir, 'reviewed.json'), 'utf-8')) as Record<string, unknown>);
+  } catch {
+    return [];
+  }
 }

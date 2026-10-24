@@ -550,14 +550,30 @@ export async function applyReview(options) {
   await syncFolders({ appId, platform, version, dataDir });
   await rebuildManifest(dataDir);
   const problems = checkVersion({ appId, platform, version, dataDir });
-  // Done: the screens are right, so the recording is no longer needed.
-  if (!problems.length && recording && existsSync(recording)) {
-    rmSync(recording, { force: true });
-    rmSync(join(dir, 'frames'), { recursive: true, force: true });
-    log.info('review: the recording is removed — the review is finished');
+  // A finished pass ends the "reviewing" state; with problems left the next pass starts it again.
+  rmSync(join(dir, 'reviewing.json'), { force: true });
+  // Done: the screens are right, so the review's working files are no longer
+  // needed — the recording, frame strips, contact sheets, screen list and
+  // corrections go. Kept: reviewed.json (the "Reviewed by Claude" mark) and
+  // this review's backup, so it can still be undone. Another review rebuilds
+  // the package with review-pack.
+  if (!problems.length) {
+    for (const entry of readdirSync(dir)) {
+      const working = /^recording\./.test(entry) || entry === 'frames' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
+      const olderBackup = entry.startsWith('backup-') && join(dir, entry) !== backup;
+      if (working || olderBackup) rmSync(join(dir, entry), { recursive: true, force: true });
+    }
+    log.info('review: finished — working files removed, the backup kept for undo');
   }
   writeJson(join(dir, 'reviewed.json'), { reviewedAt: new Date().toISOString(), by: 'Claude', fixes, rulesAdded: kept, backup, problems });
-  await writeReviewPack({ appId, platform, version, dataDir }).catch(() => null);
+  // The mark also goes in the library's own list, so the review's folder can be
+  // deleted once the admin is happy without losing "Reviewed by Claude".
+  const marks = readJson(join(dataDir, 'reviewed.json'), {});
+  if (problems.length) delete marks[`${appId}-${platform}-${version}`];
+  else marks[`${appId}-${platform}-${version}`] = { reviewedAt: new Date().toISOString(), by: 'Claude', fixes };
+  writeJson(join(dataDir, 'reviewed.json'), marks);
+  // Problems left: a fresh package for the next pass. None: nothing to review again.
+  if (problems.length) await writeReviewPack({ appId, platform, version, dataDir }).catch(() => null);
   log.ok(`review applied: ${fixes} fix(es), ${kept} new rule(s) kept; backup in ${backup}`);
   if (problems.length) {
     log.warn(`review check: ${problems.length} problem(s) left — fix them and apply again:`);
@@ -591,6 +607,9 @@ export async function undoReview(options) {
     for (const entry of readdirSync(join(backup, kind))) cpSync(join(backup, kind, entry), join(into, entry));
   }
   rmSync(join(dir, 'reviewed.json'), { force: true });
+  const marks = readJson(join(dataDir, 'reviewed.json'), {});
+  delete marks[`${appId}-${platform}-${version}`];
+  writeJson(join(dataDir, 'reviewed.json'), marks);
   rmSync(backup, { recursive: true, force: true });
   await rebuildManifest(dataDir);
   log.ok(`review undone from ${backup}`);

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { authHeaders, clock, type IngestResult, type IngestScreen } from '@/lib/inspirations/admin-chatbot/ingestJobs';
@@ -9,6 +9,7 @@ import { fineTypeLabel, screenStateLabel } from '@/lib/inspirations/taxonomy';
 import { screenTitle } from '@/lib/inspirations/screenNaming';
 import { CheckIcon, ExternalIcon, UploadIcon } from '../Icons';
 import { SCREEN_PARAM } from '../ScreenPreviewModal';
+import { useToast } from '../Toast';
 
 /**
  * What a run published, read the way the gallery will show it: each journey
@@ -23,8 +24,10 @@ import { SCREEN_PARAM } from '../ScreenPreviewModal';
  * the review package and applies its corrections; once it has, this shows
  * "Reviewed by Claude" with the number of fixes.
  */
-export function ClaudeReview({ appId, platform, version }: { appId: string; platform: string; version: string }) {
-  const [status, setStatus] = useState<{ reviewed: boolean; fixes?: number; problems?: string[] } | null>(null);
+export function ClaudeReview({ appId, appName, platform, version }: { appId: string; appName?: string; platform: string; version: string }) {
+  const { show } = useToast();
+  const seenUnreviewed = useRef(false);
+  const [status, setStatus] = useState<{ reviewed: boolean; reviewing?: boolean; startedAt?: string | null; fixes?: number; problems?: string[]; hasBackup?: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
   // Names the steps file, so any AI tool opens it from the message alone.
   const request = `Follow docs/review-motvin.md to review ${appId} ${platform} ${version}`;
@@ -33,42 +36,96 @@ export function ClaudeReview({ appId, platform, version }: { appId: string; plat
     const check = async () => {
       try {
         const res = await fetch(`/api/crawler/review-status?${new URLSearchParams({ app: appId, platform, version })}`, { headers: await authHeaders(), cache: 'no-store' });
-        if (res.ok && live) setStatus((await res.json()) as { reviewed: boolean; fixes?: number; problems?: string[] });
+        if (!res.ok || !live) return;
+        const next = (await res.json()) as { reviewed: boolean; reviewing?: boolean; startedAt?: string | null; fixes?: number; problems?: string[]; hasBackup?: boolean };
+        // The review just finished: say so, even if the admin is looking elsewhere.
+        if (next.reviewed && seenUnreviewed.current) {
+          seenUnreviewed.current = false;
+          show(`The agent finished reviewing ${appName ?? appId} — check it now.`);
+        }
+        if (!next.reviewed) seenUnreviewed.current = true;
+        setStatus(next);
       } catch {
         // The button still works without the status.
       }
     };
     void check();
-    // Claude's review lands while this stays open: looked for every half minute.
-    const timer = window.setInterval(() => void check(), 30_000);
+    // Claude's review lands while this stays open: looked for every ten seconds.
+    const timer = window.setInterval(() => void check(), 10_000);
     return () => {
       live = false;
       window.clearInterval(timer);
     };
-  }, [appId, platform, version]);
+  }, [appId, appName, platform, version, show]);
+  const [removing, setRemoving] = useState(false);
+  const removeBackup = async () => {
+    setRemoving(true);
+    try {
+      const res = await fetch(`/api/crawler/review-status?${new URLSearchParams({ app: appId, platform, version })}`, { method: 'DELETE', headers: await authHeaders(), cache: 'no-store' });
+      if (res.ok) setStatus((current) => (current ? { ...current, hasBackup: false } : current));
+    } finally {
+      setRemoving(false);
+    }
+  };
   const left = status?.problems ?? [];
+  // Where this upload is: uploaded, Claude's review, then the admin's check and clean-up.
+  const stage = status?.reviewed && !left.length ? (status.hasBackup ? 2 : 3) : 1;
+  const steps = (
+    <ol className="ins-review-steps" aria-label="Progress">
+      {['Uploaded', 'Review', 'Check & clean up'].map((label, i) => (
+        <li key={label} className={i < stage ? 'is-done' : i === stage ? 'is-current' : ''}>
+          {i < stage ? <CheckIcon size={12} /> : <span className="ins-review-steps-dot" aria-hidden />} {label}
+        </li>
+      ))}
+    </ol>
+  );
+  if (status?.reviewing) {
+    const minutes = status.startedAt ? Math.max(0, Math.round((Date.now() - Date.parse(status.startedAt)) / 60000)) : null;
+    return (
+      <div className="ins-review-card">
+        {steps}
+        <p className="ins-review-card-title">
+          <span className="ins-review-card-spinner" aria-hidden /> Agent is reviewing…
+        </p>
+        <p className="ins-review-card-text">
+          {minutes === null ? 'Started just now.' : minutes < 1 ? 'Started less than a minute ago.' : `Started ${minutes} minute${minutes === 1 ? '' : 's'} ago.`} You’ll see a note here when it’s done.
+        </p>
+      </div>
+    );
+  }
   if (status?.reviewed && !left.length) {
     return (
       <div className="ins-review-card is-done">
+        {steps}
         <p className="ins-review-card-title">
-          <CheckIcon size={14} /> Reviewed by Claude
+          <CheckIcon size={14} /> Reviewed by agent
         </p>
         <p className="ins-review-card-text">
           {status.fixes ?? 0} fix{status.fixes === 1 ? '' : 'es'} applied — nothing left to fix.
         </p>
+        {/* The screens as they were before the review are kept so it can be undone; once the admin is happy, they go. */}
+        {status.hasBackup && (
+          <>
+            <p className="ins-review-card-hint">Happy with the review? Its working folder and backup are no longer needed.</p>
+            <button type="button" className="ins-chip-btn ins-review-card-btn" disabled={removing} onClick={() => void removeBackup()}>
+              {removing ? 'Removing…' : 'Looks good — clean up'}
+            </button>
+          </>
+        )}
       </div>
     );
   }
   // Next step: the review. The check's findings are folded away — the count says enough.
   return (
     <div className="ins-review-card">
-      <p className="ins-review-card-title">{status?.reviewed ? 'Almost done' : 'Next: Claude’s review'}</p>
+      {steps}
+      <p className="ins-review-card-title">{status?.reviewed ? 'Almost done' : 'Next: review'}</p>
       <p className="ins-review-card-text">
         {status?.reviewed
-          ? `${left.length} thing${left.length === 1 ? '' : 's'} still to fix. Ask Claude to review again.`
+          ? `${left.length} thing${left.length === 1 ? '' : 's'} still to fix. Ask the agent to review again.`
           : left.length
-            ? `${left.length} thing${left.length === 1 ? '' : 's'} to fix — names, types and flows. Claude checks every screen and fixes them.`
-            : 'Claude checks every screen and fixes names, types and flows.'}
+            ? `${left.length} thing${left.length === 1 ? '' : 's'} to fix — names, types and flows. The agent checks every screen and fixes them.`
+            : 'The agent checks every screen and fixes names, types and flows.'}
       </p>
       <button
         type="button"
@@ -77,10 +134,10 @@ export function ClaudeReview({ appId, platform, version }: { appId: string; plat
           void navigator.clipboard.writeText(request).then(() => setCopied(true), () => setCopied(false));
         }}
       >
-        {copied ? <><CheckIcon size={13} /> Copied</> : status?.reviewed ? 'Ask Claude to review again' : 'Ask Claude to review'}
+        {copied ? <><CheckIcon size={13} /> Copied</> : status?.reviewed ? 'Ask agent to review again' : 'Ask agent to review'}
       </button>
       <p className="ins-review-card-hint">
-        {copied ? 'Now paste it into Claude and send.' : 'Copies one line to paste into Claude.'}
+        {copied ? 'Now paste it into your AI chat and send.' : 'Copies one line to paste into your AI chat.'}
       </p>
       {left.length > 0 && (
         <details className="ins-review-card-details">
@@ -183,7 +240,7 @@ export function AdminChatbotIngestSummary({
         ) : null}
       </div>
 
-      {!writing && result.version && <ClaudeReview appId={result.app.id} platform={result.platform ?? 'ios'} version={result.version} />}
+      {!writing && result.version && <ClaudeReview appId={result.app.id} appName={result.app.name} platform={result.platform ?? 'ios'} version={result.version} />}
 
       {/* The tree's last check: clean, or what is still worth a look. */}
       {result.checks && (

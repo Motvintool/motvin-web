@@ -864,6 +864,12 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
       // New screens in this version: a review of what was here before no longer
       // counts, so its "reviewed" mark goes (its backups stay, for undo).
       rmSync(join(resolveDataDir(options.dataDir), '..', 'reviews', `${resolvedApp.appId}-${options.platform || 'ios'}-${result.version}`, 'reviewed.json'), { force: true });
+      const marksFile = join(resolveDataDir(options.dataDir), 'reviewed.json');
+      if (existsSync(marksFile)) {
+        const marks = JSON.parse(readFileSync(marksFile, 'utf-8'));
+        delete marks[`${resolvedApp.appId}-${options.platform || 'ios'}-${result.version}`];
+        writeFileSync(marksFile, `${JSON.stringify(marks, null, 2)}\n`);
+      }
       // The recording goes with the review package, so the review can take a
       // better picture of a screen from it; a clean review removes it again.
       if (options.recordingPath && existsSync(options.recordingPath)) {

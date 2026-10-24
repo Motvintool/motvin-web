@@ -732,6 +732,8 @@ async function runReview(command, flags) {
   const options = { appId: flags.appId, platform: flags.platform, version: flags.version, dataDir: flags.dataDir };
   if (command === 'review-pack') {
     const pack = await writeReviewPack(options);
+    // Run by hand, this is a review starting: the Motvin agent shows "Claude is reviewing…".
+    writeFileSync(join(pack.dir, 'reviewing.json'), `${JSON.stringify({ startedAt: new Date().toISOString(), by: 'Claude' })}\n`);
     process.stdout.write(`${pack.dir}\n`);
   } else if (command === 'apply-review') {
     if (typeof flags.file !== 'string') {
