@@ -56,6 +56,22 @@ const pending = new Map<string, Promise<unknown>>();
 const ON_SERVER = typeof window === 'undefined';
 const SERVER_TTL = 2_000;
 
+/**
+ * When the library's index was last built, read fresh (never cached) — a page
+ * open while the library changes elsewhere (a review applied, a run
+ * finishing) compares it to the one it loaded with.
+ */
+export async function libraryVersion(): Promise<string | null> {
+  try {
+    const res = await fetch(`${baseUrl()}/meta`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const envelope = (await res.json()) as { data?: { generatedAt?: string } };
+    return envelope.data?.generatedAt ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Drops everything cached, so the next read reflects a write that just happened. */
 export function invalidateInspirationsCache() {
   cache.clear();

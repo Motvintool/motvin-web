@@ -136,7 +136,8 @@ export function toggleValue<T>(list: T[], value: T): T[] {
 
 export function matchesFilters(screen: Screen, filters: ScreenFilters): boolean {
   if (filters.platforms.length && !filters.platforms.includes(screen.platform)) return false;
-  if (filters.screenTypes.length && !filters.screenTypes.includes(screen.screenType)) return false;
+  // A screen is under every type it is, not only its main one.
+  if (filters.screenTypes.length && !(screen.screenTypes ?? [screen.screenType]).some((type) => filters.screenTypes.includes(type))) return false;
   if (filters.states.length && !filters.states.some((v) => (screen.states ?? []).includes(v))) return false;
   if (filters.industries.length && !filters.industries.includes(screen.industry)) return false;
   if (filters.styles.length && !filters.styles.some((s) => screen.style.includes(s))) return false;

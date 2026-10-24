@@ -17,6 +17,7 @@ import { UserChatbot } from './UserChatbot';
 import { LongPressScreenMenus } from './useScreenContextMenu';
 import { RevealPressedPills } from './RevealPressedPills';
 import { BackToTop } from './BackToTop';
+import { LibraryUpdateNotice } from './LibraryUpdateNotice';
 
 function InspirationsHeaderSkeleton() {
   return (
@@ -67,6 +68,8 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
             screenshot or logo (see GuestImageGuard). Renders nothing. */}
         <GuestImageGuard />
         <main className={`ins-main ${wide ? 'ins-main--wide' : ''}`}>{children}</main>
+        {/* The library changed while this page was open: offers a refresh. Renders nothing until then. */}
+        <LibraryUpdateNotice />
         {/* At the end of a long page, a pill back to its top (every Inspirations page). */}
         <BackToTop />
         {/* Reads ?flow= and renders over whatever page is showing. */}

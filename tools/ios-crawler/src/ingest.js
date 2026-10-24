@@ -796,6 +796,7 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
       try {
         const outcome = await researchTree(journeys, graph, {
           only: journeysNamed ? 'screens' : null,
+          tagList: readTagList(options.dataDir),
           complete: (request) => complete(backend, request),
           encodeImage: encodeForModel,
           extractJson,
@@ -1452,6 +1453,16 @@ export function slugify(value) {
  * the upload.
  */
 /** The apps already in the store (apps.json), or none when there is no store yet. */
+/** The library's shared tag list (tags.json), which screens' tags are chosen from; empty when there is none. */
+function readTagList(dataDirOption) {
+  try {
+    const doc = JSON.parse(readFileSync(join(resolveDataDir(dataDirOption), 'tags.json'), 'utf-8'));
+    return (doc.tags || []).map((tag) => (typeof tag === 'string' ? tag : tag?.slug)).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 function readStoredApps(dataDirOption) {
   try {
     const file = join(resolveDataDir(dataDirOption), 'apps.json');
@@ -1791,6 +1802,7 @@ export async function researchStored(options) {
   log.heading('Researching');
   const outcome = await researchTree(journeys, graph, {
     complete: ask,
+    tagList: readTagList(options.dataDir),
     encodeImage: encodeForModel,
     extractJson,
     app,
@@ -1878,6 +1890,8 @@ export async function researchStored(options) {
       ...node.sidecar,
       ...(namedType ? { screenType: namedType } : {}),
       ...(node.analysis.modelElements?.length ? { elements: node.analysis.modelElements } : {}),
+      ...(Array.isArray(node.analysis.modelExtraTypes) ? { extraTypes: node.analysis.modelExtraTypes.filter((t) => t !== (namedType ?? node.sidecar.screenType)) } : {}),
+      ...(Array.isArray(node.analysis.modelTags) ? { tags: node.analysis.modelTags } : {}),
       name: node.analysis.name,
       description: node.analysis.description || node.sidecar.description || '',
       ...(node.analysis.purpose ? { purpose: node.analysis.purpose } : {}),

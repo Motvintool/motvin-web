@@ -159,18 +159,27 @@ const SCREEN_TYPE_GUIDE = Object.entries(SCREEN_TYPE_MEANINGS)
   .join('; ');
 
 /** Pass two: the screens of one batch, with their images. */
-const SCREEN_RULES = `${SHARED_RULES}
+const SCREEN_RULES_BASE = `${SHARED_RULES}
 
 Return exactly this shape, one entry per screen id given, and nothing else:
-{ "screens": { "<screen id exactly as given, e.g. s004>": { "name": "...", "type": "...", "elements": ["..."], "purpose": "...", "primaryAction": "..." } } }
+{ "screens": { "<screen id exactly as given, e.g. s004>": { "name": "...", "type": "...", "extraTypes": ["..."], "elements": ["..."], "tags": ["..."], "purpose": "...", "primaryAction": "..." } } }
 
 The type is the one word from this list that says what the screen is, judged from the screenshot, not from single words on it: ${SCREEN_TYPE_GUIDE}
+
+The extraTypes are other types from the same list that the screen also clearly is, at most four, usually none: a permission prompt over a chat is "permission" with extraTypes ["messages"]; a sign-up form with a plan offer is "signup" with ["pricing"]. Never repeat the type, never "other", never a type that only a word on the screen suggests.
 
 The elements are the UI parts clearly visible on the screenshot, only from this list, most prominent first, at most six: ${ELEMENTS.join(', ')}. A row of buttons at the bottom is a "tab-bar" only when it switches between the app's main sections; a keyboard on screen is "keyboard".
 
 Screen names are short plain nouns a designer would file the screen under — "Phone number entry", "Restaurant detail", "Filter sheet", "Location picker (logged out)", "Order placed" — never the marketing line or a fragment of visible text. A purpose is one short sentence (under 15 words) on what the screen is for. The primary action is the one thing the person mostly does there, as a short imperative — "Enter mobile number", "Add to cart", "Apply filters" — or "" when there is none (a splash, a loading state). Write no descriptions and no other fields. Be brief; every field is one line.`;
 
 /** Kept for callers that build the old single prompt; the passes above are what runs. */
+/** The screen rules with the library's tag list, when it has one: tags are chosen from it only. */
+function screenRules(tagList = []) {
+  return tagList.length
+    ? `${SCREEN_RULES_BASE}\n\nThe tags are words a designer would search for that the type and elements do not already say, only from this list, at most five, usually one to three: ${tagList.join(', ')}.`
+    : SCREEN_RULES_BASE.replace(', "tags": ["..."]', '');
+}
+const SCREEN_RULES = screenRules();
 const OUTPUT_RULES = `${JOURNEY_RULES}\n${SCREEN_RULES}`;
 
 /**
@@ -448,7 +457,7 @@ function safeParse(text) {
  * @returns {Promise<{journeysRenamed: number, screensUpdated: number, batches: number}>}
  */
 export async function researchTree(journeys, graph, options) {
-  const { complete, encodeImage, app, vision = true, batchSize = SCREEN_BATCH, extractJson, log, analyzer = 'ai', onBatch, only = null, journeyModel = null } = options;
+  const { complete, encodeImage, app, vision = true, batchSize = SCREEN_BATCH, extractJson, log, analyzer = 'ai', onBatch, only = null, journeyModel = null, tagList = [] } = options;
   if (!journeys.length) return { journeysRenamed: 0, screensUpdated: 0, batches: 0 };
 
   const nodes = [];
@@ -613,7 +622,7 @@ export async function researchTree(journeys, graph, options) {
     try {
       // A few names, purposes and actions run to a few hundred tokens; the
       // budget leaves room for a model that thinks before it answers.
-      const reply = await complete({ system: `${BRIEF}\n${SCREEN_RULES}`, blocks, maxTokens: SCREEN_TOKENS });
+      const reply = await complete({ system: `${BRIEF}\n${screenRules(tagList)}`, blocks, maxTokens: SCREEN_TOKENS });
       debug(reply);
       raw = parse(reply);
     } catch (error) {
@@ -656,7 +665,7 @@ export async function researchTree(journeys, graph, options) {
   }
   onBatch?.(nodes.length, nodes.length, 0, 'done');
 
-  const applied = applyProposals(journeys, graph, proposals, { appName: app?.name ?? null });
+  const applied = applyProposals(journeys, graph, proposals, { appName: app?.name ?? null, tagList });
   // The self-review: a type that does not fit its screen's own name or the
   // parts on it gets a second look at the screenshot before anything is kept.
   if (vision && only !== 'journeys') {
@@ -767,6 +776,11 @@ function harmonizeTypes(graph) {
     const named = typeFromName(key);
     const type = tied.length > 1 && tied.includes(named) ? named : ranked[0][0];
     for (const node of nodes) node.analysis.modelType = type;
+    // And the same extra types: those at least half of them have, never the main one.
+    const extraSeen = new Map();
+    for (const node of nodes) for (const extra of node.analysis.modelExtraTypes ?? []) extraSeen.set(extra, (extraSeen.get(extra) ?? 0) + 1);
+    const extras = [...extraSeen].filter(([extra, count]) => extra !== type && count * 2 >= nodes.length).map(([extra]) => extra).slice(0, 4);
+    for (const node of nodes) node.analysis.modelExtraTypes = extras;
     // And the same parts: those at least half of them were seen with.
     const seen = new Map();
     for (const node of nodes) for (const element of node.analysis.modelElements ?? []) seen.set(element, (seen.get(element) ?? 0) + 1);
@@ -948,6 +962,14 @@ export function applyProposals(journeys, graph, proposals, context = {}) {
     if (elements.length) {
       analysis.modelElements = elements;
       changed = true;
+    }
+    // More types it also is (never the main one, never "other"), and tags from the library's list.
+    const known = (value) => String(value ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+    const extras = [...new Set((Array.isArray(proposal.extraTypes) ? proposal.extraTypes : []).map(known).filter((t) => t !== 'other' && t !== analysis.modelType && Object.hasOwn(SCREEN_TYPE_MEANINGS, t)))].slice(0, 4);
+    analysis.modelExtraTypes = extras;
+    if (Array.isArray(proposal.tags) && context.tagList?.length) {
+      const allowed = new Set(context.tagList);
+      analysis.modelTags = [...new Set(proposal.tags.map((tag) => String(tag).trim().toLowerCase().replace(/[\s_]+/g, '-')).filter((tag) => allowed.has(tag)))].slice(0, 5);
     }
     if (changed) {
       analysis.viaHeuristics = false;

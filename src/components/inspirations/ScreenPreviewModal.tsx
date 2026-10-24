@@ -9,7 +9,7 @@ import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
 import { StoreLinkButton } from './StoreMenuItem';
-import { INDUSTRY_LABEL, PLATFORM_LABEL, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
+import { INDUSTRY_LABEL, PLATFORM_LABEL, SCREEN_STATE_LABEL, SCREEN_TYPE_LABEL, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type Flow, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { CompareShortcut, ScreenColours } from './ScreenDetailsExtras';
@@ -54,6 +54,21 @@ export function ScreenPreviewOverlay() {
  * the same one GlobalSearch renders behind its own modal, rather than a
  * one-off copy of the same rules.
  */
+/**
+ * Where a tag goes, in the section the screen is in. A tag that is a screen
+ * type, a state, a category or the platform opens that filter (a search for
+ * "modal" would add type and state filters together and find almost
+ * nothing); a word from the tag list opens a search for it.
+ */
+function tagHref(tag: string, section: string): string {
+  const screens = INSPIRATIONS_ROUTES.screens;
+  if (Object.hasOwn(SCREEN_TYPE_LABEL, tag)) return `${screens}?type=${tag}&platform=${section}`;
+  if (Object.hasOwn(SCREEN_STATE_LABEL, tag)) return `${screens}?state=${tag}&platform=${section}`;
+  if (Object.hasOwn(INDUSTRY_LABEL, tag)) return `${screens}?industry=${tag}&platform=${section}`;
+  if (tag === 'ios' || tag === 'webapp' || tag === 'web') return `${screens}?platform=${section}`;
+  return `${INSPIRATIONS_ROUTES.searchFor(tag.replace(/-/g, ' '))}&platform=${section}`;
+}
+
 function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -68,7 +83,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const { data, loading } = useAsync(() => inspirationsApi.getScreen(screenId), `screen-preview:${screenId}`);
   const screen = data?.screen ?? null;
   const app = data?.app ?? null;
-  const patterns = data?.patterns ?? [];
+  const openedPatterns = data?.patterns ?? [];
 
   const [siblingScreens, setSiblingScreens] = useState<Screen[]>([]);
   // The app's flows, from the same getApp call, for the foot's Flow button.
@@ -86,6 +101,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const [contextScreenId, setContextScreenId] = useState<string | null>(null);
   // The keyboard shortcuts card (? or the header's Shortcuts button).
   const [showKeys, setShowKeys] = useState(false);
+  // The screen whose extra types were opened with "+N": moving to another screen folds them again.
+  const [typesOpenFor, setTypesOpenFor] = useState<string | null>(null);
   const keysRef = useRef<HTMLDivElement>(null);
   const keysBtnRef = useRef<HTMLButtonElement>(null);
   // A click anywhere outside the card closes it (the button toggles it itself).
@@ -125,6 +142,13 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     [screen, siblingScreens],
   );
   const activeIndex = Math.max(0, screens.findIndex((s) => s.id === activeId));
+  // The patterns of the screen on show, not only the one the preview opened
+  // on: stepping to the next screen reads its own (cached once read).
+  const viewId = screens[activeIndex]?.id ?? screenId;
+  const { data: viewData } = useAsync(
+    () => (viewId === screenId ? Promise.resolve(null) : inspirationsApi.getScreen(viewId)),
+    `screen-preview-patterns:${viewId}`,
+  );
 
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
 
@@ -398,6 +422,11 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   // The screen being looked at (← / → step it), so the title, foot, menu and
   // details follow it rather than staying on the one first opened.
   const view = screens[activeIndex] ?? screen;
+  const showAllTypes = typesOpenFor === view.id;
+  // The section this screen is in — iOS, or Webs (web apps and websites) —
+  // so a tag or type opened from it stays in that section.
+  const viewSection = isDesktopPlatform(view.platform) ? 'web' : view.platform;
+  const patterns = viewId === screenId ? openedPatterns : (viewData?.patterns ?? []);
 
   // The flow this screen is a step of (a top-level one first, over a detour),
   // opened in FlowPreview on this screen's step, in place of this preview.
@@ -737,10 +766,33 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   )}
                   <div className="ins-screen-preview-details-row">
                     <dt className="ins-screen-preview-details-term">Type</dt>
+                    {/* Every type the screen is, the main one first; each opens its filter.
+                        Two show; the rest wait behind "+N" until it is clicked. */}
                     <dd className="ins-screen-preview-details-value">
-                      <Link href={`${INSPIRATIONS_ROUTES.screens}?type=${view.screenType}`} className="ins-details-pill">
-                        {screenTypeLabel(view.screenType)}
-                      </Link>
+                      {(() => {
+                        const types = view.screenTypes?.length ? view.screenTypes : [view.screenType];
+                        const shown = showAllTypes ? types : types.slice(0, 2);
+                        return (
+                          <>
+                            {shown.map((type) => (
+                              <Link key={type} href={`${INSPIRATIONS_ROUTES.screens}?type=${type}&platform=${viewSection}`} className="ins-details-pill">
+                                {screenTypeLabel(type)}
+                              </Link>
+                            ))}
+                            {types.length > shown.length && (
+                              <button
+                                type="button"
+                                className="ins-details-pill ins-details-pill--more"
+                                aria-label={`Show ${types.length - shown.length} more type${types.length - shown.length === 1 ? '' : 's'}: ${types.slice(2).map(screenTypeLabel).join(', ')}`}
+                                title={types.slice(2).map(screenTypeLabel).join(', ')}
+                                onClick={() => setTypesOpenFor(view.id)}
+                              >
+                                +{types.length - shown.length}
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
                     </dd>
                   </div>
                   <div className="ins-screen-preview-details-row">
@@ -820,7 +872,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   </h3>
                   <div className="ins-details-pills">
                     {view.tags.map((t) => (
-                      <Link key={t} href={INSPIRATIONS_ROUTES.searchFor(t)} className="ins-details-pill ins-details-pill--tag">
+                      <Link key={t} href={tagHref(t, viewSection)} className="ins-details-pill ins-details-pill--tag">
                         <span aria-hidden="true">#</span>
                         {t}
                       </Link>

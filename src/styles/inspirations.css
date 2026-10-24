@@ -4475,6 +4475,20 @@ select.ins-input {
   overflow-wrap: anywhere;
 }
 
+/* "+N": the types past the first two, until it is clicked. */
+.ins-details-pill--more {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+/* A screen with more than one type: the pills wrap with a little room. */
+.ins-screen-preview-details-value:has(> .ins-details-pill + .ins-details-pill) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .ins-details-num {
   font-variant-numeric: tabular-nums;
 }

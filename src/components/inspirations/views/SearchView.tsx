@@ -253,7 +253,9 @@ export function SearchView() {
     take('type', screenTypes);
     take('industry', industries.filter((v) => (meta.taxonomy.industries as string[]).includes(v)));
     take('style', styles);
-    take('state', states);
+    // A word that is a screen type and a state too ("modal") is the type:
+    // asking for both at once would leave only the few screens that are both.
+    take('state', states.filter((state) => !screenTypes.includes(state as never)));
     if (platforms.length === 1 && !sp.get('platform') && platforms[0] !== 'ios') sp.set('platform', platforms[0]);
     sp.set('literal', '1');
     router.replace(`${pathname}?${sp.toString()}`, { scroll: false });

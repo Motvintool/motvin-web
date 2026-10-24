@@ -217,7 +217,9 @@ export async function writeReviewPack(options) {
       file: join(appDir, rel),
       name: sidecar.name ?? '',
       type: sidecar.screenType ?? 'other',
+      extraTypes: Array.isArray(sidecar.extraTypes) ? sidecar.extraTypes : [],
       elements: sidecar.elements ?? [],
+      tags: Array.isArray(sidecar.tags) ? sidecar.tags : [],
       flow: holders[0] ? pathOf(holders[0]) : null,
       flowId: holders[0]?.id ?? null,
     });
@@ -228,7 +230,8 @@ export async function writeReviewPack(options) {
 
   const doubts = screens.map((screen) => ({ n: screen.n, id: screen.id, name: screen.name, type: screen.type, why: doubtOf(screen) })).filter((entry) => entry.why);
   const tree = order.map((flow) => ({ id: flow.id, path: pathOf(flow), category: flow.category, screens: flow.screenIds.length }));
-  writeJson(join(dir, 'screens.json'), { app: appId, platform, version, generatedAt: new Date().toISOString(), types: PUBLISHED_TYPES, elements: ELEMENTS, tree, screens });
+  const tagList = (readJson(join(dataDir, 'tags.json'), { tags: [] }).tags || []).map((tag) => (typeof tag === 'string' ? tag : tag?.slug)).filter(Boolean);
+  writeJson(join(dir, 'screens.json'), { app: appId, platform, version, generatedAt: new Date().toISOString(), types: PUBLISHED_TYPES, elements: ELEMENTS, tags: tagList, tree, screens });
   writeJson(join(dir, 'doubts.json'), doubts);
 
   // Contact sheets: twelve numbered screenshots each, number and type under each.
@@ -251,7 +254,7 @@ export async function writeReviewPack(options) {
       const x = 16 + (index % SHEET_COLUMNS) * (THUMB_WIDTH + 16);
       const y = 16 + Math.floor(index / SHEET_COLUMNS) * (cellHeight + 16);
       if (cell.image) layers.push({ input: cell.image, left: x, top: y });
-      const label = `#${cell.screen.n} ${cell.screen.type}`.replace(/[<&>]/g, '');
+      const label = `#${cell.screen.n} ${cell.screen.type}${cell.screen.extraTypes?.length ? ` +${cell.screen.extraTypes.join(' +')}` : ''}`.replace(/[<&>]/g, '').slice(0, 30);
       const svg = `<svg width="${THUMB_WIDTH}" height="40" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#111"/><text x="8" y="27" font-family="Helvetica, Arial, sans-serif" font-size="20" font-weight="700" fill="#fff">${label}</text></svg>`;
       layers.push({ input: Buffer.from(svg), left: x, top: y + cellHeight - 42 });
     });
@@ -267,7 +270,7 @@ export async function writeReviewPack(options) {
 /**
  * Applies a review's corrections file:
  *
- *   { "screens": [ { "id", "name"?, "type"?, "elements"? } ],
+ *   { "screens": [ { "id", "name"?, "type"?, "extraTypes"? (up to 4), "elements"?, "tags"? (from tags.json) } ],
  *     "flows":   [ { "id", "name"?, "parent"? (flow id, or null for the top), "category"? } ],
  *     "moves":   [ { "screen": id, "from": flow id, "to": flow id } ],
  *     "merges":  [ { "from": flow id, "into": flow id } ],
@@ -314,6 +317,12 @@ export async function applyReview(options) {
     if (typeof fix.name === 'string' && fix.name.trim()) sidecar.name = fix.name.trim();
     if (fix.type && PUBLISHED_TYPES.includes(fix.type)) sidecar.screenType = fix.type;
     if (Array.isArray(fix.elements)) sidecar.elements = fix.elements.filter((element) => ELEMENTS.includes(element));
+    if (Array.isArray(fix.extraTypes)) sidecar.extraTypes = [...new Set(fix.extraTypes.filter((t) => PUBLISHED_TYPES.includes(t) && t !== 'other' && t !== sidecar.screenType))].slice(0, 4);
+    else if (Array.isArray(sidecar.extraTypes)) sidecar.extraTypes = sidecar.extraTypes.filter((t) => t !== sidecar.screenType);
+    if (Array.isArray(fix.tags)) {
+      const allowed = new Set((readJson(join(dataDir, 'tags.json'), { tags: [] }).tags || []).map((tag) => (typeof tag === 'string' ? tag : tag?.slug)));
+      sidecar.tags = [...new Set(fix.tags.filter((tag) => allowed.has(tag)))].slice(0, 5);
+    }
     writeJson(sidecarPath, sidecar);
     fixes += 1;
   }

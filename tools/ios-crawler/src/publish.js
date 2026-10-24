@@ -667,6 +667,9 @@ export function updatePublishedContent(options) {
       // The model's type from the screenshot, else the name's for an "other".
       sidecar.screenType = settledType({ classified: sidecar.screenType, modelType: analysis.modelType, name });
       if (analysis.modelElements?.length) sidecar.elements = analysis.modelElements;
+      // More types it also is, and tags from the library's list (replacing words read off the screen).
+      if (Array.isArray(analysis.modelExtraTypes)) sidecar.extraTypes = analysis.modelExtraTypes.filter((t) => t !== sidecar.screenType);
+      if (Array.isArray(analysis.modelTags)) sidecar.tags = analysis.modelTags;
       writeJson(sidecarPath, sidecar);
     }
     const recordPath = join(analysisDir, `${entry.screenId}.json`);

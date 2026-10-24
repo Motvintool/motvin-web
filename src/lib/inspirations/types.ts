@@ -189,6 +189,8 @@ export type Screen = {
   bytes: number;
   platform: Platform;
   screenType: ScreenType;
+  /** Every type the screen is, the main one (screenType) first — up to five. Absent from older manifests. */
+  screenTypes?: ScreenType[];
   /** The capture pipeline's finer type (`coach_mark`, `otp`, …); equals screenType when unknown. */
   fineType: string;
   /** Conditions the screen is in. Empty for a plain, settled screen. */
