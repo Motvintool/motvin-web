@@ -32,6 +32,7 @@ const REVIEW_STEPS = [
   'Check names, types and elements',
   'Check flows, patterns and app info',
   'Apply the corrections',
+  'Second check, flow by flow',
   'Final check',
 ];
 

@@ -52,7 +52,7 @@ ${bold('Commands')}
   research --app-id <id>    rewrite an app's flow names, summaries and screen   ${dim('--only journeys|screens')}
                             content with the AI, from what is already stored ${dim('needs a model')}
                             ${dim('--restructure also re-checks the flows: splits, merges, categories')}
-  review-progress --app-id <id> --version <date> --step <1-7>
+  review-progress --app-id <id> --version <date> --step <1-8>
                             tell the Motvin agent which review step is under way
   review-pack --app-id <id> --version <date>
                             write Claude's review package: contact sheets, screen list, doubts
@@ -745,8 +745,8 @@ async function runReview(command, flags) {
   } else if (command === 'review-progress') {
     // The review reached a step: the Motvin agent's card ticks off the ones before it.
     const step = Number(flags.step);
-    if (!Number.isInteger(step) || step < 1 || step > 7) {
-      log.error('--step must be 1–7 (see docs/review-motvin.md).');
+    if (!Number.isInteger(step) || step < 1 || step > 8) {
+      log.error('--step must be 1–8 (see docs/review-motvin.md).');
       return 1;
     }
     const dir = reviewDir(flags.dataDir, flags.appId, flags.platform || 'ios', flags.version);

@@ -79,15 +79,15 @@ export async function buildFrameExtractor() {
  *
  * @returns {Promise<{thumbs: Buffer[], count: number, fps: number, backend: string}>}
  */
-export async function extractThumbs(videoPath, framesDir, fps) {
+export async function extractThumbs(videoPath, framesDir, fps, grid = THUMB) {
   mkdirSync(framesDir, { recursive: true });
   const backend = (await has('ffmpeg')) ? 'ffmpeg' : 'avfoundation';
-  const size = THUMB.width * THUMB.height * 3;
+  const size = grid.width * grid.height * 3;
 
   if (backend === 'ffmpeg') {
     const result = await run(
       'ffmpeg',
-      ['-nostdin', '-loglevel', 'error', '-i', videoPath, '-vf', `fps=${fps},scale=${THUMB.width}:${THUMB.height}:flags=area,format=rgb24`, '-f', 'rawvideo', join(framesDir, 'thumbs.rgb')],
+      ['-nostdin', '-loglevel', 'error', '-i', videoPath, '-vf', `fps=${fps},scale=${grid.width}:${grid.height}:flags=area,format=rgb24`, '-f', 'rawvideo', join(framesDir, 'thumbs.rgb')],
       { timeout: 900_000 },
     );
     if (result.failed) {
@@ -100,7 +100,7 @@ export async function extractThumbs(videoPath, framesDir, fps) {
   }
 
   const binary = await buildFrameExtractor();
-  const result = await run(binary, [videoPath, framesDir, String(fps), String(THUMB.width), String(THUMB.height), '--thumbs-only'], { timeout: 900_000 });
+  const result = await run(binary, [videoPath, framesDir, String(fps), String(grid.width), String(grid.height), '--thumbs-only'], { timeout: 900_000 });
   if (result.failed) throw new Error(result.stderr.trim().split('\n')[0] || `frame reader exited ${result.code}`);
   const files = readdirSync(framesDir).filter((file) => /^frame-\d+\.rgb$/.test(file)).sort();
   if (!files.length) throw new Error('no frames came out of the video');

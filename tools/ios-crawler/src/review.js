@@ -18,6 +18,7 @@
  * are lined up with the tree, and the library index is rebuilt.
  */
 
+import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import sharp from 'sharp';
@@ -25,7 +26,7 @@ import { syncFolders } from './folders.js';
 import { log } from './log.js';
 import { rebuildManifest, resolveDataDir, VERSIONS_DIR_NAME } from './publish.js';
 import { extractFramesAt, extractThumbs } from './frames.js';
-import { fingerprintFromThumb } from './hash.js';
+import { fingerprintFromThumb, thumbToGray } from './hash.js';
 import { ELEMENTS, INDUSTRIES, PUBLISHED_FLOW_CATEGORIES, PUBLISHED_TYPES, STYLES, typeFromName } from './taxonomy.js';
 
 const IMAGES = new Set(['.webp', '.png', '.jpg', '.jpeg']);
@@ -187,7 +188,7 @@ export async function writeReviewPack(options) {
   if (!existsSync(versionDir)) throw new Error(`no ${version} version stored at ${versionDir}`);
   const dir = reviewDir(dataDir, appId, platform, version);
   mkdirSync(dir, { recursive: true });
-  for (const entry of readdirSync(dir)) if (/^sheet-\d+\.png$/.test(entry)) rmSync(join(dir, entry));
+  for (const entry of readdirSync(dir)) if (/^(sheet|flow)-\d+\.png$/.test(entry)) rmSync(join(dir, entry));
   // A light package (right after an upload) leaves the frame strips and the scan to the review itself.
   if (!options.light) rmSync(join(dir, 'frames'), { recursive: true, force: true });
 
@@ -263,10 +264,15 @@ export async function writeReviewPack(options) {
       }
     }
   }
+  for (const screen of screens) screen.hash = pictureHash(screen.file);
+  const keptGrays = new Map();
+  for (const screen of screens) {
+    const gray = await compareGray(screen.file).catch(() => null);
+    if (gray) keptGrays.set(screen.id, gray);
+  }
   if (!options.light) {
-    await writeFrameStrips(dir, screens, flows);
+    await writeFrameStrips(dir, screens, flows, keptGrays);
     await writeMissedMoments(dir, screens);
-    await writeUnsettledPictures(dir, screens);
   }
   // A screen with almost nothing drawn on it — a blank loading page, a white flash — is no step.
   screens.forEach((screen, i) => {
@@ -281,6 +287,32 @@ export async function writeReviewPack(options) {
     const limit = screen.type === 'loading' || (screen.extraTypes ?? []).includes('loading') ? BLANK_SPREAD : BLANK_SPREAD / 3;
     if (spread / print.length < limit) screen.blank = true;
   });
+  // Findings: every doubt the package can prove from the pictures, each to be fixed or
+  // confirmed with a reason before the review can pass (see checkVersion).
+  const before = readJson(join(dir, 'findings.json'), null);
+  const findings = { builtAt: new Date().toISOString(), picture: options.light && before ? before.picture ?? [] : [], duplicate: [], blank: [] };
+  if (!options.light) {
+    for (const screen of screens) {
+      const finding = (why, at, fix) => findings.picture.push({ key: `picture:${screen.hash}`, n: screen.n, id: screen.id, at: screen.atSeconds, better: at, message: `#${screen.n} "${screen.name}" (${screen.atSeconds}s): ${why} — ${fix}` });
+      if (screen.settlesAt !== undefined) finding('the picture was taken while the page was still moving', screen.settlesAt, `swap to the settled page ("frames": { "id", "at": ${screen.settlesAt} }); see frames/${screen.n}.png`);
+      else if (screen.clearerAt !== undefined) finding('a sharper or fully loaded picture of it is in the recording', screen.clearerAt, `swap ("frames": { "id", "at": ${screen.clearerAt} }); see frames/${screen.n}.png`);
+      else if (screen.staleTime) {
+        const seen = (screen.seenAt ?? []).sort((a, b) => Math.abs(a - screen.atSeconds) - Math.abs(b - screen.atSeconds))[0];
+        finding(`the picture is not what the recording shows at its time, so its place in the flow cannot be checked${seen !== undefined ? ` — it is seen at ${seen}s` : ''}`, seen ?? null, seen !== undefined ? `retake it there ("frames": { "id", "at": ${seen} }) and check its step order; see frames/${screen.n}.png` : `find its moment in the recording and retake it ("frames"); see frames/${screen.n}.png`);
+      } else if (screen.cleanerAt !== undefined) finding('first step of its flow, and the moment just before may be the clean start', screen.cleanerAt, `swap ("frames": { "id", "at": ${screen.cleanerAt} }); see frames/${screen.n}.png`);
+    }
+  }
+  const grayList = screens.map((screen) => keptGrays.get(screen.id));
+  for (let i = 0; i < screens.length; i++) {
+    if (!grayList[i]) continue;
+    for (let j = 0; j < i; j++) {
+      if (!grayList[j] || pageChange(grayList[i], grayList[j]) > SAME_PAGE) continue;
+      const pair = [screens[j].hash, screens[i].hash].sort().join('+');
+      findings.duplicate.push({ key: `duplicate:${pair}`, hashes: pair.split('+'), message: `#${screens[j].n} "${screens[j].name}" and #${screens[i].n} "${screens[i].name}" are the same picture — remove one ("remove"), or confirm both are steps of their own` });
+    }
+  }
+  for (const screen of screens) if (screen.blank) findings.blank.push({ key: `blank:${screen.hash}`, hash: screen.hash, message: `#${screen.n} "${screen.name}" has almost nothing on it — a blank loading page: remove it, or confirm it is a real step` });
+  writeJson(join(dir, 'findings.json'), findings);
   const doubts = screens
     .map((screen) => ({
       n: screen.n,
@@ -336,7 +368,8 @@ export async function writeReviewPack(options) {
     sheets += 1;
     await sharp({ create: { width, height, channels: 3, background: '#e9e9e9' } }).composite(layers).png().toFile(join(dir, `sheet-${sheets}.png`));
   }
-  log.ok(`review package: ${screens.length} screen(s), ${sheets} sheet(s), ${doubts.length} doubt(s) in ${dir}`);
+  const flowSheets = await writeFlowSheets(dir, order, screens, pathOf);
+  log.ok(`review package: ${screens.length} screen(s), ${sheets} sheet(s), ${flowSheets} flow sheet(s), ${doubts.length} doubt(s) in ${dir}`);
   return { dir, screens: screens.length, sheets, doubts: doubts.length };
 }
 
@@ -353,7 +386,9 @@ export async function writeReviewPack(options) {
  *     "remove":  [ screen id, … ]  (duplicates and bad frames; undo puts them back),
  *     "frames":  [ { "id": screen id, "at": seconds } ]  (a better picture from the kept recording),
  *     "add":     [ { "after": screen id, "at": seconds, "name", "type", … } ]  (a step the upload missed, from the recording),
- *     "keepPicture": [ { "at": seconds, "why": text } ]  (an unsettled picture kept on purpose),
+ *     "confirm": [ { "key": finding key, "why": text } ]  (a finding looked at and kept as it is),
+ *     "checked": [ { "id": screen id, "see": text } ]  (the verdict on a screen: what it shows, looked at),
+ *     "audit":   [ { "flow": flow id, "ok": true } ]  (the second check approved the flow as it stands),
  *     "skip":    [ { "at": seconds, "why": "typing"|"pressed"|"bars"|"same"|"picture", "same"?: screen id } ]
  *                (a missed moment not worth a screen — with a reason, checked: "same" must match that kept
  *                screen, "picture" needs a "frames" swap at that moment; a bare number is refused),
@@ -374,6 +409,7 @@ export async function applyReview(options) {
   const dir = reviewDir(dataDir, appId, platform, version);
   const backup = join(dir, `backup-${new Date().toISOString().replace(/[:.]/g, '-')}`);
   const skipsRefused = [];
+  const sequencesBefore = flowSequences(dataDir, appId, platform, version);
   // Applying: the agent's card shows step 6 under way.
   if (existsSync(join(dir, 'reviewing.json'))) writeJson(join(dir, 'reviewing.json'), { ...readJson(join(dir, 'reviewing.json'), {}), step: 6 });
   mkdirSync(backup, { recursive: true });
@@ -421,6 +457,8 @@ export async function applyReview(options) {
 
   // A better picture of a screen, taken from the kept recording.
   const recording = recordingIn(dir);
+  // Pictures the review chose itself — retaken or added — count as looked at.
+  const chosen = [];
   for (const pick of Array.isArray(corrections.frames) ? corrections.frames : []) {
     const image = fileOfId.get(pick.id);
     if (!image || typeof pick.at !== 'number') continue;
@@ -430,6 +468,7 @@ export async function applyReview(options) {
     }
     try {
       await takeFrame(recording, image, pick.at, join(dir, 'frames', 'take'));
+      chosen.push(image);
       const sidecarPath = image.replace(/\.[^.]+$/, '.json');
       const sidecar = readJson(sidecarPath, {});
       sidecar.capture = { ...(sidecar.capture ?? {}), atSeconds: pick.at };
@@ -456,13 +495,13 @@ export async function applyReview(options) {
     decided.push(skip.at);
   }
   for (const add of Array.isArray(corrections.add) ? corrections.add : []) if (typeof add.at === 'number') decided.push(add.at);
-  // Pictures kept as they are on purpose (a toast that is gone once the page settles).
-  const keptPictures = readJson(join(dir, 'kept-pictures.json'), []);
-  for (const keep of Array.isArray(corrections.keepPicture) ? corrections.keepPicture : []) {
-    if (typeof keep?.at === 'number' && typeof keep.why === 'string' && keep.why.trim()) keptPictures.push(keep.at);
-    else skipsRefused.push(`a "keepPicture" needs "at" (the picture's time) and a "why"`);
+  // Findings looked at and kept on purpose, each with its reason.
+  const confirmed = readJson(join(dir, 'confirmed.json'), []);
+  for (const entry of Array.isArray(corrections.confirm) ? corrections.confirm : []) {
+    if (typeof entry?.key === 'string' && typeof entry.why === 'string' && entry.why.trim().length >= 8) confirmed.push({ key: entry.key, why: entry.why.trim() });
+    else skipsRefused.push(`a "confirm" needs the finding's "key" and a real "why" (${JSON.stringify(entry).slice(0, 80)})`);
   }
-  writeJson(join(dir, 'kept-pictures.json'), keptPictures);
+  writeJson(join(dir, 'confirmed.json'), confirmed);
   writeJson(join(dir, 'decided.json'), decided);
   // A step the upload missed (an error, a state held on one page), taken from the
   // kept recording and put in its flow right after the screen it follows.
@@ -502,11 +541,22 @@ export async function applyReview(options) {
     const rel = `${VERSIONS_DIR_NAME}/${version}/${image.slice(versionDir.length + 1)}`;
     const id = `${appId}-${platform}-${rel.replace(/\.[^.]+$/, '').split('/').join('-')}`;
     fileOfId.set(id, image);
+    chosen.push(image);
     const at = flow.screenIds.indexOf(add.after) + 1;
     flow.screenIds.splice(at, 0, id);
     flow.steps = flow.screenIds.map((sid) => ({ screenId: sid, action: (flow.steps ?? []).find((step) => step.screenId === sid)?.action ?? null }));
     fixes += 1;
   }
+  // Verdicts: each screen the review looked at, by its picture — a picture changed later needs one again.
+  const checked = new Set(readJson(join(dir, 'checked.json'), []));
+  for (const entry of Array.isArray(corrections.checked) ? corrections.checked : []) {
+    const image = fileOfId.get(entry?.id);
+    if (!image) skipsRefused.push(`"checked" names no screen of this version: ${String(entry?.id).slice(0, 80)}`);
+    else if (typeof entry.see !== 'string' || entry.see.trim().length < 4) skipsRefused.push(`"checked" for ${entry.id} needs "see": what the screen shows`);
+    else checked.add(pictureHash(image));
+  }
+  for (const image of chosen) checked.add(pictureHash(image));
+  writeJson(join(dir, 'checked.json'), [...checked].filter(Boolean));
   // Screens the review takes out — a duplicate of the one before it, a frame
   // caught mid-transition, a blank or broken capture. The backup above holds
   // the files and records, so undo puts them back.
@@ -632,6 +682,17 @@ export async function applyReview(options) {
   const kept = corrections.rules ? addRules(dataDir, corrections.rules) : 0;
   await syncFolders({ appId, platform, version, dataDir });
   await rebuildManifest(dataDir);
+  // The second check's approvals: a flow counts as approved only when this apply left it as it was looked at.
+  const sequencesAfter = flowSequences(dataDir, appId, platform, version);
+  const audited = new Set(readJson(join(dir, 'audited.json'), []));
+  for (const entry of Array.isArray(corrections.audit) ? corrections.audit : []) {
+    if (entry?.ok !== true) continue;
+    const now = sequencesAfter.get(entry.flow);
+    if (!now) skipsRefused.push(`"audit" names no flow of this version: ${String(entry.flow).slice(0, 80)}`);
+    else if (sequencesBefore.get(entry.flow)?.sequence !== now.sequence) skipsRefused.push(`flow "${now.flow.name}" changed in this apply — look at its new flow sheet and approve it again`);
+    else audited.add(`${entry.flow}:${now.sequence}`);
+  }
+  writeJson(join(dir, 'audited.json'), [...audited]);
   // A refused skip says why, above the moment the check lists as still open.
   const problems = [...skipsRefused, ...checkVersion({ appId, platform, version, dataDir })];
   // A clean pass ends the "reviewing" state; with problems left the review is back on its last step, fixing them.
@@ -646,7 +707,7 @@ export async function applyReview(options) {
   // the package with review-pack.
   if (!problems.length) {
     for (const entry of readdirSync(dir)) {
-      const working = /^recording\./.test(entry) || entry === 'frames' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || entry === 'missed.json' || entry === 'unsettled.json' || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
+      const working = /^recording\./.test(entry) || entry === 'frames' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || entry === 'missed.json' || /^(flow-\d+\.png|flow-sheets\.json|findings\.json|confirmed\.json|checked\.json|audited\.json)$/.test(entry) || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
       const olderBackup = entry.startsWith('backup-') && join(dir, entry) !== backup;
       if (working || olderBackup) rmSync(join(dir, entry), { recursive: true, force: true });
     }
@@ -764,10 +825,7 @@ export function checkVersion(options) {
     if (/ - |\(|\)|\bflow\b/i.test(flow.name)) problems.push(`flow "${flow.name}" is not a plain task name`);
   }
 
-  const times = screens.map(({ sidecar }) => sidecar.capture?.atSeconds).filter((at) => typeof at === 'number');
-  for (const entry of unsettledLeft(reviewDir(dataDir, appId, platform, version), times)) {
-    problems.push(`the picture at ${entry.at}s (#${entry.n ?? '?'}) was taken while the page was still moving — it settles at ${entry.settledAt}s: swap it ("frames": { "id", "at": ${entry.settledAt} }), or keep it on purpose ("keepPicture": [{ "at": ${entry.at}, "why" }])`);
-  }
+  problems.push(...reviewLayerProblems({ dataDir, appId, platform, version, appDir, screens, flows, tag }));
   for (const moment of undecidedMoments(reviewDir(dataDir, appId, platform, version))) {
     problems.push(`a moment at ${moment.at}s in the recording is in no screen — add it ("add"), or skip it with a reason ("skip": { "at", "why" })`);
   }
@@ -788,6 +846,48 @@ export function checkVersion(options) {
     const weak = cards.filter((sid) => ['splash', 'loading', 'permission', 'error'].includes(typeOf.get(sid)));
     if (weak.length) problems.push(`app ${appId} card pictures include a splash, loading, permission or error screen`);
   }
+  return problems;
+}
+
+/**
+ * The review layer, active once a package was built (findings.json): every finding fixed or
+ * confirmed, every kept screen given a verdict, every flow approved by the second check as it
+ * now stands. A changed picture or flow needs its verdict or approval again.
+ */
+function reviewLayerProblems({ dataDir, appId, platform, version, appDir, screens, flows, tag }) {
+  const dir = reviewDir(dataDir, appId, platform, version);
+  const findings = readJson(join(dir, 'findings.json'), null);
+  if (!findings) return [];
+  const problems = [];
+  const confirmed = new Set(readJson(join(dir, 'confirmed.json'), []).map((entry) => entry.key));
+  // Ids flatten the folder path, so each hash is read from the file its id came from.
+  const hashOf = new Map();
+  const files = listImages(join(appDir, VERSIONS_DIR_NAME, version));
+  for (const rel of files) hashOf.set(`${tag}${rel.replace(/\.[^.]+$/, '').split('/').join('-')}`, pictureHash(join(appDir, VERSIONS_DIR_NAME, version, rel)));
+  const present = new Set(hashOf.values());
+  for (const entry of findings.picture ?? []) if (present.has(entry.key.split(':')[1]) && !confirmed.has(entry.key)) problems.push(`${entry.message} — or confirm it ("confirm": [{ "key": "${entry.key}", "why" }])`);
+  for (const entry of findings.duplicate ?? []) if (entry.hashes.every((h) => present.has(h)) && !confirmed.has(entry.key)) problems.push(`${entry.message} ("confirm": [{ "key": "${entry.key}", "why" }])`);
+  for (const entry of findings.blank ?? []) if (present.has(entry.hash) && !confirmed.has(entry.key)) problems.push(`${entry.message} ("confirm": [{ "key": "${entry.key}", "why" }])`);
+  // Steps out of the recording's order: a flow read wrong, or a picture whose time is stale.
+  const timeOf = new Map(screens.map(({ id, sidecar }) => [id, sidecar.capture?.atSeconds]));
+  for (const flow of flows) {
+    let previous = null;
+    for (const sid of flow.screenIds) {
+      const at = timeOf.get(sid);
+      if (typeof at !== 'number') continue;
+      if (previous && at < previous.at - 1) {
+        const key = `order:${hashOf.get(sid)}`;
+        if (!confirmed.has(key)) problems.push(`in "${flow.name}", ${sid.slice(tag.length)} (${at}s) comes after ${previous.sid.slice(tag.length)} (${previous.at}s) but is earlier in the recording — fix the order ("order"), retake its picture at its true moment ("frames"), or confirm the order ("confirm": [{ "key": "${key}", "why" }])`);
+      }
+      previous = { sid, at };
+    }
+  }
+  const checked = new Set(readJson(join(dir, 'checked.json'), []));
+  const unchecked = screens.filter(({ id }) => !checked.has(hashOf.get(id))).map(({ id }) => id.slice(tag.length));
+  if (unchecked.length) problems.push(`${unchecked.length} screen(s) have no verdict yet — look at each and add it to "checked" with what it shows: ${unchecked.slice(0, 25).join(', ')}${unchecked.length > 25 ? ', …' : ''}`);
+  const audited = new Set(readJson(join(dir, 'audited.json'), []));
+  const open = [...flowSequences(dataDir, appId, platform, version)].filter(([id, { sequence }]) => !audited.has(`${id}:${sequence}`)).map(([, { flow }]) => `"${flow.name}"`);
+  if (open.length) problems.push(`${open.length} flow(s) not yet approved by the second check as they stand now (audit-motvin.md, flow sheets): ${open.slice(0, 25).join(', ')}${open.length > 25 ? ', …' : ''}`);
   return problems;
 }
 
@@ -828,7 +928,7 @@ function grayDiff(a, b) {
  * anything was typed. Likely better pictures are marked on the screen
  * (`clearerAt`, `cleanerAt`) and land in the doubts.
  */
-async function writeFrameStrips(dir, screens, flows) {
+async function writeFrameStrips(dir, screens, flows, keptGrays) {
   const recording = recordingIn(dir);
   if (!recording) return;
   const timed = screens.filter((screen) => typeof screen.atSeconds === 'number');
@@ -854,21 +954,49 @@ async function writeFrameStrips(dir, screens, flows) {
       if (!path) continue;
       const seconds = Math.round((screen.atSeconds + offset) * 10) / 10;
       const gray = await sharp(path).resize(32, 64, { fit: 'fill' }).greyscale().raw().toBuffer().catch(() => null);
+      const fine = await compareGray(path).catch(() => null);
+      const norm = fine ? normalised(fine) : null;
       const image = await sharp(path).resize({ width: W }).png().toBuffer().catch(() => null);
-      if (gray && image) cells.push({ offset, seconds, gray, image, score: stripScore(gray) });
+      if (gray && fine && image) cells.push({ offset, seconds, gray, fine, norm, image, score: stripScore(gray) });
     }
     const own = cells.find((cell) => cell.offset === 0);
     if (!own || cells.length < 2) continue;
     // Same screen only: a frame from the next screen is not a better picture of this one.
     const same = cells.filter((cell) => grayDiff(cell.gray, own.gray) < 30);
-    const best = same.reduce((a, b) => (b.score > a.score ? b : a), own);
+    // A clearer picture must be this very page — brightness aside, so a dim fade still matches it.
+    const samePage = cells.filter((cell) => pageChange(cell.norm, own.norm) <= SAME_PAGE_NORMALISED);
+    const best = samePage.reduce((a, b) => (b.score > a.score ? b : a), own);
     if (best !== own && best.score >= own.score * 1.15) screen.clearerAt = best.seconds;
     // The same page, but something on it changes and stays — an error line, a filled field, a toggle:
     // likely a step of its own the upload folded into this one.
     const changed = same.find((cell) => cell.offset > 0 && grayDiff(cell.gray, own.gray) >= 2 && grayDiff(cell.gray, own.gray) < 30);
-    if (changed) screen.changesAt = changed.seconds;
+    if (changed) {
+      screen.changesAt = changed.seconds;
+      screen.changesGray = changed.fine;
+      screen.changesPicture = `frames/change-${screen.n}.png`;
+      writeFileSync(join(framesDir, `change-${screen.n}.png`), changed.image);
+    }
+    // Still moving: play on to the first moment the page holds still. When that page clearly
+    // differs from the kept picture and is no other kept screen, the settled page is the real one.
+    const keptGray = keptGrays.get(screen.id);
+    const later = cells.filter((cell) => cell.offset > 0);
+    const still = later.findIndex((cell, i) => later[i + 1] && pageChange(cell.fine, later[i + 1].fine) <= SAME_PAGE);
+    // Only a picture taken while the page moves: a brief still of its own (a screen seen for a moment) is a step.
+    const prev = cells.find((cell) => cell.offset === -0.3);
+    const next = cells.find((cell) => cell.offset === 0.3);
+    const moving = prev && next && pageChange(own.fine, prev.fine) > SAME_PAGE && pageChange(own.fine, next.fine) > SAME_PAGE;
+    if (still >= 0) screen.settledGray = later[still].fine;
+    // The picture is not what the recording shows at its time: the time is stale, so the
+    // flow's order cannot be checked from it (a picture retaken from elsewhere, an old record).
+    if (keptGray && pageChange(normalised(keptGray), own.norm) > SAME_PAGE_NORMALISED && !cells.some((cell) => pageChange(normalised(keptGray), cell.norm) <= SAME_PAGE_NORMALISED)) screen.staleTime = true;
+    if (keptGray && still >= 0 && moving) {
+      const settled = later[still];
+      const change = pageChange(keptGray, settled.fine);
+      const elsewhere = [...keptGrays].some(([id, gray]) => id !== screen.id && pageChange(gray, settled.fine) <= SETTLED_SAME);
+      if (change > SETTLED_SAME && !elsewhere) screen.settlesAt = settled.seconds;
+    }
     if (firstOfFlow.has(screen.id)) {
-      const before = same.filter((cell) => cell.offset < 0 && grayDiff(cell.gray, own.gray) > 1 && cell.score >= own.score * 0.9);
+      const before = samePage.filter((cell) => cell.offset < 0 && grayDiff(cell.gray, own.gray) > 1 && cell.score >= own.score * 0.9);
       if (before.length) screen.cleanerAt = before[0].seconds;
     }
     const meta = await sharp(cells[0].image).metadata();
@@ -886,6 +1014,21 @@ async function writeFrameStrips(dir, screens, flows) {
   rmSync(raw, { recursive: true, force: true });
 }
 
+/** Two frames of one page, once each is stretched to full contrast (a fade in or out no longer counts). */
+const SAME_PAGE_NORMALISED = 0.05;
+
+/** A grey grid stretched to full contrast, so a dimmed frame lines up with its bright one. */
+function normalised(gray) {
+  const sorted = Uint8Array.from(gray).sort();
+  const lo = sorted[Math.floor(sorted.length * 0.02)];
+  const hi = sorted[Math.floor(sorted.length * 0.98)];
+  const span = Math.max(1, hi - lo);
+  return gray.map((v) => Math.max(0, Math.min(255, Math.round(((v - lo) * 255) / span))));
+}
+
+/** A kept picture this close to its settled page is settled (a cursor blink, a shadow). */
+const SETTLED_SAME = 0.02;
+
 /** Replaces a screen's picture with the recording's frame at `seconds`, at the picture's own size. */
 async function takeFrame(recording, image, seconds, scratch) {
   const index = Math.max(0, Math.round(seconds * STRIP_FPS));
@@ -901,6 +1044,13 @@ async function takeFrame(recording, image, seconds, scratch) {
   cpSync(temp, image);
   rmSync(temp, { force: true });
 }
+
+/** The scan's frame grid: fine enough that a one-line error under a field splits a still. */
+const SCAN_GRID = { width: 72, height: 156 };
+/** Share of the page that must change between two scanned frames to start a new still. */
+const SCAN_SPLIT = 0.0015;
+/** A moment this close to a kept screen is that screen. */
+const MATCHES_KEPT = 0.006;
 
 /** Frames a second the recording is scanned at for missed moments. */
 const SCAN_FPS = 8;
@@ -918,13 +1068,12 @@ function changedShare(a, b, level) {
  * out — a clock, a battery or the bar shown on one frame and hidden on the
  * next is not a new step.
  */
-function pageChange(a, b) {
-  const width = COMPARE.width;
+function pageChange(a, b, width = COMPARE.width, level = 30) {
   const rows = a.length / width;
   const from = Math.ceil(rows * 0.07) * width;
   const to = Math.floor(rows * 0.95) * width;
   let n = 0;
-  for (let i = from; i < to; i++) if (Math.abs(a[i] - b[i]) > 30) n += 1;
+  for (let i = from; i < to; i++) if (Math.abs(a[i] - b[i]) > level) n += 1;
   return n / (to - from);
 }
 
@@ -945,36 +1094,51 @@ async function writeMissedMoments(dir, screens) {
   const scratch = join(dir, 'frames', 'scan');
   let thumbs;
   try {
-    ({ thumbs } = await extractThumbs(recording, scratch, SCAN_FPS));
+    ({ thumbs } = await extractThumbs(recording, scratch, SCAN_FPS, SCAN_GRID));
   } catch (error) {
     log.warn(`review: could not scan the recording — ${String(error.message).split('\n')[0]}`);
     return;
   }
-  const prints = thumbs.map((thumb) => fingerprintFromThumb(thumb).gray);
+  const prints = thumbs.map((thumb) => thumbToGray(thumb, SCAN_GRID.width, SCAN_GRID.height));
   const stills = [];
   let start = 0;
   for (let i = 1; i <= prints.length; i++) {
-    if (i === prints.length || changedShare(prints[i], prints[i - 1], 25) > 0.003) {
+    if (i === prints.length || pageChange(prints[i], prints[i - 1], SCAN_GRID.width, 25) > SCAN_SPLIT) {
       if (i - start >= STILL_FRAMES) stills.push(Math.floor((start + i - 1) / 2));
       start = i;
     }
   }
   const paths = await extractFramesAt(recording, scratch, SCAN_FPS, stills.map((i) => Math.max(1, i)));
   const kept = await Promise.all(screens.map(async (screen) => ({ screen, gray: await compareGray(screen.file).catch(() => null) })));
+  // A kept screen's settled page counts as shown: its finding swaps the picture to it.
+  const shown = [...kept.map((entry) => entry.gray), ...screens.map((screen) => screen.settledGray)].filter(Boolean);
   const missed = [];
+  const taken = [];
   for (const index of stills) {
     const path = paths.get(Math.max(1, index));
     if (!path) continue;
     const gray = await compareGray(path);
-    const closest = Math.min(...kept.filter((entry) => entry.gray).map((entry) => pageChange(entry.gray, gray)));
-    if (closest <= 0.004) continue;
     const at = Math.round((index / SCAN_FPS) * 100) / 100;
+    // Where each kept picture really is in the recording, for one whose own time is stale.
+    for (const entry of kept) if (entry.gray && pageChange(entry.gray, gray) <= MATCHES_KEPT) (entry.screen.seenAt ??= []).push(at);
+    if (shown.some((other) => pageChange(other, gray) <= MATCHES_KEPT)) continue;
+    // The same moment again (a page left and come back to) is decided once.
+    if (taken.some((other) => pageChange(other, gray) <= MATCHES_KEPT)) continue;
+    taken.push(gray);
     const before = screens.filter((screen) => typeof screen.atSeconds === 'number' && screen.atSeconds <= at).sort((a, b) => b.atSeconds - a.atSeconds)[0] ?? null;
     const k = missed.length + 1;
     await sharp(path).resize({ width: 360 }).png().toFile(join(dir, 'frames', `missed-${k}.png`));
     missed.push({ k, at, after: before?.id ?? null, afterN: before?.n ?? null, picture: `frames/missed-${k}.png` });
   }
   rmSync(scratch, { recursive: true, force: true });
+  // The strips' "something on it changes" moments are missed steps too, decided the same way.
+  for (const screen of screens) {
+    if (screen.changesAt === undefined || !screen.changesPicture) continue;
+    if (missed.some((moment) => Math.abs(moment.at - screen.changesAt) <= 1.5)) continue;
+    if (screens.some((other) => typeof other.atSeconds === 'number' && Math.abs(other.atSeconds - screen.changesAt) <= 0.3)) continue;
+    if (screen.changesGray && [...shown, ...taken].some((other) => pageChange(other, screen.changesGray) <= MATCHES_KEPT)) continue;
+    missed.push({ k: missed.length + 1, at: screen.changesAt, after: screen.id, afterN: screen.n, picture: screen.changesPicture, from: 'strip' });
+  }
   writeJson(join(dir, 'missed.json'), missed);
 }
 
@@ -982,7 +1146,7 @@ async function writeMissedMoments(dir, screens) {
 // frame of a still screen against another is ~0.002; an added "Incorrect code" line
 // or code boxes still empty are ≥ 0.008.
 const SAME_PAGE = 0.005;
-const SKIP_REASONS = ['typing', 'pressed', 'bars', 'same', 'picture'];
+const SKIP_REASONS = ['typing', 'pressed', 'bars', 'animation', 'same', 'picture'];
 
 /** Why a skip of a missed moment is refused, or null when it stands. */
 async function skipRefused(skip, { dir, moments, fileOfId, frames }) {
@@ -1003,65 +1167,64 @@ async function skipRefused(skip, { dir, moments, fileOfId, frames }) {
   return null;
 }
 
-/** How far after a picture its page is looked at for settling, and how often. */
-const SETTLE_SPAN = 2.4;
-const SETTLE_STEP = 0.2;
-
-/**
- * Every kept picture taken while its page was still moving — a sheet sliding up, the
- * keyboard rising, a dialog half shown — found by playing on from the picture to the
- * first still moment: when that page is clearly different from the picture and is no
- * other kept screen, the settled page is the real one. Written to unsettled.json with
- * the moment to swap to; the final check lists each until it is swapped ("frames") or
- * kept on purpose ("keepPicture").
- */
-async function writeUnsettledPictures(dir, screens) {
-  rmSync(join(dir, 'unsettled.json'), { force: true });
-  const recording = recordingIn(dir);
-  const timed = screens.filter((screen) => typeof screen.atSeconds === 'number' && screen.file);
-  if (!recording || !timed.length) return;
-  const steps = Math.round(SETTLE_SPAN / SETTLE_STEP);
-  const indexOf = (seconds) => Math.max(1, Math.round(seconds * STRIP_FPS));
-  const wanted = timed.flatMap((screen) => Array.from({ length: steps }, (_, k) => indexOf(screen.atSeconds + (k + 1) * SETTLE_STEP)));
-  const scratch = join(dir, 'frames', 'settle');
-  let paths;
+/** A picture's identity: its bytes. A swapped picture is a new one; a moved file is the same. */
+function pictureHash(file) {
   try {
-    paths = await extractFramesAt(recording, scratch, STRIP_FPS, wanted);
-  } catch (error) {
-    log.warn(`review: could not check the pictures settle — ${String(error.message).split('\n')[0]}`);
-    return;
+    return createHash('sha1').update(readFileSync(file)).digest('hex').slice(0, 16);
+  } catch {
+    return null;
   }
-  const kept = await Promise.all(timed.map(async (screen) => ({ screen, gray: await compareGray(screen.file).catch(() => null) })));
-  const unsettled = [];
-  for (const { screen, gray } of kept) {
-    if (!gray) continue;
-    const frames = [];
-    for (let k = 1; k <= steps; k++) {
-      const path = paths.get(indexOf(screen.atSeconds + k * SETTLE_STEP));
-      frames.push(path ? await compareGray(path) : null);
-    }
-    // The first frame the page then holds still on for two more steps (about 0.4s).
-    const k = frames.findIndex((frame, i) => frame && frames[i + 1] && frames[i + 2] && pageChange(frame, frames[i + 1]) <= SAME_PAGE && pageChange(frame, frames[i + 2]) <= SAME_PAGE);
-    if (k < 0) continue;
-    const settled = frames[k];
-    const change = pageChange(gray, settled);
-    if (change <= SETTLED_SAME) continue;
-    // Settling on another kept screen is a move to that screen, not this one unsettled.
-    if (kept.some((other) => other.screen !== screen && other.gray && pageChange(other.gray, settled) <= SETTLED_SAME)) continue;
-    const settledAt = Math.round((screen.atSeconds + (k + 2) * SETTLE_STEP) * 100) / 100;
-    unsettled.push({ id: screen.id, n: screen.n, at: screen.atSeconds, settledAt, change: Math.round(change * 1000) / 1000 });
-  }
-  rmSync(scratch, { recursive: true, force: true });
-  writeJson(join(dir, 'unsettled.json'), unsettled);
 }
 
-/** A kept picture this close to its settled page is settled (a cursor blink, a shadow). */
-const SETTLED_SAME = 0.02;
+/** Each flow's steps as a list of picture identities, in step order — what an audit approves. */
+function flowSequences(dataDir, appId, platform, version) {
+  const appDir = join(dataDir, 'screens', platform, appId);
+  const versionDir = join(appDir, VERSIONS_DIR_NAME, version);
+  const tag = `${appId}-${platform}-${VERSIONS_DIR_NAME}-${version}-`;
+  const fileOf = new Map(listImages(versionDir).map((rel) => [`${appId}-${platform}-${`${VERSIONS_DIR_NAME}/${version}/${rel}`.replace(/\.[^.]+$/, '').split('/').join('-')}`, join(versionDir, rel)]));
+  const flows = (readJson(join(dataDir, 'flows.json'), { flows: [] }).flows || []).filter((flow) => flow.appId === appId && flow.platform === platform && (flow.screenIds ?? []).some((sid) => sid.startsWith(tag)));
+  const out = new Map();
+  for (const flow of flows) {
+    const own = flow.screenIds.filter((sid) => fileOf.has(sid));
+    if (!own.length) continue;
+    const sequence = createHash('sha1').update(`${flow.name}|${own.map((sid) => pictureHash(fileOf.get(sid))).join(',')}`).digest('hex').slice(0, 16);
+    out.set(flow.id, { flow, sequence });
+  }
+  return out;
+}
 
-/** The unsettled pictures not yet swapped or kept on purpose; `timeOf` maps a screen's stored time. */
-function unsettledLeft(dir, times) {
-  const kept = readJson(join(dir, 'kept-pictures.json'), []);
-  return readJson(join(dir, 'unsettled.json'), []).filter((entry) => !kept.some((at) => Math.abs(at - entry.at) <= 0.05) && !times.some((at) => Math.abs(at - entry.settledAt) <= 0.6) && times.some((at) => Math.abs(at - entry.at) <= 0.05));
+/** One sheet per flow, its steps left to right in order — how a person checks a flow reads. */
+async function writeFlowSheets(dir, order, screens, pathOf) {
+  const byId = new Map(screens.map((screen) => [screen.id, screen]));
+  const W = 200;
+  const PER_ROW = 8;
+  let k = 0;
+  const index = [];
+  for (const flow of order) {
+    const steps = flow.screenIds.map((sid) => byId.get(sid)).filter(Boolean);
+    if (!steps.length) continue;
+    k += 1;
+    const cells = await Promise.all(steps.map(async (screen) => ({ screen, image: await sharp(screen.file).resize({ width: W }).png().toBuffer().catch(() => null) })));
+    const h = Math.max(...(await Promise.all(cells.map(async (cell) => (cell.image ? (await sharp(cell.image).metadata()).height ?? 400 : 400)))));
+    const rows = Math.ceil(cells.length / PER_ROW);
+    const head = 44;
+    const cellH = h + 56;
+    const width = Math.min(cells.length, PER_ROW) * (W + 12) + 12;
+    const esc = (text) => String(text).replace(/[<&>"]/g, '');
+    const layers = [{ input: Buffer.from(`<svg width="${width}" height="${head}"><rect width="100%" height="100%" fill="#111"/><text x="12" y="29" font-size="20" font-weight="700" fill="#fff" font-family="Arial">${esc(`${k}. ${pathOf(flow)} (${flow.category ?? '?'})`).slice(0, 90)}</text></svg>`), left: 0, top: 0 }];
+    cells.forEach((cell, i) => {
+      const x = 12 + (i % PER_ROW) * (W + 12);
+      const y = head + 12 + Math.floor(i / PER_ROW) * (cellH + 12);
+      if (cell.image) layers.push({ input: cell.image, left: x, top: y });
+      const label = esc(`${i + 1}. #${cell.screen.n} ${cell.screen.name}`).slice(0, 26);
+      const sub = esc(`${cell.screen.type}${cell.screen.atSeconds !== null ? ` · ${cell.screen.atSeconds}s` : ''}`).slice(0, 30);
+      layers.push({ input: Buffer.from(`<svg width="${W}" height="52"><rect width="100%" height="100%" fill="#222"/><text x="6" y="21" font-size="15" font-weight="700" fill="#fff" font-family="Arial">${label}</text><text x="6" y="43" font-size="13" fill="#bbb" font-family="Arial">${sub}</text></svg>`), left: x, top: y + h + 2 });
+    });
+    await sharp({ create: { width, height: head + 12 + rows * (cellH + 12), channels: 3, background: '#e9e9e9' } }).composite(layers).png().toFile(join(dir, `flow-${k}.png`));
+    index.push({ k, id: flow.id, path: pathOf(flow), picture: `flow-${k}.png`, steps: steps.map((screen) => screen.n) });
+  }
+  writeJson(join(dir, 'flow-sheets.json'), index);
+  return k;
 }
 
 /** The missed moments the review has not yet added or skipped. */
