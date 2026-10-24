@@ -2195,6 +2195,8 @@ export function JobThread({ job, now, reviewSlot }: { job: IngestJob; now: numbe
                 {job.result.excluded.length} screen{job.result.excluded.length === 1 ? '' : 's'} left out (loading states, third-party sign-in).
               </p>
             )}
+            {/* The upload is in: Claude's review is the next step — the automatic check's findings, the button, then "Reviewed by Claude". */}
+            {job.result.version && <ClaudeReview appId={job.result.app.id} platform={job.result.platform ?? 'ios'} version={job.result.version} />}
           </>
         )}
 

@@ -1604,7 +1604,7 @@ export async function selfTest() {
     const captureSidecar = JSON.parse(readFileSync(join(captureStore, 'screens', 'ios', 'capture-app', 'onboarding', '2.json'), 'utf-8'));
     check('the sidecar carries the fine type, states and description', captureSidecar.fineType === 'bottom_sheet' && captureSidecar.states.includes('bottom-sheet') && captureSidecar.description === 'Bottom sheet.', JSON.stringify(captureSidecar));
     check('the sidecar records when and how long the screen was on', captureSidecar.capture?.atSeconds === 6 && captureSidecar.capture?.holdSeconds === 1);
-    check('an overlay names the screen beneath it', captureSidecar.capture?.overlayOf === 'Splash screen', JSON.stringify(captureSidecar.capture));
+    check('an overlay names the screen beneath it', captureSidecar.capture?.overlayOf === 'Splash', JSON.stringify(captureSidecar.capture));
     check('a new industry passes the builder gate', JSON.parse(readFileSync(join(captureStore, 'apps.json'), 'utf-8')).apps[0].industry === 'food');
     const captureRecord = JSON.parse(readFileSync(join(captureStore, 'analysis', 'capture-app-ios-onboarding-1.json'), 'utf-8'));
     check('the analysis record has findings the screen page can render', Array.isArray(captureRecord.sections) && captureRecord.sections.length === 4 && captureRecord.sections[0].points.length > 0);

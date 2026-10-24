@@ -689,6 +689,14 @@ function screensToShow(state: LibraryState | null, args: Record<string, unknown>
  * name in quotes) is never taken for the target.
  */
 function pinQuotedTarget(op: ParsedOp, question: string, state: LibraryState | null): ParsedOp {
+  // An upload goes to an app only when this message names it: "show me" or
+  // "add an app" after a talk about Claude is not "add screens to Claude" —
+  // with no app named, the picker opens for a new app and asks.
+  if (op.kind === 'upload' && op.app) {
+    const app = findApp(state, op.app);
+    const names = [String(op.app), app?.name, app?.id].filter(Boolean).map((name) => String(name).toLowerCase());
+    if (!names.some((name) => question.toLowerCase().includes(name))) return { ...op, app: null };
+  }
   const quoted = [...question.matchAll(/[“"‘']([^”"’']{2,80})[”"’']/g)].map((match) => match[1].trim());
   if (!quoted.length) return op;
   const same = (a: unknown, b: unknown) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();

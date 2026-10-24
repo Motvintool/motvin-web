@@ -20,7 +20,7 @@
  */
 
 import { pageLines } from './heuristics.js';
-import { ELEMENTS, typeFromName } from './taxonomy.js';
+import { ELEMENTS, plainScreenName, typeFromName } from './taxonomy.js';
 
 /** The brief, as written for the researcher. Sent verbatim as the system prompt. */
 export const BRIEF = `Analyze the uploaded app screenshots as a UX/UI researcher and product designer.
@@ -934,7 +934,7 @@ export function applyProposals(journeys, graph, proposals, context = {}) {
     if (!node || !proposal || typeof proposal !== 'object') continue;
     const analysis = node.analysis;
     let changed = false;
-    const name = clean(proposal.name, 48);
+    const name = plainScreenName(clean(proposal.name, 48));
     if (name && !/^(screen|image|screenshot|untitled)$/i.test(name)) {
       analysis.name = name;
       changed = true;

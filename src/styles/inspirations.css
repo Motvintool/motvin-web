@@ -3828,7 +3828,9 @@ select.ins-input {
   .ins-flow-foot .ins-screen-preview-foot-secondary { order: 3; flex: 1 0 100%; flex-wrap: nowrap; }
 }
 @media (max-width: 640px) {
-  .ins-flow-head-step { display: none; }
+  /* The step's name is left out on a phone, and the "/" before it with it. */
+  .ins-flow-head-step,
+  .ins-flow-head-step-sep { display: none; }
 }
 /* A phone with the player: Save and Nearby screens live in More, so the
    footer is the tags, then the player with More beside it. (Save's button

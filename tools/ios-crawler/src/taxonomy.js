@@ -218,3 +218,15 @@ export function settledType({ classified, modelType, name }) {
   if (!classified || classified === 'other') return typeFromName(name) ?? classified ?? 'other';
   return classified;
 }
+
+/**
+ * A screen's name the way a designer files it: no state tacked on after a
+ * "·" or " - " ("Main menu · bottom sheet" is "Main menu" — the state is its
+ * own field), and no trailing "screen" ("Welcome screen" is "Welcome").
+ */
+export function plainScreenName(name) {
+  if (!name) return name;
+  let plain = String(name).split(/\s+[·|]\s+|\s+-\s+/)[0].trim();
+  plain = plain.replace(/\s+screen$/i, '').trim();
+  return plain || String(name).trim();
+}

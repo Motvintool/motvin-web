@@ -55,6 +55,7 @@ import {
   publishedTypeFor,
   stateFor,
   settledType,
+  plainScreenName,
 } from './taxonomy.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -157,48 +158,14 @@ function nameOf(node) {
   return printed && printed.length <= 40 && /[a-z]{3}/i.test(printed) ? printed : name || 'Screen';
 }
 
+/**
+ * The published name of every screen. Same-looking screens share one name —
+ * the step number tells them apart where they are shown — so nothing is
+ * tacked on to tell them apart: not a number ("Welcome (5)"), not a tab or a
+ * state ("Main menu · bottom sheet"). The state is its own field and filter.
+ */
 function uniqueNames(nodes) {
-  const groups = new Map();
-  for (const node of nodes) {
-    const base = nameOf(node);
-    const key = base.toLowerCase();
-    if (!groups.has(key)) groups.set(key, { base, nodes: [] });
-    groups.get(key).nodes.push(node);
-  }
-
-  const names = new Map();
-  for (const { base, nodes: members } of groups.values()) {
-    if (members.length === 1) {
-      names.set(members[0].id, base);
-      continue;
-    }
-    // The leading tab label names the section a tab-bar screen is on — "Food",
-    // "Grocery", "Dining" — and is the one honest thing that tells siblings
-    // with the same navigation title apart. A screen without a usable label
-    // gets a running number instead; body text would read as a caption, not
-    // a name.
-    const labels = members.map((node) => {
-      const tab = node.analysis?.signals?.tabLabels?.[0];
-      if (tab && tab.toLowerCase() !== base.toLowerCase() && /^[A-Za-z][A-Za-z' ]{1,13}$/.test(tab) && !base.toLowerCase().startsWith(tab.toLowerCase())) return tab;
-      // Failing a section, the state the screen was in tells siblings apart:
-      // "Cart · empty", "Food home · scrolled".
-      const state = (node.analysis?.states ?? []).find((v) => v !== 'keyboard');
-      return state ? state.replace(/-/g, ' ') : null;
-    });
-    const counts = new Map();
-    for (const label of labels) if (label) counts.set(label.toLowerCase(), (counts.get(label.toLowerCase()) ?? 0) + 1);
-    members.forEach((node, index) => {
-      const label = labels[index];
-      if (label && counts.get(label.toLowerCase()) === 1) {
-        names.set(node.id, `${base} · ${label}`);
-      } else {
-        // Same-named steps keep the same name: the step number tells them
-        // apart where they are shown, and "Welcome screen (5)" is not a name.
-        names.set(node.id, base);
-      }
-    });
-  }
-  return names;
+  return new Map(nodes.map((node) => [node.id, plainScreenName(nameOf(node))]));
 }
 
 /**

@@ -574,7 +574,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   {viewFlow && (
                     <>
                       <span>{viewFlow.name}</span>
-                      <span className="ins-screen-preview-head-sep">/</span>
+                      <span className="ins-screen-preview-head-sep ins-flow-head-step-sep">/</span>
                     </>
                   )}
                   <span className={viewFlow ? 'ins-flow-head-step' : undefined}>{screenTitleIn(viewFlow, view)}</span>
