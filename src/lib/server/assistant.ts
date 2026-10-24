@@ -976,7 +976,12 @@ function unclaim(text: string): string {
     .replace(new RegExp(`(^|[.!?]\\s+)(just |now |okay,? |ok,? )(${ING})\\b`, 'gi'), (_, lead: string, _adv, verb: string) => `${lead}I can ${base(verb)}`)
     .replace(new RegExp(`\\b(has|have) been (${PAST})\\b`, 'gi'), (_, _aux, verb: string) => `will be ${verb} once you confirm`)
     .replace(/\bis now (set|updated|changed) to\b/gi, 'will be set to')
-    .replace(/\b(is|are) (now )?(updated|set|changed|renamed|removed|deleted)\b(?! once)/gi, (_, aux: string, _adv, verb: string) => `will be ${verb} once you confirm`);
+    .replace(/\b(is|are) (now )?(updated|set|changed|renamed|removed|deleted)\b(?! once)/gi, (_, aux: string, _adv, verb: string) => `will be ${verb} once you confirm`)
+    // "It's ready for screens", "all set" — said of a change still waiting.
+    .replace(/\b(it[’']s|it is|everything[’']s|everything is) (all )?(ready|done|set|all set)\b(?! once)/gi, (_, subject: string) => `once you confirm, ${/^e/i.test(subject) ? 'everything' : 'it'}’ll be ready`)
+    .replace(/(^|[.!?]\s+)once you confirm/g, (_, lead: string) => `${lead}Once you confirm`)
+    // "I'll go ahead and fix", "I'll rename" — a promise to act; the admin's Confirm does it.
+    .replace(/\bI[’']ll (go ahead and |now |just )?(fix|rename|create|delete|remove|update|change|move|merge|add|set|start|rebuild|restructure|reorganize|apply)\b/gi, (_, _lead, verb: string) => `I can ${verb.toLowerCase()}`);
 }
 
 /** Stage one: what, if anything, is the admin asking to change? JSON, short, unstreamed. */

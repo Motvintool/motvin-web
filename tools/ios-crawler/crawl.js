@@ -24,6 +24,7 @@ import { assertAuthorized } from './src/safety.js';
 import { localDateString, publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
 import { classifyStored, describeStored, ingestFolder, researchStored, resumeIngest } from './src/ingest.js';
 import { syncFolders } from './src/folders.js';
+import { applyReview, undoReview, writeReviewPack } from './src/review.js';
 import { extractJson, pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
 import { AI_PROVIDERS, aiChat, aiChatStream, aiConfig, aiStatus, canStream, readAiSettings, writeAiSettings } from './src/ai.js';
 
@@ -51,6 +52,12 @@ ${bold('Commands')}
   research --app-id <id>    rewrite an app's flow names, summaries and screen   ${dim('--only journeys|screens')}
                             content with the AI, from what is already stored ${dim('needs a model')}
                             ${dim('--restructure also re-checks the flows: splits, merges, categories')}
+  review-pack --app-id <id> --version <date>
+                            write Claude's review package: contact sheets, screen list, doubts
+  apply-review --app-id <id> --version <date> --file <corrections.json>
+                            apply a review's corrections (backed up), keep its rules
+  undo-review --app-id <id> --version <date>
+                            put back what the last applied review replaced
   sync-folders --app-id <id> --version <date>
                             put a version's files in folders named for its flows ${dim('--dry-run')}
   describe --app-id <id> --files <a,b>
@@ -387,6 +394,8 @@ async function reportIngestResult(result, flags, app) {
         classified: ['api', 'cli', 'ai'].includes(result.backend),
         researched: result.researched ?? null,
         checks: result.checks ?? [],
+        version: result.version ?? null,
+        platform: flags.platform || 'ios',
         backend: result.backend,
         grouped: result.grouped,
         app: result.app,
@@ -469,6 +478,7 @@ async function runIngest(flags) {
     minRun: flags.minRun === undefined ? undefined : Number(flags.minRun),
     keepBrief: flags.brief !== false,
     keepLoading: flags.keepLoading === true,
+    detectIndustry: flags.detectIndustry === true,
     platform: flags.platform,
     version: flags.version,
     dryRun: flags.dryRun === true,
@@ -541,6 +551,7 @@ async function runResume(flags) {
     analyzerLabel: analyzerInfo.analyzerLabel,
     journeyModel: analyzerInfo.journeyModel,
     keepLoading: flags.keepLoading === true,
+    detectIndustry: flags.detectIndustry === true,
     platform: flags.platform,
     version: flags.version,
     dryRun: flags.dryRun === true,
@@ -712,6 +723,28 @@ async function runResearch(flags) {
   return 0;
 }
 
+/** Claude's review of a version: its package, applying its corrections, undoing them (see review.js). */
+async function runReview(command, flags) {
+  if (!flags.appId || typeof flags.version !== 'string') {
+    log.error('--app-id and --version are required. See `node crawl.js` for usage.');
+    return 1;
+  }
+  const options = { appId: flags.appId, platform: flags.platform, version: flags.version, dataDir: flags.dataDir };
+  if (command === 'review-pack') {
+    const pack = await writeReviewPack(options);
+    process.stdout.write(`${pack.dir}\n`);
+  } else if (command === 'apply-review') {
+    if (typeof flags.file !== 'string') {
+      log.error('--file is required: the corrections JSON.');
+      return 1;
+    }
+    await applyReview({ ...options, file: flags.file });
+  } else {
+    await undoReview(options);
+  }
+  return 0;
+}
+
 /** Puts a version's files in the folders its flow tree names (see folders.js). */
 async function runSyncFolders(flags) {
   if (!flags.appId || typeof flags.version !== 'string') {
@@ -802,6 +835,10 @@ async function main() {
         return await runDescribe(flags);
       case 'sync-folders':
         return await runSyncFolders(flags);
+      case 'review-pack':
+      case 'apply-review':
+      case 'undo-review':
+        return await runReview(command, flags);
       case 'ai':
         return await runAi(flags);
       case 'ask':

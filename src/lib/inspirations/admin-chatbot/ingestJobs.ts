@@ -62,6 +62,9 @@ export type IngestResult = {
   researched: { journeysRenamed: number; screensUpdated: number; batches: number; screens: number; flows: number; typesRechecked?: number; typesFixed?: number } | null;
   /** What the tree's last check found — empty when it is clean; absent from runs before the check existed. */
   checks?: string[];
+  /** Where the screens went — what Claude's review is asked about. Absent from runs before it was reported. */
+  version?: string | null;
+  platform?: string;
   flows: IngestFlow[];
   screens: IngestScreen[];
 };
@@ -222,7 +225,7 @@ function sortJobs(jobs: IngestJob[]): IngestJob[] {
   return [...jobs].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
 
-async function authHeaders(extra: Record<string, string> = {}): Promise<Record<string, string>> {
+export async function authHeaders(extra: Record<string, string> = {}): Promise<Record<string, string>> {
   const token = await getIdToken();
   if (!token) throw new Error('You are signed out. Sign in again to continue.');
   return { Authorization: `Bearer ${token}`, ...extra };
@@ -318,6 +321,8 @@ export type StartIngestOptions = {
   version?: string;
   /** An app already in the library to add these screens to; omit to identify a new one from the screens. */
   appId?: string;
+  /** The app was made a moment ago with a stand-in category: the run looks its real one up. */
+  detectIndustry?: boolean;
 };
 
 export const PLATFORM_CHOICES: { id: 'ios' | 'webapp' | 'web'; label: string }[] = [
@@ -376,6 +381,7 @@ export function startIngest(video: File, startedBy: string, options: StartIngest
       query.set('platform', options.platform ?? 'ios');
       if (options.version) query.set('version', options.version);
       if (options.appId) query.set('appId', options.appId);
+      if (options.detectIndustry) query.set('detectIndustry', '1');
 
       // XMLHttpRequest, for one reason: fetch cannot report upload progress.
       const xhr = new XMLHttpRequest();
@@ -1185,12 +1191,18 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         const file = heldUploadFiles[0];
         if (!file) throw new Error('The recording is no longer held — drop it here again.');
         const logo = heldUploadLogo;
+        // A new app is made first, under the name the admin gave it, so the
+        // run adds to it instead of naming one itself.
+        if (op.newApp) {
+          await adminApi.saveApp({ id: op.newApp.id, name: op.newApp.name, industry: (op.newApp.industry ?? 'saas') as Industry });
+          if (logo) await adminApi.uploadLogo(op.newApp.id, logo.name, logo);
+        }
         releaseUpload();
         // The upload of a large recording can take a while on its own; the run
         // shows as a job above from its first second, so this does not wait.
         // A new app's logo waits on the run: only it can say which app it made.
-        void startIngest(file, op.startedBy, { platform: op.platform, appId: op.appId, version: op.version }).then((jobId) => {
-          if (logo) logosForJobs.set(jobId, logo);
+        void startIngest(file, op.startedBy, { platform: op.platform, appId: op.appId, version: op.version, detectIndustry: Boolean(op.newApp) }).then((jobId) => {
+          if (logo && !op.newApp) logosForJobs.set(jobId, logo);
         }).catch((error: Error) => {
           assistantSays(`I could not start that run: ${error.message}`);
         });

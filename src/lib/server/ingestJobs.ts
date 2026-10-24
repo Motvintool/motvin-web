@@ -36,6 +36,8 @@ const KEEP_LOG_LINES = 160;
  * server-side, the same as `workDir`, and reused to build `resume`'s args. */
 export type ResumeConfig = {
   appId: string | null;
+  /** The app was just made with a stand-in category: the resumed run looks up its real one. */
+  detectIndustry?: boolean;
   authorizedBy: string;
   platform: string;
   version: string | null;
@@ -409,6 +411,7 @@ export function resumeJob(id: string, decision: ReviewDecision): IngestJob | nul
     '--authorized',
     ...(config?.authorizedBy ? ['--authorized-by', config.authorizedBy] : []),
     ...(config?.appId ? ['--app-id', config.appId] : []),
+    ...(config?.detectIndustry ? ['--detect-industry'] : []),
     ...(config?.platform ? ['--platform', config.platform] : []),
     ...(config?.version ? ['--version', config.version] : []),
     ...(config?.keepLoading ? ['--keep-loading'] : []),

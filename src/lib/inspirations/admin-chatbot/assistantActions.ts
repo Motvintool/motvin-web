@@ -41,7 +41,8 @@ export type AdminOp =
   /** The sidecar fields the Screens tab edits that have no op of their own: when it was captured, its components, its style. */
   | { kind: 'set-screen-details'; platform: string; appId: string; file: string; version?: string; flow?: string; name: string; capturedAt?: string; elements?: string[]; style?: string[] }
   /** A dropped recording, every question answered — the run starts on Confirm. The file itself is held by the dock. */
-  | { kind: 'start-ingest'; fileName: string; platform: 'ios' | 'webapp' | 'web'; appId?: string; appName?: string; version?: string; versionLabel?: string; startedBy: string; logoName?: string }
+  /** newApp: made first, so the run files under the name the admin gave it. */
+  | { kind: 'start-ingest'; fileName: string; platform: 'ios' | 'webapp' | 'web'; appId?: string; appName?: string; version?: string; versionLabel?: string; startedBy: string; logoName?: string; newApp?: { id: string; name: string; industry?: string } }
   /** Dropped screenshots, every question answered — uploaded on Confirm, creating the app first when it is new. */
   | { kind: 'upload-screens'; count: number; platform: 'ios' | 'webapp' | 'web'; appId: string; appName: string; version: string; versionLabel: string; newApp?: { id: string; name: string; industry?: string }; logoName?: string }
   | { kind: 'set-flow-parent'; flowId: string; name: string; parentId: string | null; parentName: string | null }
@@ -61,6 +62,8 @@ export type AssistantAction =
   | { type: 'upload'; appId?: string; appName?: string; platform?: string }
   /** A version's screens laid out to drag into a new order, saved with one press. */
   | { type: 'reorder'; appId: string; appName: string; platform: string; versionId: string; versionLabel: string; screens: ShownScreen[] }
+  /** "Ask Claude to review" for an app already in the library: one version's line to copy. */
+  | { type: 'review'; appId: string; appName: string; platform: string; versionId: string; versionLabel: string }
   | { type: 'open'; href: string; label: string }
   | { type: 'confirm'; op: AdminOp; label: string; destructive: boolean }
   /** A suggested next message, shown as a chip; pressing it sends it. */
@@ -203,7 +206,7 @@ export function describeOp(op: AdminOp, extra: { screens?: number; flows?: numbe
       return `Set “${op.name}”’s ${parts.join(' and ')}?`;
     }
     case 'start-ingest':
-      return `Start a run on “${op.fileName}” (${platformName(op.platform)})${op.appName ? `, adding to ${op.appName}${op.versionLabel ? ` — ${op.versionLabel}` : ''}` : ', as a new app'}${op.logoName ? `, with “${op.logoName}” as its logo` : ''}? The screens go live in a minute or two; the AI names them after that.`;
+      return `Start a run on “${op.fileName}” (${platformName(op.platform)})${op.newApp ? ` as a new app, ${op.newApp.name} — created first${op.versionLabel ? `, ${op.versionLabel}` : ''}` : op.appName ? `, adding to ${op.appName}${op.versionLabel ? ` — ${op.versionLabel}` : ''}` : ', as a new app'}${op.logoName ? `, with “${op.logoName}” as its logo` : ''}? The screens go live in a minute or two; the AI names them after that.`;
     case 'upload-screens':
       return `Upload ${op.count} screenshot${op.count === 1 ? '' : 's'} to ${op.appName} (${platformName(op.platform)}, ${op.versionLabel})${op.newApp ? ` — ${op.appName} is created first${op.logoName ? `, with “${op.logoName}” as its logo` : ''}` : ''}? Each screen’s type is read from its file name; you can retype any afterwards.`;
     case 'set-flow-parent':

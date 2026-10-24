@@ -45,6 +45,7 @@ import {
   clock,
   dismissIngestJob,
   isActive,
+  refreshIngestJobs,
   megabytes,
   stageIndex,
   useAiStatus,
@@ -62,6 +63,7 @@ import { tone } from './AdminChatbotAiPicker';
 import { cupFor as rankCup, MAX_RANK as MAX_STORE_RANK } from '../StoreRankBadge';
 import { forgetStoreStats } from '../useStoreStats';
 import { screenLabel } from './screenFiles';
+import { ClaudeReview } from './AdminChatbotIngestSummary';
 
 /**
  * The assistant in the corner — the library owner's helper on every page.
@@ -267,6 +269,22 @@ export function AdminChatbot() {
   const running = visible.some(isActive);
   /** The one job the composer's stop control acts on, if any is going. */
   const liveJob = visible.find(isActive) ?? null;
+  // While a run holds the composer, it is asked after here too — every few
+  // seconds and on coming back to the tab — so a finished run never leaves
+  // the box locked if the shared loop stopped (a reload mid-run).
+  const liveJobId = liveJob?.id ?? null;
+  useEffect(() => {
+    if (!liveJobId) return;
+    const check = () => void refreshIngestJobs();
+    const timer = window.setInterval(check, 5000);
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', check);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [liveJobId]);
   // A run that read an iOS app's rank fresh: the badge on any page showing
   // that app re-reads it, once per run.
   // A new app's logo picked during the questions is set once the run says
@@ -460,7 +478,7 @@ export function AdminChatbot() {
     setUploadPlan({ ...held.plan, step: 'confirm', platform: opts.platform, appId: opts.appId ?? opts.newApp?.id, appName, newApp: opts.newApp });
     const op: AdminOp =
       held.kind === 'video'
-        ? { kind: 'start-ingest', fileName: files[0].name, platform: opts.platform, appId: opts.appId, appName: app?.name, version: opts.version, versionLabel, startedBy: user.email, ...(opts.logoName ? { logoName: opts.logoName } : {}) }
+        ? { kind: 'start-ingest', fileName: files[0].name, platform: opts.platform, appId: opts.appId ?? opts.newApp?.id, appName: app?.name ?? opts.newApp?.name, version: opts.version, versionLabel, startedBy: user.email, ...(opts.newApp ? { newApp: opts.newApp } : {}), ...(opts.logoName ? { logoName: opts.logoName } : {}) }
         : {
             kind: 'upload-screens',
             count: files.length,
@@ -489,7 +507,9 @@ export function AdminChatbot() {
     const state = await library();
     const apps = appsOnPlatform(state, plan.platform!);
     if (!apps.length) {
-      askLogo(plan, heldUpload?.kind === 'screens' ? 'name' : 'offer');
+      // Named by the admin, screenshots or a recording alike: a recording left
+      // to name itself can take the name of an app already here and file into it.
+      askLogo(plan, 'name');
       return;
     }
     setUploadPlan({ ...plan, step: 'app' });
@@ -527,7 +547,7 @@ export function AdminChatbot() {
   /** Screenshots for an app that does not exist yet: a recording identifies its app itself; screenshots cannot. */
   const askName = (plan: UploadPlan) => {
     setUploadPlan({ ...plan, step: 'name' });
-    assistantSays('What is the app called? I’ll create it and file the screenshots under it.', [chip('Cancel')]);
+    assistantSays(`What is the app called? I’ll create it and file the ${heldUpload?.kind === 'video' ? 'recording’s screens' : 'screenshots'} under it.`, [chip('Cancel')]);
   };
 
   const askVersion = (plan: UploadPlan, app: AdminAppRecord) => {
@@ -604,7 +624,7 @@ export function AdminChatbot() {
     }
     if (plan.step === 'app') {
       if (/^(a )?new( app)?$/i.test(text)) {
-        askLogo(plan, heldUpload?.kind === 'screens' ? 'name' : 'offer');
+        askLogo(plan, 'name');
         return;
       }
       const state = await library();
@@ -706,6 +726,11 @@ export function AdminChatbot() {
   const run = async (action: ConfirmAction) => {
     const outcome = await performAction(action);
     if (outcome === 'done' && action.op.kind === 'upload-screens') await offerReorder(action.op);
+    // A new app made by name has no logo yet: the next step offered, not left to be remembered.
+    if (outcome === 'done' && action.op.kind === 'create-app') {
+      const op: AdminOp = { kind: 'set-logo', appId: action.op.id, name: action.op.name };
+      assistantSays(`Add a logo for ${action.op.name}? PNG, SVG or WebP.`, [{ type: 'confirm', op, label: `Upload ${action.op.name}’s logo`, destructive: false }]);
+    }
     if (outcome === 'needs-image') {
       setLogoFor(action);
       assistantSays(action.op.kind === 'add-screen' ? `Choose the screenshot to add to ${action.op.name} — PNG, JPG or WebP.` : `Choose the image for ${action.op.kind === 'set-logo' ? action.op.name : 'the app'}’s logo — PNG, SVG or WebP.`);
@@ -1515,6 +1540,9 @@ function ChatBubble({
               }
               if (action.type === 'reorder') {
                 return <ReorderScreens key={index} action={action} disabled={busy} />;
+              }
+              if (action.type === 'review') {
+                return <ClaudeReview key={index} appId={action.appId} platform={action.platform} version={action.versionId} />;
               }
               if (action.type === 'date') {
                 // Answered: the question has moved on, so the calendar goes.

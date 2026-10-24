@@ -450,6 +450,7 @@ const READ_TOOLS: ToolDef[] = [
   { name: 'get_app', description: "One app in full: name, tagline, industry, website, logo, source status, versions, flows with their steps, and screen names grouped by version.", parameters: obj({ app: APP }, ['app']) },
   { name: 'list_screens', description: "An app's screens by name, with type and version — all versions, or one.", parameters: obj({ app: APP, version: str("A version — date or 'latest' — to limit to; omit for all.") }, ['app']) },
   { name: 'list_flows', description: "An app's flows, each with its steps in order.", parameters: obj({ app: APP }, ['app']) },
+  { name: 'ask_claude_review', description: "Give the admin the \"Ask Claude to review\" button for one version of an app already in the library, so Claude (or another AI tool) checks every screen's name, type and elements and the flows, and fixes them. Use when they ask to review, check, audit or correct an app's screens or names with Claude, or ask how to get an app reviewed.", parameters: obj({ app: APP, version: str("The version — a date or 'latest'; omit for the latest.") }, ['app']) },
   { name: 'reorder_screens', description: "Lay out one version of an app's screens so the admin can drag them into a new order and save it. Use it when they want to reorder, rearrange or change the order or position of screens.", parameters: obj({ app: APP, version: str("The version — a date or 'latest'; omit for the latest.") }, ['app']) },
   { name: 'show_screens', description: "Show the admin an app's screens as thumbnails they can look at and tap to pick — all versions, or one. Use it whenever they need to choose screens (to delete, rename, reorder) or ask to see them. This is how they see images.", parameters: obj({ app: APP, version: str("A version — a date or 'latest' — to show only that one; omit for all."), kind: str("Only screens of one kind, when the admin asks for some — a screen type, state, element or part of the name, like 'bottom sheet', 'login', 'paywall', 'settings'. Omit for all.") }, ['app']) },
   { name: 'get_runs', description: 'The video ingest runs — what is running now and how far, and recent finished ones.', parameters: obj({}) },
@@ -678,6 +679,32 @@ function screensToShow(state: LibraryState | null, args: Record<string, unknown>
     action: { type: 'screens', appId: app.id, appName: app.name, platform, versionId: version?.id, versionLabel: version?.label, screens },
     note: `${screens.length} screen${screens.length === 1 ? '' : 's'} of ${app.name}, ${label}.`,
   };
+}
+
+/**
+ * A name the admin put in quotes is the one they mean: when their message
+ * quotes a flow or screen that exists ("rename the “Ch” flow to “Getting
+ * started”") and the model aimed the change at a different one — misled by
+ * an earlier turn — the quoted one is put back. The value being set (a new
+ * name in quotes) is never taken for the target.
+ */
+function pinQuotedTarget(op: ParsedOp, question: string, state: LibraryState | null): ParsedOp {
+  const quoted = [...question.matchAll(/[“"‘']([^”"’']{2,80})[”"’']/g)].map((match) => match[1].trim());
+  if (!quoted.length) return op;
+  const same = (a: unknown, b: unknown) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+  const value = typeof op.to === 'string' ? op.to : typeof (op.fields as { name?: unknown } | undefined)?.name === 'string' ? (op.fields as { name: string }).name : null;
+  const candidates = quoted.filter((text) => !same(text, value));
+  if (op.flow !== undefined && op.flow !== null) {
+    const flows = state?.flows ?? [];
+    const named = candidates.find((text) => flows.some((flow) => same(flow.name, text)));
+    if (named && !candidates.some((text) => same(text, op.flow))) return { ...op, flow: named };
+  }
+  if (op.screen !== undefined && op.screen !== null) {
+    const files = state?.files ?? [];
+    const named = candidates.find((text) => files.some((file) => same((file.sidecar as { name?: string } | null | undefined)?.name, text)));
+    if (named && !candidates.some((text) => same(text, op.screen))) return { ...op, screen: named };
+  }
+  return op;
 }
 
 /** The write tool's arguments, as the operation assistant.ts validates. */
@@ -911,6 +938,19 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
     let stop = false;
     for (const call of reply.toolCalls) {
       step(stepText(call, deps.state));
+      if (call.name === 'ask_claude_review') {
+        const shown = screensToShow(deps.state, { app: call.args.app, version: call.args.version ?? 'latest' });
+        const grid = shown.action?.type === 'screens' ? shown.action : null;
+        if (grid && grid.versionId) {
+          action = { type: 'review', appId: grid.appId, appName: grid.appName, platform: grid.platform, versionId: grid.versionId, versionLabel: grid.versionLabel ?? grid.versionId };
+          note = `The review button for ${grid.appName}, ${grid.versionLabel ?? grid.versionId}.`;
+          stop = true;
+          messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `${note} It copies a one-line request; they paste it to Claude, which checks every screen and the flows and applies the fixes itself — you do nothing after. Call Claude "Claude" or "it", never "he" or "she". Nothing changes until then.` });
+          break;
+        }
+        messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: shown.note ?? 'That app has no screens in a version to review.' });
+        continue;
+      }
       if (call.name === 'reorder_screens') {
         const shown = screensToShow(deps.state, { app: call.args.app, version: call.args.version ?? 'latest' });
         const grid = shown.action?.type === 'screens' ? shown.action : null;
@@ -952,7 +992,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
         messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `There is no tool called ${call.name}. The tools are: ${tools.map((tool) => tool.name).join(', ')}.` });
         continue;
       }
-      const checked = deps.validate(toParsedOp(write, call.args));
+      const checked = deps.validate(pinQuotedTarget(toParsedOp(write, call.args), input.question, deps.state));
       step(checked.action ? 'Checked — ready to confirm' : checked.settled ? 'Checked — nothing to change' : 'Checked — not possible as asked', checked.note);
       if (checked.action) {
         action = checked.action;
@@ -978,7 +1018,9 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Assi
       messages.push({
         role: 'user',
         content:
-          action?.type === 'reorder'
+          action?.type === 'review'
+            ? `[Note, not from the admin: a button that copies the review request for Claude is now under your reply — they paste it to Claude, which checks every screen and applies the fixes itself; you do nothing afterwards. Call Claude "Claude" or "it", never "he". Reply to them naturally, in one or two sentences — no tool calls.]`
+            : action?.type === 'reorder'
             ? `[Note, not from the admin: the screens are now laid out for them to drag into a new order; it is saved when they press Save order. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`
             : action?.type === 'screens'
             ? `[Note, not from the admin: the screens you asked for are now shown to them as thumbnails they can tap. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`

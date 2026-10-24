@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
-import { clock, type IngestResult, type IngestScreen } from '@/lib/inspirations/admin-chatbot/ingestJobs';
+import { authHeaders, clock, type IngestResult, type IngestScreen } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 import { fineTypeLabel, screenStateLabel } from '@/lib/inspirations/taxonomy';
 import { screenTitle } from '@/lib/inspirations/screenNaming';
 import { CheckIcon, ExternalIcon, UploadIcon } from '../Icons';
@@ -15,6 +16,58 @@ import { SCREEN_PARAM } from '../ScreenPreviewModal';
  * pipeline gave every one. Anything left out is listed by name and reason,
  * so nothing disappears silently.
  */
+
+/**
+ * Claude's review of this upload. The button copies the one line to paste
+ * into Claude (or any AI tool) — it names docs/review-motvin.md, which checks every screen from
+ * the review package and applies its corrections; once it has, this shows
+ * "Reviewed by Claude" with the number of fixes.
+ */
+export function ClaudeReview({ appId, platform, version }: { appId: string; platform: string; version: string }) {
+  const [status, setStatus] = useState<{ reviewed: boolean; fixes?: number } | null>(null);
+  const [copied, setCopied] = useState(false);
+  // Names the steps file, so any AI tool opens it from the message alone.
+  const request = `Follow docs/review-motvin.md to review ${appId} ${platform} ${version}`;
+  useEffect(() => {
+    let live = true;
+    const check = async () => {
+      try {
+        const res = await fetch(`/api/crawler/review-status?${new URLSearchParams({ app: appId, platform, version })}`, { headers: await authHeaders(), cache: 'no-store' });
+        if (res.ok && live) setStatus((await res.json()) as { reviewed: boolean; fixes?: number });
+      } catch {
+        // The button still works without the status.
+      }
+    };
+    void check();
+    // Claude's review lands while this stays open: looked for every half minute.
+    const timer = window.setInterval(() => void check(), 30_000);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [appId, platform, version]);
+  if (status?.reviewed) {
+    return (
+      <p className="ins-admin-note">
+        <CheckIcon size={13} /> Reviewed by Claude — {status.fixes ?? 0} fix{status.fixes === 1 ? '' : 'es'} applied.
+      </p>
+    );
+  }
+  return (
+    <p className="ins-admin-note">
+      <button
+        type="button"
+        className="ins-chip-btn ins-chip-btn--primary"
+        onClick={() => {
+          void navigator.clipboard.writeText(request).then(() => setCopied(true), () => setCopied(false));
+        }}
+      >
+        Ask Claude to review
+      </button>{' '}
+      {copied ? <>Copied <code>{request}</code> — paste it to Claude.</> : 'Copies a one-line request to paste to Claude, who checks every screen and fixes what is wrong.'}
+    </p>
+  );
+}
 
 /**
  * The published screens arrive before the AI has written their content; the
@@ -105,6 +158,8 @@ export function AdminChatbotIngestSummary({
           </span>
         ) : null}
       </div>
+
+      {!writing && result.version && <ClaudeReview appId={result.app.id} platform={result.platform ?? 'ios'} version={result.version} />}
 
       {/* The tree's last check: clean, or what is still worth a look. */}
       {result.checks && (

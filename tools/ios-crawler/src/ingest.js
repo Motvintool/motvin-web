@@ -38,6 +38,7 @@ import { resolveIndustry } from './category.js';
 import { researchTree } from './researcher.js';
 import { extractJson } from './analyze.js';
 import { syncFolders } from './folders.js';
+import { applyRulesToGraph, writeReviewPack } from './review.js';
 import { checkTree, foldSmallRepeats, groupIntoFeatures, liftAppTasksOutOfOnboarding, mergeSameNamedSiblings, nameBrokenSections, promoteAreas, tidyNames, reviewStructure, settleCategories, splitOnboardingTail } from './structure.js';
 import { buildJourneys } from './journeys.js';
 import { actionPhrase, describeAction } from './actions.js';
@@ -598,6 +599,16 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
     // The platform is the admin's call — a recording does not say whether it
     // is an iPhone app, a web app or a website — and it decides where the
     // screens live: screens/<platform>/<app>.
+    // An app the admin just made by name carries a stand-in category; its
+    // real one is looked up the way an identified app's is (the App Store
+    // genre first), so it is not left filed as the stand-in.
+    if (options.detectIndustry && app && !options.dryRun) {
+      const decision = await resolveIndustry({ name: resolvedApp.name }).catch(() => null);
+      if (decision?.industry && decision.source !== 'needs-category' && decision.industry !== 'needs-category') {
+        resolvedApp = { ...resolvedApp, industry: decision.industry, industrySource: decision.source };
+        log.info(`category: ${decision.industry} — ${decision.detail}`);
+      }
+    }
     if (options.platform) {
       if (!['ios', 'webapp', 'web'].includes(options.platform)) throw new Error(`platform must be ios, webapp or web, not "${options.platform}"`);
       resolvedApp = { ...resolvedApp, platform: options.platform };
@@ -812,6 +823,8 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
             group.summary = journey.summary ?? group.summary ?? null;
           }
         }
+        // Corrections kept from earlier reviews go over the model's answers.
+        applyRulesToGraph(graph, resolvedApp.appId, options.dataDir);
         const written = updatePublishedContent({ dataDir: options.dataDir, version: result.version, app: resolvedApp, graph, written: result.screens, flows: result.flows, flowGroups });
         log.info(`researcher: ${outcome.journeysRenamed} journey name(s), ${outcome.screensUpdated} screen(s) described in ${outcome.batches} call(s); ${written.screens} screen(s) and ${written.flows} flow(s) rewritten`);
         researched = { ...outcome, ...written };
@@ -830,6 +843,8 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
     // the folders are put in step with the tree as it finally stands.
     if (!options.dryRun && result.version && flowGroups.length) {
       await syncFolders({ appId: resolvedApp.appId, platform: options.platform || 'ios', version: result.version, dataDir: options.dataDir }).catch((error) => log.warn(`could not line the folders up with the flows — ${error.message.split('\n')[0]}`));
+      // Ready for Claude's review: contact sheets, the screen list, the doubts.
+      await writeReviewPack({ appId: resolvedApp.appId, platform: options.platform || 'ios', version: result.version, dataDir: options.dataDir }).catch((error) => log.warn(`could not write the review package — ${error.message.split('\n')[0]}`));
     }
     return {
       ...result,
@@ -1786,6 +1801,8 @@ export async function researchStored(options) {
     only: options.only ?? null,
   });
   log.info(`researcher: ${outcome.journeysRenamed} journey name(s), ${outcome.screensUpdated} screen(s) described in ${outcome.batches} call(s)`);
+  // Corrections kept from earlier reviews go over the model's answers.
+  applyRulesToGraph(graph, options.appId, options.dataDir);
 
   let flowsChanged = 0;
   if (options.restructure) {

@@ -69,6 +69,8 @@ export async function POST(request: Request) {
   // "New app", the admin page's default, where the app is worked out from
   // the screens themselves.
   const appId = params.get('appId')?.trim() || null;
+  // An app the agent made a moment ago carries a stand-in category; the run looks up its real one.
+  const detectIndustry = params.get('detectIndustry') === '1';
   if (appId && !/^[a-z0-9][a-z0-9-]{0,63}$/.test(appId)) return fail('appId must be lower-case letters, digits and hyphens.', 400);
 
   // The video's own name is the last resort for naming the app, used when no
@@ -120,12 +122,14 @@ export async function POST(request: Request) {
     '--platform', platform,
     ...(version ? ['--version', version] : []),
     ...(appId ? ['--app-id', appId] : []),
+    ...(detectIndustry ? ['--detect-industry'] : []),
     ...(keepBrief ? [] : ['--no-brief']),
     ...(keepLoading ? ['--keep-loading'] : []),
     '--review',
   ];
   const resumeConfig: ResumeConfig = {
     appId,
+    detectIndustry,
     authorizedBy: admin.email,
     platform,
     version,

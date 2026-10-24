@@ -767,6 +767,11 @@ function harmonizeTypes(graph) {
     const named = typeFromName(key);
     const type = tied.length > 1 && tied.includes(named) ? named : ranked[0][0];
     for (const node of nodes) node.analysis.modelType = type;
+    // And the same parts: those at least half of them were seen with.
+    const seen = new Map();
+    for (const node of nodes) for (const element of node.analysis.modelElements ?? []) seen.set(element, (seen.get(element) ?? 0) + 1);
+    const common = [...seen].filter(([, count]) => count * 2 >= nodes.length).sort((a, b) => b[1] - a[1]).map(([element]) => element).slice(0, 6);
+    if (common.length) for (const node of nodes) node.analysis.modelElements = common;
   }
 
 }
