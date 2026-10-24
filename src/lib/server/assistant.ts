@@ -426,7 +426,14 @@ function validateOp(
   // conversation's app stand in. Silently retargeting another app is the
   // one thing this must never do.
   const named = typeof op.app === 'string' && op.app.trim() && !/^(this|that|it|the app|app|null)$/i.test(op.app.trim()) ? op.app.trim() : null;
-  const app = named ? findApp(state, named) : findApp(state, mentioned[0]?.name) ?? (grounding.fallbackApp ? findApp(state, grounding.fallbackApp) : null);
+  // An upload goes to an existing app only when that app was named: the page
+  // being viewed or an app talked about earlier is never a reason to file a
+  // new recording under it — "add a new app" on Zomato's page is a new app.
+  const app = named
+    ? findApp(state, named)
+    : op.kind === 'upload'
+      ? null
+      : findApp(state, mentioned[0]?.name) ?? (grounding.fallbackApp ? findApp(state, grounding.fallbackApp) : null);
   const noApp = {
     note: named && !app
       ? `There’s no app called “${named}” in the library${apps.length ? ` — it has ${apps.map((entry) => entry.name).join(', ')}` : ''}.`

@@ -49,30 +49,46 @@ export function ClaudeReview({ appId, platform, version }: { appId: string; plat
   const left = status?.problems ?? [];
   if (status?.reviewed && !left.length) {
     return (
-      <p className="ins-admin-note">
-        <CheckIcon size={13} /> Reviewed by Claude — {status.fixes ?? 0} fix{status.fixes === 1 ? '' : 'es'} applied.
-      </p>
+      <div className="ins-review-card is-done">
+        <p className="ins-review-card-title">
+          <CheckIcon size={14} /> Reviewed by Claude
+        </p>
+        <p className="ins-review-card-text">
+          {status.fixes ?? 0} fix{status.fixes === 1 ? '' : 'es'} applied — nothing left to fix.
+        </p>
+      </div>
     );
   }
+  // Next step: the review. The check's findings are folded away — the count says enough.
   return (
-    <div className="ins-admin-note">
-      {/* The review's own final check still flags something: list it, and offer the review again. */}
-      {left.length > 0 && (
-        <>
-          {status?.reviewed ? 'Reviewed by Claude — ' : 'The automatic check found '}{left.length} problem{left.length === 1 ? '' : 's'}{status?.reviewed ? ' left to fix' : ''}:
-          <ul>{left.slice(0, 5).map((problem) => <li key={problem}>{problem}</li>)}</ul>
-        </>
-      )}
+    <div className="ins-review-card">
+      <p className="ins-review-card-title">{status?.reviewed ? 'Almost done' : 'Next: Claude’s review'}</p>
+      <p className="ins-review-card-text">
+        {status?.reviewed
+          ? `${left.length} thing${left.length === 1 ? '' : 's'} still to fix. Ask Claude to review again.`
+          : left.length
+            ? `${left.length} thing${left.length === 1 ? '' : 's'} to fix — names, types and flows. Claude checks every screen and fixes them.`
+            : 'Claude checks every screen and fixes names, types and flows.'}
+      </p>
       <button
         type="button"
-        className="ins-chip-btn ins-chip-btn--primary"
+        className="ins-chip-btn ins-chip-btn--primary ins-review-card-btn"
         onClick={() => {
           void navigator.clipboard.writeText(request).then(() => setCopied(true), () => setCopied(false));
         }}
       >
-        Ask Claude to review
-      </button>{' '}
-      {copied ? <>Copied <code>{request}</code> — paste it to Claude.</> : 'Copies a one-line request to paste to Claude, who checks every screen and fixes what is wrong.'}
+        {copied ? <><CheckIcon size={13} /> Copied</> : status?.reviewed ? 'Ask Claude to review again' : 'Ask Claude to review'}
+      </button>
+      <p className="ins-review-card-hint">
+        {copied ? 'Now paste it into Claude and send.' : 'Copies one line to paste into Claude.'}
+      </p>
+      {left.length > 0 && (
+        <details className="ins-review-card-details">
+          <summary>Show what to fix</summary>
+          <ul>{left.slice(0, 30).map((problem) => <li key={problem}>{problem}</li>)}</ul>
+          {left.length > 30 && <p className="ins-review-card-hint">…and {left.length - 30} more.</p>}
+        </details>
+      )}
     </div>
   );
 }

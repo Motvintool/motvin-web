@@ -71,6 +71,9 @@ export async function POST(request: Request) {
   const appId = params.get('appId')?.trim() || null;
   // An app the agent made a moment ago carries a stand-in category; the run looks up its real one.
   const detectIndustry = params.get('detectIndustry') === '1';
+  // Fast (the default): screens are found and read on-device in a few minutes, and Claude's review names
+  // and files them. Full: the local AI also names every screen first — slower, for when no review will run.
+  const full = params.get('full') === '1';
   if (appId && !/^[a-z0-9][a-z0-9-]{0,63}$/.test(appId)) return fail('appId must be lower-case letters, digits and hyphens.', 400);
 
   // The video's own name is the last resort for naming the app, used when no
@@ -125,6 +128,9 @@ export async function POST(request: Request) {
     ...(detectIndustry ? ['--detect-industry'] : []),
     ...(keepBrief ? [] : ['--no-brief']),
     ...(keepLoading ? ['--keep-loading'] : []),
+    // Fast: the on-device rules can take a sparse screen for a loading page, so nothing is left out as
+    // "loading" — Claude's review removes the real spinners.
+    ...(full ? [] : ['--backend', 'local', ...(keepLoading ? [] : ['--keep-loading'])]),
     '--review',
   ];
   const resumeConfig: ResumeConfig = {
@@ -133,8 +139,9 @@ export async function POST(request: Request) {
     authorizedBy: admin.email,
     platform,
     version,
-    keepLoading,
+    keepLoading: keepLoading || !full,
     dryRun: false,
+    full,
   };
 
   const job = startJob({

@@ -42,7 +42,7 @@ export type AdminOp =
   | { kind: 'set-screen-details'; platform: string; appId: string; file: string; version?: string; flow?: string; name: string; capturedAt?: string; elements?: string[]; style?: string[] }
   /** A dropped recording, every question answered — the run starts on Confirm. The file itself is held by the dock. */
   /** newApp: made first, so the run files under the name the admin gave it. */
-  | { kind: 'start-ingest'; fileName: string; platform: 'ios' | 'webapp' | 'web'; appId?: string; appName?: string; version?: string; versionLabel?: string; startedBy: string; logoName?: string; newApp?: { id: string; name: string; industry?: string } }
+  | { kind: 'start-ingest'; fileName: string; platform: 'ios' | 'webapp' | 'web'; appId?: string; appName?: string; version?: string; versionLabel?: string; startedBy: string; logoName?: string; newApp?: { id: string; name: string; industry?: string }; full?: boolean }
   /** Dropped screenshots, every question answered — uploaded on Confirm, creating the app first when it is new. */
   | { kind: 'upload-screens'; count: number; platform: 'ios' | 'webapp' | 'web'; appId: string; appName: string; version: string; versionLabel: string; newApp?: { id: string; name: string; industry?: string }; logoName?: string }
   | { kind: 'set-flow-parent'; flowId: string; name: string; parentId: string | null; parentName: string | null }
@@ -206,7 +206,7 @@ export function describeOp(op: AdminOp, extra: { screens?: number; flows?: numbe
       return `Set “${op.name}”’s ${parts.join(' and ')}?`;
     }
     case 'start-ingest':
-      return `Start a run on “${op.fileName}” (${platformName(op.platform)})${op.newApp ? ` as a new app, ${op.newApp.name} — created first${op.versionLabel ? `, ${op.versionLabel}` : ''}` : op.appName ? `, adding to ${op.appName}${op.versionLabel ? ` — ${op.versionLabel}` : ''}` : ', as a new app'}${op.logoName ? `, with “${op.logoName}” as its logo` : ''}? The screens go live in a minute or two; the AI names them after that.`;
+      return `Start a run on “${op.fileName}” (${platformName(op.platform)})${op.newApp ? ` as a new app, ${op.newApp.name} — created first${op.versionLabel ? `, ${op.versionLabel}` : ''}` : op.appName ? `, adding to ${op.appName}${op.versionLabel ? ` — ${op.versionLabel}` : ''}` : ', as a new app'}${op.logoName ? `, with “${op.logoName}” as its logo` : ''}? ${op.full ? 'Full upload: the local AI names every screen — about half an hour. Say “fast upload” to skip that.' : 'Fast upload: the screens are in within a few minutes, then “Ask Claude to review” names and files them. Say “full upload” to have the local AI name them first (about half an hour).'}`;
     case 'upload-screens':
       return `Upload ${op.count} screenshot${op.count === 1 ? '' : 's'} to ${op.appName} (${platformName(op.platform)}, ${op.versionLabel})${op.newApp ? ` — ${op.appName} is created first${op.logoName ? `, with “${op.logoName}” as its logo` : ''}` : ''}? Each screen’s type is read from its file name; you can retype any afterwards.`;
     case 'set-flow-parent':

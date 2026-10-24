@@ -8022,6 +8022,39 @@ select.ins-input {
   background: var(--ins-tag);
 }
 
+.ins-review-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border-radius: var(--ins-radius);
+  background: var(--ins-tag);
+}
+.ins-review-card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ins-text, inherit);
+}
+.ins-review-card.is-done .ins-review-card-title { color: #16a34a; }
+.ins-review-card-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--ins-sub);
+}
+.ins-review-card-btn { margin-top: 4px; display: inline-flex; align-items: center; gap: 6px; }
+.ins-review-card-hint { margin: 0; font-size: 13px; color: var(--ins-sub); }
+.ins-review-card-details { width: 100%; font-size: 13px; color: var(--ins-sub); }
+.ins-review-card-details summary { cursor: pointer; margin-top: 2px; }
+.ins-review-card-details ul { margin: 6px 0 0; padding-left: 18px; max-height: 180px; overflow-y: auto; }
+.ins-review-card-details li { margin: 2px 0; }
+
 .ins-admin-ok {
   display: inline-flex;
   align-items: center;

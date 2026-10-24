@@ -43,6 +43,9 @@ export type ResumeConfig = {
   version: string | null;
   keepLoading: boolean;
   dryRun: boolean;
+  /** Full upload: the local AI names every screen too. Otherwise (fast, the default) screens are read
+   *  on-device by rules, and Claude's review does the naming, typing and tree. */
+  full?: boolean;
 };
 
 type ServerJob = IngestJob & { workDir: string | null; stagingDir: string | null; resumeConfig: ResumeConfig | null };
@@ -416,6 +419,7 @@ export function resumeJob(id: string, decision: ReviewDecision): IngestJob | nul
     ...(config?.version ? ['--version', config.version] : []),
     ...(config?.keepLoading ? ['--keep-loading'] : []),
     ...(config?.dryRun ? ['--dry-run'] : []),
+    ...(config?.full ? [] : ['--backend', 'local']),
     ...(manual ? ['--excluded', excluded.join(',')] : []),
   ];
   job.status = 'running';

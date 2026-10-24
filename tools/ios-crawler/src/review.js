@@ -156,6 +156,11 @@ function listImages(dir, base = dir) {
 }
 
 /** Why a stored screen's type is in doubt, or null. */
+/** Mean grey-level difference (0–255) under which two thumbnails count as the same screen. */
+const LOOKALIKE_DIFF = 1;
+/** Mean distance from the average grey (0–255) under which a screen counts as nearly blank. */
+const BLANK_SPREAD = 4.5;
+
 function doubtOf(screen) {
   const named = typeFromName(screen.name);
   const elements = screen.elements ?? [];
@@ -237,7 +242,48 @@ export async function writeReviewPack(options) {
   const patterns = builtPatterns
     .map((pattern) => ({ slug: pattern.slug, name: pattern.name, match: patternRules.get(pattern.slug) ?? {}, screens: screens.filter((screen) => screen.patterns.includes(pattern.name)).map((screen) => screen.n) }))
     .filter((pattern) => pattern.screens.length);
-  const doubts = screens.map((screen) => ({ n: screen.n, id: screen.id, name: screen.name, type: screen.type, why: doubtOf(screen) })).filter((entry) => entry.why);
+  // Screens that look the same as another one in this version: likely
+  // duplicates of one screen caught twice, for the review to remove.
+  const prints = await Promise.all(screens.map((screen) => sharp(screen.file).resize(72, 144, { fit: 'fill' }).greyscale().raw().toBuffer().catch(() => null)));
+  for (let i = 0; i < screens.length; i++) {
+    if (!prints[i]) continue;
+    // Only the few screens just before it: a screen caught twice is caught twice in a row.
+    for (let j = Math.max(0, i - 3); j < i; j++) {
+      if (!prints[j]) continue;
+      let diff = 0;
+      for (let k = 0; k < prints[i].length; k++) diff += Math.abs(prints[i][k] - prints[j][k]);
+      if (diff / prints[i].length < LOOKALIKE_DIFF) {
+        screens[i].looksLike = screens[j].n;
+        break;
+      }
+    }
+  }
+  // A screen with almost nothing drawn on it — a blank loading page, a white flash — is no step.
+  screens.forEach((screen, i) => {
+    const print = prints[i];
+    if (!print) return;
+    let mean = 0;
+    for (const v of print) mean += v;
+    mean /= print.length;
+    let spread = 0;
+    for (const v of print) spread += Math.abs(v - mean);
+    // A loading screen with this little on it is a blank page waiting; any other screen must be emptier still.
+    const limit = screen.type === 'loading' || (screen.extraTypes ?? []).includes('loading') ? BLANK_SPREAD : BLANK_SPREAD / 3;
+    if (spread / print.length < limit) screen.blank = true;
+  });
+  const doubts = screens
+    .map((screen) => ({
+      n: screen.n,
+      id: screen.id,
+      name: screen.name,
+      type: screen.type,
+      why: screen.blank
+        ? 'almost nothing on it — a blank loading page to remove?'
+        : screen.looksLike
+          ? `looks the same as #${screen.looksLike} — a duplicate to remove?`
+          : doubtOf(screen),
+    }))
+    .filter((entry) => entry.why);
   const tree = order.map((flow) => ({ id: flow.id, path: pathOf(flow), category: flow.category, screens: flow.screenIds.length }));
   const tagList = (readJson(join(dataDir, 'tags.json'), { tags: [] }).tags || []).map((tag) => (typeof tag === 'string' ? tag : tag?.slug)).filter(Boolean);
   // The app's own category (industry), what the Categories list files it under.
@@ -287,6 +333,7 @@ export async function writeReviewPack(options) {
  *                (a new id in this version, with a name, makes a new flow; listed flows are shown in list order),
  *     "moves":   [ { "screen": id, "from"?: flow id (none for a screen no flow lists), "to": flow id } ],
  *     "merges":  [ { "from": flow id, "into": flow id } ],
+ *     "remove":  [ screen id, … ]  (duplicates and bad frames; undo puts them back),
  *     "rules":   { "screenTypes"?: [...], "nameFixes"?: [...], "wordTypes"?: [...] } }
  *
  * Everything it touches is backed up first; then the folders are lined up
@@ -348,6 +395,30 @@ export async function applyReview(options) {
 
   const flowsFile = join(dataDir, 'flows.json');
   const flowsDoc = readJson(flowsFile, { version: 1, flows: [] });
+  // Screens the review takes out — a duplicate of the one before it, a frame
+  // caught mid-transition, a blank or broken capture. The backup above holds
+  // the files and records, so undo puts them back.
+  const removed = new Set();
+  for (const id of Array.isArray(corrections.remove) ? corrections.remove : []) {
+    const image = fileOfId.get(id);
+    if (!image) {
+      log.warn(`review: no screen ${id} to remove — skipped`);
+      continue;
+    }
+    rmSync(image, { force: true });
+    rmSync(image.replace(/\.[^.]+$/, '.json'), { force: true });
+    for (const kind of ['analysis', 'words']) rmSync(join(dataDir, kind, `${id}.json`), { force: true });
+    fileOfId.delete(id);
+    removed.add(id);
+    fixes += 1;
+  }
+  if (removed.size) {
+    for (const flow of flowsDoc.flows || []) {
+      if (flow.appId !== appId || flow.platform !== platform) continue;
+      flow.screenIds = (flow.screenIds ?? []).filter((id) => !removed.has(id));
+      flow.steps = (flow.steps ?? []).filter((step) => !removed.has(step.screenId));
+    }
+  }
   const flowById = new Map((flowsDoc.flows || []).map((flow) => [flow.id, flow]));
   const owned = (flow) => flow && flow.appId === appId && flow.platform === platform;
   // A flow id the store does not have yet, named and in this version, is a

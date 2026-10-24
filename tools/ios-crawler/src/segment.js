@@ -345,6 +345,28 @@ export function segmentRecording(thumbs, options) {
     hold.rep = representative(hold, steps, prints, fps);
     hold.print = prints[hold.rep];
   }
+  // The recording's opening screen is shown as it first appeared — before a
+  // field was typed into or anything chosen — its first settled frame, not the
+  // last one, which small changes like typing leave inside the same hold.
+  const opening = holds[0];
+  if (opening) {
+    const lastingFrames = briefFramesAt(fps);
+    let run = 0;
+    for (let frame = opening.start + 1; frame <= opening.end; frame++) {
+      const step = steps[frame];
+      run = step && step.mad <= SETTLED_MAD && step.changed <= SETTLED_CHANGED ? run + 1 : 0;
+      if (run >= lastingFrames) {
+        const first = frame - run;
+        // Only when something changed in the hold since (text typed, a choice made); the same picture stays as it was.
+        const changedSince = meanAbsDiff(prints[first].gray, prints[opening.rep].gray, prints[first].width, prints[first].height) > 0.5;
+        if (changedSince && prints[first].edge >= prints[opening.rep].edge * 0.95) {
+          opening.rep = first;
+          opening.print = prints[first];
+        }
+        break;
+      }
+    }
+  }
 
   // ─── 3. Which holds are screens ──────────────────────────────────────────
   const isBlank = (print) =>

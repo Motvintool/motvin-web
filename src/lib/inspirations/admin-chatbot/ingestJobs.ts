@@ -323,6 +323,8 @@ export type StartIngestOptions = {
   appId?: string;
   /** The app was made a moment ago with a stand-in category: the run looks its real one up. */
   detectIndustry?: boolean;
+  /** Have the local AI name every screen too (slow); by default the review does it. */
+  full?: boolean;
 };
 
 export const PLATFORM_CHOICES: { id: 'ios' | 'webapp' | 'web'; label: string }[] = [
@@ -382,6 +384,7 @@ export function startIngest(video: File, startedBy: string, options: StartIngest
       if (options.version) query.set('version', options.version);
       if (options.appId) query.set('appId', options.appId);
       if (options.detectIndustry) query.set('detectIndustry', '1');
+      if (options.full) query.set('full', '1');
 
       // XMLHttpRequest, for one reason: fetch cannot report upload progress.
       const xhr = new XMLHttpRequest();
@@ -1201,7 +1204,7 @@ export async function performAction(action: ConfirmAction, image?: File | null):
         // The upload of a large recording can take a while on its own; the run
         // shows as a job above from its first second, so this does not wait.
         // A new app's logo waits on the run: only it can say which app it made.
-        void startIngest(file, op.startedBy, { platform: op.platform, appId: op.appId, version: op.version, detectIndustry: Boolean(op.newApp) }).then((jobId) => {
+        void startIngest(file, op.startedBy, { platform: op.platform, appId: op.appId, version: op.version, detectIndustry: Boolean(op.newApp), full: Boolean(op.full) }).then((jobId) => {
           if (logo && !op.newApp) logosForJobs.set(jobId, logo);
         }).catch((error: Error) => {
           assistantSays(`I could not start that run: ${error.message}`);

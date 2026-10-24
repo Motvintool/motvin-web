@@ -308,7 +308,16 @@ class Analyzer {
  * half-drawn while a later duplicate sample of the same hold is not).
  */
 function frameQuality(print) {
-  let score = print.edge;
+  // Detail, plus contrast: a sheet or dialog still fading in (or a page under a
+  // scrim still darkening) has the same layout as the settled frame but washed
+  // out, and its contrast is a fraction of the settled one's.
+  let mean = 0;
+  for (const value of print.gray) mean += value;
+  mean /= print.gray.length;
+  let spread = 0;
+  for (const value of print.gray) spread += (value - mean) ** 2;
+  const contrast = Math.sqrt(spread / print.gray.length);
+  let score = print.edge + contrast / 4;
   if (print.luminance > 245 || print.luminance < 10) score -= 5;
   if (skeletonLike(print, print.width, print.height)) score -= 5;
   return Math.round(score * 10) / 10;
@@ -844,6 +853,9 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
     // the folders are put in step with the tree as it finally stands.
     if (!options.dryRun && result.version && flowGroups.length) {
       await syncFolders({ appId: resolvedApp.appId, platform: options.platform || 'ios', version: result.version, dataDir: options.dataDir }).catch((error) => log.warn(`could not line the folders up with the flows — ${error.message.split('\n')[0]}`));
+      // New screens in this version: a review of what was here before no longer
+      // counts, so its "reviewed" mark goes (its backups stay, for undo).
+      rmSync(join(resolveDataDir(options.dataDir), '..', 'reviews', `${resolvedApp.appId}-${options.platform || 'ios'}-${result.version}`, 'reviewed.json'), { force: true });
       // Ready for Claude's review: contact sheets, the screen list, the doubts.
       await writeReviewPack({ appId: resolvedApp.appId, platform: options.platform || 'ios', version: result.version, dataDir: options.dataDir }).catch((error) => log.warn(`could not write the review package — ${error.message.split('\n')[0]}`));
     }

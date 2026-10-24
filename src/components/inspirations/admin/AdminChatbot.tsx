@@ -584,6 +584,13 @@ export function AdminChatbot() {
       // The questions are done; only the Confirm (or a yes/no) is left.
       const waiting = getPending();
       const reply = answersPending(text);
+      // "full upload" / "fast upload" switches how the recording is read, then asks again.
+      const speed = /\bfull\b/i.test(text) ? true : /\b(fast|quick)\b/i.test(text) ? false : null;
+      if (waiting && waiting.op.kind === 'start-ingest' && speed !== null) {
+        const op = { ...waiting.op, full: speed };
+        offerAction(describeOp(op), { type: 'confirm', op, label: labelFor(op), destructive: false });
+        return;
+      }
       if (waiting && reply === 'yes') await run(waiting);
       else if (reply === 'no' || /^(cancel|discard|never ?mind|forget it)\b/i.test(text)) cancelHeld();
       else assistantSays('Press Confirm above to go ahead, or say cancel.');
@@ -1031,7 +1038,7 @@ export function AdminChatbot() {
         <div className="ins-dock-held">
           <div className="ins-dock-held-row">
             <span>
-              <strong>{reviewJob.title}</strong> — clean up its screens automatically, or review them yourself?
+              <strong>{reviewJob.title}</strong> — clean up its screens automatically? Claude’s review takes out any duplicates or bad frames afterwards, so there is no need to pick them yourself.
             </span>
             <button type="button" className="ins-linkbtn" onClick={() => void dismissIngestJob(reviewJob.id)}>
               Dismiss
@@ -1715,23 +1722,23 @@ const QUALITY_MARGIN = 3;
 /**
  * The excluded set both "I'll choose myself" (a starting point to adjust
  * from) and "Clean up automatically" (the final word, sent as-is) begin
- * from: a screen the segmenter itself flagged as loading or already set
- * aside is ticked already — a Google/Apple/Facebook sign-in page is left
- * unticked on purpose, so it publishes like any other screen and the
- * user's actual route through the app, hand-off included, still shows in
- * the flow — plus, for any family worth keeping at all, swapping to
- * whichever raw sample is clearly the most complete one, not just
- * whichever the segmenter happened to land on.
+ * from: only repeats of one moment and blank frames — plus, for each
+ * screen, swapping to whichever raw sample is clearly the most complete one,
+ * not just whichever the segmenter happened to land on. Anything else that
+ * should not be in the library is removed by Claude's review afterwards.
  */
 function defaultExcluded(screens: NonNullable<IngestJob['capturedScreens']>): Set<string> {
-  const base = new Set(screens.filter((screen) => {
-    if (screen.dropped || screen.reason === 'loading') return true;
-    // For transitions: exclude only if dropped or duplicate, keep proper ones selected
-    if (screen.reason === 'transition') {
-      return screen.dropped || screen.duplicateOf;
-    }
-    return false;
-  }).map((screen) => screen.id));
+  // Keep generously: a screen left out here never reaches the library, and no
+  // review can bring it back, while one kept too many is taken out by Claude's
+  // review. So only a repeat of the same moment and a blank frame are left out;
+  // a transition, a page still loading (also one the segmenter folded into the
+  // loaded page), a prompt over a dimmed screen and a screen still moving all
+  // stay, for the review to judge from the picture — states are steps too.
+  const base = new Set(
+    screens
+      .filter((screen) => screen.kind === 'duplicate' || Boolean(screen.duplicateOf) || screen.reason === 'duplicate' || screen.reason === 'blank')
+      .map((screen) => screen.id),
+  );
   // A hold's own picture and every raw-sample duplicate of it are the same
   // screen — defaulting to "keep the one the segmenter happened to land
   // on, drop every duplicate" means a duplicate that is actually more
@@ -1764,7 +1771,8 @@ function defaultExcluded(screens: NonNullable<IngestJob['capturedScreens']>): Se
     // wrong, and could just as easily swap away a frame kept on purpose
     // (the launch screen among them) for no real difference at all. Only
     // a clearly, not marginally, more complete duplicate is worth the swap.
-    if (best.id === anchor.id || best.quality <= anchor.quality + QUALITY_MARGIN) continue;
+    // Clearly better: a set amount more, or a fifth more (a dialog caught mid-fade scores well under the settled one).
+    if (best.id === anchor.id || (best.quality <= anchor.quality + QUALITY_MARGIN && (anchor.quality <= 0 || best.quality < anchor.quality * 1.2))) continue;
     for (const screen of family) {
       if (screen.id === best.id) base.delete(screen.id);
       else base.add(screen.id);
@@ -1783,7 +1791,8 @@ export function ReviewGrid({ job, slot }: { job: IngestJob; slot?: HTMLDivElemen
   // segmenter genuinely never kept, so the summary line does not read as if
   // hundreds of screens were missed when most of them are just duplicates.
   const duplicateCount = dropped.filter((screen) => screen.kind === 'duplicate').length;
-  const setAsideCount = dropped.length - duplicateCount;
+  const blankCount = dropped.filter((screen) => screen.kind !== 'duplicate' && screen.reason === 'blank').length;
+  const willKeep = screens.length - defaultExcluded(screens).size;
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -1908,21 +1917,17 @@ export function ReviewGrid({ job, slot }: { job: IngestJob; slot?: HTMLDivElemen
             ragged column of its own. */}
         <p className="ins-chat-line">
           <span>
-            <strong>{kept.length}</strong> screen{kept.length === 1 ? '' : 's'} found
-            {setAsideCount ? (
+            {/* What "Clean up automatically" keeps: every screen but repeats of one moment and blank frames. */}
+            <strong>{willKeep}</strong> screen{willKeep === 1 ? '' : 's'} to keep
+            {duplicateCount + blankCount ? (
               <>
-                , <strong>{setAsideCount}</strong> more set aside
-              </>
-            ) : null}
-            {duplicateCount ? (
-              <>
-                , <strong>{duplicateCount}</strong> repeat sample{duplicateCount === 1 ? '' : 's'} of a kept screen
+                {' '}— <strong>{duplicateCount + blankCount}</strong> repeat{duplicateCount + blankCount === 1 ? '' : 's'} of the same moment and blank frame{duplicateCount + blankCount === 1 ? '' : 's'} left out
               </>
             ) : null}
             .{' '}
             {picking
-              ? `Likely loading and sign-in screens, and everything set aside, are already ticked to leave out — untick a set-aside one to recover it, or tap any other thumbnail to add or drop it. ${toRemove.length} removed, ${toRecover.length} recovered.`
-              : 'Clean them up automatically, or pick through everything — kept and set aside — yourself?'}
+              ? `Repeats and blank frames are already ticked to leave out — tap any thumbnail to add or drop it. ${toRemove.length} removed, ${toRecover.length} recovered.`
+              : 'Claude’s review takes out any extra ones afterwards.'}
           </span>
         </p>
         <button
