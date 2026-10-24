@@ -24,6 +24,7 @@ import sharp from 'sharp';
 import { syncFolders } from './folders.js';
 import { log } from './log.js';
 import { rebuildManifest, resolveDataDir, VERSIONS_DIR_NAME } from './publish.js';
+import { extractFramesAt } from './frames.js';
 import { ELEMENTS, INDUSTRIES, PUBLISHED_FLOW_CATEGORIES, PUBLISHED_TYPES, STYLES, typeFromName } from './taxonomy.js';
 
 const IMAGES = new Set(['.webp', '.png', '.jpg', '.jpeg']);
@@ -186,6 +187,7 @@ export async function writeReviewPack(options) {
   const dir = reviewDir(dataDir, appId, platform, version);
   mkdirSync(dir, { recursive: true });
   for (const entry of readdirSync(dir)) if (/^sheet-\d+\.png$/.test(entry)) rmSync(join(dir, entry));
+  rmSync(join(dir, 'frames'), { recursive: true, force: true });
 
   const tag = `${appId}-${platform}-${VERSIONS_DIR_NAME}-${version}-`;
   const flows = (readJson(join(dataDir, 'flows.json'), { flows: [] }).flows || []).filter((flow) => flow.appId === appId && flow.platform === platform && (flow.screenIds ?? []).some((id) => id.startsWith(tag)));
@@ -228,6 +230,7 @@ export async function writeReviewPack(options) {
       tags: Array.isArray(sidecar.tags) ? sidecar.tags : [],
       flow: holders[0] ? pathOf(holders[0]) : null,
       flowId: holders[0]?.id ?? null,
+      atSeconds: typeof sidecar.capture?.atSeconds === 'number' ? sidecar.capture.atSeconds : null,
     });
   };
   const fileOfId = new Map(files.map((rel) => [idOf(rel), rel]));
@@ -258,6 +261,7 @@ export async function writeReviewPack(options) {
       }
     }
   }
+  await writeFrameStrips(dir, screens, flows);
   // A screen with almost nothing drawn on it — a blank loading page, a white flash — is no step.
   screens.forEach((screen, i) => {
     const print = prints[i];
@@ -279,6 +283,10 @@ export async function writeReviewPack(options) {
       type: screen.type,
       why: screen.blank
         ? 'almost nothing on it — a blank loading page to remove?'
+        : screen.cleanerAt !== undefined
+          ? `first step of its flow, and the picture at ${screen.cleanerAt}s (just before) may be the clean start — see frames/${screen.n}.png`
+        : screen.clearerAt !== undefined
+          ? `a clearer picture of it at ${screen.clearerAt}s (sharper or fully loaded) — see frames/${screen.n}.png`
         : screen.looksLike
           ? `looks the same as #${screen.looksLike} — a duplicate to remove?`
           : doubtOf(screen),
@@ -334,6 +342,7 @@ export async function writeReviewPack(options) {
  *     "moves":   [ { "screen": id, "from"?: flow id (none for a screen no flow lists), "to": flow id } ],
  *     "merges":  [ { "from": flow id, "into": flow id } ],
  *     "remove":  [ screen id, … ]  (duplicates and bad frames; undo puts them back),
+ *     "frames":  [ { "id": screen id, "at": seconds } ]  (a better picture from the kept recording),
  *     "rules":   { "screenTypes"?: [...], "nameFixes"?: [...], "wordTypes"?: [...] } }
  *
  * Everything it touches is backed up first; then the folders are lined up
@@ -393,6 +402,26 @@ export async function applyReview(options) {
     fixes += 1;
   }
 
+  // A better picture of a screen, taken from the kept recording.
+  const recording = recordingIn(dir);
+  for (const pick of Array.isArray(corrections.frames) ? corrections.frames : []) {
+    const image = fileOfId.get(pick.id);
+    if (!image || typeof pick.at !== 'number') continue;
+    if (!recording) {
+      log.warn(`review: no recording kept for this upload — the picture of ${pick.id} stays`);
+      continue;
+    }
+    try {
+      await takeFrame(recording, image, pick.at, join(dir, 'frames', 'take'));
+      const sidecarPath = image.replace(/\.[^.]+$/, '.json');
+      const sidecar = readJson(sidecarPath, {});
+      sidecar.capture = { ...(sidecar.capture ?? {}), atSeconds: pick.at };
+      writeJson(sidecarPath, sidecar);
+      fixes += 1;
+    } catch (error) {
+      log.warn(`review: could not take the frame at ${pick.at}s for ${pick.id} — ${String(error.message).split('\n')[0]}`);
+    }
+  }
   const flowsFile = join(dataDir, 'flows.json');
   const flowsDoc = readJson(flowsFile, { version: 1, flows: [] });
   // Screens the review takes out — a duplicate of the one before it, a frame
@@ -521,13 +550,21 @@ export async function applyReview(options) {
   await syncFolders({ appId, platform, version, dataDir });
   await rebuildManifest(dataDir);
   const problems = checkVersion({ appId, platform, version, dataDir });
+  // Done: the screens are right, so the recording is no longer needed.
+  if (!problems.length && recording && existsSync(recording)) {
+    rmSync(recording, { force: true });
+    rmSync(join(dir, 'frames'), { recursive: true, force: true });
+    log.info('review: the recording is removed — the review is finished');
+  }
   writeJson(join(dir, 'reviewed.json'), { reviewedAt: new Date().toISOString(), by: 'Claude', fixes, rulesAdded: kept, backup, problems });
   await writeReviewPack({ appId, platform, version, dataDir }).catch(() => null);
   log.ok(`review applied: ${fixes} fix(es), ${kept} new rule(s) kept; backup in ${backup}`);
   if (problems.length) {
     log.warn(`review check: ${problems.length} problem(s) left — fix them and apply again:`);
     for (const problem of problems) log.warn(`  - ${problem}`);
-  } else log.ok('review check: no problems left');
+  } else {
+    log.ok('review check: no problems left');
+  }
   return { fixes, rulesAdded: kept, backup, problems };
 }
 
@@ -631,4 +668,111 @@ export function checkVersion(options) {
     if (weak.length) problems.push(`app ${appId} card pictures include a splash, loading, permission or error screen`);
   }
   return problems;
+}
+
+/** Seconds around a screen's moment shown in its frame strip. */
+const STRIP_OFFSETS = [-0.9, -0.6, -0.3, 0, 0.3, 0.6, 0.9, 1.5];
+/** Frames a second the strip is read at. */
+const STRIP_FPS = 10;
+
+/** Path of the recording kept in a review package, or null. */
+export function recordingIn(dir) {
+  if (!existsSync(dir)) return null;
+  const name = readdirSync(dir).find((entry) => /^recording\.[a-z0-9]+$/i.test(entry));
+  return name ? join(dir, name) : null;
+}
+
+function stripScore(gray) {
+  let mean = 0;
+  for (const v of gray) mean += v;
+  mean /= gray.length;
+  let spread = 0;
+  for (const v of gray) spread += (v - mean) ** 2;
+  let edge = 0;
+  for (let i = 1; i < gray.length; i++) edge += Math.abs(gray[i] - gray[i - 1]);
+  return edge / gray.length + Math.sqrt(spread / gray.length) / 4;
+}
+
+function grayDiff(a, b) {
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d += Math.abs(a[i] - b[i]);
+  return d / a.length;
+}
+
+/**
+ * With the recording kept, every screen gets a strip of the frames around its
+ * moment (frames/<n>.png, each labelled with its second) so the review can
+ * pick the best picture: a sharper one than a frame caught mid-fade, a fully
+ * loaded one, or — for the first step of a flow — the clean start before
+ * anything was typed. Likely better pictures are marked on the screen
+ * (`clearerAt`, `cleanerAt`) and land in the doubts.
+ */
+async function writeFrameStrips(dir, screens, flows) {
+  const recording = recordingIn(dir);
+  if (!recording) return;
+  const timed = screens.filter((screen) => typeof screen.atSeconds === 'number');
+  if (!timed.length) return;
+  const framesDir = join(dir, 'frames');
+  const raw = join(framesDir, 'raw');
+  // Frame 0 is not read back by the frame reader; the first readable one stands in for it.
+  const at = (screen, offset) => Math.max(1, Math.round((screen.atSeconds + offset) * STRIP_FPS));
+  const indexes = [...new Set(timed.flatMap((screen) => STRIP_OFFSETS.map((offset) => at(screen, offset))))];
+  let paths;
+  try {
+    paths = await extractFramesAt(recording, raw, STRIP_FPS, indexes);
+  } catch (error) {
+    log.warn(`review: could not read frames from the recording — ${String(error.message).split('\n')[0]}`);
+    return;
+  }
+  const firstOfFlow = new Set(flows.map((flow) => flow.screenIds[0]).filter(Boolean));
+  const W = 320;
+  for (const screen of timed) {
+    const cells = [];
+    for (const offset of STRIP_OFFSETS) {
+      const path = paths.get(at(screen, offset));
+      if (!path) continue;
+      const seconds = Math.round((screen.atSeconds + offset) * 10) / 10;
+      const gray = await sharp(path).resize(32, 64, { fit: 'fill' }).greyscale().raw().toBuffer().catch(() => null);
+      const image = await sharp(path).resize({ width: W }).png().toBuffer().catch(() => null);
+      if (gray && image) cells.push({ offset, seconds, gray, image, score: stripScore(gray) });
+    }
+    const own = cells.find((cell) => cell.offset === 0);
+    if (!own || cells.length < 2) continue;
+    // Same screen only: a frame from the next screen is not a better picture of this one.
+    const same = cells.filter((cell) => grayDiff(cell.gray, own.gray) < 30);
+    const best = same.reduce((a, b) => (b.score > a.score ? b : a), own);
+    if (best !== own && best.score >= own.score * 1.15) screen.clearerAt = best.seconds;
+    if (firstOfFlow.has(screen.id)) {
+      const before = same.filter((cell) => cell.offset < 0 && grayDiff(cell.gray, own.gray) > 1 && cell.score >= own.score * 0.9);
+      if (before.length) screen.cleanerAt = before[0].seconds;
+    }
+    const meta = await sharp(cells[0].image).metadata();
+    const h = meta.height ?? 200;
+    const label = (text) => Buffer.from(`<svg width="${W}" height="28"><rect width="100%" height="100%" fill="#111"/><text x="8" y="20" font-size="16" fill="#fff" font-family="Arial">${text}</text></svg>`);
+    const composite = cells.flatMap((cell, i) => [
+      { input: cell.image, left: i * (W + 6), top: 0 },
+      { input: label(`${cell.seconds}s${cell.offset === 0 ? ' (now)' : ''}`), left: i * (W + 6), top: h },
+    ]);
+    await sharp({ create: { width: cells.length * (W + 6), height: h + 28, channels: 3, background: '#e8e8e8' } })
+      .composite(composite)
+      .png()
+      .toFile(join(framesDir, `${screen.n}.png`));
+  }
+  rmSync(raw, { recursive: true, force: true });
+}
+
+/** Replaces a screen's picture with the recording's frame at `seconds`, at the picture's own size. */
+async function takeFrame(recording, image, seconds, scratch) {
+  const index = Math.max(0, Math.round(seconds * STRIP_FPS));
+  const paths = await extractFramesAt(recording, scratch, STRIP_FPS, [index]);
+  const frame = paths.get(index);
+  if (!frame) throw new Error(`no frame at ${seconds}s`);
+  const meta = await sharp(image).metadata();
+  const ext = extname(image).toLowerCase();
+  let out = sharp(frame).resize(meta.width, meta.height, { fit: 'fill' });
+  out = ext === '.webp' ? out.webp({ quality: 90 }) : ext === '.jpg' || ext === '.jpeg' ? out.jpeg({ quality: 90 }) : out.png();
+  const temp = `${image}.new`;
+  await out.toFile(temp);
+  cpSync(temp, image);
+  rmSync(temp, { force: true });
 }

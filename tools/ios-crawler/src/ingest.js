@@ -24,7 +24,7 @@
  * sheet.
  */
 
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { run } from './exec.js';
@@ -499,9 +499,17 @@ export async function ingestFolder(options) {
           if (candidate.duplicateOf) candidate.external = externalById.get(candidate.duplicateOf) ?? false;
         }
 
+        // The recording waits with the captured frames: the review picks better
+        // pictures from it later (moved when it can be, copied otherwise).
+        const recording = join(staging, `recording${extname(source).toLowerCase()}`);
+        try {
+          renameSync(source, recording);
+        } catch {
+          copyFileSync(source, recording);
+        }
         writeFileSync(
           join(staging, 'review.json'),
-          JSON.stringify({ source: basename(source), captureInfo, timeline, candidates }),
+          JSON.stringify({ source: basename(source), recording, captureInfo, timeline, candidates }),
         );
         const kept = candidates.filter((candidate) => !candidate.dropped).length;
         const duplicateCount = candidates.filter((candidate) => candidate.kind === 'duplicate').length;
@@ -549,7 +557,7 @@ export async function ingestFolder(options) {
     }
 
     if (!graph.size) throw new Error('every file was a duplicate — nothing to publish');
-    return await finishIngest({ app, source, graph, visits, analyzer, duplicates, excluded, options, captureInfo, timeline });
+    return await finishIngest({ app, source, graph, visits, analyzer, duplicates, excluded, options: { ...options, recordingPath: isVideo ? source : null }, captureInfo, timeline });
   } finally {
     // The staged PNGs have been copied into the store by now — except when
     // paused for review, where they are still waiting to be. resumeIngest
@@ -856,6 +864,14 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
       // New screens in this version: a review of what was here before no longer
       // counts, so its "reviewed" mark goes (its backups stay, for undo).
       rmSync(join(resolveDataDir(options.dataDir), '..', 'reviews', `${resolvedApp.appId}-${options.platform || 'ios'}-${result.version}`, 'reviewed.json'), { force: true });
+      // The recording goes with the review package, so the review can take a
+      // better picture of a screen from it; a clean review removes it again.
+      if (options.recordingPath && existsSync(options.recordingPath)) {
+        const reviewFolder = join(resolveDataDir(options.dataDir), '..', 'reviews', `${resolvedApp.appId}-${options.platform || 'ios'}-${result.version}`);
+        mkdirSync(reviewFolder, { recursive: true });
+        for (const entry of readdirSync(reviewFolder)) if (/^recording\./.test(entry)) rmSync(join(reviewFolder, entry), { force: true });
+        copyFileSync(options.recordingPath, join(reviewFolder, `recording${extname(options.recordingPath).toLowerCase()}`));
+      }
       // Ready for Claude's review: contact sheets, the screen list, the doubts.
       await writeReviewPack({ appId: resolvedApp.appId, platform: options.platform || 'ios', version: result.version, dataDir: options.dataDir }).catch((error) => log.warn(`could not write the review package — ${error.message.split('\n')[0]}`));
     }
@@ -1108,7 +1124,7 @@ export async function resumeIngest(options) {
   try {
     const visits = await ingestTimeline({ timeline, frames, analyzer, graph, duplicates, excluded, options, captureInfo });
     if (!graph.size) throw new Error('every remaining screen was a duplicate — nothing to publish');
-    return await finishIngest({ app: options.app, source, graph, visits, analyzer, duplicates, excluded, options, captureInfo, timeline });
+    return await finishIngest({ app: options.app, source, graph, visits, analyzer, duplicates, excluded, options: { ...options, recordingPath: manifest.recording ?? null }, captureInfo, timeline });
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }
