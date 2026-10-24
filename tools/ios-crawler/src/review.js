@@ -228,10 +228,18 @@ export async function writeReviewPack(options) {
   for (const flow of order) for (const id of flow.screenIds) if (fileOfId.has(id)) add(fileOfId.get(id));
   for (const rel of files) add(rel);
 
+  // The patterns each screen lands in, from the last library build, and the
+  // rules that put it there — so a review can see a rule that is too loose.
+  const builtPatterns = readJson(join(dataDir, 'manifest.json'), { patterns: [] }).patterns || [];
+  const patternRules = new Map((readJson(join(dataDir, 'patterns.json'), { patterns: [] }).patterns || []).map((pattern) => [pattern.slug, pattern.match ?? {}]));
+  for (const screen of screens) screen.patterns = builtPatterns.filter((pattern) => (pattern.screenIds ?? []).includes(screen.id)).map((pattern) => pattern.name);
+  const patterns = builtPatterns
+    .map((pattern) => ({ slug: pattern.slug, name: pattern.name, match: patternRules.get(pattern.slug) ?? {}, screens: screens.filter((screen) => screen.patterns.includes(pattern.name)).map((screen) => screen.n) }))
+    .filter((pattern) => pattern.screens.length);
   const doubts = screens.map((screen) => ({ n: screen.n, id: screen.id, name: screen.name, type: screen.type, why: doubtOf(screen) })).filter((entry) => entry.why);
   const tree = order.map((flow) => ({ id: flow.id, path: pathOf(flow), category: flow.category, screens: flow.screenIds.length }));
   const tagList = (readJson(join(dataDir, 'tags.json'), { tags: [] }).tags || []).map((tag) => (typeof tag === 'string' ? tag : tag?.slug)).filter(Boolean);
-  writeJson(join(dir, 'screens.json'), { app: appId, platform, version, generatedAt: new Date().toISOString(), types: PUBLISHED_TYPES, elements: ELEMENTS, tags: tagList, tree, screens });
+  writeJson(join(dir, 'screens.json'), { app: appId, platform, version, generatedAt: new Date().toISOString(), types: PUBLISHED_TYPES, elements: ELEMENTS, tags: tagList, tree, patterns, screens });
   writeJson(join(dir, 'doubts.json'), doubts);
 
   // Contact sheets: twelve numbered screenshots each, number and type under each.
@@ -271,8 +279,9 @@ export async function writeReviewPack(options) {
  * Applies a review's corrections file:
  *
  *   { "screens": [ { "id", "name"?, "type"?, "extraTypes"? (up to 4), "elements"?, "tags"? (from tags.json) } ],
- *     "flows":   [ { "id", "name"?, "parent"? (flow id, or null for the top), "category"? } ],
- *     "moves":   [ { "screen": id, "from": flow id, "to": flow id } ],
+ *     "flows":   [ { "id", "name"?, "parent"? (flow id, or null for the top), "category"? } ]
+ *                (a new id in this version, with a name, makes a new flow; listed flows are shown in list order),
+ *     "moves":   [ { "screen": id, "from"?: flow id (none for a screen no flow lists), "to": flow id } ],
  *     "merges":  [ { "from": flow id, "into": flow id } ],
  *     "rules":   { "screenTypes"?: [...], "nameFixes"?: [...], "wordTypes"?: [...] } }
  *
@@ -331,6 +340,16 @@ export async function applyReview(options) {
   const flowsDoc = readJson(flowsFile, { version: 1, flows: [] });
   const flowById = new Map((flowsDoc.flows || []).map((flow) => [flow.id, flow]));
   const owned = (flow) => flow && flow.appId === appId && flow.platform === platform;
+  // A flow id the store does not have yet, named and in this version, is a
+  // new flow — the tree a review settles on may need more flows than the
+  // upload made. It is filled by the moves below.
+  const versionTag = `${appId}-${platform}-${VERSIONS_DIR_NAME}-${version}-`;
+  for (const fix of Array.isArray(corrections.flows) ? corrections.flows : []) {
+    if (flowById.has(fix.id) || !String(fix.id ?? '').startsWith(versionTag) || !(typeof fix.name === 'string' && fix.name.trim())) continue;
+    const flow = { id: fix.id, appId, name: fix.name.trim(), category: fix.category || 'discovery', platform, screenIds: [], parentId: null, steps: [] };
+    flowsDoc.flows.push(flow);
+    flowById.set(flow.id, flow);
+  }
   for (const fix of Array.isArray(corrections.flows) ? corrections.flows : []) {
     const flow = flowById.get(fix.id);
     if (!owned(flow)) continue;
@@ -340,11 +359,14 @@ export async function applyReview(options) {
     fixes += 1;
   }
   for (const move of Array.isArray(corrections.moves) ? corrections.moves : []) {
-    const from = flowById.get(move.from);
+    // No "from": a screen no flow lists yet, added to one.
+    const from = move.from ? flowById.get(move.from) : null;
     const to = flowById.get(move.to);
-    if (!owned(from) || !owned(to)) continue;
-    from.screenIds = from.screenIds.filter((id) => id !== move.screen);
-    from.steps = (from.steps ?? []).filter((step) => step.screenId !== move.screen);
+    if ((move.from && !owned(from)) || !owned(to) || !fileOfId.has(move.screen)) continue;
+    if (from) {
+      from.screenIds = from.screenIds.filter((id) => id !== move.screen);
+      from.steps = (from.steps ?? []).filter((step) => step.screenId !== move.screen);
+    }
     if (!to.screenIds.includes(move.screen)) {
       to.screenIds.push(move.screen);
       to.steps = [...(to.steps ?? []), { screenId: move.screen, action: null }];
@@ -367,6 +389,11 @@ export async function applyReview(options) {
     for (const child of flowsDoc.flows) if (child.parentId === flow.id) child.parentId = flow.parentId ?? null;
     flowsDoc.flows = flowsDoc.flows.filter((entry) => entry !== flow);
   }
+  // The flows the corrections list are shown in the order they are listed;
+  // every other flow keeps its place.
+  const listed = (Array.isArray(corrections.flows) ? corrections.flows : []).map((fix) => flowById.get(fix.id)).filter((flow) => owned(flow) && flowsDoc.flows.includes(flow));
+  const slots = flowsDoc.flows.map((flow, at) => (listed.includes(flow) ? at : -1)).filter((at) => at >= 0);
+  slots.forEach((at, n) => { flowsDoc.flows[at] = listed[n]; });
   writeJson(flowsFile, flowsDoc);
 
   const kept = corrections.rules ? addRules(dataDir, corrections.rules) : 0;

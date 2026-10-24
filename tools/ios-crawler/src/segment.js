@@ -67,6 +67,9 @@ const MERGE_MAD = 2;
 const MERGE_CHANGED = 0.01;
 /** …unless the first had already been still this long and this much of it then changed: a new state of the page. */
 const SETTLED_SECONDS = 1.5;
+/** A page on screen less than SETTLED_SECONDS is still arriving: changes up to this size are it drawing in. */
+const ARRIVING_MAD = 12;
+const ARRIVING_CHANGED = 0.15;
 const STATE_CHANGED = 0.01;
 /**
  * …or that much changed inside a tall block of real content: two screens that
@@ -311,10 +314,15 @@ export function segmentRecording(thumbs, options) {
           previousSeconds >= SETTLED_SECONDS &&
           !inChrome &&
           (step.changed >= STATE_CHANGED || (bigBox && step.changed >= BIG_BOX_CHANGED));
+        // A page still arriving (on screen under SETTLED_SECONDS) draws in in
+        // larger pieces — a section, an image, a block of text a beat after
+        // the rest — and is still the same screen; once it has settled, only
+        // the slightest change folds in.
+        const arriving = previousSeconds < SETTLED_SECONDS;
         if (
           step.label !== 'scroll' &&
-          step.mad <= MERGE_MAD &&
-          step.changed <= MERGE_CHANGED &&
+          step.mad <= (arriving ? ARRIVING_MAD : MERGE_MAD) &&
+          step.changed <= (arriving ? ARRIVING_CHANGED : MERGE_CHANGED) &&
           !compact &&
           !stateChange &&
           scrim(a, b, width).fraction < OVERLAY_DIM_FRACTION

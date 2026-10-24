@@ -6,7 +6,7 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { extractPalette, isLightColor, readCachedPalette, writeCachedPalette, type PaletteColor } from '@/lib/inspirations/palette';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { screenTypeLabel } from '@/lib/inspirations/taxonomy';
-import type { App, Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type App, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { useToast } from './Toast';
 import { useAsync } from './useAsync';
@@ -119,15 +119,18 @@ export function CompareShortcut({ app, screen }: { app: App; screen: Screen }) {
 
   const picks = useMemo(() => {
     if (!ofType || !apps) return null;
+    // Only apps in the same section — an iPhone screen beside iPhone apps,
+    // a web screen beside web ones — as the rest of the site keeps them.
+    const sameSection = (s: Screen) => isDesktopPlatform(s.platform) === isDesktopPlatform(screen.platform);
     const counts = new Map<string, number>();
-    for (const s of ofType) if (s.appId !== app.id) counts.set(s.appId, (counts.get(s.appId) ?? 0) + 1);
+    for (const s of ofType) if (s.appId !== app.id && sameSection(s)) counts.set(s.appId, (counts.get(s.appId) ?? 0) + 1);
     const byId = new Map(apps.map((a) => [a.id, a]));
     return [...counts.entries()]
       .sort((a, b) => b[1] - a[1])
       .map(([id]) => byId.get(id))
       .filter((a): a is App => Boolean(a))
       .slice(0, COMPARE_PICKS);
-  }, [ofType, apps, app.id]);
+  }, [ofType, apps, app.id, screen.platform]);
 
   if (!type || type === 'other') return null;
   const label = screenTypeLabel(type).toLowerCase();

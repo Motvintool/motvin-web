@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import type { Pattern, Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type Pattern, type Screen } from '@/lib/inspirations/types';
 import { Screenshot } from './Screenshot';
 
 /**
@@ -20,8 +20,11 @@ export function PatternCard({
   textHighlights?: Record<string, Array<{ left: number; top: number; width: number; height: number }>>;
 }) {
   const examples = screens.slice(0, 4);
+  // A pattern only web screens show opens in the Webs section, not the iOS
+  // default, where it would look empty.
+  const webOnly = examples.length > 0 && examples.every((s) => isDesktopPlatform(s.platform));
   return (
-    <Link href={INSPIRATIONS_ROUTES.pattern(pattern)} className="ins-pattern-card">
+    <Link href={`${INSPIRATIONS_ROUTES.pattern(pattern)}${webOnly ? '&platform=web' : ''}`} className="ins-pattern-card">
       <div className="ins-pattern-grid" aria-hidden>
         {examples.map((s) => (
           <div className="ins-pattern-thumb" key={s.id}>

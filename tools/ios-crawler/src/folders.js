@@ -143,6 +143,17 @@ export async function syncFolders(options) {
     for (const step of flow.steps ?? []) if (newId.has(step.screenId)) step.screenId = newId.get(step.screenId);
   }
   writeFileSync(flowsFile, `${JSON.stringify(flowsDoc, null, 2)}\n`);
+  // The app's card pictures name screens by id too.
+  const appsFile = join(dataDir, 'apps.json');
+  if (existsSync(appsFile)) {
+    const appsDoc = JSON.parse(readFileSync(appsFile, 'utf-8'));
+    const record = (Array.isArray(appsDoc) ? appsDoc : appsDoc.apps ?? []).find((entry) => entry.id === appId);
+    if (Array.isArray(record?.cardScreens) && record.cardScreens.some((id) => newId.has(id) && newId.get(id) !== id)) {
+      writeFileSync(join(backup, 'apps.json'), readFileSync(appsFile));
+      record.cardScreens = record.cardScreens.map((id) => newId.get(id) ?? id);
+      writeFileSync(appsFile, `${JSON.stringify(appsDoc, null, 2)}\n`);
+    }
+  }
   writeFileSync(join(backup, 'id-map.json'), `${JSON.stringify(Object.fromEntries(newId), null, 2)}\n`);
   log.ok(`folders: ${moved} screen(s) moved; the old folder and records are kept in ${backup}`);
   await rebuildManifest(dataDir);

@@ -1,7 +1,7 @@
 import { inspirationsApi } from '../api';
 import { correctText } from './fuzzy';
 import { appsUsingPattern, loadIndex, type LibraryIndex } from './guideIndex';
-import { asksElements, findElements, findFlowCategory, findNegations, findNumberFilter, findOrdinal, findPatterns, findStates, findStyles, findTopN, matchesNumber, splitIntents, stripElements, withoutNegations, type NumberFilter } from './guideParse';
+import { asksElements, findElements, findFlowCategory, findNegations, findNumberFilter, findOrdinal, findPatternCategory, findPatterns, findStates, findStyles, findTopN, matchesNumber, splitIntents, stripElements, withoutNegations, type NumberFilter } from './guideParse';
 import { INSPIRATIONS_ROUTES } from '../routes';
 import { suggestQueries, type SearchSuggestion } from '../search';
 import { EMPTY_FILTERS } from '../filters';
@@ -871,6 +871,11 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
 
   // A pattern, named or by category, across the library.
   if (namedPatterns.length > 0) {
+    // "modal patterns": the whole category, not one pattern in it.
+    const askedCategory = findPatternCategory(working, patterns);
+    if (askedCategory && !DEFINE.test(original.trim()) && !WHICH_APPS.test(lower) && !asksCount) {
+      return { text: `Opening the ${askedCategory.toLowerCase()} patterns.`, targets: namedPatterns.slice(0, 6).map(patternTarget), go: { label: `${askedCategory} patterns`, hint: 'Patterns', href: INSPIRATIONS_ROUTES.patternCategory(askedCategory) } };
+    }
     if (namedPatterns.length === 1) {
       const pattern = namedPatterns[0];
       const used = appsUsingPattern(index, pattern);

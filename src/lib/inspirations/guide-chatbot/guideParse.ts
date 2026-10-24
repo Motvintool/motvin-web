@@ -128,9 +128,19 @@ export const asksElements = (text: string) => /\b(?:ui ?elements?|components?|wi
 
 /* --------------------------------------------------------------- patterns */
 
+const patternsByName = (lower: string, patterns: Pattern[]) =>
+  patterns.filter((pattern) => hasWord(lower, pattern.name.toLowerCase()) || hasWord(lower, pattern.name.toLowerCase().replace(/s$/, '')));
+
+/** The pattern category a sentence asks for as a whole ("modal patterns"), when it names no single pattern. */
+export function findPatternCategory(text: string, patterns: Pattern[]): string | null {
+  const lower = text.toLowerCase();
+  if (patternsByName(lower, patterns).length) return null;
+  return findPatterns(text, patterns)[0]?.category ?? null;
+}
+
 export function findPatterns(text: string, patterns: Pattern[]): Pattern[] {
   const lower = text.toLowerCase();
-  const byName = patterns.filter((pattern) => hasWord(lower, pattern.name.toLowerCase()) || hasWord(lower, pattern.name.toLowerCase().replace(/s$/, '')));
+  const byName = patternsByName(lower, patterns);
   if (byName.length) return byName;
   // "bottom navigation patterns", "modal patterns": a whole category.
   const byCategory = patterns.filter((pattern) => hasWord(lower, pattern.category.toLowerCase()) || hasWord(lower, pattern.category.toLowerCase().replace(/s$/, '')));

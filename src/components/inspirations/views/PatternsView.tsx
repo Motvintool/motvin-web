@@ -22,8 +22,9 @@ const PAGE = 60;
 
 /**
  * /inspirations/patterns — the pattern library, shown the way search shows pattern results: the screens the
- * patterns were found on, in the frameless app-page grid, with a Patterns pill to narrow by category
- * (?category=Forms,Modals). Follows the platform switch like every other browse page.
+ * patterns were found on, in the frameless app-page grid, with a Category pill to narrow by category
+ * (?category=Forms,Modals) and a Pattern pill to narrow to single patterns (?pattern=dialogs) — what a
+ * screen's pattern chip opens. Follows the platform switch like every other browse page.
  *
  * A pattern only appears once real screens match it, so this page grows as the store does.
  */
@@ -36,6 +37,7 @@ export function PatternsView() {
   // Webs (websites and web apps) are landscape screenshots: the web grid, as an app page shows them.
   const webGrid = platforms.every(isDesktopPlatform);
   const picked = (params.get('category') ?? '').split(',').filter(Boolean);
+  const pickedPatterns = (params.get('pattern') ?? '').split(',').filter(Boolean);
   const [shown, setShown] = useState(PAGE);
 
   // Every pattern with the screens it was found on (one request per pattern).
@@ -65,12 +67,22 @@ export function PatternsView() {
       .sort((a, b) => b.count - a.count);
   })();
 
-  // The grid: every screen of the picked categories (all of them when none is picked), each once.
+  // The pattern pill: each pattern of the picked categories (all when none is picked) that has screens here.
+  const patternOptions = entries
+    .filter(({ pattern, screens }) => screens.length > 0 && (!picked.length || picked.includes(pattern.category)))
+    .map(({ pattern, screens }) => ({ value: pattern.slug, label: pattern.name, count: screens.length }))
+    .sort((a, b) => b.count - a.count);
+
+  // Picked patterns win over picked categories; otherwise the picked categories, or everything.
+  const included = (pattern: { slug: string; category: string }) =>
+    pickedPatterns.length ? pickedPatterns.includes(pattern.slug) : !picked.length || picked.includes(pattern.category);
+
+  // The grid: every screen of the included patterns, each once.
   const screens = (() => {
     const seen = new Set<string>();
     const out: Screen[] = [];
     for (const { pattern, screens: list } of entries) {
-      if (picked.length && !picked.includes(pattern.category)) continue;
+      if (!included(pattern)) continue;
       for (const s of list) {
         if (seen.has(s.id)) continue;
         seen.add(s.id);
@@ -85,7 +97,7 @@ export function PatternsView() {
   const categoryOf = (() => {
     const map = new Map<string, string>();
     for (const { pattern, screens: list } of entries) {
-      if (picked.length && !picked.includes(pattern.category)) continue;
+      if (!included(pattern)) continue;
       for (const s of list) if (!map.has(s.id)) map.set(s.id, pattern.category);
     }
     return map;
@@ -108,14 +120,18 @@ export function PatternsView() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
 
-  const setCategories = (next: string[]) => {
+  const setList = (key: 'category' | 'pattern', next: string[]) => {
     setShown(PAGE);
     const sp = new URLSearchParams(params.toString());
-    if (next.length) sp.set('category', next.join(','));
-    else sp.delete('category');
+    if (next.length) sp.set(key, next.join(','));
+    else sp.delete(key);
+    // A new category choice starts the pattern choice over.
+    if (key === 'category') sp.delete('pattern');
     const qs = sp.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
+  const setCategories = (next: string[]) => setList('category', next);
+  const setPatterns = (next: string[]) => setList('pattern', next);
 
   return (
     <>
@@ -125,11 +141,20 @@ export function PatternsView() {
         <NavPill counts={meta.counts} activeCount={loading || (textQuery && !textHits) ? null : gridScreens.length} />
         {categoryOptions.length > 0 && (
           <CheckboxFilterPill
-            label="Patterns"
+            label="Category"
             options={categoryOptions}
             selected={picked}
             onToggle={(v) => setCategories(picked.includes(v) ? picked.filter((c) => c !== v) : [...picked, v])}
             onClear={() => setCategories([])}
+          />
+        )}
+        {patternOptions.length > 0 && (
+          <CheckboxFilterPill
+            label="Pattern"
+            options={patternOptions}
+            selected={pickedPatterns}
+            onToggle={(v) => setPatterns(pickedPatterns.includes(v) ? pickedPatterns.filter((p) => p !== v) : [...pickedPatterns, v])}
+            onClear={() => setPatterns([])}
           />
         )}
       </ToolbarRow>
@@ -149,24 +174,26 @@ export function PatternsView() {
             onLoadMore={() => setShown((n) => n + PAGE)}
             empty={
               <EmptyState
-                play={Boolean(textQuery || picked.length)}
+                play={Boolean(textQuery || picked.length || pickedPatterns.length)}
                 icon={<GridIcon size={22} />}
                 title={
                   textQuery
                     ? `No pattern screens contain “${textQuery}”`
-                    : picked.length
+                    : pickedPatterns.length
+                      ? 'No screens for this pattern on this platform yet'
+                      : picked.length
                       ? 'No pattern screens in these categories yet'
                       : 'No patterns matched yet'
                 }
                 description={
-                  textQuery || picked.length
+                  textQuery || picked.length || pickedPatterns.length
                     ? undefined
                     : 'Patterns are matched against stored screens when the manifest is built. Add screens and they fill in on their own.'
                 }
                 action={
                   textQuery
                     ? { label: 'Clear text search', onClick: () => setText(undefined) }
-                    : picked.length
+                    : picked.length || pickedPatterns.length
                       ? { label: 'Show all patterns', onClick: () => setCategories([]) }
                       : undefined
                 }

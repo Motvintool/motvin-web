@@ -73,7 +73,7 @@ describe('pages and names', () => {
   });
 
   it('opens a pattern by the start of a word in its name', async () => {
-    expect((await ask('filter')).go?.href).toBe('/inspirations/patterns?category=Filters');
+    expect((await ask('filter')).go?.href).toBe('/inspirations/patterns?pattern=filter-chips');
   });
 
   it('opens a screen type page', async () => {
@@ -729,7 +729,7 @@ describe('UI elements', () => {
 describe('patterns', () => {
   it('opens a pattern by name, with where it is used', async () => {
     const reply = await ask('filter chips');
-    expect(reply.go?.href).toBe('/inspirations/patterns?category=Filters');
+    expect(reply.go?.href).toBe('/inspirations/patterns?pattern=filter-chips');
     expect(reply.text).toBe('Opening the “Filter chips” pattern.');
     expect(reply.card?.facts).toEqual(['Filters', '2 screens', 'In Swiggy and Zomato']);
   });
@@ -1179,8 +1179,8 @@ describe('found against the real library', () => {
   it('a scope beats a pattern that shares the name', async () => {
     vi.mocked(inspirationsApi.listPatterns).mockResolvedValueOnce([{ id: 'p9', name: 'Empty states', slug: 'empty-states', category: 'Empty States', description: 'When there is nothing to show.', screenIds: [] }] as never);
     expect((await ask('empty states from food apps')).go?.href).toBe('/inspirations/screens?state=empty&industry=food');
-    expect((await ask('empty states')).go?.href).toBe('/inspirations/patterns?category=Empty%20States');
-    expect((await ask('empty states pattern')).go?.href).toBe('/inspirations/patterns?category=Empty%20States');
+    expect((await ask('empty states')).go?.href).toBe('/inspirations/patterns?pattern=empty-states');
+    expect((await ask('empty states pattern')).go?.href).toBe('/inspirations/patterns?pattern=empty-states');
   });
 
   it('a definition does not borrow the app being discussed', async () => {

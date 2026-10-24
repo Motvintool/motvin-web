@@ -22,10 +22,12 @@ export const INSPIRATIONS_ROUTES = {
   settingsRequests: '/inspirations/settings?section=requests',
   app: (app: Pick<App, 'slug'>) => `/inspirations/app/${app.slug}`,
   /**
-   * A pattern: the Patterns page narrowed to its category. (The old
-   * one-pattern page is gone; next.config.ts sends its addresses to Patterns.)
+   * A pattern: the Patterns page narrowed to that one pattern's screens. (The
+   * old one-pattern page is gone; next.config.ts sends its addresses here.)
    */
-  pattern: (pattern: Pick<Pattern, 'category'>) => `/inspirations/patterns?category=${encodeURIComponent(pattern.category)}`,
+  pattern: (pattern: Pick<Pattern, 'slug'>) => `/inspirations/patterns?pattern=${encodeURIComponent(pattern.slug)}`,
+  /** A pattern category: the Patterns page narrowed to every pattern in it. */
+  patternCategory: (category: string) => `/inspirations/patterns?category=${encodeURIComponent(category)}`,
   searchFor: (query: string, mode?: 'text') => `/inspirations/search?q=${encodeURIComponent(query)}${mode === 'text' ? '&mode=text' : ''}`,
   /** Opens Inspirations with Motvin Buddy already answering `question`. */
   askBuddy: (question: string) => `/inspirations?buddy=${encodeURIComponent(question)}`,

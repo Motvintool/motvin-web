@@ -124,7 +124,8 @@ const nextConfig: NextConfig = {
       // query string (e.g. ?collection=id) carried over automatically.
       { source: '/inspirations/saved', destination: '/inspirations/collections', permanent: true },
       // The old one-pattern page is gone: patterns are browsed on the
-      // Patterns page, by category. A surviving link or bookmark lands there.
+      // Patterns page. A surviving link or bookmark opens that one pattern there.
+      { source: '/inspirations/pattern/:slug', destination: '/inspirations/patterns?pattern=:slug', permanent: true },
       { source: '/inspirations/pattern/:slug*', destination: '/inspirations/patterns', permanent: true },
     ];
   },

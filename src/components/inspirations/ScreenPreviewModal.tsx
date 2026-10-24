@@ -829,7 +829,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   </h3>
                   <div className="ins-details-pills">
                     {patterns.map((p) => (
-                      <Link key={p.id} href={INSPIRATIONS_ROUTES.pattern(p)} className="ins-details-pill">
+                      <Link key={p.id} href={`${INSPIRATIONS_ROUTES.pattern(p)}${INSPIRATIONS_ROUTES.pattern(p).includes('?') ? '&' : '?'}platform=${viewSection}`} className="ins-details-pill">
                         {p.name}
                       </Link>
                     ))}
