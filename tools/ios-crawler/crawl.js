@@ -24,7 +24,7 @@ import { assertAuthorized } from './src/safety.js';
 import { localDateString, publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
 import { classifyStored, describeStored, ingestFolder, researchStored, resumeIngest } from './src/ingest.js';
 import { syncFolders } from './src/folders.js';
-import { applyReview, packIsFresh, prepareReview, reviewDir, undoReview } from './src/review.js';
+import { applyReview, packIsFresh, prefetchFrames, prepareReview, reviewDir, undoReview } from './src/review.js';
 import { extractJson, pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
 import { AI_PROVIDERS, aiChat, aiChatStream, aiConfig, aiStatus, canStream, readAiSettings, writeAiSettings } from './src/ai.js';
 
@@ -885,6 +885,11 @@ async function main() {
         return await runDescribe(flags);
       case 'sync-folders':
         return await runSyncFolders(flags);
+      case 'review-prefetch':
+        // Started by an upload: the review's frames, read while the upload analyses its screens.
+        if (typeof flags.recording !== 'string') return 1;
+        await prefetchFrames({ recording: flags.recording, dataDir: flags.dataDir });
+        return 0;
       case 'review-pack':
       case 'review-prepare':
       case 'review-progress':

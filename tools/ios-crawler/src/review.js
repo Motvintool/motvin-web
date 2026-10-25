@@ -19,8 +19,10 @@
  */
 
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { closeSync, copyFileSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { syncFolders } from './folders.js';
 import { log } from './log.js';
@@ -411,6 +413,111 @@ export async function prepareReview(options) {
   return writeReviewPack({ ...options, dataDir, platform: options.platform || 'ios', light: false });
 }
 
+// ─── Frames read early, during the upload ───────────────────────────────────
+
+/** A recording's identity: its size and first bytes, so a copy of it finds the same cache. */
+export function recordingKey(path) {
+  const head = Buffer.alloc(Math.min(8 * 1024 * 1024, statSync(path).size));
+  const fd = openSync(path, 'r');
+  try {
+    readSync(fd, head, 0, head.length, 0);
+  } finally {
+    closeSync(fd);
+  }
+  return createHash('sha1').update(`${statSync(path).size}:`).update(head).digest('hex').slice(0, 16);
+}
+
+const cacheRoot = (dataDir) => join(resolveDataDir(dataDir), '..', 'reviews', '.frame-cache');
+const cacheOf = (dataDir, recording) => join(cacheRoot(dataDir), recordingKey(recording));
+const cachedFrame = (cache, index) => join(cache, 'strip', `frame-${String(index + 1).padStart(5, '0')}.png`);
+const stripIndexes = (times) => [...new Set(times.flatMap((seconds) => STRIP_OFFSETS.map((offset) => Math.max(1, Math.round((seconds + offset) * STRIP_FPS)))))];
+
+/**
+ * Starts reading the review's frames while the upload is still analysing its screens: the
+ * frame strips at each screen's moment and the scan of the whole recording, into a cache the
+ * review package then takes them from. Runs on its own, so the upload does not wait for it.
+ */
+export function startPrefetch({ recording, times, dataDir }) {
+  try {
+    const root = cacheRoot(dataDir);
+    mkdirSync(root, { recursive: true });
+    // Caches older than two days belong to uploads long reviewed.
+    for (const entry of readdirSync(root)) {
+      const path = join(root, entry);
+      if (Date.now() - statSync(path).mtimeMs > 2 * 86_400_000) rmSync(path, { recursive: true, force: true });
+    }
+    const cache = cacheOf(dataDir, recording);
+    mkdirSync(cache, { recursive: true });
+    writeJson(join(cache, 'times.json'), times.filter((seconds) => typeof seconds === 'number'));
+    const args = [fileURLToPath(new URL('../crawl.js', import.meta.url)), 'review-prefetch', '--recording', recording];
+    if (dataDir) args.push('--data-dir', dataDir);
+    spawn(process.execPath, args, { detached: true, stdio: 'ignore' }).unref();
+  } catch (error) {
+    log.warn(`could not start reading the review's frames early — ${String(error.message).split('\n')[0]}`);
+  }
+}
+
+/** The work startPrefetch starts: run as `crawl.js review-prefetch`. */
+export async function prefetchFrames({ recording, dataDir }) {
+  const cache = cacheOf(dataDir, recording);
+  mkdirSync(cache, { recursive: true });
+  const meta = join(cache, 'meta.json');
+  writeJson(meta, { pid: process.pid, startedAt: new Date().toISOString() });
+  // Its own copy: the upload's staging folder, where the recording sits now, is cleared when it ends.
+  const local = join(cache, `recording${extname(recording).toLowerCase()}`);
+  try {
+    copyFileSync(recording, local);
+    await extractFramesAt(local, join(cache, 'strip'), STRIP_FPS, stripIndexes(readJson(join(cache, 'times.json'), [])));
+    const { thumbs } = await extractThumbs(local, join(cache, 'scan-raw'), SCAN_FPS, SCAN_GRID);
+    writeFileSync(join(cache, 'scan.bin'), Buffer.concat(thumbs));
+    rmSync(join(cache, 'scan-raw'), { recursive: true, force: true });
+    writeJson(meta, { done: true, scanFrames: thumbs.length, finishedAt: new Date().toISOString() });
+  } catch (error) {
+    writeJson(meta, { failed: String(error.message).split('\n')[0] });
+  } finally {
+    rmSync(local, { force: true });
+  }
+}
+
+/** The cache for this recording once its early reading is done (waited for while it runs), or null. */
+async function readyCache(dir, recording) {
+  let cache;
+  try {
+    cache = cacheOf(join(dir, '..', '..', 'inspirations'), recording);
+  } catch {
+    return null;
+  }
+  const meta = join(cache, 'meta.json');
+  for (;;) {
+    const state = readJson(meta, null);
+    if (!state) return null;
+    if (state.done) return cache;
+    if (state.failed || !Number.isInteger(state.pid) || !alive(state.pid)) return null;
+    reportPack(dir, 'Finishing the frames read during the upload');
+    await new Promise((done) => setTimeout(done, 3000));
+  }
+}
+
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Drops the early frames of a recording once its review is done. */
+function dropCache(dir) {
+  const recording = recordingIn(dir);
+  if (!recording) return;
+  try {
+    rmSync(cacheOf(join(dir, '..', '..', 'inspirations'), recording), { recursive: true, force: true });
+  } catch {
+    // Old caches are cleared after two days anyway.
+  }
+}
+
 // ─── Apply and undo ─────────────────────────────────────────────────────────
 
 /**
@@ -753,6 +860,7 @@ export async function applyReview(options) {
   // this review's backup, so it can still be undone. Another review rebuilds
   // the package with review-pack.
   if (!problems.length) {
+    dropCache(dir);
     for (const entry of readdirSync(dir)) {
       const working = /^recording\./.test(entry) || entry === 'frames' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || entry === 'missed.json' || /^(flow-\d+\.png|flow-sheets\.json|findings\.json|confirmed\.json|checked\.json|audited\.json|preparing\.json)$/.test(entry) || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
       const olderBackup = entry.startsWith('backup-') && join(dir, entry) !== backup;
@@ -997,18 +1105,24 @@ async function writeFrameStrips(dir, screens, flows, keptGrays) {
   const timed = screens.filter((screen) => typeof screen.atSeconds === 'number');
   if (!timed.length) return;
   const framesDir = join(dir, 'frames');
+  mkdirSync(framesDir, { recursive: true });
   const raw = join(framesDir, 'raw');
   // Frame 0 is not read back by the frame reader; the first readable one stands in for it.
   const at = (screen, offset) => Math.max(1, Math.round((screen.atSeconds + offset) * STRIP_FPS));
   const indexes = [...new Set(timed.flatMap((screen) => STRIP_OFFSETS.map((offset) => at(screen, offset))))];
   let paths;
+  // Frames read during the upload are taken from its cache; only the rest is read now.
+  const cache = await readyCache(dir, recording);
+  const cached = new Map(cache ? indexes.map((index) => [index, cachedFrame(cache, index)]).filter(([, path]) => existsSync(path)) : []);
+  const missing = indexes.filter((index) => !cached.has(index));
   // The frame reader runs on its own: its progress is the frames it has written so far.
   const reading = setInterval(() => {
     const count = existsSync(raw) ? readdirSync(raw).length : 0;
-    reportPack(dir, `Reading frames ${count} of ${indexes.length}`);
+    reportPack(dir, `Reading frames ${count} of ${missing.length}`);
   }, 3000);
   try {
-    paths = await extractFramesAt(recording, raw, STRIP_FPS, indexes);
+    paths = missing.length ? await extractFramesAt(recording, raw, STRIP_FPS, missing) : new Map();
+    for (const [index, path] of cached) paths.set(index, path);
   } catch (error) {
     log.warn(`review: could not read frames from the recording — ${String(error.message).split('\n')[0]}`);
     return;
@@ -1206,9 +1320,17 @@ async function writeMissedMoments(dir, screens) {
   if (!recording || !screens.length) return;
   const scratch = join(dir, 'frames', 'scan');
   let thumbs;
+  const cache = await readyCache(dir, recording);
+  const early = cache ? join(cache, 'scan.bin') : null;
   try {
-    reportPack(dir, 'Scanning the whole recording for missed steps');
-    ({ thumbs } = await extractThumbs(recording, scratch, SCAN_FPS, SCAN_GRID));
+    if (early && existsSync(early)) {
+      const all = readFileSync(early);
+      const size = SCAN_GRID.width * SCAN_GRID.height * 3;
+      thumbs = Array.from({ length: Math.floor(all.length / size) }, (_, i) => all.subarray(i * size, (i + 1) * size));
+    } else {
+      reportPack(dir, 'Scanning the whole recording for missed steps');
+      ({ thumbs } = await extractThumbs(recording, scratch, SCAN_FPS, SCAN_GRID));
+    }
   } catch (error) {
     log.warn(`review: could not scan the recording — ${String(error.message).split('\n')[0]}`);
     return;

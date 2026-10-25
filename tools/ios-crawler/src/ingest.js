@@ -40,7 +40,7 @@ import { resolveIndustry } from './category.js';
 import { researchTree } from './researcher.js';
 import { extractJson } from './analyze.js';
 import { syncFolders } from './folders.js';
-import { applyRulesToGraph, writeReviewPack } from './review.js';
+import { applyRulesToGraph, startPrefetch, writeReviewPack } from './review.js';
 import { checkTree, foldSmallRepeats, groupIntoFeatures, liftAppTasksOutOfOnboarding, mergeSameNamedSiblings, nameBrokenSections, promoteAreas, tidyNames, reviewStructure, settleCategories, splitOnboardingTail } from './structure.js';
 import { buildJourneys } from './journeys.js';
 import { actionPhrase, describeAction } from './actions.js';
@@ -543,6 +543,8 @@ export async function ingestFolder(options) {
         return { pausedForReview: true, stagingDir: staging, screens: kept };
       }
 
+      // The review's frames are read now, alongside the analysis, so its package is ready sooner.
+      startPrefetch({ recording: source, times: timeline.screens.map((screen) => screen.start), dataDir: options.dataDir });
       visits = await ingestTimeline({ timeline, frames, analyzer, graph, duplicates, excluded, options, captureInfo });
     } else {
       const files = listImages(source);
@@ -1140,6 +1142,8 @@ export async function resumeIngest(options) {
   );
 
   try {
+    // The review's frames are read now, alongside the analysis, so its package is ready sooner.
+    if (manifest.recording && existsSync(manifest.recording)) startPrefetch({ recording: manifest.recording, times: distinct.map((screen) => screen.start), dataDir: options.dataDir });
     const visits = await ingestTimeline({ timeline, frames, analyzer, graph, duplicates, excluded, options, captureInfo });
     if (!graph.size) throw new Error('every remaining screen was a duplicate — nothing to publish');
     return await finishIngest({ app: options.app, source, graph, visits, analyzer, duplicates, excluded, options: { ...options, recordingPath: manifest.recording ?? null }, captureInfo, timeline });
