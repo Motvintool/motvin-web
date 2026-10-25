@@ -302,6 +302,7 @@ export async function writeReviewPack(options) {
       } else if (screen.cleanerAt !== undefined) finding('first step of its flow, and the moment just before may be the clean start', screen.cleanerAt, `swap ("frames": { "id", "at": ${screen.cleanerAt} }); see frames/${screen.n}.png`);
     }
   }
+  reportPack(dir, 'Looking for duplicates and blank pages');
   const grayList = screens.map((screen) => keptGrays.get(screen.id));
   for (let i = 0; i < screens.length; i++) {
     if (!grayList[i]) continue;
@@ -368,6 +369,7 @@ export async function writeReviewPack(options) {
     sheets += 1;
     await sharp({ create: { width, height, channels: 3, background: '#e9e9e9' } }).composite(layers).png().toFile(join(dir, `sheet-${sheets}.png`));
   }
+  reportPack(dir, 'Drawing contact and flow sheets');
   const flowSheets = await writeFlowSheets(dir, order, screens, pathOf);
   log.ok(`review package: ${screens.length} screen(s), ${sheets} sheet(s), ${flowSheets} flow sheet(s), ${doubts.length} doubt(s) in ${dir}`);
   return { dir, screens: screens.length, sheets, doubts: doubts.length };
@@ -928,6 +930,20 @@ function grayDiff(a, b) {
  * anything was typed. Likely better pictures are marked on the screen
  * (`clearerAt`, `cleanerAt`) and land in the doubts.
  */
+/** Screens whose strips are drawn at once. */
+const STRIP_WORKERS = 6;
+
+/** What the package build is doing now, for the Motvin agent's card ("Picture strips 120 of 501"). */
+function reportPack(dir, detail) {
+  const file = join(dir, 'reviewing.json');
+  if (!existsSync(file)) return;
+  try {
+    writeJson(file, { ...readJson(file, {}), detail });
+  } catch {
+    // Progress is a nicety; the build goes on without it.
+  }
+}
+
 async function writeFrameStrips(dir, screens, flows, keptGrays) {
   const recording = recordingIn(dir);
   if (!recording) return;
@@ -939,15 +955,23 @@ async function writeFrameStrips(dir, screens, flows, keptGrays) {
   const at = (screen, offset) => Math.max(1, Math.round((screen.atSeconds + offset) * STRIP_FPS));
   const indexes = [...new Set(timed.flatMap((screen) => STRIP_OFFSETS.map((offset) => at(screen, offset))))];
   let paths;
+  // The frame reader runs on its own: its progress is the frames it has written so far.
+  const reading = setInterval(() => {
+    const count = existsSync(raw) ? readdirSync(raw).length : 0;
+    reportPack(dir, `Reading frames ${count} of ${indexes.length}`);
+  }, 3000);
   try {
     paths = await extractFramesAt(recording, raw, STRIP_FPS, indexes);
   } catch (error) {
     log.warn(`review: could not read frames from the recording — ${String(error.message).split('\n')[0]}`);
     return;
+  } finally {
+    clearInterval(reading);
   }
   const firstOfFlow = new Set(flows.map((flow) => flow.screenIds[0]).filter(Boolean));
   const W = 320;
-  for (const screen of timed) {
+  let done = 0;
+  const one = async (screen) => {
     const cells = [];
     for (const offset of STRIP_OFFSETS) {
       const path = paths.get(at(screen, offset));
@@ -960,7 +984,7 @@ async function writeFrameStrips(dir, screens, flows, keptGrays) {
       if (gray && fine && image) cells.push({ offset, seconds, gray, fine, norm, image, score: stripScore(gray) });
     }
     const own = cells.find((cell) => cell.offset === 0);
-    if (!own || cells.length < 2) continue;
+    if (!own || cells.length < 2) return;
     // Same screen only: a frame from the next screen is not a better picture of this one.
     const same = cells.filter((cell) => grayDiff(cell.gray, own.gray) < 30);
     // A clearer picture must be this very page — brightness aside, so a dim fade still matches it.
@@ -1010,7 +1034,14 @@ async function writeFrameStrips(dir, screens, flows, keptGrays) {
       .composite(composite)
       .png()
       .toFile(join(framesDir, `${screen.n}.png`));
-  }
+    done += 1;
+    if (done % 10 === 0 || done === timed.length) reportPack(dir, `Picture strips ${done} of ${timed.length}`);
+  };
+  // A few screens at a time: the picture work runs in parallel threads.
+  let next = 0;
+  await Promise.all(Array.from({ length: STRIP_WORKERS }, async () => {
+    while (next < timed.length) await one(timed[next++]);
+  }));
   rmSync(raw, { recursive: true, force: true });
 }
 
@@ -1094,6 +1125,7 @@ async function writeMissedMoments(dir, screens) {
   const scratch = join(dir, 'frames', 'scan');
   let thumbs;
   try {
+    reportPack(dir, 'Scanning the whole recording for missed steps');
     ({ thumbs } = await extractThumbs(recording, scratch, SCAN_FPS, SCAN_GRID));
   } catch (error) {
     log.warn(`review: could not scan the recording — ${String(error.message).split('\n')[0]}`);
@@ -1108,6 +1140,7 @@ async function writeMissedMoments(dir, screens) {
       start = i;
     }
   }
+  reportPack(dir, `Checking ${stills.length} still moments against the kept screens`);
   const paths = await extractFramesAt(recording, scratch, SCAN_FPS, stills.map((i) => Math.max(1, i)));
   const kept = await Promise.all(screens.map(async (screen) => ({ screen, gray: await compareGray(screen.file).catch(() => null) })));
   // A kept screen's settled page counts as shown: its finding swaps the picture to it.

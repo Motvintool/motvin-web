@@ -39,7 +39,7 @@ const REVIEW_STEPS = [
 export function ClaudeReview({ appId, appName, platform, version }: { appId: string; appName?: string; platform: string; version: string }) {
   const { show } = useToast();
   const seenUnreviewed = useRef(false);
-  const [status, setStatus] = useState<{ reviewed: boolean; reviewing?: boolean; startedAt?: string | null; step?: number; fixes?: number; problems?: string[]; hasBackup?: boolean } | null>(null);
+  const [status, setStatus] = useState<{ reviewed: boolean; reviewing?: boolean; startedAt?: string | null; step?: number; detail?: string | null; fixes?: number; problems?: string[]; hasBackup?: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
   // Names the steps file, so any AI tool opens it from the message alone.
   const request = `Follow docs/review-motvin.md to review ${appId} ${platform} ${version}`;
@@ -49,7 +49,7 @@ export function ClaudeReview({ appId, appName, platform, version }: { appId: str
       try {
         const res = await fetch(`/api/crawler/review-status?${new URLSearchParams({ app: appId, platform, version })}`, { headers: await authHeaders(), cache: 'no-store' });
         if (!res.ok || !live) return;
-        const next = (await res.json()) as { reviewed: boolean; reviewing?: boolean; startedAt?: string | null; step?: number; fixes?: number; problems?: string[]; hasBackup?: boolean };
+        const next = (await res.json()) as { reviewed: boolean; reviewing?: boolean; startedAt?: string | null; step?: number; detail?: string | null; fixes?: number; problems?: string[]; hasBackup?: boolean };
         // The review just finished: say so, even if the admin is looking elsewhere.
         if (next.reviewed && seenUnreviewed.current) {
           seenUnreviewed.current = false;
@@ -119,6 +119,8 @@ export function ClaudeReview({ appId, appName, platform, version }: { appId: str
               <li key={label} className={state}>
                 {state === 'is-done' ? <CheckIcon size={13} /> : state === 'is-current' ? <span className="ins-review-card-spinner" aria-hidden /> : <span className="ins-review-progress-dot" aria-hidden />}
                 {label}
+                {/* What the package build is doing right now, while it builds. */}
+                {state === 'is-current' && at === 2 && status.detail && <span className="ins-review-progress-detail">{status.detail}</span>}
               </li>
             );
           })}

@@ -33,8 +33,8 @@ export async function GET(request: Request) {
   const reviewing = join(dirname(file), 'reviewing.json');
   if (existsSync(reviewing)) {
     try {
-      const started = JSON.parse(readFileSync(reviewing, 'utf-8')) as { startedAt?: string; step?: number };
-      return Response.json({ reviewed: false, reviewing: true, startedAt: started.startedAt ?? null, step: typeof started.step === 'number' ? started.step : 3, problems: [] }, { headers: { 'Cache-Control': 'no-store' } });
+      const started = JSON.parse(readFileSync(reviewing, 'utf-8')) as { startedAt?: string; step?: number; detail?: string };
+      return Response.json({ reviewed: false, reviewing: true, startedAt: started.startedAt ?? null, step: typeof started.step === 'number' ? started.step : 3, detail: typeof started.detail === 'string' ? started.detail : null, problems: [] }, { headers: { 'Cache-Control': 'no-store' } });
     } catch {
       // A half-written mark: carry on as if none.
     }
