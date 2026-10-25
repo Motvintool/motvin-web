@@ -539,6 +539,9 @@ export async function ingestFolder(options) {
             })),
           },
         );
+        // The review's frames are read while the admin chooses how to clean up: the screens kept
+        // so far (a screen the admin recovers later is read when the package is built).
+        startPrefetch({ recording, times: candidates.filter((candidate) => !candidate.dropped).map((candidate) => candidate.start), dataDir: options.dataDir });
         pausedForReview = true;
         return { pausedForReview: true, stagingDir: staging, screens: kept };
       }

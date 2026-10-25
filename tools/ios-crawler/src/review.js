@@ -451,6 +451,9 @@ export function startPrefetch({ recording, times, dataDir }) {
       if (Date.now() - statSync(path).mtimeMs > 2 * 86_400_000) rmSync(path, { recursive: true, force: true });
     }
     const cache = cacheOf(dataDir, recording);
+    // Already read, or being read — started at the upload's pause, so its resume does not read it again.
+    const state = readJson(join(cache, 'meta.json'), null);
+    if (state?.done || (Number.isInteger(state?.pid) && alive(state.pid))) return;
     mkdirSync(cache, { recursive: true });
     writeJson(join(cache, 'times.json'), times.filter((seconds) => typeof seconds === 'number'));
     const args = [fileURLToPath(new URL('../crawl.js', import.meta.url)), 'review-prefetch', '--recording', recording];
@@ -868,7 +871,7 @@ export async function applyReview(options) {
   if (!problems.length) {
     dropCache(dir);
     for (const entry of readdirSync(dir)) {
-      const working = /^recording\./.test(entry) || entry === 'frames' || entry === 'corrections-draft.json' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || entry === 'missed.json' || /^(flow-\d+\.png|flow-sheets\.json|findings\.json|confirmed\.json|checked\.json|audited\.json|preparing\.json)$/.test(entry) || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
+      const working = /^recording\./.test(entry) || entry === 'frames' || entry === 'corrections-draft.json' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || entry === 'missed.json' || /^(flow-\d+\.png|flow-sheets\.json|findings\.json|confirmed\.json|checked\.json|audited\.json|preparing\.json|work-parts\.json)$/.test(entry) || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
       const olderBackup = entry.startsWith('backup-') && join(dir, entry) !== backup;
       if (working || olderBackup) rmSync(join(dir, entry), { recursive: true, force: true });
     }
@@ -1490,6 +1493,9 @@ function flowSequences(dataDir, appId, platform, version) {
   return out;
 }
 
+/** How many agents a review's work is split between. */
+const WORK_PARTS = 4;
+
 /** One sheet per flow, its steps left to right in order — how a person checks a flow reads. */
 async function writeFlowSheets(dir, order, screens, pathOf) {
   const byId = new Map(screens.map((screen) => [screen.id, screen]));
@@ -1521,6 +1527,25 @@ async function writeFlowSheets(dir, order, screens, pathOf) {
     index.push({ k, id: flow.id, path: pathOf(flow), picture: `flow-${k}.png`, steps: steps.map((screen) => screen.n) });
   }
   writeJson(join(dir, 'flow-sheets.json'), index);
+  // The review's work in four even parts, for four agents at once: contact sheets for the first
+  // pass, flow sheets for the second — split by screen count, so each part takes about as long.
+  const split = (items, weight) => {
+    const parts = Array.from({ length: Math.min(WORK_PARTS, items.length) }, () => ({ items: [], load: 0 }));
+    for (const item of [...items].sort((a, b) => weight(b) - weight(a))) {
+      const part = parts.reduce((low, next) => (next.load < low.load ? next : low));
+      part.items.push(item);
+      part.load += weight(item);
+    }
+    return parts.map((part) => part.items);
+  };
+  const sheetCount = Math.ceil(screens.length / (SHEET_COLUMNS * SHEET_ROWS));
+  const sheetNumbers = Array.from({ length: sheetCount }, (_, i) => i + 1);
+  const sheetParts = [];
+  for (let at = 0, size = Math.ceil(sheetCount / WORK_PARTS); at < sheetCount; at += size) sheetParts.push(sheetNumbers.slice(at, at + size));
+  writeJson(join(dir, 'work-parts.json'), {
+    firstPass: sheetParts.map((sheets) => ({ sheets: sheets.map((n) => `sheet-${n}.png`) })),
+    secondCheck: split(index, (entry) => entry.steps.length).map((part) => ({ flows: part.map((entry) => entry.picture).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) })),
+  });
   return k;
 }
 
