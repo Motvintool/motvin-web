@@ -256,6 +256,8 @@ export type StartJobInput = {
   mode?: 'ingest' | 'research';
   /** Set when the run may pause for review — what `resumeJob` needs to finish it the same way. */
   resumeConfig?: ResumeConfig | null;
+  /** Started by a batch of uploads (Add new apps), not by the Motvin agent. */
+  source?: 'batch';
 };
 
 /** Ends a running job's process. The screens it published stay. */
@@ -334,6 +336,7 @@ export function startJob(input: StartJobInput): IngestJob {
     workDir: input.workDir,
     stagingDir: null,
     resumeConfig: input.resumeConfig ?? null,
+    ...(input.source ? { source: input.source } : {}),
   };
   store.jobs.set(id, job);
   trim();

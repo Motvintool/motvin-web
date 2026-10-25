@@ -410,6 +410,9 @@ export async function ingestFolder(options) {
 
     if (isVideo) {
       if (!existsSync(source)) throw new Error(`video not found: ${source}`);
+      // The review's scan of the whole recording starts now, beside this run; the frame strips
+      // follow once the screens are found (their moments are handed over below).
+      if (!options.dryRun) startPrefetch({ recording: source, times: null, dataDir: options.dataDir });
       const fps = options.fps ?? DEFAULT_FPS;
       log.heading(`Reading ${basename(source)}`);
       log.detail(`extracting frames at ${fps}/second…`);

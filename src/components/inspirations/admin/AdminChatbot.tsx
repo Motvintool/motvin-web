@@ -296,7 +296,9 @@ export function AdminChatbot() {
   /** The library as it stood when a recording was dropped — apps and their versions, for the questions that follow. */
   const libraryRef = useRef<AdminState | null>(null);
 
-  const visible = jobs.filter((job) => !job.dismissed).slice(0, 3);
+  // A batch's uploads are followed in its own queue (Admin → Add new apps), not as the agent's run.
+  const visible = jobs.filter((job) => !job.dismissed && job.source !== 'batch').slice(0, 3);
+  const batchRunning = jobs.filter((job) => job.source === 'batch' && isActive(job)).length;
   const running = visible.some(isActive);
   /** The one job the composer's stop control acts on, if any is going. */
   const liveJob = visible.find(isActive) ?? null;
@@ -1137,6 +1139,11 @@ export function AdminChatbot() {
           </div>
           <div className="ins-dock-held-actions" ref={setReviewSlot} />
         </div>
+      )}
+      {batchRunning > 0 && (
+        <p className="ins-dock-batch">
+          <span className="ins-spinner" aria-hidden /> Batch: {batchRunning} app{batchRunning === 1 ? '' : 's'} uploading — follow them in Admin → Add new apps. You can keep chatting.
+        </p>
       )}
       <form className="ins-dock-composer" onSubmit={(event) => void ask(event)}>
         <button type="button" className="ins-iconbtn ins-iconbtn--plain" onClick={() => fileRef.current?.click()} aria-label="Upload a video or an image" title="Upload a video or a logo image">

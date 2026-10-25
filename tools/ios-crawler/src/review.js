@@ -452,11 +452,12 @@ export function startPrefetch({ recording, times, dataDir }) {
       if (Date.now() - statSync(path).mtimeMs > 2 * 86_400_000) rmSync(path, { recursive: true, force: true });
     }
     const cache = cacheOf(dataDir, recording);
-    // Already read, or being read — started at the upload's pause, so its resume does not read it again.
+    mkdirSync(cache, { recursive: true });
+    // The screens' moments, once the upload knows them: a reader already running picks them up.
+    if (Array.isArray(times)) writeJson(join(cache, 'times.json'), times.filter((seconds) => typeof seconds === 'number'));
+    // Already read, or being read (started when the upload began): not started twice.
     const state = readJson(join(cache, 'meta.json'), null);
     if (state?.done || (Number.isInteger(state?.pid) && alive(state.pid))) return;
-    mkdirSync(cache, { recursive: true });
-    writeJson(join(cache, 'times.json'), times.filter((seconds) => typeof seconds === 'number'));
     const args = [fileURLToPath(new URL('../crawl.js', import.meta.url)), 'review-prefetch', '--recording', recording];
     if (dataDir) args.push('--data-dir', dataDir);
     spawn(process.execPath, args, { detached: true, stdio: 'ignore' }).unref();
@@ -465,21 +466,35 @@ export function startPrefetch({ recording, times, dataDir }) {
   }
 }
 
-/** The work startPrefetch starts: run as `crawl.js review-prefetch`. */
+/** How long the reader waits for the upload to say where its screens are. */
+const TIMES_WAIT_MS = 30 * 60_000;
+
+/**
+ * The work startPrefetch starts: run as `crawl.js review-prefetch`. Started the moment an
+ * upload begins, it scans the whole recording first (that needs nothing from the upload), then
+ * reads the frame strips as soon as the upload has found its screens and written their moments.
+ */
 export async function prefetchFrames({ recording, dataDir }) {
   const cache = cacheOf(dataDir, recording);
   mkdirSync(cache, { recursive: true });
   const meta = join(cache, 'meta.json');
   writeJson(meta, { pid: process.pid, startedAt: new Date().toISOString() });
-  // Its own copy: the upload's staging folder, where the recording sits now, is cleared when it ends.
+  // Its own copy: the upload moves the recording into a staging folder that is cleared when it ends.
   const local = join(cache, `recording${extname(recording).toLowerCase()}`);
   try {
     copyFileSync(recording, local);
-    await extractFramesAt(local, join(cache, 'strip'), STRIP_FPS, stripIndexes(readJson(join(cache, 'times.json'), [])));
-    const { thumbs } = await extractThumbs(local, join(cache, 'scan-raw'), SCAN_FPS, SCAN_GRID);
-    writeFileSync(join(cache, 'scan.bin'), Buffer.concat(thumbs));
-    rmSync(join(cache, 'scan-raw'), { recursive: true, force: true });
-    writeJson(meta, { done: true, scanFrames: thumbs.length, finishedAt: new Date().toISOString() });
+    let scanFrames = null;
+    if (!existsSync(join(cache, 'scan.bin'))) {
+      const { thumbs } = await extractThumbs(local, join(cache, 'scan-raw'), SCAN_FPS, SCAN_GRID);
+      writeFileSync(join(cache, 'scan.bin'), Buffer.concat(thumbs));
+      rmSync(join(cache, 'scan-raw'), { recursive: true, force: true });
+      scanFrames = thumbs.length;
+    }
+    const timesFile = join(cache, 'times.json');
+    for (const until = Date.now() + TIMES_WAIT_MS; !existsSync(timesFile) && Date.now() < until; ) await new Promise((done) => setTimeout(done, 2000));
+    const times = readJson(timesFile, []);
+    if (times.length) await extractFramesAt(local, join(cache, 'strip'), STRIP_FPS, stripIndexes(times));
+    writeJson(meta, { done: true, scanFrames, strips: times.length, finishedAt: new Date().toISOString() });
   } catch (error) {
     writeJson(meta, { failed: String(error.message).split('\n')[0] });
   } finally {
@@ -664,7 +679,10 @@ export async function checkCorrections(options) {
     if (!sheets.has(entry?.sheet)) problems.push(`sheets: no contact sheet ${entry?.sheet}`);
     else if (typeof entry.see !== 'string' || entry.see.trim().length < 12) problems.push(`sheets ${entry.sheet}: needs "see" — what is on it`);
   }
-  for (const entry of corrections.audit ?? []) if (!flowIds.has(entry?.flow)) problems.push(`audit: no flow ${entry?.flow}`);
+  for (const entry of corrections.audit ?? []) {
+    if (!flowIds.has(entry?.flow)) problems.push(`audit: no flow ${entry?.flow}`);
+    for (const id of Array.isArray(entry?.expect) ? entry.expect : []) screen(id, `audit ${entry.flow} expect`);
+  }
   if (corrections.app?.industry !== undefined && !INDUSTRIES.includes(corrections.app.industry)) problems.push(`app: unknown industry "${corrections.app.industry}"`);
   for (const id of corrections.app?.cardScreens ?? []) screen(id, 'app cardScreens');
   return problems;
@@ -686,7 +704,8 @@ export async function checkCorrections(options) {
  *     "confirm": [ { "key": finding key, "why": text } ]  (a finding looked at and kept as it is),
  *     "checked": [ { "id": screen id, "see": text } ]  (the verdict on a screen: what it shows, looked at),
  *     "sheets":  [ { "sheet": n, "see": text } ]  (the verdict on a whole contact sheet's screens),
- *     "audit":   [ { "flow": flow id, "ok": true } ]  (the second check approved the flow as it stands),
+ *     "audit":   [ { "flow": flow id, "ok": true, "expect"?: [screen id, …] } ]  (the second check approved the flow as it
+ *                stands — or, with "expect", as it will stand once this file's fix is applied: approved only if it comes out so),
  *     "skip":    [ { "at": seconds, "why": "typing"|"pressed"|"bars"|"same"|"picture", "same"?: screen id } ]
  *                (a missed moment not worth a screen — with a reason, checked: "same" must match that kept
  *                screen, "picture" needs a "frames" swap at that moment; a bare number is refused),
@@ -733,6 +752,15 @@ async function applyReviewUnlocked(options) {
   }
 
   const fileOfId = new Map(listImages(versionDir).map((rel) => [`${appId}-${platform}-${`${VERSIONS_DIR_NAME}/${version}/${rel}`.replace(/\.[^.]+$/, '').split('/').join('-')}`, join(versionDir, rel)]));
+  // Fix and approve in one go: the steps the second check expects a flow to have once its fix is
+  // applied, as the pictures stand now — compared with the flow after the apply, below.
+  const expected = new Map();
+  for (const entry of Array.isArray(corrections.audit) ? corrections.audit : []) {
+    if (entry?.ok !== true || !Array.isArray(entry.expect)) continue;
+    const hashes = entry.expect.map((id) => (fileOfId.has(id) ? pictureHash(fileOfId.get(id)) : null));
+    if (hashes.every(Boolean)) expected.set(entry.flow, hashes);
+    else skipsRefused.push(`"audit" for ${entry.flow}: "expect" names a screen that is not in this version`);
+  }
   let fixes = 0;
   for (const fix of Array.isArray(corrections.screens) ? corrections.screens : []) {
     const image = fileOfId.get(fix.id);
@@ -1001,9 +1029,19 @@ async function applyReviewUnlocked(options) {
   for (const entry of Array.isArray(corrections.audit) ? corrections.audit : []) {
     if (entry?.ok !== true) continue;
     const now = sequencesAfter.get(entry.flow);
-    if (!now) skipsRefused.push(`"audit" names no flow of this version: ${String(entry.flow).slice(0, 80)}`);
-    else if (sequencesBefore.get(entry.flow)?.sequence !== now.sequence) skipsRefused.push(`flow "${now.flow.name}" changed in this apply — look at its new flow sheet and approve it again`);
-    else audited.add(`${entry.flow}:${now.sequence}`);
+    if (!now) {
+      skipsRefused.push(`"audit" names no flow of this version: ${String(entry.flow).slice(0, 80)}`);
+      continue;
+    }
+    if (sequencesBefore.get(entry.flow)?.sequence === now.sequence) {
+      audited.add(`${entry.flow}:${now.sequence}`);
+      continue;
+    }
+    // Changed by this apply: approved only when it came out exactly as the check said it would.
+    const wanted = expected.get(entry.flow);
+    const outcome = wanted ? createHash('sha1').update(`${now.flow.name}|${wanted.join(',')}`).digest('hex').slice(0, 16) : null;
+    if (outcome === now.sequence) audited.add(`${entry.flow}:${now.sequence}`);
+    else skipsRefused.push(`flow "${now.flow.name}" changed in this apply${wanted ? ' and did not come out as expected' : ''} — look at its new flow sheet and approve it again`);
   }
   writeJson(join(dir, 'audited.json'), [...audited]);
   // A refused skip says why, above the moment the check lists as still open.

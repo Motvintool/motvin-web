@@ -18246,3 +18246,6 @@ html:has(aside.ins-dock:not(.ins-dock-user)) {
   .ins-batch-item { grid-template-columns: 1fr; }
   .ins-batch-item-actions { grid-column: 1; grid-row: auto; justify-content: flex-start; }
 }
+
+/* A batch's uploads, noted in the Motvin agent without taking over its composer. */
+.ins-dock-batch { display: flex; align-items: center; gap: 8px; margin: 0 16px 8px; font-size: 12px; color: var(--ins-sub); }

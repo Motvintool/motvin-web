@@ -148,6 +148,8 @@ export type IngestJob = {
   identifiedApp?: { name: string; tagline: string | null };
   error: string | null;
   dismissed: boolean;
+  /** Started by a batch of uploads (Add new apps): shown in its queue, not as the agent's own run. */
+  source?: 'batch';
 };
 
 /**

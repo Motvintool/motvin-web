@@ -372,6 +372,7 @@ function startNextUpload(batch: Batch): boolean {
     startedBy: batch.createdBy,
     workDir: null,
     args,
+    source: 'batch',
     resumeConfig: { appId: item.appId, detectIndustry: item.detectIndustry, authorizedBy: batch.createdBy, platform: settings.platform, version: settings.version, keepLoading: true, dryRun: false, full: false },
   });
   item.jobId = job.id;
@@ -473,7 +474,7 @@ function startNextReview(batch: Batch): boolean {
     `Follow docs/review-motvin.md to review ${item.appId} ${platform} ${item.version}.`,
     'You are running unattended, started by the Motvin batch queue: nobody will answer questions, so make every decision the steps describe yourself.',
     // Unattended, the run ends when this reply ends — agents still working would be lost.
-    'Start agents in the foreground and wait until every one of them has returned before going on; never end your reply while any agent is still working.',
+    'Start all four agents of a pass together, in one single message (four agent calls at once, never two and then two), and wait until every one of them has returned before going on; never end your reply while any agent is still working.',
     'Finish only when apply-review says "review check: no problems left".',
   ].join(' ');
   const tools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Agent', 'Task', 'Bash(cd:*)', 'Bash(node:*)', 'Bash(npm run build:inspirations)', 'Bash(npm run --silent build:inspirations)', 'Bash(cp:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'Bash(mkdir:*)', 'Bash(python3:*)', 'Bash(echo:*)', 'Bash(grep:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(sort:*)', 'Bash(uniq:*)', 'Bash(find:*)', 'Bash(sed:*)', 'Bash(awk:*)', 'Bash(date:*)', 'Bash(pwd)', 'Bash(jq:*)'];
