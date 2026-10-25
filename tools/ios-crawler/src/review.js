@@ -20,7 +20,7 @@
 
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { closeSync, copyFileSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, copyFileSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
@@ -267,6 +267,9 @@ export async function writeReviewPack(options) {
     }
   }
   for (const screen of screens) screen.hash = pictureHash(screen.file);
+  // A light package keeps the strips, but an apply renumbers the screens: each strip follows
+  // its picture to the new number, and a strip whose picture is gone (removed or retaken) goes.
+  if (options.light) renumberStrips(dir, screens);
   const keptGrays = new Map();
   for (const screen of screens) {
     const gray = await compareGray(screen.file).catch(() => null);
@@ -376,6 +379,7 @@ export async function writeReviewPack(options) {
   }
   reportPack(dir, 'Drawing contact and flow sheets');
   const flowSheets = await writeFlowSheets(dir, order, screens, pathOf);
+  writeDraft(dir, screens, findings);
   log.ok(`review package: ${screens.length} screen(s), ${sheets} sheet(s), ${flowSheets} flow sheet(s), ${doubts.length} doubt(s) in ${dir}`);
   return { dir, screens: screens.length, sheets, doubts: doubts.length };
 }
@@ -550,6 +554,8 @@ export async function applyReview(options) {
   const platform = options.platform || 'ios';
   const corrections = readJson(options.file, null);
   if (!corrections) throw new Error(`${options.file} could not be read`);
+  // The draft as written is suggestions no one has looked at yet: it is gone through first.
+  if (corrections._how) throw new Error('this is the review draft as written — keep, edit or delete each entry after looking at its picture, remove "_how", then apply');
   const appDir = join(dataDir, 'screens', platform, appId);
   const versionDir = join(appDir, VERSIONS_DIR_NAME, version);
   const dir = reviewDir(dataDir, appId, platform, version);
@@ -862,7 +868,7 @@ export async function applyReview(options) {
   if (!problems.length) {
     dropCache(dir);
     for (const entry of readdirSync(dir)) {
-      const working = /^recording\./.test(entry) || entry === 'frames' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || entry === 'missed.json' || /^(flow-\d+\.png|flow-sheets\.json|findings\.json|confirmed\.json|checked\.json|audited\.json|preparing\.json)$/.test(entry) || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
+      const working = /^recording\./.test(entry) || entry === 'frames' || entry === 'corrections-draft.json' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || entry === 'missed.json' || /^(flow-\d+\.png|flow-sheets\.json|findings\.json|confirmed\.json|checked\.json|audited\.json|preparing\.json)$/.test(entry) || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
       const olderBackup = entry.startsWith('backup-') && join(dir, entry) !== backup;
       if (working || olderBackup) rmSync(join(dir, entry), { recursive: true, force: true });
     }
@@ -1020,8 +1026,12 @@ function reviewLayerProblems({ dataDir, appId, platform, version, appDir, screen
   const files = listImages(join(appDir, VERSIONS_DIR_NAME, version));
   for (const rel of files) hashOf.set(`${tag}${rel.replace(/\.[^.]+$/, '').split('/').join('-')}`, pictureHash(join(appDir, VERSIONS_DIR_NAME, version, rel)));
   const present = new Set(hashOf.values());
+  // A duplicate of one picture with itself stays open only while two copies are kept.
+  const copies = new Map();
+  for (const hash of hashOf.values()) copies.set(hash, (copies.get(hash) ?? 0) + 1);
+  const bothKept = (hashes) => (hashes[0] === hashes[1] ? (copies.get(hashes[0]) ?? 0) >= 2 : hashes.every((h) => present.has(h)));
   for (const entry of findings.picture ?? []) if (present.has(entry.key.split(':')[1]) && !confirmed.has(entry.key)) problems.push(`${entry.message} — or confirm it ("confirm": [{ "key": "${entry.key}", "why" }])`);
-  for (const entry of findings.duplicate ?? []) if (entry.hashes.every((h) => present.has(h)) && !confirmed.has(entry.key)) problems.push(`${entry.message} ("confirm": [{ "key": "${entry.key}", "why" }])`);
+  for (const entry of findings.duplicate ?? []) if (bothKept(entry.hashes) && !confirmed.has(entry.key)) problems.push(`${entry.message} ("confirm": [{ "key": "${entry.key}", "why" }])`);
   for (const entry of findings.blank ?? []) if (present.has(entry.hash) && !confirmed.has(entry.key)) problems.push(`${entry.message} ("confirm": [{ "key": "${entry.key}", "why" }])`);
   // Steps out of the recording's order: a flow read wrong, or a picture whose time is stale.
   const timeOf = new Map(screens.map(({ id, sidecar }) => [id, sidecar.capture?.atSeconds]));
@@ -1402,6 +1412,56 @@ async function skipRefused(skip, { dir, moments, fileOfId, frames }) {
     if (change > SAME_PAGE) return `it is not the same page as ${skip.same} (${(change * 100).toFixed(1)}% differs — a new state, like an empty field or an error line)`;
   }
   return null;
+}
+
+/**
+ * A starting point for the review's corrections: every finding's fix written out, every
+ * missed moment as an "add" after the screen it follows, every contact sheet waiting for its
+ * verdict. Each entry is only a suggestion — the review keeps, edits or deletes it, and
+ * nothing in it is applied until the review applies its own file.
+ */
+function writeDraft(dir, screens, findings) {
+  const byId = new Map(screens.map((screen) => [screen.id, screen]));
+  const missed = readJson(join(dir, 'missed.json'), []);
+  const draft = {
+    _how: 'Suggestions only: keep, edit or delete each entry after looking at its picture, then save the rest as corrections.json. Delete every "_why" and "_see" before applying.',
+    frames: (findings.picture ?? []).filter((entry) => typeof entry.better === 'number').map((entry) => ({ id: entry.id, at: entry.better, _why: entry.message })),
+    add: missed.map((moment) => {
+      const after = byId.get(moment.after);
+      return { after: moment.after, at: moment.at, name: after?.name ?? '', type: after?.type ?? 'other', _see: moment.picture, _why: 'a still moment no kept screen shows — add it (name it for what it shows), or move it to "skip" with a reason' };
+    }),
+    skip: [],
+    sheets: [...new Set(screens.map((screen) => screen.sheet))].map((sheet) => ({ sheet, see: '' })),
+  };
+  writeJson(join(dir, 'corrections-draft.json'), draft);
+}
+
+/**
+ * After an apply the screens are numbered anew, but a light package keeps the old strips
+ * (frames/<n>.png): each strip is renamed to the number its picture has now, and a strip
+ * whose picture is gone — removed, or retaken from the recording — is dropped as stale.
+ */
+function renumberStrips(dir, screens) {
+  const framesDir = join(dir, 'frames');
+  const previous = readJson(join(dir, 'screens.json'), { screens: [] }).screens ?? [];
+  if (!existsSync(framesDir) || !previous.length) return;
+  const nowOf = new Map(screens.map((screen) => [screen.hash, screen.n]));
+  const strips = readdirSync(framesDir).filter((entry) => /^\d+\.png$/.test(entry));
+  const hashOf = new Map(previous.map((screen) => [screen.n, screen.hash]));
+  // Two steps, so a strip never lands on one not yet moved.
+  const moving = [];
+  for (const entry of strips) {
+    const now = nowOf.get(hashOf.get(Number(entry.slice(0, -4))));
+    const from = join(framesDir, entry);
+    if (!now) {
+      rmSync(from, { force: true });
+      continue;
+    }
+    const temp = join(framesDir, `renumber-${entry}`);
+    renameSync(from, temp);
+    moving.push([temp, join(framesDir, `${now}.png`)]);
+  }
+  for (const [temp, to] of moving) renameSync(temp, to);
 }
 
 /** A picture's identity: its bytes. A swapped picture is a new one; a moved file is the same. */
