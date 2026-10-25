@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     platform: raw.platform === 'web' || raw.platform === 'webapp' ? raw.platform : 'ios',
     version: typeof raw.version === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.version) ? raw.version : null,
     notify: raw.notify === 'summary' || raw.notify === 'off' ? raw.notify : 'each',
-    reviewsAtOnce: raw.reviewsAtOnce === 1 || raw.reviewsAtOnce === 3 ? raw.reviewsAtOnce : 2,
+    appsAtOnce: raw.appsAtOnce === 1 || raw.appsAtOnce === 2 || raw.appsAtOnce === 4 ? raw.appsAtOnce : 3,
   };
   const records = recordsDir();
   const uploads = batchFilesDir();

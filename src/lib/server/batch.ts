@@ -32,7 +32,9 @@ export type BatchSettings = {
   version: string | null;
   /** A system notification for each app and the summary, the summary only, or none. */
   notify: 'each' | 'summary' | 'off';
-  /** How many reviews run side by side (uploads stay one at a time). */
+  /** How many apps go through their whole process (upload to final check) side by side, each on its own. */
+  appsAtOnce?: 1 | 2 | 3 | 4;
+  /** Older batches: reviews side by side, uploads one at a time. */
   reviewsAtOnce?: 1 | 2 | 3;
 };
 
@@ -292,7 +294,7 @@ async function tick() {
       for (const item of batch.items) changed = followUpload(batch, item) || changed;
       for (const item of batch.items) changed = followReview(batch, item) || changed;
       if (batch.state === 'running') {
-        changed = startNextUpload(batch) || changed;
+        for (let started = 0; started < 4 && startNextUpload(batch); started++) changed = true;
         // Up to the setting's number of reviews side by side.
         for (let started = 0; started < 3 && startNextReview(batch); started++) changed = true;
       }
@@ -320,9 +322,18 @@ function summaryLine(batch: Batch): string {
 }
 
 /** One upload at a time — and never while the admin's own upload is running. */
+/** Apps under way, from their upload to the end of their review. */
+const ACTIVE: BatchStage[] = ['uploading', 'choose', 'review-queued', 'reviewing'];
+const appsAtOnce = (batch: Batch) => batch.settings.appsAtOnce ?? 1;
+
 function startNextUpload(batch: Batch): boolean {
-  if (batch.items.some((item) => item.stage === 'uploading' || item.stage === 'choose')) return false;
-  if (activeJob()) return false;
+  // Each app runs on its own, up to the limit; an older batch keeps one upload at a time.
+  if (batch.settings.appsAtOnce === undefined && batch.items.some((item) => item.stage === 'uploading' || item.stage === 'choose')) return false;
+  if (batch.items.filter((item) => ACTIVE.includes(item.stage)).length >= appsAtOnce(batch)) return false;
+  // The admin's own upload in the Motvin agent goes first.
+  const busy = activeJob();
+  const ours = new Set(runner.batches.flatMap((entry) => entry.items.map((item) => item.jobId)).filter(Boolean));
+  if (busy && !ours.has(busy.id)) return false;
   const item = batch.items.find((entry) => entry.stage === 'queued' && !later(entry));
   if (!item) return false;
   if (!existsSync(item.video)) {
@@ -437,7 +448,8 @@ function followUpload(batch: Batch, item: BatchItem): boolean {
 /** One review at a time, while the next upload runs. */
 function startNextReview(batch: Batch): boolean {
   const running = batch.items.filter((item) => item.stage === 'reviewing').length;
-  if (running >= (batch.settings.reviewsAtOnce ?? 1)) return false;
+  // An app's review starts as soon as its upload is in; the apps limit already bounds how many run.
+  if (running >= (batch.settings.appsAtOnce ?? batch.settings.reviewsAtOnce ?? 1)) return false;
   const item = batch.items.find((entry) => entry.stage === 'review-queued' && !later(entry));
   if (!item || !item.appId || !item.version) return false;
   // Each review keeps frames and sheets on disk while it runs: room for one more first.
@@ -460,6 +472,8 @@ function startNextReview(batch: Batch): boolean {
   const prompt = [
     `Follow docs/review-motvin.md to review ${item.appId} ${platform} ${item.version}.`,
     'You are running unattended, started by the Motvin batch queue: nobody will answer questions, so make every decision the steps describe yourself.',
+    // Unattended, the run ends when this reply ends — agents still working would be lost.
+    'Start agents in the foreground and wait until every one of them has returned before going on; never end your reply while any agent is still working.',
     'Finish only when apply-review says "review check: no problems left".',
   ].join(' ');
   const tools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Agent', 'Task', 'Bash(cd:*)', 'Bash(node:*)', 'Bash(npm run build:inspirations)', 'Bash(npm run --silent build:inspirations)', 'Bash(cp:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'Bash(mkdir:*)', 'Bash(python3:*)', 'Bash(echo:*)', 'Bash(grep:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(sort:*)', 'Bash(uniq:*)', 'Bash(find:*)', 'Bash(sed:*)', 'Bash(awk:*)', 'Bash(date:*)', 'Bash(pwd)', 'Bash(jq:*)'];
