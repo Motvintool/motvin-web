@@ -1,5 +1,5 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { activeJob, getJob, resumeJob, startJob } from '@/lib/server/ingestJobs';
@@ -102,7 +102,10 @@ const pluginRoot = () => resolve(process.cwd(), '..');
 /** Recordings and logos the admin keeps on this machine. */
 export const recordsDir = () => (process.env.MOTVIN_RECORDS_DIR ? resolve(process.env.MOTVIN_RECORDS_DIR) : resolve(process.cwd(), '..', '..', 'records'));
 
-type Runner = { batches: Batch[]; loaded: boolean; timer: ReturnType<typeof setInterval> | null; reviews: Map<string, { child: ChildProcess; output: string; startedAt: number }>; awake: ChildProcess | null; ticking: boolean };
+/** This copy of the module, so a timer started by an older copy is replaced (see startBatchRunner). */
+const MODULE = Math.random().toString(36).slice(2);
+
+type Runner = { module?: string; batches: Batch[]; loaded: boolean; timer: ReturnType<typeof setInterval> | null; reviews: Map<string, { child: ChildProcess; output: string; startedAt: number }>; awake: ChildProcess | null; ticking: boolean };
 const runner: Runner = ((globalThis as unknown as { __motvinBatches?: Runner }).__motvinBatches ??= { batches: [], loaded: false, timer: null, reviews: new Map(), awake: null, ticking: false });
 
 function save() {
@@ -140,8 +143,11 @@ function load() {
 /** Starts working through the queue; called at server start and whenever the batch API is used. */
 export function startBatchRunner() {
   load();
-  if (runner.timer) return;
-  runner.timer = setInterval(() => void tick(), 5000);
+  // One timer, always running this module's code: after an update the next call swaps it in.
+  if (runner.timer && runner.module === MODULE) return;
+  if (runner.timer) clearInterval(runner.timer);
+  runner.module = MODULE;
+  runner.timer = setInterval(() => void tick().catch((error: Error) => logLine(`tick failed: ${error.message}`)), 5000);
   void tick();
 }
 
@@ -437,7 +443,16 @@ function followReview(batch: Batch, item: BatchItem): boolean {
   const key = `${batch.id}/${item.id}`;
   const entry = runner.reviews.get(key);
   const { platform } = batch.settings;
-  if (entry && entry.child.exitCode === null && entry.child.signalCode === null) {
+  // Done when the review says so — the final check clean — whatever the process is doing.
+  const now = reviewState(item.appId, platform, item.version);
+  const running = entry && entry.child.exitCode === null && entry.child.signalCode === null && alive(entry.child.pid);
+  if (now.reviewed && !now.reviewing && !now.problems.length) {
+    if (running) entry.child.kill('SIGTERM');
+    runner.reviews.delete(key);
+    logLine(`${item.title}: review finished clean`);
+    return finishReview(batch, item);
+  }
+  if (running) {
     // Still going: stuck when it has written nothing for a long while, or has run far too long.
     const quiet = Date.now() - newestWrite(reviewFolder(item.appId, platform, item.version), entry.startedAt);
     if (quiet > STUCK_MS || Date.now() - entry.startedAt > MAX_REVIEW_MS) {
@@ -448,6 +463,7 @@ function followReview(batch: Batch, item: BatchItem): boolean {
   }
   runner.reviews.delete(key);
   const state = reviewState(item.appId, platform, item.version);
+  logLine(`${item.title}: review ended — ${state.reviewed ? `${state.problems.length} problem(s) left` : 'not reviewed'}; output: ${(entry?.output ?? '').slice(-400).replace(/\s+/g, ' ')}`);
   if (state.reviewed && !state.problems.length && !state.reviewing) return finishReview(batch, item);
   const output = entry?.output ?? '';
   // Out of AI usage: wait and go again, without counting it as a try.
@@ -530,6 +546,26 @@ function keepAwake(on: boolean) {
   if (!on && runner.awake) {
     runner.awake.kill();
     runner.awake = null;
+  }
+}
+
+function alive(pid: number | undefined): boolean {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A line in batches/batch.log, to see afterwards what the queue did. */
+function logLine(text: string) {
+  try {
+    mkdirSync(batchesDir(), { recursive: true });
+    appendFileSync(join(batchesDir(), 'batch.log'), `${new Date().toISOString()} ${text}\n`);
+  } catch {
+    // The log is a nicety.
   }
 }
 
