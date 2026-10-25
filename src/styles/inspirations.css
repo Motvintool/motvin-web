@@ -8057,7 +8057,9 @@ select.ins-input {
 .ins-review-progress { margin: 4px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--ins-sub); }
 .ins-review-progress li { display: flex; align-items: center; gap: 8px; }
 .ins-review-progress li.is-done { color: var(--ins-text, inherit); }
-.ins-review-progress-detail { margin-left: auto; padding-left: 8px; font-size: 12px; color: var(--ins-sub); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ins-review-card-preparing { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.ins-review-progress li:has(.ins-review-progress-detail) { flex-wrap: wrap; row-gap: 2px; }
+.ins-review-progress-detail { flex-basis: 100%; padding-left: 21px; font-size: 12px; color: var(--ins-sub); font-variant-numeric: tabular-nums; }
 .ins-review-progress li.is-done svg { color: #16a34a; }
 .ins-review-progress li.is-current { color: var(--ins-text, inherit); font-weight: 600; }
 .ins-review-progress-dot { width: 13px; height: 13px; border-radius: 50%; border: 1.5px dashed currentColor; display: inline-block; }

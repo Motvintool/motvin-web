@@ -58,7 +58,14 @@ export async function GET(request: Request) {
     } catch {
       // No package yet.
     }
-    return Response.json({ reviewed: false, problems }, { headers: { 'Cache-Control': 'no-store' } });
+    // The package still being prepared in the background after the upload, and what it is doing.
+    let preparing: { detail?: string } | null = null;
+    try {
+      preparing = JSON.parse(readFileSync(join(dirname(file), 'preparing.json'), 'utf-8')) as { detail?: string };
+    } catch {
+      // Ready, or never started.
+    }
+    return Response.json({ reviewed: false, problems, preparing: Boolean(preparing), detail: preparing?.detail ?? null }, { headers: { 'Cache-Control': 'no-store' } });
   }
   try {
     const status = JSON.parse(readFileSync(file, 'utf-8')) as { reviewedAt?: string; fixes?: number; rulesAdded?: number; problems?: string[] };

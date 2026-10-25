@@ -11,7 +11,7 @@
  * src/safety.js.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { configureLog, log, bold, dim } from './src/log.js';
@@ -24,7 +24,7 @@ import { assertAuthorized } from './src/safety.js';
 import { localDateString, publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
 import { classifyStored, describeStored, ingestFolder, researchStored, resumeIngest } from './src/ingest.js';
 import { syncFolders } from './src/folders.js';
-import { applyReview, reviewDir, undoReview, writeReviewPack } from './src/review.js';
+import { applyReview, packIsFresh, prepareReview, reviewDir, undoReview } from './src/review.js';
 import { extractJson, pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
 import { AI_PROVIDERS, aiChat, aiChatStream, aiConfig, aiStatus, canStream, readAiSettings, writeAiSettings } from './src/ai.js';
 
@@ -55,7 +55,10 @@ ${bold('Commands')}
   review-progress --app-id <id> --version <date> --step <1-8>
                             tell the Motvin agent which review step is under way
   review-pack --app-id <id> --version <date>
-                            write Claude's review package: contact sheets, screen list, doubts
+                            start a review: reuse the prepared package, or build it
+  review-prepare --app-id <id> --version <date>
+                            build the full package ahead of the review
+                            (run in the background after an upload)
   apply-review --app-id <id> --version <date> --file <corrections.json>
                             apply a review's corrections (backed up), keep its rules
   undo-review --app-id <id> --version <date>
@@ -739,9 +742,24 @@ async function runReview(command, flags) {
     mkdirSync(reviewFolder, { recursive: true });
     const startedAt = new Date().toISOString();
     writeFileSync(join(reviewFolder, 'reviewing.json'), `${JSON.stringify({ startedAt, step: 2 })}\n`);
-    const pack = await writeReviewPack(options);
-    writeFileSync(join(pack.dir, 'reviewing.json'), `${JSON.stringify({ startedAt, step: 3 })}\n`);
-    process.stdout.write(`${pack.dir}\n`);
+    // Prepared in the background after the upload: wait for it to finish rather than build twice.
+    const preparing = join(reviewFolder, 'preparing.json');
+    while (existsSync(preparing) && processAlive(JSON.parse(readFileSync(preparing, 'utf-8')).pid)) await new Promise((done) => setTimeout(done, 3000));
+    rmSync(preparing, { force: true });
+    if (packIsFresh(options)) log.ok('review package: the prepared one is up to date — reused');
+    else await prepareReview(options);
+    writeFileSync(join(reviewFolder, 'reviewing.json'), `${JSON.stringify({ startedAt, step: 3 })}\n`);
+    process.stdout.write(`${reviewFolder}\n`);
+  } else if (command === 'review-prepare') {
+    const reviewFolder = reviewDir(flags.dataDir, flags.appId, flags.platform || 'ios', flags.version);
+    mkdirSync(reviewFolder, { recursive: true });
+    const preparing = join(reviewFolder, 'preparing.json');
+    writeFileSync(preparing, `${JSON.stringify({ startedAt: new Date().toISOString(), pid: process.pid })}\n`);
+    try {
+      await prepareReview(options);
+    } finally {
+      rmSync(preparing, { force: true });
+    }
   } else if (command === 'review-progress') {
     // The review reached a step: the Motvin agent's card ticks off the ones before it.
     const step = Number(flags.step);
@@ -829,6 +847,17 @@ function summarise(crawler, graph) {
   }
 }
 
+/** True when a process with this id is still running. */
+function processAlive(pid) {
+  if (!Number.isInteger(pid)) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const flags = parseArgs(argv);
@@ -857,6 +886,7 @@ async function main() {
       case 'sync-folders':
         return await runSyncFolders(flags);
       case 'review-pack':
+      case 'review-prepare':
       case 'review-progress':
       case 'apply-review':
       case 'undo-review':

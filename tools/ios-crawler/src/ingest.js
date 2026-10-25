@@ -24,9 +24,11 @@
  * sheet.
  */
 
+import { spawn } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { run } from './exec.js';
 import { log, dim } from './log.js';
 import { extractFramesAt, extractThumbs } from './frames.js';
@@ -881,6 +883,15 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
       // Ready for Claude's review: contact sheets, the screen list, the doubts.
       // Light: the screens and the check now; the frame strips and the scan wait for the review to start.
       await writeReviewPack({ appId: resolvedApp.appId, platform: options.platform || 'ios', version: result.version, dataDir: options.dataDir, light: true }).catch((error) => log.warn(`could not write the review package — ${error.message.split('\n')[0]}`));
+      // The full package (frame strips, the scan, the findings) is built in the
+      // background now, so it is ready by the time the review starts instead of being waited for.
+      try {
+        const args = [fileURLToPath(new URL('../crawl.js', import.meta.url)), 'review-prepare', '--app-id', resolvedApp.appId, '--platform', options.platform || 'ios', '--version', result.version];
+        if (options.dataDir) args.push('--data-dir', options.dataDir);
+        spawn(process.execPath, args, { detached: true, stdio: 'ignore' }).unref();
+      } catch (error) {
+        log.warn(`could not start preparing the review — ${String(error.message).split('\n')[0]}`);
+      }
     }
     return {
       ...result,
