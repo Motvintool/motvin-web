@@ -30,6 +30,7 @@ import { rebuildManifest, resolveDataDir, VERSIONS_DIR_NAME } from './publish.js
 import { extractFramesAt, extractThumbs } from './frames.js';
 import { fingerprintFromThumb, thumbToGray } from './hash.js';
 import { ELEMENTS, INDUSTRIES, PUBLISHED_FLOW_CATEGORIES, PUBLISHED_TYPES, STYLES, typeFromName } from './taxonomy.js';
+import { withLibraryLock } from './lock.js';
 
 const IMAGES = new Set(['.webp', '.png', '.jpg', '.jpeg']);
 const SHEET_COLUMNS = 6;
@@ -525,6 +526,150 @@ function dropCache(dir) {
   }
 }
 
+// ─── Combining and checking corrections ─────────────────────────────────────
+
+/**
+ * One corrections file from the parts several agents returned: entries for the
+ * same screen, flow, moment or key are joined (a later part's field wins);
+ * notes (keys starting "_") are dropped. Returns the file and the screen names
+ * used, so the reviewer can give one page one name before applying.
+ */
+export function mergeCorrections(parts) {
+  const out = {};
+  const byKey = (list, key) => {
+    const map = new Map();
+    for (const entry of list) {
+      // A bare value (a skip written as a number) is kept as it is, for the check to point out.
+      if (!entry || typeof entry !== 'object') {
+        map.set(`raw:${String(entry)}`, entry);
+        continue;
+      }
+      const id = typeof key === 'function' ? key(entry) : entry[key];
+      map.set(id, { ...(map.get(id) ?? {}), ...entry });
+    }
+    return [...map.values()];
+  };
+  const clean = (value) => {
+    if (Array.isArray(value)) return value.map(clean);
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).filter(([key]) => !key.startsWith('_')).map(([key, inner]) => [key, clean(inner)]));
+    return value;
+  };
+  const all = (field) => parts.flatMap((part) => (Array.isArray(part?.[field]) ? part[field] : []));
+  const keyed = { screens: 'id', flows: 'id', frames: 'id', add: (entry) => `${entry.after}@${entry.at}`, skip: (entry) => (typeof entry === 'object' ? entry.at : entry), confirm: 'key', checked: 'id', sheets: 'sheet', audit: 'flow' };
+  for (const [field, key] of Object.entries(keyed)) {
+    const list = all(field);
+    if (list.length) out[field] = byKey(list, key);
+  }
+  for (const field of ['moves', 'merges']) {
+    const seen = new Set();
+    const list = all(field).filter((entry) => {
+      const id = JSON.stringify(entry);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    if (list.length) out[field] = list;
+  }
+  const remove = [...new Set(all('remove'))];
+  if (remove.length) out.remove = remove;
+  const app = Object.assign({}, ...parts.map((part) => (part?.app && typeof part.app === 'object' ? part.app : {})));
+  if (Object.keys(app).length) out.app = app;
+  const rules = {};
+  for (const part of parts) for (const [kind, list] of Object.entries(part?.rules ?? {})) if (Array.isArray(list)) rules[kind] = [...(rules[kind] ?? []), ...list];
+  if (Object.keys(rules).length) out.rules = rules;
+  // A screen removed is not also fixed, swapped or verdicted.
+  if (out.remove) for (const field of ['screens', 'frames', 'checked']) if (out[field]) out[field] = out[field].filter((entry) => !out.remove.includes(entry.id));
+  const names = {};
+  for (const fix of out.screens ?? []) if (fix.name) names[fix.name] = (names[fix.name] ?? 0) + 1;
+  return { corrections: clean(out), names };
+}
+
+/**
+ * Everything apply-review would refuse or the final check would hold, found
+ * before applying — nothing is changed. An empty list means the file can be
+ * applied in one go.
+ */
+export async function checkCorrections(options) {
+  const dataDir = resolveDataDir(options.dataDir);
+  const { appId, version } = options;
+  const platform = options.platform || 'ios';
+  const corrections = readJson(options.file, null);
+  if (!corrections) return [`${options.file} could not be read`];
+  const problems = [];
+  if (corrections._how) problems.push('this is the review draft as written — go through each entry, then remove "_how"');
+  const known = new Set(['screens', 'flows', 'moves', 'merges', 'remove', 'frames', 'add', 'skip', 'confirm', 'checked', 'sheets', 'audit', 'app', 'rules']);
+  for (const key of Object.keys(corrections)) if (!known.has(key) && !key.startsWith('_')) problems.push(`unknown field "${key}"`);
+  const versionDir = join(dataDir, 'screens', platform, appId, VERSIONS_DIR_NAME, version);
+  const dir = reviewDir(dataDir, appId, platform, version);
+  const tag = `${appId}-${platform}-${VERSIONS_DIR_NAME}-${version}-`;
+  const fileOfId = new Map(listImages(versionDir).map((rel) => [`${tag}${rel.replace(/\.[^.]+$/, '').split('/').join('-')}`, join(versionDir, rel)]));
+  const flowsDoc = readJson(join(dataDir, 'flows.json'), { flows: [] });
+  const flowIds = new Set((flowsDoc.flows || []).map((flow) => flow.id));
+  const newFlows = new Set((corrections.flows ?? []).filter((flow) => !flowIds.has(flow.id)).map((flow) => flow.id));
+  const flowExists = (id) => flowIds.has(id) || newFlows.has(id);
+  const tags = new Set((readJson(join(dataDir, 'tags.json'), { tags: [] }).tags || []).map((entry) => (typeof entry === 'string' ? entry : entry?.slug)));
+  const screen = (id, where) => {
+    if (!fileOfId.has(id)) problems.push(`${where}: no screen ${id} in this version (ids change after every apply — read screens.json again)`);
+  };
+  for (const fix of corrections.screens ?? []) {
+    screen(fix.id, 'screens');
+    const name = String(fix.name ?? '');
+    if (fix.name !== undefined && (!name.trim() || /\(\d+\)$|\s\d+$/.test(name) || /[·|]| - |\bscreen$/i.test(name))) problems.push(`screens: "${name}" is not a plain name`);
+    if (fix.type !== undefined && (!PUBLISHED_TYPES.includes(fix.type) || fix.type === 'other')) problems.push(`screens: unknown type "${fix.type}" for ${fix.id}`);
+    for (const t of fix.extraTypes ?? []) if (!PUBLISHED_TYPES.includes(t) || t === 'other' || t === fix.type) problems.push(`screens: bad extra type "${t}" for ${fix.id}`);
+    for (const e of fix.elements ?? []) if (!ELEMENTS.includes(e)) problems.push(`screens: unknown element "${e}" for ${fix.id}`);
+    if ((fix.elements ?? []).length > 6) problems.push(`screens: more than six elements for ${fix.id}`);
+    for (const t of fix.tags ?? []) if (tags.size && !tags.has(t)) problems.push(`screens: unknown tag "${t}" for ${fix.id}`);
+  }
+  for (const flow of corrections.flows ?? []) {
+    if (!flowIds.has(flow.id) && (!String(flow.id).startsWith(tag) || !flow.name)) problems.push(`flows: a new flow needs an id starting "${tag}" and a name (${flow.id})`);
+    if (flow.parent && !flowExists(flow.parent)) problems.push(`flows: parent ${flow.parent} of ${flow.id} does not exist`);
+    if (flow.category !== undefined && !PUBLISHED_FLOW_CATEGORIES.includes(flow.category)) problems.push(`flows: unknown category "${flow.category}" for ${flow.id}`);
+    for (const id of flow.order ?? []) screen(id, `flows ${flow.id} order`);
+  }
+  for (const move of corrections.moves ?? []) {
+    screen(move.screen, 'moves');
+    if (!flowExists(move.to)) problems.push(`moves: no flow ${move.to}`);
+    if (move.from && !flowIds.has(move.from)) problems.push(`moves: no flow ${move.from}`);
+  }
+  for (const merge of corrections.merges ?? []) if (!flowIds.has(merge.from) || !flowExists(merge.into)) problems.push(`merges: no flow ${flowIds.has(merge.from) ? merge.into : merge.from}`);
+  for (const id of corrections.remove ?? []) screen(id, 'remove');
+  for (const pick of corrections.frames ?? []) {
+    screen(pick.id, 'frames');
+    if (typeof pick.at !== 'number') problems.push(`frames: "at" must be seconds for ${pick.id}`);
+  }
+  for (const add of corrections.add ?? []) {
+    screen(add.after, 'add');
+    if (typeof add.at !== 'number') problems.push(`add: "at" must be seconds (after ${add.after})`);
+    if (add.type !== undefined && (!PUBLISHED_TYPES.includes(add.type) || add.type === 'other')) problems.push(`add: unknown type "${add.type}" at ${add.at}s`);
+    if (!add.name) problems.push(`add: the step at ${add.at}s needs a name`);
+  }
+  const moments = readJson(join(dir, 'missed.json'), []);
+  for (const skip of corrections.skip ?? []) {
+    const refused = await skipRefused(skip, { dir, moments, fileOfId, frames: corrections.frames });
+    if (refused) problems.push(`skip at ${skip?.at ?? skip}s: ${refused}`);
+  }
+  const findings = readJson(join(dir, 'findings.json'), { picture: [], duplicate: [], blank: [] });
+  const keys = new Set([...(findings.picture ?? []), ...(findings.duplicate ?? []), ...(findings.blank ?? [])].map((entry) => entry.key));
+  for (const entry of corrections.confirm ?? []) {
+    if (typeof entry?.why !== 'string' || entry.why.trim().length < 8) problems.push(`confirm ${entry?.key}: needs a real "why"`);
+    if (!String(entry?.key).startsWith('order:') && !keys.has(entry?.key)) problems.push(`confirm: no finding ${entry?.key}`);
+  }
+  for (const entry of corrections.checked ?? []) {
+    screen(entry.id, 'checked');
+    if (typeof entry.see !== 'string' || entry.see.trim().length < 4) problems.push(`checked ${entry.id}: needs "see"`);
+  }
+  const sheets = new Set(readJson(join(dir, 'screens.json'), { screens: [] }).screens.map((entry) => entry.sheet));
+  for (const entry of corrections.sheets ?? []) {
+    if (!sheets.has(entry?.sheet)) problems.push(`sheets: no contact sheet ${entry?.sheet}`);
+    else if (typeof entry.see !== 'string' || entry.see.trim().length < 12) problems.push(`sheets ${entry.sheet}: needs "see" — what is on it`);
+  }
+  for (const entry of corrections.audit ?? []) if (!flowIds.has(entry?.flow)) problems.push(`audit: no flow ${entry?.flow}`);
+  if (corrections.app?.industry !== undefined && !INDUSTRIES.includes(corrections.app.industry)) problems.push(`app: unknown industry "${corrections.app.industry}"`);
+  for (const id of corrections.app?.cardScreens ?? []) screen(id, 'app cardScreens');
+  return problems;
+}
+
 // ─── Apply and undo ─────────────────────────────────────────────────────────
 
 /**
@@ -551,7 +696,12 @@ function dropCache(dir) {
  * with the tree, the library index rebuilt, the rules kept and the review
  * marked done.
  */
+/** Applies a review's corrections, holding the library lock (lock.js) — one writer at a time. */
 export async function applyReview(options) {
+  return withLibraryLock(options.dataDir, () => applyReviewUnlocked(options));
+}
+
+async function applyReviewUnlocked(options) {
   const dataDir = resolveDataDir(options.dataDir);
   const { appId, version } = options;
   const platform = options.platform || 'ios';
@@ -897,7 +1047,12 @@ export async function applyReview(options) {
 }
 
 /** Puts back what the last applied review replaced. */
+/** Undoes the last review, holding the library lock (lock.js). */
 export async function undoReview(options) {
+  return withLibraryLock(options.dataDir, () => undoReviewUnlocked(options));
+}
+
+async function undoReviewUnlocked(options) {
   const dataDir = resolveDataDir(options.dataDir);
   const { appId, version } = options;
   const platform = options.platform || 'ios';

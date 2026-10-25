@@ -24,7 +24,7 @@ import { assertAuthorized } from './src/safety.js';
 import { localDateString, publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
 import { classifyStored, describeStored, ingestFolder, researchStored, resumeIngest } from './src/ingest.js';
 import { syncFolders } from './src/folders.js';
-import { applyReview, packIsFresh, prefetchFrames, prepareReview, reviewDir, undoReview, writeReviewPack } from './src/review.js';
+import { applyReview, checkCorrections, mergeCorrections, packIsFresh, prefetchFrames, prepareReview, reviewDir, undoReview, writeReviewPack } from './src/review.js';
 import { extractJson, pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
 import { AI_PROVIDERS, aiChat, aiChatStream, aiConfig, aiStatus, canStream, readAiSettings, writeAiSettings } from './src/ai.js';
 
@@ -56,6 +56,10 @@ ${bold('Commands')}
                             tell the Motvin agent which review step is under way
   review-pack --app-id <id> --version <date>
                             start a review: reuse the prepared package, or build it
+  merge-corrections --app-id <id> --version <date> --files <a.json,b.json> --out <file>
+                            one corrections file from several agents' parts
+  check-corrections --app-id <id> --version <date> --file <corrections.json>
+                            what apply-review would refuse, found without applying
   review-prepare --app-id <id> --version <date>
                             build the full package ahead of the review
                             (run in the background after an upload)
@@ -785,6 +789,30 @@ async function runReview(command, flags) {
     const current = existsSync(file) ? JSON.parse(readFileSync(file, 'utf-8')) : { startedAt: new Date().toISOString() };
     mkdirSync(dir, { recursive: true });
     writeFileSync(file, `${JSON.stringify({ ...current, step })}\n`);
+  } else if (command === 'merge-corrections') {
+    // The parts several agents returned, as one file (notes dropped), with the names they used.
+    const files = String(flags.files ?? '').split(',').map((file) => file.trim()).filter(Boolean);
+    if (!files.length || typeof flags.out !== 'string') {
+      log.error('--files a.json,b.json,… and --out corrections.json are required.');
+      return 1;
+    }
+    const { corrections, names } = mergeCorrections(files.map((file) => JSON.parse(readFileSync(file, 'utf-8'))));
+    writeFileSync(flags.out, `${JSON.stringify(corrections, null, 2)}\n`);
+    log.ok(`merged ${files.length} part(s) into ${flags.out}: ${Object.entries(corrections).map(([key, value]) => `${Array.isArray(value) ? value.length : 1} ${key}`).join(', ')}`);
+    log.info(`screen names used (give one page one name): ${Object.entries(names).sort((a, b) => a[0].localeCompare(b[0])).map(([name, count]) => `${name} ×${count}`).join(' · ')}`);
+  } else if (command === 'check-corrections') {
+    if (typeof flags.file !== 'string') {
+      log.error('--file is required: the corrections JSON.');
+      return 1;
+    }
+    const problems = await checkCorrections({ ...options, file: flags.file });
+    if (!problems.length) {
+      log.ok('corrections check: nothing would be refused — apply it');
+      return 0;
+    }
+    log.warn(`corrections check: ${problems.length} thing(s) to fix before applying:`);
+    for (const problem of problems) log.warn(`  - ${problem}`);
+    return 2;
   } else if (command === 'apply-review') {
     if (typeof flags.file !== 'string') {
       log.error('--file is required: the corrections JSON.');
@@ -898,6 +926,9 @@ async function main() {
         return await runDescribe(flags);
       case 'sync-folders':
         return await runSyncFolders(flags);
+      case 'merge-corrections':
+      case 'check-corrections':
+        return await runReview(command, flags);
       case 'review-prefetch':
         // Started by an upload: the review's frames, read while the upload analyses its screens.
         if (typeof flags.recording !== 'string') return 1;

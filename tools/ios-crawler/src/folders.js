@@ -19,6 +19,7 @@ import { tmpdir } from 'node:os';
 import { dirname, extname, join, relative } from 'node:path';
 import { log } from './log.js';
 import { rebuildManifest, resolveDataDir, safeName, VERSIONS_DIR_NAME } from './publish.js';
+import { withLibraryLock } from './lock.js';
 
 const IMAGES = new Set(['.webp', '.png', '.jpg', '.jpeg']);
 
@@ -41,7 +42,12 @@ function listImages(dir, base = dir) {
  * @param {{appId: string, platform?: string, version: string, dataDir?: string, dryRun?: boolean}} options
  * @returns {Promise<{moved: number, folders: number, backup: string|null}>}
  */
+/** Lines the folders up, holding the library lock (lock.js). */
 export async function syncFolders(options) {
+  return withLibraryLock(options.dataDir, () => syncFoldersUnlocked(options));
+}
+
+async function syncFoldersUnlocked(options) {
   const dataDir = resolveDataDir(options.dataDir);
   const { appId, version } = options;
   const platform = options.platform || 'ios';

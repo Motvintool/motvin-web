@@ -46,6 +46,7 @@ import sharp from 'sharp';
 import { run } from './exec.js';
 import { log } from './log.js';
 import { buildSections } from './heuristics.js';
+import { withLibraryLock, withLibraryLockSync } from './lock.js';
 import {
   filterStates,
   filterStyles,
@@ -174,7 +175,12 @@ function uniqueNames(nodes) {
  * @param {{graph: ScreenGraph, app: object, flows?: object[], dataDir?: string, dryRun?: boolean,
  *          capture?: {source?: string, fps?: number, frames?: number, durationSeconds?: number}}} options
  */
+/** Publishes a crawl, holding the library lock (lock.js). */
 export async function publishCrawl(options) {
+  return withLibraryLock(options.dataDir, () => publishCrawlUnlocked(options));
+}
+
+async function publishCrawlUnlocked(options) {
   const { graph, app } = options;
   const dataDir = resolveDataDir(options.dataDir);
   const platform = app.platform || 'ios';
@@ -605,7 +611,12 @@ export async function publishCrawl(options) {
  *
  * @param {{dataDir?: string, version?: string, app: object, graph: ScreenGraph, written: object[], flows: object[], flowGroups: object[]}} options
  */
+/** Writes the screens' content, holding the library lock (lock.js). */
 export function updatePublishedContent(options) {
+  return withLibraryLockSync(options.dataDir, () => updatePublishedContentUnlocked(options));
+}
+
+function updatePublishedContentUnlocked(options) {
   const dataDir = resolveDataDir(options.dataDir);
   const platform = options.app.platform || 'ios';
   // Must agree with the appDir publishCrawl actually wrote these screens to —

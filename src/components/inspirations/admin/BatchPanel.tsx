@@ -27,8 +27,9 @@ type Settings = {
   platform: Platform;
   version: string | null;
   notify: 'each' | 'summary' | 'off';
+  reviewsAtOnce: 1 | 2 | 3;
 };
-type RecordVideo = { name: string; file: string; path: string; platform: Platform; sizeBytes: number };
+type RecordVideo = { name: string; file: string; path: string; platform: Platform | 'any'; sizeBytes: number };
 type Row = { key: string; title: string; name: string; video: { kind: 'records'; path: string } | { kind: 'file'; file: File }; logo: { kind: 'records'; file: string } | { kind: 'file'; file: File } | null; sizeBytes: number };
 type BatchItem = {
   id: string;
@@ -42,7 +43,7 @@ type BatchItem = {
   waitUntil: string | null;
   result: { appName: string; screens: number; flows: number } | null;
 };
-type Batch = { id: string; createdAt: string; settings: Settings & { platform: Platform }; items: BatchItem[]; state: 'running' | 'paused' | 'done'; finishedAt: string | null };
+type Batch = { id: string; cleared?: boolean; createdAt: string; settings: Settings & { platform: Platform }; items: BatchItem[]; state: 'running' | 'paused' | 'done'; finishedAt: string | null };
 
 const STAGE_LABEL: Record<BatchItem['stage'], string> = {
   queued: 'Waiting',
@@ -56,7 +57,7 @@ const STAGE_LABEL: Record<BatchItem['stage'], string> = {
   'needs-you': 'Needs you',
 };
 
-const DEFAULTS: Settings = { cleanup: 'automatic', review: 'auto', afterReview: 'cleanup', existing: 'skip', platform: 'ios', version: null, notify: 'each' };
+const DEFAULTS: Settings = { cleanup: 'automatic', review: 'auto', afterReview: 'cleanup', existing: 'skip', platform: 'ios', version: null, notify: 'each', reviewsAtOnce: 2 };
 const PLATFORM_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web App', web: 'Web' };
 
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
@@ -93,7 +94,8 @@ function Choice<T extends string>({ label, value, options, onChange, hint }: { l
 export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged: () => Promise<void> | void }) {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [rows, setRows] = useState<Row[]>([]);
-  const [records, setRecords] = useState<{ videos: RecordVideo[]; logos: string[] } | null>(null);
+  const [records, setRecords] = useState<{ root: string; videos: RecordVideo[]; logos: string[] } | null>(null);
+  const [choosing, setChoosing] = useState(false);
   const [picking, setPicking] = useState(false);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [autoReview, setAutoReview] = useState(true);
@@ -133,9 +135,26 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
       window.clearInterval(timer);
     };
   }, []);
+  const loadRecords = useCallback(() => api<{ root: string; videos: RecordVideo[]; logos: string[] }>('/api/crawler/batch/records').then(setRecords, () => setRecords({ root: '', videos: [], logos: [] })), []);
   useEffect(() => {
-    void api<{ videos: RecordVideo[]; logos: string[] }>('/api/crawler/batch/records').then(setRecords, () => setRecords({ videos: [], logos: [] }));
+    void api<{ root: string; videos: RecordVideo[]; logos: string[] }>('/api/crawler/batch/records').then(setRecords, () => setRecords({ root: '', videos: [], logos: [] }));
   }, []);
+  // The Mac's own folder picker, opened by the server on this Mac.
+  const chooseFolder = async () => {
+    setChoosing(true);
+    setError(null);
+    try {
+      const picked = await api<{ success: boolean; cancelled?: boolean }>('/api/crawler/batch/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pick: true }) });
+      if (picked.success) {
+        await loadRecords();
+        setPicking(true);
+      }
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setChoosing(false);
+    }
+  };
 
   // A logo kept under the app's name in the records folder (Netflix.mov ↔ Netflix.webp).
   const matchLogo = useCallback((name: string): Row['logo'] => {
@@ -163,8 +182,8 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
   const update = (key: string, patch: Partial<Row>) => setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
 
   const active = batches.filter((batch) => batch.state !== 'done').at(-1) ?? null;
-  const last = active ?? batches.at(-1) ?? null;
-  const recordsForPlatform = useMemo(() => (records?.videos ?? []).filter((video) => video.platform === settings.platform), [records, settings.platform]);
+  const last = active ?? batches.filter((batch) => !batch.cleared).at(-1) ?? null;
+  const recordsForPlatform = useMemo(() => (records?.videos ?? []).filter((video) => video.platform === settings.platform || video.platform === 'any'), [records, settings.platform]);
 
   const start = async () => {
     setError(null);
@@ -211,7 +230,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
     }
   };
 
-  const control = async (batch: Batch, action: 'pause' | 'resume' | 'retry' | 'skip' | 'stop', item?: string) => {
+  const control = async (batch: Batch, action: 'pause' | 'resume' | 'retry' | 'skip' | 'stop' | 'clear', item?: string) => {
     try {
       await api(`/api/crawler/batch?${new URLSearchParams({ id: batch.id, action, ...(item ? { item } : {}) })}`, { method: 'PATCH' });
       await refresh();
@@ -232,6 +251,11 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
                 {last.finishedAt ? ` · took ${minutes(last.createdAt, last.finishedAt)}` : ''}
               </p>
             </div>
+            {last.state === 'done' && (
+              <button type="button" className="ins-btn ins-btn--ghost" onClick={() => void control(last, 'clear')}>
+                <CloseIcon size={13} /> Clear
+              </button>
+            )}
             {last.state !== 'done' && (
               <div className="ins-admin-actions ins-admin-actions--tight">
                 {last.state === 'running' ? (
@@ -284,8 +308,11 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
         <p className="ins-field-hint">Add the recordings, give each a name and logo if you like, choose the settings, and start. Each app is uploaded, cleaned up, reviewed and checked by itself — you can close this page.</p>
 
         <div className="ins-admin-actions ins-admin-actions--tight">
-          <button type="button" className="ins-btn ins-btn--ghost" onClick={() => setPicking((open) => !open)} disabled={!records?.videos.length}>
+          <button type="button" className="ins-btn ins-btn--ghost" onClick={() => setPicking((open) => !open)}>
             <FolderIcon size={14} /> From the records folder{records ? ` (${recordsForPlatform.length})` : ''}
+          </button>
+          <button type="button" className="ins-btn ins-btn--ghost" onClick={() => void chooseFolder()} disabled={choosing}>
+            {choosing ? <><span className="ins-spinner" aria-hidden /> Choose in the Finder window…</> : 'Change folder…'}
           </button>
           <button type="button" className="ins-btn ins-btn--ghost" onClick={() => videoInput.current?.click()}>
             <UploadIcon size={14} /> From this computer
@@ -293,6 +320,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
           <input ref={videoInput} type="file" accept="video/*,.mov,.mp4,.m4v" multiple hidden onChange={(event) => { addFiles(event.target.files); event.target.value = ''; }} />
         </div>
 
+        {records?.root && <p className="ins-field-hint">Records folder: {records.root}</p>}
         {picking && (
           <div className="ins-batch-picker">
             {recordsForPlatform.length ? recordsForPlatform.map((video) => {
@@ -304,7 +332,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
                   <span className="ins-muted">{Math.round(video.sizeBytes / 1024 ** 2)} MB{known ? ' · in library' : ''}</span>
                 </button>
               );
-            }) : <span className="ins-muted">No {PLATFORM_LABEL[settings.platform]} recordings in {`records/${settings.platform === 'ios' ? 'iOS' : settings.platform === 'webapp' ? 'Web Apps' : 'Webs'}`}.</span>}
+            }) : <span className="ins-muted">No {PLATFORM_LABEL[settings.platform]} recordings in this folder (looked in it and in {settings.platform === 'ios' ? 'iOS' : settings.platform === 'webapp' ? 'Web Apps' : 'Webs'}/).</span>}
           </div>
         )}
 
@@ -333,6 +361,9 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
         <p className="ins-addflow-title">Settings for every app</p>
         <Choice label="Clean up" value={settings.cleanup} onChange={(v) => set('cleanup', v)} options={[['automatic', 'Automatically'], ['manual', 'I’ll choose myself']]} hint={settings.cleanup === 'manual' ? 'Each app waits for your choice in the Motvin agent; the next one waits behind it.' : undefined} />
         <Choice label="Review" value={settings.review} onChange={(v) => set('review', v)} options={[['auto', 'Auto review'], ['manual', 'Manual review']]} hint={settings.review === 'auto' && !autoReview ? 'Auto review needs the Claude Code command-line tool on this computer. Until it is installed, each app ends ready for you to review.' : undefined} />
+        {settings.review === 'auto' && (
+          <Choice label="Reviews at the same time" value={String(settings.reviewsAtOnce) as '1' | '2' | '3'} onChange={(v) => set('reviewsAtOnce', Number(v) as 1 | 2 | 3)} options={[['1', '1'], ['2', '2'], ['3', '3']]} hint="More at once finishes a batch sooner; the AI usage is the same in total, just used faster. Uploads stay one at a time." />
+        )}
         <Choice label="After a clean review" value={settings.afterReview} onChange={(v) => set('afterReview', v)} options={[['cleanup', 'Clean up working files'], ['keep', 'Keep files for me to check']]} />
         <Choice label="App already in the library" value={settings.existing} onChange={(v) => set('existing', v)} options={[['skip', 'Skip it'], ['version', 'Add as a new version'], ['replace', 'Replace it']]} hint={settings.existing === 'replace' ? 'Replace removes the app and all its screens before uploading it again.' : undefined} />
         <Choice label="Platform" value={settings.platform} onChange={(v) => set('platform', v)} options={[['ios', 'iOS'], ['webapp', 'Web App'], ['web', 'Web']]} />

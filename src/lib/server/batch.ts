@@ -1,4 +1,4 @@
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { execFile, execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -32,6 +32,8 @@ export type BatchSettings = {
   version: string | null;
   /** A system notification for each app and the summary, the summary only, or none. */
   notify: 'each' | 'summary' | 'off';
+  /** How many reviews run side by side (uploads stay one at a time). */
+  reviewsAtOnce?: 1 | 2 | 3;
 };
 
 export type BatchStage =
@@ -78,6 +80,8 @@ export type Batch = {
   items: BatchItem[];
   state: 'running' | 'paused' | 'done';
   finishedAt: string | null;
+  /** Taken off the board by the admin once finished (kept on disk). */
+  cleared?: boolean;
 };
 
 /** Tries per upload and per review before it is left for the admin. */
@@ -100,7 +104,38 @@ const storeFile = () => join(batchesDir(), 'batches.json');
 /** The plugin folder, where docs/review-motvin.md is — the review runs from there. */
 const pluginRoot = () => resolve(process.cwd(), '..');
 /** Recordings and logos the admin keeps on this machine. */
-export const recordsDir = () => (process.env.MOTVIN_RECORDS_DIR ? resolve(process.env.MOTVIN_RECORDS_DIR) : resolve(process.cwd(), '..', '..', 'records'));
+const settingsFile = () => join(batchesDir(), 'settings.json');
+
+/** Recordings and logos the admin keeps on this machine: the folder they chose, else ../../records. */
+export function recordsDir(): string {
+  try {
+    const chosen = (JSON.parse(readFileSync(settingsFile(), 'utf-8')) as { recordsDir?: string }).recordsDir;
+    if (chosen && existsSync(chosen)) return resolve(chosen);
+  } catch {
+    // Not chosen yet.
+  }
+  return process.env.MOTVIN_RECORDS_DIR ? resolve(process.env.MOTVIN_RECORDS_DIR) : resolve(process.cwd(), '..', '..', 'records');
+}
+
+/** Remembers the records folder the admin picked. Only a folder in their home folder. */
+export function setRecordsDir(path: string): string {
+  const full = resolve(path);
+  if (!full.startsWith(`${homedir()}/`) || !existsSync(full) || !statSync(full).isDirectory()) throw new Error('Choose a folder inside your home folder.');
+  mkdirSync(batchesDir(), { recursive: true });
+  writeFileSync(settingsFile(), `${JSON.stringify({ recordsDir: full }, null, 2)}\n`);
+  return full;
+}
+
+/** Opens the Mac's own folder picker (the server runs on this Mac) and returns the folder chosen, or null if cancelled. Never blocks the server while it is open. */
+export function pickFolder(): Promise<string | null> {
+  if (process.platform !== 'darwin') return Promise.resolve(null);
+  return new Promise((done) => {
+    execFile('osascript', ['-e', 'activate', '-e', 'POSIX path of (choose folder with prompt "Choose the folder with your recordings")'], { encoding: 'utf-8', timeout: 5 * 60_000 }, (error, stdout) => {
+      const picked = error ? '' : String(stdout).trim();
+      done(picked ? picked.replace(/\/$/, '') : null);
+    });
+  });
+}
 
 /** This copy of the module, so a timer started by an older copy is replaced (see startBatchRunner). */
 const MODULE = Math.random().toString(36).slice(2);
@@ -194,11 +229,12 @@ export function createBatch(input: { createdBy: string; settings: BatchSettings;
 }
 
 /** Pause, resume, retry an item, skip an item, or stop the batch. */
-export function controlBatch(id: string, action: 'pause' | 'resume' | 'retry' | 'skip' | 'stop', itemId?: string): Batch | null {
+export function controlBatch(id: string, action: 'pause' | 'resume' | 'retry' | 'skip' | 'stop' | 'clear', itemId?: string): Batch | null {
   load();
   const batch = runner.batches.find((entry) => entry.id === id);
   if (!batch) return null;
   const item = itemId ? batch.items.find((entry) => entry.id === itemId) : undefined;
+  if (action === 'clear' && batch.state === 'done') batch.cleared = true;
   if (action === 'pause' && batch.state === 'running') batch.state = 'paused';
   if (action === 'resume' && batch.state === 'paused') batch.state = 'running';
   if (action === 'retry' && item && ['needs-you', 'skipped'].includes(item.stage)) {
@@ -257,7 +293,8 @@ async function tick() {
       for (const item of batch.items) changed = followReview(batch, item) || changed;
       if (batch.state === 'running') {
         changed = startNextUpload(batch) || changed;
-        changed = startNextReview(batch) || changed;
+        // Up to the setting's number of reviews side by side.
+        for (let started = 0; started < 3 && startNextReview(batch); started++) changed = true;
       }
       if (batch.items.every(finished) && ![...runner.reviews.keys()].some((key) => key.startsWith(`${batch.id}/`))) {
         batch.state = 'done';
@@ -399,9 +436,17 @@ function followUpload(batch: Batch, item: BatchItem): boolean {
 
 /** One review at a time, while the next upload runs. */
 function startNextReview(batch: Batch): boolean {
-  if (batch.items.some((item) => item.stage === 'reviewing')) return false;
+  const running = batch.items.filter((item) => item.stage === 'reviewing').length;
+  if (running >= (batch.settings.reviewsAtOnce ?? 1)) return false;
   const item = batch.items.find((entry) => entry.stage === 'review-queued' && !later(entry));
   if (!item || !item.appId || !item.version) return false;
+  // Each review keeps frames and sheets on disk while it runs: room for one more first.
+  const free = freeBytes();
+  if (running > 0 && free !== null && free < MIN_FREE_BYTES) {
+    item.waitUntil = new Date(Date.now() + 2 * 60_000).toISOString();
+    item.note = `Waiting for disk space to review alongside the others — ${(free / 1024 ** 3).toFixed(1)} GB free`;
+    return true;
+  }
   const cli = claudeCli();
   if (!cli) {
     item.stage = 'review-ready';
@@ -466,6 +511,15 @@ function followReview(batch: Batch, item: BatchItem): boolean {
   logLine(`${item.title}: review ended — ${state.reviewed ? `${state.problems.length} problem(s) left` : 'not reviewed'}; output: ${(entry?.output ?? '').slice(-400).replace(/\s+/g, ' ')}`);
   if (state.reviewed && !state.problems.length && !state.reviewing) return finishReview(batch, item);
   const output = entry?.output ?? '';
+  // Signed out of Claude Code: nothing will work until the admin signs in again.
+  if (/not logged in|please run \/login|invalid api key|authentication|unauthori[sz]ed|oauth token/i.test(output)) {
+    item.stage = 'needs-you';
+    item.reviewTries = Math.max(0, item.reviewTries - 1);
+    item.note = 'Sign in to Claude again: run "claude" in a terminal and type /login, then click Retry';
+    item.finishedAt = new Date().toISOString();
+    if (batch.settings.notify !== 'off') notify('Claude needs you', 'Sign in to Claude again to continue the reviews');
+    return true;
+  }
   // Out of AI usage: wait and go again, without counting it as a try.
   if (/usage limit|rate limit|limit reached|resets at|quota/i.test(output)) {
     item.stage = 'review-queued';

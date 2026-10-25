@@ -48,6 +48,7 @@ import { isBlockingScreen, isExternalAuthScreen } from './safety.js';
 import { localDateString, publishCrawl, rebuildManifest, resolveDataDir, resolveVersionId, safeName, updatePublishedContent } from './publish.js';
 import { readText } from './ocr.js';
 import { filterStyles, isPublishable, labelFor, publishedTypeFor, PUBLISHED_TYPES, settledType, stateFor } from './taxonomy.js';
+import { withLibraryLockSync } from './lock.js';
 
 /** What a phone or a Finder export might hand us. */
 const READABLE = ['.png', '.jpg', '.jpeg', '.heic', '.heif', '.webp', '.tiff'];
@@ -1414,7 +1415,12 @@ async function ingestFiles({ staged, analyzer, graph, duplicates, excluded, opti
 }
 
 /** Takes one screen id out of every flow that lists it, so a flow closes over the gap. */
+/** Takes a screen out of the flows, holding the library lock (lock.js). */
 function dropFromFlows(dataDir, screenId) {
+  return withLibraryLockSync(dataDir, () => dropFromFlowsUnlocked(dataDir, screenId));
+}
+
+function dropFromFlowsUnlocked(dataDir, screenId) {
   const flowsFile = join(dataDir, 'flows.json');
   if (!existsSync(flowsFile)) return;
   const doc = JSON.parse(readFileSync(flowsFile, 'utf-8'));
@@ -1967,7 +1973,7 @@ export async function researchStored(options) {
       }
     }
   }
-  if (!options.dryRun) writeFileSync(join(dataDir, 'flows.json'), `${JSON.stringify(flowsDoc, null, 2)}\n`);
+  if (!options.dryRun) withLibraryLockSync(dataDir, () => writeFileSync(join(dataDir, 'flows.json'), `${JSON.stringify(flowsDoc, null, 2)}\n`));
   return { dataDir, flowsChanged, screensChanged, outcome };
 }
 

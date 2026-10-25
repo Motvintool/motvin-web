@@ -11,7 +11,7 @@ import type { BatchSettings } from '@/lib/server/batch';
  * POST   a new batch: { settings, items: [{ title, video, ownsVideo, appId, detectIndustry, skip? }] }.
  *        The browser has already made each new app and set its logo; a video
  *        is a file in the records folder or one uploaded to the batch's own.
- * PATCH  ?id=&action=pause|resume|retry|skip|stop[&item=]
+ * PATCH  ?id=&action=pause|resume|retry|skip|stop|clear[&item=]
  */
 
 const inside = (path: string, root: string) => {
@@ -39,6 +39,7 @@ export async function POST(request: Request) {
     platform: raw.platform === 'web' || raw.platform === 'webapp' ? raw.platform : 'ios',
     version: typeof raw.version === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.version) ? raw.version : null,
     notify: raw.notify === 'summary' || raw.notify === 'off' ? raw.notify : 'each',
+    reviewsAtOnce: raw.reviewsAtOnce === 1 || raw.reviewsAtOnce === 3 ? raw.reviewsAtOnce : 2,
   };
   const records = recordsDir();
   const uploads = batchFilesDir();
@@ -68,7 +69,7 @@ export async function PATCH(request: Request) {
   if (!admin) return fail('This account may not administer the library.', 403);
   const params = new URL(request.url).searchParams;
   const action = params.get('action');
-  if (!action || !['pause', 'resume', 'retry', 'skip', 'stop'].includes(action)) return fail('action must be pause, resume, retry, skip or stop.', 400);
+  if (!action || !['pause', 'resume', 'retry', 'skip', 'stop', 'clear'].includes(action)) return fail('action must be pause, resume, retry, skip, stop or clear.', 400);
   const batch = controlBatch(params.get('id') ?? '', action as 'pause', params.get('item') ?? undefined);
   if (!batch) return fail('No such batch.', 404);
   return Response.json({ success: true, batch }, { headers: { 'Cache-Control': 'no-store' } });
