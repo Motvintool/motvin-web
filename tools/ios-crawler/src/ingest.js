@@ -505,7 +505,8 @@ export async function ingestFolder(options) {
         // pictures from it later (moved when it can be, copied otherwise).
         const recording = join(staging, `recording${extname(source).toLowerCase()}`);
         try {
-          renameSync(source, recording);
+          if (options.keepSource) copyFileSync(source, recording);
+          else renameSync(source, recording);
         } catch {
           copyFileSync(source, recording);
         }

@@ -1,5 +1,6 @@
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { clearReviewFolder } from '@/lib/server/reviews';
 import { fail, verifyAdmin } from '@/lib/server/adminAuth';
 
 /**
@@ -90,21 +91,7 @@ export async function DELETE(request: Request) {
   const platform = params.get('platform') ?? 'ios';
   const version = params.get('version') ?? '';
   if (!/^[a-z0-9][a-z0-9-]*$/.test(app) || !['ios', 'webapp', 'web'].includes(platform) || !/^\d{4}-\d{2}-\d{2}$/.test(version)) return fail('app, platform and version are required.', 400);
-  const dataDir = process.env.INSPIRATIONS_DATA_DIR ? resolve(process.env.INSPIRATIONS_DATA_DIR) : resolve(process.cwd(), '..', 'motvin-backend', 'data', 'inspirations');
-  const dir = join(dataDir, '..', 'reviews', `${app}-${platform}-${version}`);
-  if (!existsSync(join(dir, 'reviewed.json'))) return fail('This upload has not been reviewed.', 400);
-  // The mark is kept in the library's own list first, so "Reviewed by Claude" stays; then the whole folder goes.
-  const marksFile = join(dataDir, 'reviewed.json');
-  let marks: Record<string, unknown> = {};
-  try {
-    marks = JSON.parse(readFileSync(marksFile, 'utf-8')) as Record<string, unknown>;
-  } catch {
-    // A new list.
-  }
-  const status = JSON.parse(readFileSync(join(dir, 'reviewed.json'), 'utf-8')) as { reviewedAt?: string; fixes?: number };
-  marks[`${app}-${platform}-${version}`] = { reviewedAt: status.reviewedAt ?? null, by: 'Claude', fixes: status.fixes ?? 0 };
-  writeFileSync(marksFile, `${JSON.stringify(marks, null, 2)}\n`);
-  rmSync(dir, { recursive: true, force: true });
+  if (!clearReviewFolder(app, platform, version)) return fail('This upload has not been reviewed.', 400);
   const removed = 1;
   return Response.json({ success: true, removed }, { headers: { 'Cache-Control': 'no-store' } });
 }

@@ -18215,3 +18215,34 @@ html:has(aside.ins-dock:not(.ins-dock-user)) {
   opacity: 0.35;
   cursor: default;
 }
+
+/* Add new apps — a batch of uploads and its queue board. */
+.ins-batch { display: flex; flex-direction: column; gap: 20px; }
+.ins-batch-board { border: 1px solid var(--ins-line, rgba(0,0,0,.08)); border-radius: 16px; padding: 16px; background: var(--ins-surface, transparent); }
+.ins-batch-board-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.ins-batch-items, .ins-batch-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ins-batch-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 12px; border-radius: 12px; background: var(--ins-soft, rgba(0,0,0,.03)); }
+.ins-batch-item-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ins-batch-item-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ins-batch-stage { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--ins-chip, rgba(0,0,0,.06)); white-space: nowrap; }
+.ins-batch-item.is-done .ins-batch-stage { color: #1a7f37; background: rgba(26,127,55,.1); }
+.ins-batch-item.is-needs-you .ins-batch-stage, .ins-batch-item.is-choose .ins-batch-stage { color: #b35900; background: rgba(179,89,0,.1); }
+.ins-batch-item.is-skipped { opacity: .6; }
+.ins-batch-item-sub { grid-column: 1 / 2; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ins-sub); font-variant-numeric: tabular-nums; }
+.ins-batch-item-actions { grid-column: 2 / 3; grid-row: 1 / 3; display: flex; align-items: center; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.ins-batch-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ins-batch-pick { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--ins-line, rgba(0,0,0,.1)); background: transparent; cursor: pointer; font-size: 13px; }
+.ins-batch-pick.is-added { opacity: .55; cursor: default; }
+.ins-batch-rows { margin-top: 12px; }
+.ins-batch-row { display: grid; grid-template-columns: minmax(120px, 1.2fr) minmax(140px, 1.4fr) minmax(90px, .9fr) minmax(110px, 1fr) auto; align-items: center; gap: 10px; }
+.ins-batch-row-video { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ins-batch-row-logo { font-size: 12px; cursor: pointer; text-decoration: underline; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ins-batch-row-state { font-size: 12px; color: var(--ins-sub); }
+.ins-batch-row-state.is-known { color: #b35900; }
+.ins-batch-settings { display: flex; flex-direction: column; gap: 14px; }
+@media (max-width: 720px) {
+  .ins-batch-row { grid-template-columns: 1fr auto; }
+  .ins-batch-row > .ins-input, .ins-batch-row-logo, .ins-batch-row-state { grid-column: 1 / -1; }
+  .ins-batch-item { grid-template-columns: 1fr; }
+  .ins-batch-item-actions { grid-column: 1; grid-row: auto; justify-content: flex-start; }
+}

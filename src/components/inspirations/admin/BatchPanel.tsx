@@ -1,0 +1,361 @@
+'use client';
+
+import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { adminApi, type AdminState } from '@/lib/inspirations/admin';
+import { authHeaders } from '@/lib/inspirations/admin-chatbot/ingestJobs';
+import type { Industry } from '@/lib/inspirations/types';
+import { CheckIcon, CloseIcon, CopyIcon, ExternalIcon, FolderIcon, PlayIcon, RetryIcon, StopIcon, UploadIcon } from '../Icons';
+
+/**
+ * Add new apps — many at once, with nobody watching.
+ *
+ * The admin lists the recordings (from the records folder on this machine, or
+ * from their computer), with a name and logo each when they want one, and
+ * picks the settings once. Starting makes each new app and sets its logo here
+ * (that needs the admin's sign-in); the server then works through the queue
+ * by itself — upload, clean-up, review, final check, clean-up — and this board
+ * shows where each app is. Closing the page does not stop it.
+ */
+
+type Platform = 'ios' | 'webapp' | 'web';
+type Settings = {
+  cleanup: 'automatic' | 'manual';
+  review: 'auto' | 'manual';
+  afterReview: 'cleanup' | 'keep';
+  existing: 'skip' | 'version' | 'replace';
+  platform: Platform;
+  version: string | null;
+  notify: 'each' | 'summary' | 'off';
+};
+type RecordVideo = { name: string; file: string; path: string; platform: Platform; sizeBytes: number };
+type Row = { key: string; title: string; name: string; video: { kind: 'records'; path: string } | { kind: 'file'; file: File }; logo: { kind: 'records'; file: string } | { kind: 'file'; file: File } | null; sizeBytes: number };
+type BatchItem = {
+  id: string;
+  title: string;
+  stage: 'queued' | 'uploading' | 'choose' | 'review-queued' | 'reviewing' | 'review-ready' | 'done' | 'skipped' | 'needs-you';
+  note: string | null;
+  appId: string | null;
+  version: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  waitUntil: string | null;
+  result: { appName: string; screens: number; flows: number } | null;
+};
+type Batch = { id: string; createdAt: string; settings: Settings & { platform: Platform }; items: BatchItem[]; state: 'running' | 'paused' | 'done'; finishedAt: string | null };
+
+const STAGE_LABEL: Record<BatchItem['stage'], string> = {
+  queued: 'Waiting',
+  uploading: 'Uploading',
+  choose: 'Needs your clean-up choice',
+  'review-queued': 'Waiting for review',
+  reviewing: 'Reviewing',
+  'review-ready': 'Ready for review',
+  done: 'Done',
+  skipped: 'Skipped',
+  'needs-you': 'Needs you',
+};
+
+const DEFAULTS: Settings = { cleanup: 'automatic', review: 'auto', afterReview: 'cleanup', existing: 'skip', platform: 'ios', version: null, notify: 'each' };
+const PLATFORM_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web App', web: 'Web' };
+
+const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
+const plainName = (file: string) => file.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+const minutes = (from: string | null, to: string | null) => {
+  if (!from) return '';
+  const seconds = Math.max(0, Math.round(((to ? Date.parse(to) : Date.now()) - Date.parse(from)) / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+};
+
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, { ...init, headers: await authHeaders(init?.headers as Record<string, string> | undefined), cache: 'no-store' });
+  const body = (await res.json().catch(() => ({}))) as T & { message?: string; error?: string };
+  if (!res.ok) throw new Error(body.message ?? body.error ?? `Request failed (${res.status})`);
+  return body;
+}
+
+function Choice<T extends string>({ label, value, options, onChange, hint }: { label: string; value: T; options: Array<[T, string]>; onChange: (next: T) => void; hint?: string }) {
+  return (
+    <div className="ins-field">
+      <span className="ins-field-label">{label}</span>
+      <div className="ins-segmented" role="radiogroup" aria-label={label}>
+        {options.map(([id, text]) => (
+          <button key={id} type="button" role="radio" aria-checked={value === id} className={`ins-segmented-item ${value === id ? 'is-active' : ''}`} onClick={() => onChange(id)}>
+            {text}
+          </button>
+        ))}
+      </div>
+      {hint && <span className="ins-field-hint">{hint}</span>}
+    </div>
+  );
+}
+
+export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged: () => Promise<void> | void }) {
+  const [settings, setSettings] = useState<Settings>(DEFAULTS);
+  const [rows, setRows] = useState<Row[]>([]);
+  const [records, setRecords] = useState<{ videos: RecordVideo[]; logos: string[] } | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [autoReview, setAutoReview] = useState(true);
+  const [starting, setStarting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [, setNow] = useState(0);
+  const videoInput = useRef<HTMLInputElement>(null);
+  const set = <K extends keyof Settings>(key: K, value: Settings[K]) => setSettings((current) => ({ ...current, [key]: value }));
+
+  const refresh = useCallback(async () => {
+    try {
+      const next = await api<{ batches: Batch[]; autoReview: boolean }>('/api/crawler/batch');
+      setBatches(next.batches);
+      setAutoReview(next.autoReview);
+    } catch {
+      // The board still shows the last state.
+    }
+  }, []);
+  // The board follows the queue every five seconds while this tab is open.
+  useEffect(() => {
+    let live = true;
+    const poll = async () => {
+      try {
+        const next = await api<{ batches: Batch[]; autoReview: boolean }>('/api/crawler/batch');
+        if (!live) return;
+        setBatches(next.batches);
+        setAutoReview(next.autoReview);
+        setNow(Date.now());
+      } catch {
+        // The board still shows the last state.
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 5000);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+  useEffect(() => {
+    void api<{ videos: RecordVideo[]; logos: string[] }>('/api/crawler/batch/records').then(setRecords, () => setRecords({ videos: [], logos: [] }));
+  }, []);
+
+  // A logo kept under the app's name in the records folder (Netflix.mov ↔ Netflix.webp).
+  const matchLogo = useCallback((name: string): Row['logo'] => {
+    const file = records?.logos.find((entry) => entry.replace(/\.[^.]+$/, '').toLowerCase() === name.toLowerCase());
+    return file ? { kind: 'records', file } : null;
+  }, [records]);
+
+  const appFor = useCallback((name: string) => {
+    const id = slug(name);
+    return state.apps.find((app) => app.id === id || app.name.toLowerCase() === name.trim().toLowerCase()) ?? null;
+  }, [state.apps]);
+
+  const addFiles = (files: FileList | null) => {
+    if (!files) return;
+    const next = [...files].filter((file) => /\.(mov|mp4|m4v|avi|mkv)$/i.test(file.name)).map((file): Row => {
+      const name = plainName(file.name);
+      return { key: `f-${file.name}-${file.size}`, title: file.name, name, video: { kind: 'file', file }, logo: matchLogo(name), sizeBytes: file.size };
+    });
+    setRows((current) => [...current, ...next.filter((row) => !current.some((other) => other.key === row.key))]);
+  };
+  const addRecord = (video: RecordVideo) => {
+    const key = `r-${video.path}`;
+    setRows((current) => (current.some((row) => row.key === key) ? current : [...current, { key, title: video.file, name: video.name, video: { kind: 'records', path: video.path }, logo: matchLogo(video.name), sizeBytes: video.sizeBytes }]));
+  };
+  const update = (key: string, patch: Partial<Row>) => setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+
+  const active = batches.filter((batch) => batch.state !== 'done').at(-1) ?? null;
+  const last = active ?? batches.at(-1) ?? null;
+  const recordsForPlatform = useMemo(() => (records?.videos ?? []).filter((video) => video.platform === settings.platform), [records, settings.platform]);
+
+  const start = async () => {
+    setError(null);
+    try {
+      const items = [];
+      for (const [i, row] of rows.entries()) {
+        const name = row.name.trim() || plainName(row.title);
+        setStarting(`Preparing ${i + 1} of ${rows.length}: ${name}`);
+        const existing = appFor(name);
+        if (existing && settings.existing === 'skip') {
+          items.push({ title: row.title, video: row.video.kind === 'records' ? row.video.path : '', ownsVideo: false, appId: existing.id, detectIndustry: false, skip: `${existing.name} is already in the library` });
+          continue;
+        }
+        let appId = existing?.id ?? slug(name);
+        let detectIndustry = false;
+        if (existing && settings.existing === 'replace') await adminApi.deleteApp(existing.id);
+        if (!existing || settings.existing === 'replace') {
+          // A new app under the name given; its real category is looked up by the upload.
+          appId = slug(name) || `app-${Date.now().toString(36)}`;
+          await adminApi.saveApp({ id: appId, name, industry: 'saas' as Industry });
+          detectIndustry = true;
+        }
+        if (row.logo) {
+          const blob = row.logo.kind === 'file' ? row.logo.file : await fetch(`/api/crawler/batch/records?logo=${encodeURIComponent(row.logo.file)}`, { headers: await authHeaders() }).then((res) => res.blob());
+          await adminApi.uploadLogo(appId, row.logo.kind === 'file' ? row.logo.file.name : row.logo.file, blob);
+        }
+        let video = row.video.kind === 'records' ? row.video.path : '';
+        if (row.video.kind === 'file') {
+          setStarting(`Sending ${i + 1} of ${rows.length}: ${row.title}`);
+          const ext = row.video.file.name.split('.').pop() ?? 'mov';
+          video = (await api<{ path: string }>(`/api/crawler/batch/upload?ext=${encodeURIComponent(ext)}`, { method: 'POST', body: row.video.file })).path;
+        }
+        items.push({ title: row.title, video, ownsVideo: row.video.kind === 'file', appId, detectIndustry });
+      }
+      setStarting('Starting the queue');
+      await api('/api/crawler/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ settings, items }) });
+      setRows([]);
+      await refresh();
+      await onChanged();
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setStarting(null);
+    }
+  };
+
+  const control = async (batch: Batch, action: 'pause' | 'resume' | 'retry' | 'skip' | 'stop', item?: string) => {
+    try {
+      await api(`/api/crawler/batch?${new URLSearchParams({ id: batch.id, action, ...(item ? { item } : {}) })}`, { method: 'PATCH' });
+      await refresh();
+    } catch (failure) {
+      setError((failure as Error).message);
+    }
+  };
+
+  return (
+    <div className="ins-admin-panel ins-batch">
+      {last && (
+        <section className="ins-batch-board" aria-label="Queue">
+          <div className="ins-batch-board-head">
+            <div>
+              <p className="ins-addflow-title">{last.state === 'done' ? 'Last batch' : last.state === 'paused' ? 'Batch paused' : 'Batch running'}</p>
+              <p className="ins-muted">
+                {last.items.filter((item) => item.stage === 'done').length} of {last.items.length} done · {PLATFORM_LABEL[last.settings.platform]} · started {new Date(last.createdAt).toLocaleString()}
+                {last.finishedAt ? ` · took ${minutes(last.createdAt, last.finishedAt)}` : ''}
+              </p>
+            </div>
+            {last.state !== 'done' && (
+              <div className="ins-admin-actions ins-admin-actions--tight">
+                {last.state === 'running' ? (
+                  <button type="button" className="ins-btn ins-btn--ghost" onClick={() => void control(last, 'pause')}>Pause</button>
+                ) : (
+                  <button type="button" className="ins-btn ins-btn--ghost" onClick={() => void control(last, 'resume')}><PlayIcon size={13} /> Resume</button>
+                )}
+                <button type="button" className="ins-btn ins-btn--ghost" onClick={() => void control(last, 'stop')}><StopIcon size={13} /> Stop after current</button>
+              </div>
+            )}
+          </div>
+          <ol className="ins-batch-items">
+            {last.items.map((item) => (
+              <li key={item.id} className={`ins-batch-item is-${item.stage}`}>
+                <div className="ins-batch-item-main">
+                  <span className="ins-batch-item-title">{item.result?.appName ?? item.title}</span>
+                  <span className="ins-batch-stage">
+                    {['uploading', 'reviewing'].includes(item.stage) && <span className="ins-spinner" aria-hidden />}
+                    {item.stage === 'done' && <CheckIcon size={12} />}
+                    {STAGE_LABEL[item.stage]}
+                  </span>
+                </div>
+                <div className="ins-batch-item-sub">
+                  {item.note && <span>{item.note}</span>}
+                  {item.result && <span>{item.result.screens} screens · {item.result.flows} flows</span>}
+                  {item.startedAt && <span>{minutes(item.startedAt, item.finishedAt)}</span>}
+                </div>
+                <div className="ins-batch-item-actions">
+                  {item.appId && ['done', 'review-ready'].includes(item.stage) && (
+                    <Link className="ins-linkbtn" href={`/inspirations/app/${item.appId}`}>Open <ExternalIcon size={11} /></Link>
+                  )}
+                  {item.stage === 'review-ready' && item.appId && item.version && (
+                    <button type="button" className="ins-linkbtn" onClick={() => void navigator.clipboard.writeText(`Follow docs/review-motvin.md to review ${item.appId} ${last.settings.platform} ${item.version}`)}>
+                      <CopyIcon size={11} /> Copy review request
+                    </button>
+                  )}
+                  {item.stage === 'choose' && <span className="ins-muted">Open the Motvin agent to choose</span>}
+                  {['needs-you', 'skipped'].includes(item.stage) && last.state !== 'done' && <button type="button" className="ins-linkbtn" onClick={() => void control(last, 'retry', item.id)}><RetryIcon size={11} /> Retry</button>}
+                  {item.stage === 'needs-you' && last.state === 'done' && <button type="button" className="ins-linkbtn" onClick={() => void control(last, 'retry', item.id)}><RetryIcon size={11} /> Retry</button>}
+                  {['queued', 'review-queued'].includes(item.stage) && <button type="button" className="ins-linkbtn" onClick={() => void control(last, 'skip', item.id)}>Skip</button>}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      <section className="ins-addflow-block">
+        <p className="ins-addflow-title">Add new apps</p>
+        <p className="ins-field-hint">Add the recordings, give each a name and logo if you like, choose the settings, and start. Each app is uploaded, cleaned up, reviewed and checked by itself — you can close this page.</p>
+
+        <div className="ins-admin-actions ins-admin-actions--tight">
+          <button type="button" className="ins-btn ins-btn--ghost" onClick={() => setPicking((open) => !open)} disabled={!records?.videos.length}>
+            <FolderIcon size={14} /> From the records folder{records ? ` (${recordsForPlatform.length})` : ''}
+          </button>
+          <button type="button" className="ins-btn ins-btn--ghost" onClick={() => videoInput.current?.click()}>
+            <UploadIcon size={14} /> From this computer
+          </button>
+          <input ref={videoInput} type="file" accept="video/*,.mov,.mp4,.m4v" multiple hidden onChange={(event) => { addFiles(event.target.files); event.target.value = ''; }} />
+        </div>
+
+        {picking && (
+          <div className="ins-batch-picker">
+            {recordsForPlatform.length ? recordsForPlatform.map((video) => {
+              const added = rows.some((row) => row.key === `r-${video.path}`);
+              const known = appFor(video.name);
+              return (
+                <button key={video.path} type="button" className={`ins-batch-pick ${added ? 'is-added' : ''}`} onClick={() => addRecord(video)} disabled={added}>
+                  {added && <CheckIcon size={11} />} {video.name}
+                  <span className="ins-muted">{Math.round(video.sizeBytes / 1024 ** 2)} MB{known ? ' · in library' : ''}</span>
+                </button>
+              );
+            }) : <span className="ins-muted">No {PLATFORM_LABEL[settings.platform]} recordings in {`records/${settings.platform === 'ios' ? 'iOS' : settings.platform === 'webapp' ? 'Web Apps' : 'Webs'}`}.</span>}
+          </div>
+        )}
+
+        {rows.length > 0 && (
+          <ol className="ins-batch-rows">
+            {rows.map((row) => {
+              const known = appFor(row.name.trim() || plainName(row.title));
+              return (
+                <li key={row.key} className="ins-batch-row">
+                  <span className="ins-batch-row-video" title={row.title}>{row.title} <span className="ins-muted">{Math.round(row.sizeBytes / 1024 ** 2)} MB</span></span>
+                  <input className="ins-input" value={row.name} placeholder="App name (from the screens if empty)" onChange={(event) => update(row.key, { name: event.target.value })} aria-label="App name" />
+                  <label className="ins-batch-row-logo">
+                    {row.logo ? (row.logo.kind === 'records' ? row.logo.file : row.logo.file.name) : 'Add logo'}
+                    <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) update(row.key, { logo: { kind: 'file', file } }); event.target.value = ''; }} />
+                  </label>
+                  <span className={`ins-batch-row-state ${known ? 'is-known' : ''}`}>{known ? `In library — ${settings.existing === 'skip' ? 'will be skipped' : settings.existing === 'version' ? 'new version' : 'will be replaced'}` : 'New app'}</span>
+                  <button type="button" className="ins-linkbtn" aria-label={`Remove ${row.title}`} onClick={() => setRows((current) => current.filter((other) => other.key !== row.key))}><CloseIcon size={13} /></button>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </section>
+
+      <section className="ins-addflow-block ins-batch-settings">
+        <p className="ins-addflow-title">Settings for every app</p>
+        <Choice label="Clean up" value={settings.cleanup} onChange={(v) => set('cleanup', v)} options={[['automatic', 'Automatically'], ['manual', 'I’ll choose myself']]} hint={settings.cleanup === 'manual' ? 'Each app waits for your choice in the Motvin agent; the next one waits behind it.' : undefined} />
+        <Choice label="Review" value={settings.review} onChange={(v) => set('review', v)} options={[['auto', 'Auto review'], ['manual', 'Manual review']]} hint={settings.review === 'auto' && !autoReview ? 'Auto review needs the Claude Code command-line tool on this computer. Until it is installed, each app ends ready for you to review.' : undefined} />
+        <Choice label="After a clean review" value={settings.afterReview} onChange={(v) => set('afterReview', v)} options={[['cleanup', 'Clean up working files'], ['keep', 'Keep files for me to check']]} />
+        <Choice label="App already in the library" value={settings.existing} onChange={(v) => set('existing', v)} options={[['skip', 'Skip it'], ['version', 'Add as a new version'], ['replace', 'Replace it']]} hint={settings.existing === 'replace' ? 'Replace removes the app and all its screens before uploading it again.' : undefined} />
+        <Choice label="Platform" value={settings.platform} onChange={(v) => set('platform', v)} options={[['ios', 'iOS'], ['webapp', 'Web App'], ['web', 'Web']]} />
+        <div className="ins-field">
+          <span className="ins-field-label">Version date</span>
+          <div className="ins-admin-actions ins-admin-actions--tight">
+            <div className="ins-segmented" role="radiogroup" aria-label="Version date">
+              <button type="button" role="radio" aria-checked={settings.version === null} className={`ins-segmented-item ${settings.version === null ? 'is-active' : ''}`} onClick={() => set('version', null)}>Today</button>
+              <button type="button" role="radio" aria-checked={settings.version !== null} className={`ins-segmented-item ${settings.version !== null ? 'is-active' : ''}`} onClick={() => set('version', new Date().toISOString().slice(0, 10))}>Choose a date</button>
+            </div>
+            {settings.version !== null && <input type="date" className="ins-input" value={settings.version} onChange={(event) => set('version', event.target.value || null)} aria-label="Version date" />}
+          </div>
+        </div>
+        <Choice label="Notify me" value={settings.notify} onChange={(v) => set('notify', v)} options={[['each', 'Each app and the end'], ['summary', 'Only at the end'], ['off', 'Off']]} />
+      </section>
+
+      {error && <p className="ins-admin-err">{error}</p>}
+      <div className="ins-admin-actions">
+        <button type="button" className="ins-btn ins-btn--primary" disabled={!rows.length || Boolean(starting) || Boolean(active)} onClick={() => void start()}>
+          {starting ? <><span className="ins-spinner" aria-hidden /> {starting}</> : `Start ${rows.length || ''} app${rows.length === 1 ? '' : 's'}`}
+        </button>
+        {active && <span className="ins-muted">A batch is running — start the next one when it ends.</span>}
+      </div>
+    </div>
+  );
+}

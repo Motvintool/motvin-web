@@ -100,6 +100,7 @@ ${bold('ingest options')}
   --app-id <id>             add to an app already in the library, by its slug —
                             skips identification, instead of a config file
   --authorized-by <who>     recorded in sources.json when there is no --app
+  --keep-source             leave the recording where it is (copy it, never move it)
   --fps <n>                 frames per second to pull from a video          ${dim('default one every 0.3s (~3.33)')}
   --min-hold <seconds>      how long a screen must hold still to count      ${dim('default 0.5')}
   --no-brief                drop screens shown for less than --min-hold even
@@ -488,6 +489,8 @@ async function runIngest(flags) {
     version: flags.version,
     dryRun: flags.dryRun === true,
     reviewOnly: flags.review === true,
+    // The recording is someone's own file (a batch from the records folder): copied, never moved.
+    keepSource: flags.keepSource === true,
     onProgress: flags.json
       ? (event) => process.stdout.write(`${PROGRESS_MARKER} ${JSON.stringify(event)}\n`)
       : undefined,

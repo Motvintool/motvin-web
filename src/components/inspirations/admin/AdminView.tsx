@@ -6,6 +6,7 @@ import { PageHeading } from '../PageHeading';
 import { CloseIcon, FlowIcon, FolderIcon, ImageIcon, LayersIcon, PlusIcon, SettingsIcon, UploadIcon } from '../Icons';
 import { AddScreensPanel } from './AddScreensPanel';
 import { AppsPanel } from './AppsPanel';
+import { BatchPanel } from './BatchPanel';
 import { FlowsPanel } from './FlowsPanel';
 import { RequestsPanel } from './RequestsPanel';
 import { ScreensPanel } from './ScreensPanel';
@@ -27,10 +28,11 @@ import { useAdminState } from './useAdminState';
  * the same thing; they are now one tab with a switch, in AddScreensPanel.
  */
 
-type Tab = 'add' | 'screens' | 'apps' | 'flows' | 'requests' | 'settings';
+type Tab = 'add' | 'batch' | 'screens' | 'apps' | 'flows' | 'requests' | 'settings';
 
 const TABS: { id: Tab; label: string; icon: (props: { size?: number }) => ReactElement }[] = [
   { id: 'add', label: 'Add screens', icon: UploadIcon },
+  { id: 'batch', label: 'Add new apps', icon: LayersIcon },
   { id: 'screens', label: 'Screens', icon: ImageIcon },
   { id: 'apps', label: 'Apps', icon: FolderIcon },
   { id: 'flows', label: 'Flows', icon: FlowIcon },
@@ -144,6 +146,7 @@ export function AdminView() {
       ) : (
         <section className="ins-tabpanel" role="tabpanel">
           {tab === 'add' && <AddScreensPanel state={state} busy={busy} run={run} onIngested={refresh} onUploaded={refresh} />}
+          {tab === 'batch' && <BatchPanel state={state} onChanged={refresh} />}
           {tab === 'screens' && <ScreensPanel state={state} busy={busy} run={run} />}
           {tab === 'apps' && <AppsPanel state={state} busy={busy} run={run} />}
           {tab === 'flows' && <FlowsPanel state={state} busy={busy} run={run} />}
