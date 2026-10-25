@@ -1543,7 +1543,23 @@ async function writeFlowSheets(dir, order, screens, pathOf) {
   const sheetParts = [];
   for (let at = 0, size = Math.ceil(sheetCount / WORK_PARTS); at < sheetCount; at += size) sheetParts.push(sheetNumbers.slice(at, at + size));
   writeJson(join(dir, 'work-parts.json'), {
-    firstPass: sheetParts.map((sheets) => ({ sheets: sheets.map((n) => `sheet-${n}.png`) })),
+    // Each part decides its own missed moments and findings too — the ones after or on its screens —
+    // so nothing is left open for a second round.
+    firstPass: sheetParts.map((sheets, part) => {
+      const mine = new Set(screens.filter((screen) => sheets.includes(screen.sheet)).map((screen) => screen.id));
+      const mineByHash = new Set(screens.filter((screen) => mine.has(screen.id)).map((screen) => screen.hash));
+      const findings = readJson(join(dir, 'findings.json'), { picture: [], duplicate: [], blank: [] });
+      return {
+        sheets: sheets.map((n) => `sheet-${n}.png`),
+        // A moment before the first screen follows none: the first part takes it.
+        missed: readJson(join(dir, 'missed.json'), []).filter((moment) => (moment.after ? mine.has(moment.after) : part === 0)).map((moment) => moment.k),
+        findings: [
+          ...(findings.picture ?? []).filter((entry) => mine.has(entry.id)),
+          ...(findings.duplicate ?? []).filter((entry) => entry.hashes.some((h) => mineByHash.has(h))),
+          ...(findings.blank ?? []).filter((entry) => mineByHash.has(entry.hash)),
+        ].map((entry) => entry.key),
+      };
+    }),
     secondCheck: split(index, (entry) => entry.steps.length).map((part) => ({ flows: part.map((entry) => entry.picture).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) })),
   });
   return k;

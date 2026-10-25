@@ -24,7 +24,7 @@ import { assertAuthorized } from './src/safety.js';
 import { localDateString, publishCrawl, rebuildManifest, resolveDataDir } from './src/publish.js';
 import { classifyStored, describeStored, ingestFolder, researchStored, resumeIngest } from './src/ingest.js';
 import { syncFolders } from './src/folders.js';
-import { applyReview, packIsFresh, prefetchFrames, prepareReview, reviewDir, undoReview } from './src/review.js';
+import { applyReview, packIsFresh, prefetchFrames, prepareReview, reviewDir, undoReview, writeReviewPack } from './src/review.js';
 import { extractJson, pickBackend, probeAnalyzer, resolveBackend } from './src/analyze.js';
 import { AI_PROVIDERS, aiChat, aiChatStream, aiConfig, aiStatus, canStream, readAiSettings, writeAiSettings } from './src/ai.js';
 
@@ -743,6 +743,16 @@ async function runReview(command, flags) {
     // step 2 while the package is built (minutes for a long recording), then step 3, the screens.
     const reviewFolder = reviewDir(flags.dataDir, flags.appId, flags.platform || 'ios', flags.version);
     mkdirSync(reviewFolder, { recursive: true });
+    // Run again in the middle of a review (after an apply): the full package is already there, so
+    // only the screens, sheets and findings are refreshed — the frames and the scan are not read again.
+    const before = existsSync(join(reviewFolder, 'reviewing.json')) ? JSON.parse(readFileSync(join(reviewFolder, 'reviewing.json'), 'utf-8')) : null;
+    const findings = existsSync(join(reviewFolder, 'findings.json')) ? JSON.parse(readFileSync(join(reviewFolder, 'findings.json'), 'utf-8')) : null;
+    if (before?.step >= 3 && findings?.full) {
+      await writeReviewPack({ ...options, light: true });
+      log.ok('review package: refreshed for the review under way (frames and scan kept)');
+      process.stdout.write(`${reviewFolder}\n`);
+      return 0;
+    }
     const startedAt = new Date().toISOString();
     writeFileSync(join(reviewFolder, 'reviewing.json'), `${JSON.stringify({ startedAt, step: 2 })}\n`);
     // Prepared in the background after the upload: wait for it to finish rather than build twice.
