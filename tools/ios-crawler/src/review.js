@@ -291,7 +291,8 @@ export async function writeReviewPack(options) {
     for (const v of print) spread += Math.abs(v - mean);
     // A loading screen with this little on it is a blank page waiting; any other screen must be emptier still.
     const limit = screen.type === 'loading' || (screen.extraTypes ?? []).includes('loading') ? BLANK_SPREAD : BLANK_SPREAD / 3;
-    if (spread / print.length < limit) screen.blank = true;
+    screen.spread = spread / print.length;
+    if (screen.spread < limit) screen.blank = true;
   });
   // Findings: every doubt the package can prove from the pictures, each to be fixed or
   // confirmed with a reason before the review can pass (see checkVersion).
@@ -320,6 +321,8 @@ export async function writeReviewPack(options) {
   }
   for (const screen of screens) if (screen.blank) findings.blank.push({ key: `blank:${screen.hash}`, hash: screen.hash, message: `#${screen.n} "${screen.name}" has almost nothing on it — a blank loading page: remove it, or confirm it is a real step` });
   findings.signature = packSignature(dataDir, appId, platform, version);
+  for (const screen of screens) screen.sheet = Math.floor((screen.n - 1) / (SHEET_COLUMNS * SHEET_ROWS)) + 1;
+  writeLookAgain(dir, appId, screens, flows, keptGrays, (sid) => readJson(join(dataDir, 'words', `${sid}.json`), {}).text ?? '');
   writeJson(join(dir, 'findings.json'), findings);
   const doubts = screens
     .map((screen) => ({
@@ -612,7 +615,7 @@ export async function checkCorrections(options) {
   if (!corrections) return [`${options.file} could not be read`];
   const problems = [];
   if (corrections._how) problems.push('this is the review draft as written — go through each entry, then remove "_how"');
-  const known = new Set(['screens', 'flows', 'moves', 'merges', 'remove', 'frames', 'add', 'skip', 'confirm', 'checked', 'sheets', 'audit', 'app', 'rules']);
+  const known = new Set(['screens', 'flows', 'moves', 'merges', 'remove', 'frames', 'add', 'skip', 'confirm', 'checked', 'sheets', 'audit', 'app', 'rules', 'lookAgain']);
   for (const key of Object.keys(corrections)) if (!known.has(key) && !key.startsWith('_')) problems.push(`unknown field "${key}"`);
   const versionDir = join(dataDir, 'screens', platform, appId, VERSIONS_DIR_NAME, version);
   const dir = reviewDir(dataDir, appId, platform, version);
@@ -668,7 +671,7 @@ export async function checkCorrections(options) {
   const keys = new Set([...(findings.picture ?? []), ...(findings.duplicate ?? []), ...(findings.blank ?? [])].map((entry) => entry.key));
   for (const entry of corrections.confirm ?? []) {
     if (typeof entry?.why !== 'string' || entry.why.trim().length < 8) problems.push(`confirm ${entry?.key}: needs a real "why"`);
-    if (!String(entry?.key).startsWith('order:') && !keys.has(entry?.key)) problems.push(`confirm: no finding ${entry?.key}`);
+    if (!/^order:/.test(String(entry?.key)) && !keys.has(entry?.key)) problems.push(`confirm: no finding ${entry?.key}`);
   }
   for (const entry of corrections.checked ?? []) {
     screen(entry.id, 'checked');
@@ -679,12 +682,139 @@ export async function checkCorrections(options) {
     if (!sheets.has(entry?.sheet)) problems.push(`sheets: no contact sheet ${entry?.sheet}`);
     else if (typeof entry.see !== 'string' || entry.see.trim().length < 12) problems.push(`sheets ${entry.sheet}: needs "see" — what is on it`);
   }
+  const lookKeys = new Set(readJson(join(dir, 'look-again.json'), []).map((item) => item.key));
+  for (const entry of corrections.lookAgain ?? []) {
+    if (!lookKeys.has(entry?.key)) problems.push(`lookAgain: nothing on the look-again list is ${entry?.key}`);
+    else if (!['keep', 'fixed'].includes(entry.decision) || typeof entry.why !== 'string' || entry.why.trim().length < 8) problems.push(`lookAgain ${entry.key}: needs "decision" keep or fixed and a real "why"`);
+  }
   for (const entry of corrections.audit ?? []) {
     if (!flowIds.has(entry?.flow)) problems.push(`audit: no flow ${entry?.flow}`);
     for (const id of Array.isArray(entry?.expect) ? entry.expect : []) screen(id, `audit ${entry.flow} expect`);
   }
   if (corrections.app?.industry !== undefined && !INDUSTRIES.includes(corrections.app.industry)) problems.push(`app: unknown industry "${corrections.app.industry}"`);
   for (const id of corrections.app?.cardScreens ?? []) screen(id, 'app cardScreens');
+  return problems;
+}
+
+// ─── Look again (Sonnet reviews) ────────────────────────────────────────────
+
+/** Two steps of one flow, under one name, this close are a possible repeat to look at again. */
+const LOOK_ALIKE = 0.08;
+/** A small group of a flow's steps this many seconds from the rest is a possible wrong flow. */
+const LOOK_APART_SECONDS = 25;
+/** This many tasks at the top of the tree, outside any area, is a flat tree. */
+const FLAT_TASKS = 3;
+/** A flow back on the app's menu this many times walks across its sections (tabs), each an area of its own. */
+const MENU_VISITS = 3;
+const MENU_NAME = /\b(navigation|drawer|side ?menu|sidebar|tab bar)\b/i;
+/** Two alike steps in different flows this close in time are one moment kept twice (a page shared by flows is no repeat). */
+const LOOK_SAME_MOMENT = 5;
+/** Words a flow name may share with its screens without being named after their content. */
+const NAME_PLAIN_WORDS = new Set('a an and the of for to in on at by with from into your my new all app account settings profile search web page pages tab tabs photo photos video videos email password code message messages chat notes note list home menu option options mode screen'.split(' '));
+
+/**
+ * For a review on the lighter model (Sonnet): the spots where it was seen to slip, listed for a
+ * second, focused look — possible repeats in a flow, steps far in time from the rest of their
+ * flow, near-empty screens and loose tasks at the top of the tree. Not faults to fix: each one is
+ * looked at on its pictures and decided, kept with a reason or fixed (lookAgain in corrections).
+ */
+function writeLookAgain(dir, appId, screens, flows, grayOf, textOf) {
+  const file = join(dir, 'look-again.json');
+  if (!existsSync(join(dir, 'strict.json'))) {
+    rmSync(file, { force: true });
+    return;
+  }
+  const items = [];
+  const byId = new Map(screens.map((screen) => [screen.id, screen]));
+  const brief = (screen) => ({ n: screen.n, id: screen.id, name: screen.name, atSeconds: screen.atSeconds, sheet: `sheet-${screen.sheet}.png`, strip: `frames/${screen.n}.png` });
+  for (const flow of flows) {
+    const steps = flow.screenIds.map((sid) => byId.get(sid)).filter(Boolean);
+    for (let i = 1; i < steps.length; i++) for (let j = 0; j < i; j++) {
+      const a = steps[j];
+      const b = steps[i];
+      const ga = grayOf.get(a.id);
+      const gb = grayOf.get(b.id);
+      // Side by side, one name is a state of the same page (empty, typed, error): real steps.
+      // Apart, it is the same sequence gone through again — the repeat a light review leaves in.
+      if (i - j < 2 || !ga || !gb || a.name !== b.name || !within(ga, gb, LOOK_ALIKE)) continue;
+      items.push({ key: `repeat:${[a.hash, b.hash].sort().join('+')}`, kind: 'repeat', hashes: [a.hash, b.hash], flow: flow.name, screens: [brief(a), brief(b)], ask: `In "${flow.name}", #${a.n} and #${b.n} are both "${a.name}" and look nearly alike. A step gone through twice (the same sequence again) is a repeat — remove one. A different state (empty, typed, error, loading, done) is a step of its own — keep both.` });
+    }
+    const timed = steps.filter((screen) => typeof screen.atSeconds === 'number').sort((a, b) => a.atSeconds - b.atSeconds);
+    if (timed.length >= 3) {
+      let cut = 0;
+      let widest = 0;
+      for (let i = 1; i < timed.length; i++) {
+        const gap = timed[i].atSeconds - timed[i - 1].atSeconds;
+        if (gap > widest) {
+          widest = gap;
+          cut = i;
+        }
+      }
+      const group = cut * 2 <= timed.length ? timed.slice(0, cut) : timed.slice(cut);
+      if (widest > LOOK_APART_SECONDS && group.length * 3 <= timed.length) {
+        for (const screen of group) items.push({ key: `apart:${screen.hash}`, kind: 'apart', hashes: [screen.hash], flow: flow.name, screens: [brief(screen)], ask: `In "${flow.name}", #${screen.n} "${screen.name}" (${screen.atSeconds}s) stands ${Math.round(widest)}s apart from the rest of the flow. Does it belong to this task? If it is from another task, move it there; if the person came back to it in this task, keep it.` });
+      }
+    }
+  }
+  // The same moment, or the same step gone through again, kept in two flows.
+  const flowOf = new Map();
+  for (const flow of flows) for (const sid of flow.screenIds) if (!flowOf.has(sid)) flowOf.set(sid, flow);
+  for (let i = 1; i < screens.length; i++) for (let j = 0; j < i; j++) {
+    const a = screens[j];
+    const b = screens[i];
+    const fa = flowOf.get(a.id);
+    const fb = flowOf.get(b.id);
+    const ga = grayOf.get(a.id);
+    const gb = grayOf.get(b.id);
+    if (!fa || !fb || fa === fb || !ga || !gb) continue;
+    const close = typeof a.atSeconds === 'number' && typeof b.atSeconds === 'number' && Math.abs(a.atSeconds - b.atSeconds) <= LOOK_SAME_MOMENT;
+    // One flow handing over to the next (its last step, the other's first), or two flows starting
+    // from one page, is a shared page, not a repeat.
+    const first = (flow, screen) => flow.screenIds[0] === screen.id;
+    const last = (flow, screen) => flow.screenIds.at(-1) === screen.id;
+    const shared = (last(fa, a) && first(fb, b)) || (last(fb, b) && first(fa, a)) || (first(fa, a) && first(fb, b));
+    if (!close || shared || a.name !== b.name || !within(ga, gb, LOOK_ALIKE)) continue;
+    items.push({ key: `across:${[a.hash, b.hash].sort().join('+')}`, kind: 'across', hashes: [a.hash, b.hash], flow: `${fa.name} / ${fb.name}`, screens: [brief(a), brief(b)], ask: `#${a.n} "${a.name}" (in "${fa.name}") and #${b.n} "${b.name}" (in "${fb.name}") look nearly alike and are seconds apart in the recording. One moment kept in two flows is a repeat — keep it in the flow it belongs to and remove the other. Two real steps that only look alike — keep both.` });
+  }
+  // A flow that keeps going back to the menu is a walk through the app's sections, not one task.
+  for (const flow of flows) {
+    const visits = flow.screenIds.map((sid) => byId.get(sid)).filter((screen) => screen && MENU_NAME.test(screen.name));
+    if (visits.length < MENU_VISITS) continue;
+    items.push({ key: `sections:${flow.id}`, kind: 'sections', hashes: visits.map((screen) => screen.hash), flow: flow.name, screens: visits.map(brief), ask: `"${flow.name}" goes back to the app's menu ${visits.length} times — it walks through several of the app's sections. Make each section the menu opens (for example Projects, Artifacts, Code) an area of its own at the top of the tree, holding its screens, and keep the menu itself once.` });
+  }
+  // A flow named after what its screens show (a search's words, a list's items), not after the task.
+  const appWords = new Set(String(appId).split('-'));
+  for (const flow of textOf ? flows : []) {
+    // "Searching for dim sum restaurants": what was searched or asked for, as written on its screens.
+    const [, about] = String(flow.name).toLowerCase().match(/^(?:searching|looking|asking|browsing|shopping) (?:for|about) (?:an? |the )?(.+)$/) ?? [];
+    if (!about) continue;
+    const words = about.split(/[^a-z0-9]+/).filter(Boolean);
+    const text = ` ${flow.screenIds.map((sid) => textOf(sid)).join(' ').toLowerCase().replace(/[^a-z0-9]+/g, ' ')} `;
+    // Two content words, side by side, written on its screens.
+    const pair = words.findIndex((word, k) => k + 1 < words.length && ![word, words[k + 1]].some((w) => NAME_PLAIN_WORDS.has(w) || appWords.has(w) || w.length < 3) && text.includes(` ${word} ${words[k + 1]} `));
+    if (pair < 0) continue;
+    items.push({ key: `content:${flow.id}`, kind: 'content', hashes: [], flow: flow.name, screens: [], ask: `The flow "${flow.name}" is named after words on its screens ("${words[pair]} ${words[pair + 1]}") — what was typed or shown, not the task. Name it for the task a person does, as Mobbin does (for example "Getting an AI answer", not "Searching for dim sum"), unless those words are the app's own feature name.` });
+  }
+  for (const screen of screens) {
+    if (screen.spread === undefined || screen.spread >= BLANK_SPREAD || screen.blank) continue;
+    items.push({ key: `empty:${screen.hash}`, kind: 'empty', hashes: [screen.hash], screens: [brief(screen)], ask: `#${screen.n} "${screen.name}" has very little on it. A blank flash or an empty loading page is no step — remove it. A real screen that happens to be plain or dark — keep it.` });
+  }
+  const ids = new Set(flows.map((flow) => flow.id));
+  const loose = flows.filter((flow) => (!flow.parentId || !ids.has(flow.parentId)) && /^\w+ing\b/i.test(flow.name) && !/^onboarding$/i.test(flow.name));
+  if (loose.length >= FLAT_TASKS) items.push({ key: `flat:${appId}`, kind: 'flat', hashes: [], screens: [], flows: loose.map((flow) => flow.name), ask: `${loose.length} tasks sit at the top of the tree with no area (${loose.map((flow) => `"${flow.name}"`).join(', ')}). Group them under the app's areas, as Mobbin does (for example "Search" holding "Searching by voice"), unless the app truly has no areas.` });
+  writeJson(file, items);
+}
+
+/** What a strict review still has to decide on its look-again list, or said it fixed but did not. */
+function lookAgainProblems(dir) {
+  const items = readJson(join(dir, 'look-again.json'), []);
+  const decided = new Map(readJson(join(dir, 'look-again-decided.json'), []).map((entry) => [entry.key, entry]));
+  const problems = [];
+  for (const item of items) {
+    const decision = decided.get(item.key);
+    if (!decision) problems.push(`look again (${item.kind}): ${item.ask} — decide it ("lookAgain": [{ "key": "${item.key}", "decision": "keep" or "fixed", "why" }]); see work file look-again.json`);
+    else if (decision.decision === 'fixed') problems.push(`look again (${item.kind}): said fixed, but it is still there — ${item.ask} ("lookAgain": [{ "key": "${item.key}", "decision": "keep" or "fixed", "why" }])`);
+  }
   return problems;
 }
 
@@ -828,6 +958,15 @@ async function applyReviewUnlocked(options) {
     decided.push(skip.at);
   }
   for (const add of Array.isArray(corrections.add) ? corrections.add : []) if (typeof add.at === 'number') decided.push(add.at);
+  // Look again (Sonnet reviews): each listed spot decided — kept with a reason, or fixed.
+  const lookItems = new Set(readJson(join(dir, 'look-again.json'), []).map((item) => item.key));
+  const lookDecided = new Map(readJson(join(dir, 'look-again-decided.json'), []).map((entry) => [entry.key, entry]));
+  for (const entry of Array.isArray(corrections.lookAgain) ? corrections.lookAgain : []) {
+    if (!lookItems.has(entry?.key)) skipsRefused.push(`"lookAgain" names nothing on the look-again list: ${String(entry?.key).slice(0, 80)}`);
+    else if (!['keep', 'fixed'].includes(entry.decision) || typeof entry.why !== 'string' || entry.why.trim().length < 8) skipsRefused.push(`"lookAgain" ${entry.key} needs "decision": "keep" or "fixed", and a real "why"`);
+    else lookDecided.set(entry.key, { key: entry.key, decision: entry.decision, why: entry.why.trim() });
+  }
+  writeJson(join(dir, 'look-again-decided.json'), [...lookDecided.values()]);
   // Findings looked at and kept on purpose, each with its reason.
   const confirmed = readJson(join(dir, 'confirmed.json'), []);
   for (const entry of Array.isArray(corrections.confirm) ? corrections.confirm : []) {
@@ -891,7 +1030,13 @@ async function applyReviewUnlocked(options) {
   for (const image of chosen) checked.add(pictureHash(image));
   // A verdict for a whole contact sheet: every screen on it, as the package showed it.
   const sheetOf = readJson(join(dir, 'screens.json'), { screens: [] }).screens;
+  const strictReview = existsSync(join(dir, 'strict.json'));
   for (const entry of Array.isArray(corrections.sheets) ? corrections.sheets : []) {
+    // A strict (Sonnet) review gives every screen its own verdict, so each one is looked at.
+    if (strictReview) {
+      skipsRefused.push(`this review gives a verdict per screen ("checked"), not per sheet — sheet ${entry?.sheet} was not counted`);
+      continue;
+    }
     const on = sheetOf.filter((screen) => screen.sheet === entry?.sheet && screen.hash);
     if (!on.length) skipsRefused.push(`"sheets" names no contact sheet: ${JSON.stringify(entry).slice(0, 60)}`);
     else if (typeof entry.see !== 'string' || entry.see.trim().length < 12) skipsRefused.push(`the verdict for sheet ${entry.sheet} needs "see": what is on it, looked at`);
@@ -1059,7 +1204,7 @@ async function applyReviewUnlocked(options) {
   if (!problems.length) {
     dropCache(dir);
     for (const entry of readdirSync(dir)) {
-      const working = /^recording\./.test(entry) || entry === 'frames' || entry === 'corrections-draft.json' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || entry === 'missed.json' || /^(flow-\d+\.png|flow-sheets\.json|findings\.json|confirmed\.json|checked\.json|audited\.json|preparing\.json|work-parts\.json|work-(first|check)-\d+\.json)$/.test(entry) || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
+      const working = /^recording\./.test(entry) || entry === 'frames' || entry === 'corrections-draft.json' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || entry === 'missed.json' || /^(flow-\d+\.png|flow-sheets\.json|findings\.json|confirmed\.json|checked\.json|audited\.json|preparing\.json|work-parts\.json|work-(first|check)-\d+\.json|strict\.json|look-again\.json|look-again-decided\.json)$/.test(entry) || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
       const olderBackup = entry.startsWith('backup-') && join(dir, entry) !== backup;
       if (working || olderBackup) rmSync(join(dir, entry), { recursive: true, force: true });
     }
@@ -1243,6 +1388,7 @@ function reviewLayerProblems({ dataDir, appId, platform, version, appDir, screen
       previous = { sid, at };
     }
   }
+  if (existsSync(join(dir, 'strict.json'))) problems.push(...lookAgainProblems(dir));
   const checked = new Set(readJson(join(dir, 'checked.json'), []));
   const unchecked = screens.filter(({ id }) => !checked.has(hashOf.get(id))).map(({ id }) => id.slice(tag.length));
   if (unchecked.length) problems.push(`${unchecked.length} screen(s) have no verdict yet — look at each and give it a verdict ("sheets" for a whole contact sheet, "checked" for one screen): ${unchecked.slice(0, 25).join(', ')}${unchecked.length > 25 ? ', …' : ''}`);
@@ -1251,6 +1397,11 @@ function reviewLayerProblems({ dataDir, appId, platform, version, appDir, screen
   if (open.length) problems.push(`${open.length} flow(s) not yet approved by the second check as they stand now (audit-motvin.md, flow sheets): ${open.slice(0, 25).join(', ')}${open.length > 25 ? ', …' : ''}`);
   return problems;
 }
+
+/**
+ * The extra holds of a strict (Sonnet) review, from the slips it was seen to make: a repeat left
+ * side by side, a screen filed in a flow it does not belong to, and a flat tree of loose tasks.
+ */
 
 /** Seconds around a screen's moment shown in its frame strip. */
 const STRIP_OFFSETS = [-0.9, -0.6, -0.3, 0, 0.3, 0.6, 1, 1.5, 2.2, 3];
@@ -1411,6 +1562,7 @@ async function writeFrameStrips(dir, screens, flows, keptGrays) {
   }));
   rmSync(raw, { recursive: true, force: true });
 }
+
 
 /** Two frames of one page, once each is stretched to full contrast (a fade in or out no longer counts). */
 const SAME_PAGE_NORMALISED = 0.05;

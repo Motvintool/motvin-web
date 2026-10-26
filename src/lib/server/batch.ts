@@ -507,11 +507,21 @@ function startNextReview(batch: Batch): boolean {
     reviewer === 'gemini'
       ? 'If you cannot start separate agents, do the four parts yourself one after another; never stop before every part is done.'
       : 'Start all four agents of a pass together, in one single message (four agent calls at once, never two and then two), and wait until every one of them has returned before going on; never end your reply while any agent is still working.',
+    ...(batch.settings.reviewModel === 'sonnet' && reviewer === 'claude'
+      ? ['This review runs strict: give every screen its own verdict ("checked" with what it shows) — verdicts per sheet are not counted; open the frame strip frames/<n>.png of every finding and missed moment before deciding it; group task flows under the app\'s areas, the way Mobbin does: the areas are the app\'s own tabs and menu sections (Home, Projects, Artifacts, Code, Settings…), every section the recording opens is an area of its own even with one to three screens, and no task walks through several sections. After the second check, do the look-again pass (docs/review-motvin.md step 7b): one fresh agent opens the pictures of every item in look-again.json and decides it, keep or fixed, with a reason.']
+      : []),
     'Finish only when apply-review says "review check: no problems left".',
   ].join(' ');
   const tools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Agent', 'Task', 'Bash(cd:*)', 'Bash(node:*)', 'Bash(npm run build:inspirations)', 'Bash(npm run --silent build:inspirations)', 'Bash(cp:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'Bash(mkdir:*)', 'Bash(python3:*)', 'Bash(echo:*)', 'Bash(grep:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(sort:*)', 'Bash(uniq:*)', 'Bash(find:*)', 'Bash(sed:*)', 'Bash(awk:*)', 'Bash(date:*)', 'Bash(pwd)', 'Bash(jq:*)'];
   // The review's model is fixed here, not left to whatever the terminal last picked.
   const claudeModel = batch.settings.reviewModel === 'sonnet' ? SONNET_MODEL : REVIEW_MODEL;
+  // A Sonnet review runs strict: the crawler adds its extra checks and wants a verdict per screen.
+  const strict = reviewer === 'claude' && batch.settings.reviewModel === 'sonnet';
+  const strictFile = join(reviewFolder(item.appId, platform, item.version), 'strict.json');
+  if (strict) {
+    mkdirSync(dirname(strictFile), { recursive: true });
+    writeFileSync(strictFile, `${JSON.stringify({ model: claudeModel, since: new Date().toISOString() })}\n`);
+  } else rmSync(strictFile, { force: true });
   // Claude Code runs with the tools listed above only. The Gemini CLI has no such list here: it
   // runs with its own approvals switched off (--yolo), so it is for a trusted machine only.
   const args = reviewer === 'gemini'
