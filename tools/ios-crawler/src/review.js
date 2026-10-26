@@ -782,6 +782,11 @@ function writeLookAgain(dir, appId, screens, flows, grayOf, textOf) {
     if (visits.length < MENU_VISITS) continue;
     items.push({ key: `sections:${flow.id}`, kind: 'sections', hashes: visits.map((screen) => screen.hash), flow: flow.name, screens: visits.map(brief), ask: `"${flow.name}" goes back to the app's menu ${visits.length} times — it walks through several of the app's sections. Make each section the menu opens (for example Projects, Artifacts, Code) an area of its own at the top of the tree, holding its screens, and keep the menu itself once.` });
   }
+  // "Adding connectors and skills": two tasks in one flow, each a flow of its own (Mobbin keeps one task per flow).
+  for (const flow of flows) {
+    if (!/^\w+ing\b.* and /i.test(flow.name) || / and back\b/i.test(flow.name)) continue;
+    items.push({ key: `two:${flow.id}`, kind: 'two', hashes: [], flow: flow.name, screens: [], ask: `"${flow.name}" names two things. If they are two tasks (for example adding a connector, then browsing skills), split the flow in two, each with its own steps and an -ing name. If it is one task whose name has "and" in it (for example "Privacy and security"), keep it.` });
+  }
   // A flow named after what its screens show (a search's words, a list's items), not after the task.
   const appWords = new Set(String(appId).split('-'));
   for (const flow of textOf ? flows : []) {

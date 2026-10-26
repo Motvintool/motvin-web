@@ -201,6 +201,9 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
     setError(null);
     try {
       const items = [];
+      // Every upload lands in this day's version (or the one chosen), fixed now so a run past midnight keeps it.
+      const now = new Date();
+      const day = settings.version ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       for (const [i, row] of rows.entries()) {
         const name = row.name.trim() || plainName(row.title);
         setStarting(`Preparing ${i + 1} of ${rows.length}: ${name}`);
@@ -212,6 +215,11 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
         let appId = existing?.id ?? slug(name);
         let detectIndustry = false;
         if (existing && settings.existing === 'replace') await adminApi.deleteApp(existing.id);
+        // A version of that day already there is replaced: an upload adds to its day's folder, mixing old and new.
+        if (existing && settings.existing === 'version' && existing.versions?.some((entry) => entry.id === day)) {
+          setStarting(`Replacing ${existing.name}'s version of ${day}`);
+          await adminApi.deleteVersion(existing.id, day);
+        }
         if (!existing || settings.existing === 'replace') {
           // A new app under the name given; its real category is looked up by the upload.
           appId = slug(name) || `app-${Date.now().toString(36)}`;
@@ -231,7 +239,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
         items.push({ title: row.title, video, ownsVideo: row.video.kind === 'file', appId, detectIndustry });
       }
       setStarting('Starting the queue');
-      await api('/api/crawler/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ settings, items }) });
+      await api('/api/crawler/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ settings: { ...settings, version: day }, items }) });
       setRows([]);
       await refresh();
       await onChanged();
@@ -385,18 +393,9 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
             hint={settings.reviewer === 'gemini' ? (reviewers.gemini ? 'Reviews run with Google’s Gemini CLI (the Gemini models Antigravity uses). New — test it on one app before a big batch.' : 'Needs Google’s Gemini CLI on this computer: npm install -g @google/gemini-cli, then run gemini once to sign in. Until then, each app ends ready for you to review — copy the request into Antigravity.') : undefined}
           />
         )}
-        {settings.review === 'auto' && settings.reviewer === 'claude' && (
-          <Choice
-            label="Review model"
-            value={settings.reviewModel}
-            onChange={(v) => set('reviewModel', v)}
-            options={[['sonnet', 'Sonnet 5.5'], ['opus', 'Opus 5.5']]}
-            hint={settings.reviewModel === 'sonnet' ? 'Uses less of your AI usage. Runs strict, with extra checks for the slips it tends to make (repeats, flow names, areas).' : 'The most careful review; uses the most AI usage.'}
-          />
-        )}
         <Choice label="Apps at the same time" value={String(settings.appsAtOnce) as '1' | '2' | '3' | '4'} onChange={(v) => set('appsAtOnce', Number(v) as 1 | 2 | 3 | 4)} options={[['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']]} hint="Each app goes through its own upload, clean-up and review without waiting for the others. More at once finishes sooner; the AI usage is the same in total. 3 suits most Macs." />
         <Choice label="After a clean review" value={settings.afterReview} onChange={(v) => set('afterReview', v)} options={[['cleanup', 'Clean up working files'], ['keep', 'Keep files for me to check']]} />
-        <Choice label="App already in the library" value={settings.existing} onChange={(v) => set('existing', v)} options={[['skip', 'Skip it'], ['version', 'Add as a new version'], ['replace', 'Replace it']]} hint={settings.existing === 'replace' ? 'Replace removes the app and all its screens before uploading it again.' : undefined} />
+        <Choice label="App already in the library" value={settings.existing} onChange={(v) => set('existing', v)} options={[['skip', 'Skip it'], ['version', 'Add as a new version'], ['replace', 'Replace it']]} hint={settings.existing === 'replace' ? 'Replace removes the app and all its screens before uploading it again.' : settings.existing === 'version' ? 'Versions are by day: a version from the same day is replaced by the new upload.' : undefined} />
         <Choice label="Platform" value={settings.platform} onChange={(v) => set('platform', v)} options={[['ios', 'iOS'], ['webapp', 'Web App'], ['web', 'Web']]} />
         <div className="ins-field">
           <span className="ins-field-label">Version date</span>

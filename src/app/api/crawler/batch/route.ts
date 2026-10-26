@@ -41,7 +41,8 @@ export async function POST(request: Request) {
     notify: raw.notify === 'summary' || raw.notify === 'off' ? raw.notify : 'each',
     appsAtOnce: raw.appsAtOnce === 1 || raw.appsAtOnce === 2 || raw.appsAtOnce === 4 ? raw.appsAtOnce : 3,
     reviewer: raw.reviewer === 'gemini' ? 'gemini' : 'claude',
-    reviewModel: raw.reviewModel === 'opus' ? 'opus' : 'sonnet',
+    // Reviews run on Sonnet only, strict with its extra checks.
+    reviewModel: 'sonnet',
   };
   const records = recordsDir();
   const uploads = batchFilesDir();
