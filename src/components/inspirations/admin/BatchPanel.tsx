@@ -42,6 +42,7 @@ type BatchItem = {
   finishedAt: string | null;
   waitUntil: string | null;
   result: { appName: string; screens: number; flows: number } | null;
+  workMs?: number;
 };
 type Batch = { id: string; cleared?: boolean; createdAt: string; settings: Settings & { platform: Platform }; items: BatchItem[]; state: 'running' | 'paused' | 'done'; finishedAt: string | null };
 
@@ -65,6 +66,11 @@ const plainName = (file: string) => file.replace(/\.[^.]+$/, '').replace(/[_-]+/
 const minutes = (from: string | null, to: string | null) => {
   if (!from) return '';
   const seconds = Math.max(0, Math.round(((to ? Date.parse(to) : Date.now()) - Date.parse(from)) / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+};
+
+const clockOf = (ms: number) => {
+  const seconds = Math.max(0, Math.round(ms / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 };
 
@@ -281,7 +287,8 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
                 <div className="ins-batch-item-sub">
                   {item.note && <span>{item.note}</span>}
                   {item.result && <span>{item.result.screens} screens · {item.result.flows} flows</span>}
-                  {item.startedAt && <span>{minutes(item.startedAt, item.finishedAt)}</span>}
+                  {/* Working time only — waits for a turn, for AI usage or for you are left out. */}
+                  {item.workMs !== undefined ? <span title="Time spent uploading and reviewing">{clockOf(item.workMs)}</span> : item.startedAt && <span>{minutes(item.startedAt, item.finishedAt)}</span>}
                 </div>
                 <div className="ins-batch-item-actions">
                   {item.appId && ['done', 'review-ready'].includes(item.stage) && (

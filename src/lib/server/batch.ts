@@ -72,6 +72,10 @@ export type BatchItem = {
   reviewStartedAt: string | null;
   finishedAt: string | null;
   result: { appName: string; screens: number; flows: number; problems: number } | null;
+  /** Time spent working on this app — uploading or reviewing — leaving out waits for its turn, for AI usage or for the admin. */
+  workMs?: number;
+  /** When workMs was last brought up to date while the app was working. */
+  countedAt?: number | null;
 };
 
 export type Batch = {
@@ -291,6 +295,15 @@ async function tick() {
     let changed = false;
     for (const batch of runner.batches) {
       if (batch.state === 'done') continue;
+      // Working time: counted only while an app is uploading or being reviewed.
+      const now = Date.now();
+      for (const item of batch.items) {
+        const working = (item.stage === 'uploading' || item.stage === 'reviewing') && batch.state === 'running';
+        if (working && item.countedAt) item.workMs = (item.workMs ?? 0) + (now - item.countedAt);
+        const next = working ? now : null;
+        if (next !== item.countedAt) changed = true;
+        item.countedAt = next;
+      }
       for (const item of batch.items) changed = followUpload(batch, item) || changed;
       for (const item of batch.items) changed = followReview(batch, item) || changed;
       if (batch.state === 'running') {
@@ -536,11 +549,14 @@ function followReview(batch: Batch, item: BatchItem): boolean {
     return true;
   }
   // Out of AI usage: wait and go again, without counting it as a try.
-  if (/usage limit|rate limit|limit reached|resets at|quota/i.test(output)) {
+  // Any wording Claude uses ("session limit", "usage limit", "weekly limit"… "resets 3:50am").
+  if (/\b(usage|session|rate|weekly|daily|hourly|5-hour|plan)\s+limit|limit (reached|hit)|hit your limit|\bresets\b|quota|overloaded/i.test(output)) {
+    const resetsAt = resetTime(output);
     item.stage = 'review-queued';
     item.reviewTries = Math.max(0, item.reviewTries - 1);
-    item.waitUntil = new Date(Date.now() + USAGE_WAIT_MS).toISOString();
-    item.note = 'Out of AI usage for now — trying again in 30 minutes';
+    item.waitUntil = new Date(resetsAt ?? Date.now() + USAGE_WAIT_MS).toISOString();
+    item.note = resetsAt ? `Out of AI usage — continues by itself at ${new Date(resetsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'Out of AI usage for now — trying again in 30 minutes';
+    logLine(`${item.title}: out of AI usage, waiting until ${item.waitUntil}`);
     return true;
   }
   if (item.reviewTries < TRIES) {
@@ -616,6 +632,19 @@ function keepAwake(on: boolean) {
     runner.awake.kill();
     runner.awake = null;
   }
+}
+
+/** When the limit message says usage comes back ("resets 3:50am"), a minute after that; else null. */
+function resetTime(output: string): number | null {
+  const match = output.match(/resets\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (!match) return null;
+  let hour = Number(match[1]) % 12;
+  if ((match[3] ?? '').toLowerCase() === 'pm' || (!match[3] && Number(match[1]) > 12)) hour += 12;
+  if (!match[3] && Number(match[1]) === 12) hour = 12;
+  const at = new Date();
+  at.setHours(hour, Number(match[2] ?? 0) + 1, 0, 0);
+  if (at.getTime() <= Date.now()) at.setDate(at.getDate() + 1);
+  return at.getTime();
 }
 
 function alive(pid: number | undefined): boolean {
