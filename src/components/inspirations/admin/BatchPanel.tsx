@@ -381,7 +381,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
             label="Reviewer"
             value={settings.reviewer}
             onChange={(v) => set('reviewer', v)}
-            options={[['claude', 'Claude (Opus 5.5)'], ['gemini', 'Gemini']]}
+            options={[['claude', 'Claude'], ['gemini', 'Gemini']]}
             hint={settings.reviewer === 'gemini' ? (reviewers.gemini ? 'Reviews run with Google’s Gemini CLI (the Gemini models Antigravity uses). New — test it on one app before a big batch.' : 'Needs Google’s Gemini CLI on this computer: npm install -g @google/gemini-cli, then run gemini once to sign in. Until then, each app ends ready for you to review — copy the request into Antigravity.') : undefined}
           />
         )}
