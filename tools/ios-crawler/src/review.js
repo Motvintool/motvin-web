@@ -1059,7 +1059,7 @@ async function applyReviewUnlocked(options) {
   if (!problems.length) {
     dropCache(dir);
     for (const entry of readdirSync(dir)) {
-      const working = /^recording\./.test(entry) || entry === 'frames' || entry === 'corrections-draft.json' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || entry === 'missed.json' || /^(flow-\d+\.png|flow-sheets\.json|findings\.json|confirmed\.json|checked\.json|audited\.json|preparing\.json|work-parts\.json)$/.test(entry) || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
+      const working = /^recording\./.test(entry) || entry === 'frames' || entry === 'corrections-draft.json' || /^sheet-\d+\.png$/.test(entry) || entry === 'screens.json' || entry === 'doubts.json' || entry === 'missed.json' || /^(flow-\d+\.png|flow-sheets\.json|findings\.json|confirmed\.json|checked\.json|audited\.json|preparing\.json|work-parts\.json|work-(first|check)-\d+\.json)$/.test(entry) || /^corrections.*\.json$/.test(entry) || /^reviewed-before.*\.json$/.test(entry);
       const olderBackup = entry.startsWith('backup-') && join(dir, entry) !== backup;
       if (working || olderBackup) rmSync(join(dir, entry), { recursive: true, force: true });
     }
@@ -1755,7 +1755,55 @@ async function writeFlowSheets(dir, order, screens, pathOf) {
     }),
     secondCheck: split(index, (entry) => entry.steps.length).map((part) => ({ flows: part.map((entry) => entry.picture).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) })),
   });
+  writeWorkFiles(dir, index);
   return k;
+}
+
+/**
+ * One small file per agent: only its own part — its screens, their missed moments and findings,
+ * or its flows — with the lists the review chooses from. An agent reads this, not the whole
+ * screens.json, so it carries a quarter of the app instead of all of it at every step.
+ */
+function writeWorkFiles(dir, flowIndex) {
+  for (const entry of readdirSync(dir)) if (/^work-(first|check)-\d+\.json$/.test(entry)) rmSync(join(dir, entry));
+  const pack = readJson(join(dir, 'screens.json'), null);
+  const parts = readJson(join(dir, 'work-parts.json'), null);
+  if (!pack || !parts) return;
+  const lists = { types: pack.types, elements: pack.elements, tags: pack.tags, flowCategories: pack.flowCategories };
+  const findings = readJson(join(dir, 'findings.json'), { picture: [], duplicate: [], blank: [] });
+  const allFindings = [...(findings.picture ?? []), ...(findings.duplicate ?? []), ...(findings.blank ?? [])];
+  const missed = readJson(join(dir, 'missed.json'), []);
+  (parts.firstPass ?? []).forEach((part, i) => {
+    const sheets = part.sheets.map((name) => Number(name.match(/\d+/)[0]));
+    const file = `work-first-${i + 1}.json`;
+    part.file = file;
+    writeJson(join(dir, file), {
+      part: i + 1,
+      of: parts.firstPass.length,
+      app: { id: pack.app, platform: pack.platform, version: pack.version, name: pack.appName, industry: pack.industry },
+      sheets: part.sheets,
+      screens: pack.screens.filter((screen) => sheets.includes(screen.sheet)),
+      missed: missed.filter((moment) => part.missed.includes(moment.k)),
+      findings: allFindings.filter((entry) => part.findings.includes(entry.key)),
+      ...lists,
+    });
+  });
+  const flowByPicture = new Map(flowIndex.map((entry) => [entry.picture, entry]));
+  (parts.secondCheck ?? []).forEach((part, i) => {
+    const file = `work-check-${i + 1}.json`;
+    part.file = file;
+    writeJson(join(dir, file), {
+      part: i + 1,
+      of: parts.secondCheck.length,
+      app: { id: pack.app, platform: pack.platform, version: pack.version, name: pack.appName },
+      flows: part.flows.map((picture) => {
+        const flow = flowByPicture.get(picture);
+        return { id: flow?.id, path: flow?.path, sheet: picture, steps: (flow?.steps ?? []).map((n) => pack.screens.find((screen) => screen.n === n)).filter(Boolean).map((screen) => ({ n: screen.n, id: screen.id, name: screen.name, type: screen.type, atSeconds: screen.atSeconds })) };
+      }),
+      flowCategories: pack.flowCategories,
+    });
+  });
+  writeJson(join(dir, 'work-parts.json'), parts);
 }
 
 /** The missed moments the review has not yet added or skipped. */

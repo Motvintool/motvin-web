@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import { fail, verifyAdmin } from '@/lib/server/adminAuth';
-import { batchFilesDir, claudeCli, controlBatch, createBatch, listBatches, recordsDir, startBatchRunner } from '@/lib/server/batch';
+import { batchFilesDir, claudeCli, controlBatch, createBatch, geminiCli, listBatches, recordsDir, startBatchRunner } from '@/lib/server/batch';
 import type { BatchSettings } from '@/lib/server/batch';
 
 /**
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const admin = await verifyAdmin(request);
   if (!admin) return fail('This account may not administer the library.', 403);
   startBatchRunner();
-  return Response.json({ batches: listBatches(), autoReview: Boolean(claudeCli()) }, { headers: { 'Cache-Control': 'no-store' } });
+  return Response.json({ batches: listBatches(), autoReview: Boolean(claudeCli()), reviewers: { claude: Boolean(claudeCli()), gemini: Boolean(geminiCli()) } }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function POST(request: Request) {
@@ -40,6 +40,7 @@ export async function POST(request: Request) {
     version: typeof raw.version === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.version) ? raw.version : null,
     notify: raw.notify === 'summary' || raw.notify === 'off' ? raw.notify : 'each',
     appsAtOnce: raw.appsAtOnce === 1 || raw.appsAtOnce === 2 || raw.appsAtOnce === 4 ? raw.appsAtOnce : 3,
+    reviewer: raw.reviewer === 'gemini' ? 'gemini' : 'claude',
   };
   const records = recordsDir();
   const uploads = batchFilesDir();

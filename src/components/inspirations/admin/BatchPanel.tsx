@@ -28,6 +28,7 @@ type Settings = {
   version: string | null;
   notify: 'each' | 'summary' | 'off';
   appsAtOnce: 1 | 2 | 3 | 4;
+  reviewer: 'claude' | 'gemini';
 };
 type RecordVideo = { name: string; file: string; path: string; platform: Platform | 'any'; sizeBytes: number };
 type Row = { key: string; title: string; name: string; video: { kind: 'records'; path: string } | { kind: 'file'; file: File }; logo: { kind: 'records'; file: string } | { kind: 'file'; file: File } | null; sizeBytes: number };
@@ -59,7 +60,7 @@ const STAGE_LABEL: Record<BatchItem['stage'], string> = {
   'needs-you': 'Needs you',
 };
 
-const DEFAULTS: Settings = { cleanup: 'automatic', review: 'auto', afterReview: 'cleanup', existing: 'skip', platform: 'ios', version: null, notify: 'each', appsAtOnce: 3 };
+const DEFAULTS: Settings = { cleanup: 'automatic', review: 'auto', afterReview: 'cleanup', existing: 'skip', platform: 'ios', version: null, notify: 'each', appsAtOnce: 3, reviewer: 'claude' };
 const PLATFORM_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web App', web: 'Web' };
 
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
@@ -106,6 +107,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
   const [picking, setPicking] = useState(false);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [autoReview, setAutoReview] = useState(true);
+  const [reviewers, setReviewers] = useState<{ claude: boolean; gemini: boolean }>({ claude: true, gemini: false });
   const [starting, setStarting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, setNow] = useState(0);
@@ -126,10 +128,11 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
     let live = true;
     const poll = async () => {
       try {
-        const next = await api<{ batches: Batch[]; autoReview: boolean }>('/api/crawler/batch');
+        const next = await api<{ batches: Batch[]; autoReview: boolean; reviewers?: { claude: boolean; gemini: boolean } }>('/api/crawler/batch');
         if (!live) return;
         setBatches(next.batches);
         setAutoReview(next.autoReview);
+        if (next.reviewers) setReviewers(next.reviewers);
         setNow(Date.now());
       } catch {
         // The board still shows the last state.
@@ -370,6 +373,15 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
         <p className="ins-addflow-title">Settings for every app</p>
         <Choice label="Clean up" value={settings.cleanup} onChange={(v) => set('cleanup', v)} options={[['automatic', 'Automatically'], ['manual', 'I’ll choose myself']]} hint={settings.cleanup === 'manual' ? 'Each app waits for your choice in the Motvin agent; the next one waits behind it.' : undefined} />
         <Choice label="Review" value={settings.review} onChange={(v) => set('review', v)} options={[['auto', 'Auto review'], ['manual', 'Manual review']]} hint={settings.review === 'auto' && !autoReview ? 'Auto review needs the Claude Code command-line tool on this computer. Until it is installed, each app ends ready for you to review.' : undefined} />
+        {settings.review === 'auto' && (
+          <Choice
+            label="Reviewer"
+            value={settings.reviewer}
+            onChange={(v) => set('reviewer', v)}
+            options={[['claude', 'Claude (Opus 5.5)'], ['gemini', 'Gemini']]}
+            hint={settings.reviewer === 'gemini' ? (reviewers.gemini ? 'Reviews run with Google’s Gemini CLI (the Gemini models Antigravity uses). New — test it on one app before a big batch.' : 'Needs Google’s Gemini CLI on this computer: npm install -g @google/gemini-cli, then run gemini once to sign in. Until then, each app ends ready for you to review — copy the request into Antigravity.') : undefined}
+          />
+        )}
         <Choice label="Apps at the same time" value={String(settings.appsAtOnce) as '1' | '2' | '3' | '4'} onChange={(v) => set('appsAtOnce', Number(v) as 1 | 2 | 3 | 4)} options={[['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']]} hint="Each app goes through its own upload, clean-up and review without waiting for the others. More at once finishes sooner; the AI usage is the same in total. 3 suits most Macs." />
         <Choice label="After a clean review" value={settings.afterReview} onChange={(v) => set('afterReview', v)} options={[['cleanup', 'Clean up working files'], ['keep', 'Keep files for me to check']]} />
         <Choice label="App already in the library" value={settings.existing} onChange={(v) => set('existing', v)} options={[['skip', 'Skip it'], ['version', 'Add as a new version'], ['replace', 'Replace it']]} hint={settings.existing === 'replace' ? 'Replace removes the app and all its screens before uploading it again.' : undefined} />

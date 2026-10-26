@@ -32,6 +32,8 @@ export type BatchSettings = {
   version: string | null;
   /** A system notification for each app and the summary, the summary only, or none. */
   notify: 'each' | 'summary' | 'off';
+  /** Which AI tool runs the auto reviews: Claude Code (the default) or Google's Gemini CLI. */
+  reviewer?: 'claude' | 'gemini';
   /** How many apps go through their whole process (upload to final check) side by side, each on its own. */
   appsAtOnce?: 1 | 2 | 3 | 4;
   /** Older batches: reviews side by side, uploads one at a time. */
@@ -105,6 +107,8 @@ const USAGE_WAIT_MS = 30 * 60_000;
 const KEEP_BATCHES = 10;
 /** The model auto reviews run on (MOTVIN_REVIEW_MODEL to change it). */
 const REVIEW_MODEL = process.env.MOTVIN_REVIEW_MODEL || 'claude-opus-5-5';
+/** The Gemini model auto reviews run on with the Gemini CLI (MOTVIN_GEMINI_MODEL to change it). */
+const GEMINI_MODEL = process.env.MOTVIN_GEMINI_MODEL || 'gemini-3.1-pro';
 
 const batchesDir = () => join(inspirationsDataDir(), '..', 'batches');
 export const batchFilesDir = () => join(batchesDir(), 'files');
@@ -274,18 +278,22 @@ export function controlBatch(id: string, action: 'pause' | 'resume' | 'retry' | 
   return batch;
 }
 
-/** Whether the Claude Code command-line tool is on this machine, for auto review. */
-export function claudeCli(): string | null {
-  // Installed with npm, it sits next to the node running this server.
-  const candidates = [process.env.CLAUDE_BIN, join(dirname(process.execPath), 'claude'), join(homedir(), '.claude', 'local', 'claude'), join(homedir(), '.local', 'bin', 'claude'), '/opt/homebrew/bin/claude', '/usr/local/bin/claude'].filter(Boolean) as string[];
+/** A command-line tool on this machine: from its env setting, next to this server's node (npm installs), or the usual places. */
+function findCli(name: string, envVar: string): string | null {
+  const candidates = [process.env[envVar], join(dirname(process.execPath), name), join(homedir(), '.claude', 'local', name), join(homedir(), '.local', 'bin', name), `/opt/homebrew/bin/${name}`, `/usr/local/bin/${name}`].filter(Boolean) as string[];
   for (const path of candidates) if (existsSync(path)) return path;
   try {
-    const found = execFileSync('/bin/sh', ['-lc', 'command -v claude'], { encoding: 'utf-8', timeout: 5000 }).trim();
+    const found = execFileSync('/bin/sh', ['-lc', `command -v ${name}`], { encoding: 'utf-8', timeout: 5000 }).trim();
     return found || null;
   } catch {
     return null;
   }
 }
+
+/** Claude Code, for auto review. */
+export const claudeCli = () => findCli('claude', 'CLAUDE_BIN');
+/** Google's Gemini CLI, for auto review with Gemini (the models Antigravity uses). */
+export const geminiCli = () => findCli('gemini', 'GEMINI_BIN');
 
 const later = (item: BatchItem) => item.waitUntil !== null && Date.parse(item.waitUntil) > Date.now();
 const finished = (item: BatchItem) => ['done', 'skipped', 'needs-you', 'review-ready'].includes(item.stage);
@@ -475,10 +483,11 @@ function startNextReview(batch: Batch): boolean {
     item.note = `Waiting for disk space to review alongside the others — ${(free / 1024 ** 3).toFixed(1)} GB free`;
     return true;
   }
-  const cli = claudeCli();
+  const reviewer = batch.settings.reviewer ?? 'claude';
+  const cli = reviewer === 'gemini' ? geminiCli() : claudeCli();
   if (!cli) {
     item.stage = 'review-ready';
-    item.note = 'Auto review needs the Claude Code command-line tool — ask the agent to review it';
+    item.note = reviewer === 'gemini' ? 'Auto review with Gemini needs the Gemini CLI on this computer — copy the review request instead' : 'Auto review needs the Claude Code command-line tool — ask the agent to review it';
     item.finishedAt = new Date().toISOString();
     return true;
   }
@@ -489,12 +498,19 @@ function startNextReview(batch: Batch): boolean {
     `Follow docs/review-motvin.md to review ${item.appId} ${platform} ${item.version}.`,
     'You are running unattended, started by the Motvin batch queue: nobody will answer questions, so make every decision the steps describe yourself.',
     // Unattended, the run ends when this reply ends — agents still working would be lost.
-    'Start all four agents of a pass together, in one single message (four agent calls at once, never two and then two), and wait until every one of them has returned before going on; never end your reply while any agent is still working.',
+    reviewer === 'gemini'
+      ? 'If you cannot start separate agents, do the four parts yourself one after another; never stop before every part is done.'
+      : 'Start all four agents of a pass together, in one single message (four agent calls at once, never two and then two), and wait until every one of them has returned before going on; never end your reply while any agent is still working.',
     'Finish only when apply-review says "review check: no problems left".',
   ].join(' ');
   const tools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Agent', 'Task', 'Bash(cd:*)', 'Bash(node:*)', 'Bash(npm run build:inspirations)', 'Bash(npm run --silent build:inspirations)', 'Bash(cp:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'Bash(mkdir:*)', 'Bash(python3:*)', 'Bash(echo:*)', 'Bash(grep:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(sort:*)', 'Bash(uniq:*)', 'Bash(find:*)', 'Bash(sed:*)', 'Bash(awk:*)', 'Bash(date:*)', 'Bash(pwd)', 'Bash(jq:*)'];
   // The review's model is fixed here, not left to whatever the terminal last picked.
-  const child = spawn(cli, ['-p', prompt, '--model', REVIEW_MODEL, '--allowedTools', tools.join(','), '--permission-mode', 'acceptEdits', '--output-format', 'json'], { cwd: pluginRoot(), env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+  // Claude Code runs with the tools listed above only. The Gemini CLI has no such list here: it
+  // runs with its own approvals switched off (--yolo), so it is for a trusted machine only.
+  const args = reviewer === 'gemini'
+    ? ['-p', prompt, '-m', GEMINI_MODEL, '--yolo']
+    : ['-p', prompt, '--model', REVIEW_MODEL, '--allowedTools', tools.join(','), '--permission-mode', 'acceptEdits', '--output-format', 'json'];
+  const child = spawn(cli, args, { cwd: pluginRoot(), env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
   const key = `${batch.id}/${item.id}`;
   const entry = { child, output: '', stdout: '', startedAt: Date.now() };
   const keep = (chunk: Buffer) => {
@@ -548,17 +564,17 @@ function followReview(batch: Batch, item: BatchItem): boolean {
   if (state.reviewed && !state.problems.length && !state.reviewing) return finishReview(batch, item);
   const output = entry?.output ?? '';
   // Signed out of Claude Code: nothing will work until the admin signs in again.
-  if (/not logged in|please run \/login|invalid api key|authentication|unauthori[sz]ed|oauth token/i.test(output)) {
+  if (/not logged in|please run \/login|invalid api key|authentication|unauthori[sz]ed|oauth token|set an auth method|gemini_api_key|login required/i.test(output)) {
     item.stage = 'needs-you';
     item.reviewTries = Math.max(0, item.reviewTries - 1);
-    item.note = 'Sign in to Claude again: run "claude" in a terminal and type /login, then click Retry';
+    item.note = (batch.settings.reviewer ?? 'claude') === 'gemini' ? 'Sign in to Gemini: run "gemini" in a terminal and sign in, then click Retry' : 'Sign in to Claude again: run "claude" in a terminal and type /login, then click Retry';
     item.finishedAt = new Date().toISOString();
     if (batch.settings.notify !== 'off') notify('Claude needs you', 'Sign in to Claude again to continue the reviews');
     return true;
   }
   // Out of AI usage: wait and go again, without counting it as a try.
   // Any wording Claude uses ("session limit", "usage limit", "weekly limit"… "resets 3:50am").
-  if (/\b(usage|session|rate|weekly|daily|hourly|5-hour|plan)\s+limit|limit (reached|hit)|hit your limit|\bresets\b|quota|overloaded/i.test(output)) {
+  if (/\b(usage|session|rate|weekly|daily|hourly|5-hour|plan)\s+limit|limit (reached|hit)|hit your limit|\bresets\b|quota|overloaded|resource_exhausted|\b429\b/i.test(output)) {
     const resetsAt = resetTime(output);
     item.stage = 'review-queued';
     item.reviewTries = Math.max(0, item.reviewTries - 1);
