@@ -782,6 +782,23 @@ function writeLookAgain(dir, appId, screens, flows, grayOf, textOf) {
     if (visits.length < MENU_VISITS) continue;
     items.push({ key: `sections:${flow.id}`, kind: 'sections', hashes: visits.map((screen) => screen.hash), flow: flow.name, screens: visits.map(brief), ask: `"${flow.name}" goes back to the app's menu ${visits.length} times — it walks through several of the app's sections. Make each section the menu opens (for example Projects, Artifacts, Code) an area of its own at the top of the tree, holding its screens, and keep the menu itself once.` });
   }
+  // Weak tasks: one that only passes through the menu to an area page, and a short one whose
+  // steps show nothing of what its name says.
+  const flowIds = new Set(flows.map((flow) => flow.id));
+  const areaPages = new Set(flows.filter((flow) => !flow.parentId || !flowIds.has(flow.parentId)).flatMap((area) => area.screenIds.map((sid) => byId.get(sid)?.name).filter(Boolean)));
+  const stems = (text) => String(text).toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 2).map((word) => word.slice(0, 3));
+  for (const flow of flows) {
+    if (!flow.parentId || !flowIds.has(flow.parentId)) continue;
+    const steps = flow.screenIds.map((sid) => byId.get(sid)).filter(Boolean);
+    if (!steps.length) continue;
+    const named = new Set(stems(flow.name));
+    const isMenuTask = MENU_NAME.test(flow.name) || /\b(menu|sidebar)\b/i.test(flow.name);
+    if (!isMenuTask && steps.some((screen) => MENU_NAME.test(screen.name)) && steps.every((screen) => MENU_NAME.test(screen.name) || areaPages.has(screen.name))) {
+      items.push({ key: `thin:${flow.id}`, kind: 'thin', hashes: steps.map((screen) => screen.hash), flow: flow.name, screens: steps.map(brief), ask: `"${flow.name}" only passes through the menu to an area page (${steps.map((screen) => `"${screen.name}"`).join(', ')}) — no step of its own. Remove it, or give it the steps of the task its name says.` });
+    } else if (steps.length <= 2 && !steps.some((screen) => stems(screen.name).some((stem) => named.has(stem)))) {
+      items.push({ key: `unrelated:${flow.id}`, kind: 'unrelated', hashes: steps.map((screen) => screen.hash), flow: flow.name, screens: steps.map(brief), ask: `"${flow.name}" holds ${steps.map((screen) => `"${screen.name}"`).join(', ')} — nothing of what its name says. If the steps are another task, name it for them or move them there; if steps are missing, add them; if the name and steps truly match, keep it.` });
+    }
+  }
   // "Adding connectors and skills": two tasks in one flow, each a flow of its own (Mobbin keeps one task per flow).
   for (const flow of flows) {
     if (!/^\w+ing\b.* and /i.test(flow.name) || / and back\b/i.test(flow.name)) continue;
@@ -1137,6 +1154,11 @@ async function applyReviewUnlocked(options) {
   const listed = (Array.isArray(corrections.flows) ? corrections.flows : []).map((fix) => flowById.get(fix.id)).filter((flow) => owned(flow) && flowsDoc.flows.includes(flow));
   const slots = flowsDoc.flows.map((flow, at) => (listed.includes(flow) ? at : -1)).filter((at) => at >= 0);
   slots.forEach((at, n) => { flowsDoc.flows[at] = listed[n]; });
+  // The app's areas as Mobbin lists them: Onboarding first, Settings last, the rest in their order.
+  const rank = (flow) => (/^(onboarding|welcome|getting started)$/i.test(flow.name) ? 0 : /^(settings|account|profile)$/i.test(flow.name) ? 2 : 1);
+  const areas = flowsDoc.flows.filter((flow) => owned(flow) && !flow.parentId);
+  const areaSlots = flowsDoc.flows.map((flow, at) => (areas.includes(flow) ? at : -1)).filter((at) => at >= 0);
+  [...areas].sort((a, b) => rank(a) - rank(b)).forEach((flow, n) => { flowsDoc.flows[areaSlots[n]] = flow; });
   writeJson(flowsFile, flowsDoc);
 
   // The app's category and its card pictures, when the review corrects them.
@@ -1251,10 +1273,29 @@ async function undoReviewUnlocked(options) {
   const versionDir = join(dataDir, 'screens', platform, appId, VERSIONS_DIR_NAME, version);
   rmSync(versionDir, { recursive: true, force: true });
   cpSync(join(backup, 'version'), versionDir, { recursive: true });
-  cpSync(join(backup, 'flows.json'), join(dataDir, 'flows.json'));
-  if (existsSync(join(backup, 'apps.json'))) cpSync(join(backup, 'apps.json'), join(dataDir, 'apps.json'));
-  if (existsSync(join(backup, 'review-rules.json'))) cpSync(join(backup, 'review-rules.json'), rulesFile(dataDir));
   const tag = `${appId}-${platform}-${VERSIONS_DIR_NAME}-${version}-`;
+  // Only this version's flows and this app's record come back: the library files hold every app,
+  // and another app's review since this backup must not be undone with it. The rules stay — other
+  // reviews may have added to them since.
+  const mine = (flow) => flow.appId === appId && flow.platform === platform && (flow.screenIds ?? []).some((sid) => sid.startsWith(tag));
+  const flowsFile = join(dataDir, 'flows.json');
+  const flowsDoc = readJson(flowsFile, { version: 1, flows: [] });
+  const before = (readJson(join(backup, 'flows.json'), { flows: [] }).flows ?? []).filter(mine);
+  const at = flowsDoc.flows.findIndex(mine);
+  const others = flowsDoc.flows.filter((flow) => !mine(flow));
+  const place = at < 0 ? others.length : flowsDoc.flows.slice(0, at).filter((flow) => !mine(flow)).length;
+  writeJson(flowsFile, { ...flowsDoc, flows: [...others.slice(0, place), ...before, ...others.slice(place)] });
+  if (existsSync(join(backup, 'apps.json'))) {
+    const appsFile = join(dataDir, 'apps.json');
+    const appsDoc = readJson(appsFile, { apps: [] });
+    const list = Array.isArray(appsDoc) ? appsDoc : appsDoc.apps ?? [];
+    const backupDoc = readJson(join(backup, 'apps.json'), { apps: [] });
+    const old = (Array.isArray(backupDoc) ? backupDoc : backupDoc.apps ?? []).find((entry) => entry.id === appId);
+    if (old) {
+      const next = list.some((entry) => entry.id === appId) ? list.map((entry) => (entry.id === appId ? old : entry)) : [...list, old];
+      writeJson(appsFile, Array.isArray(appsDoc) ? next : { ...appsDoc, apps: next });
+    }
+  }
   for (const kind of ['analysis', 'words']) {
     const into = join(dataDir, kind);
     if (!existsSync(join(backup, kind)) || !existsSync(into)) continue;

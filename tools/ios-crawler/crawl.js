@@ -11,6 +11,7 @@
  * src/safety.js.
  */
 
+import { removeUpload } from './src/remove.js';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,6 +55,7 @@ ${bold('Commands')}
                             ${dim('--restructure also re-checks the flows: splits, merges, categories')}
   review-progress --app-id <id> --version <date> --step <1-8>
                             tell the Motvin agent which review step is under way
+  remove-upload --app-id <id> (--version <date> | --whole-app)   take an upload back out of the library
   review-pack --app-id <id> --version <date>
                             start a review: reuse the prepared package, or build it
   merge-corrections --app-id <id> --version <date> --files <a.json,b.json> --out <file>
@@ -940,6 +942,10 @@ async function main() {
       case 'apply-review':
       case 'undo-review':
         return await runReview(command, flags);
+      case 'remove-upload':
+        // The batch queue taking an upload back out: one version, or the whole app it made.
+        await removeUpload({ appId: flags.appId, version: typeof flags.version === 'string' ? flags.version : undefined, wholeApp: Boolean(flags.wholeApp), dataDir: flags.dataDir });
+        return 0;
       case 'ai':
         return await runAi(flags);
       case 'ask':

@@ -1,4 +1,4 @@
-import { execFile, spawn } from 'node:child_process';
+import { execFile, execFileSync, spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -260,6 +260,26 @@ export type StartJobInput = {
   source?: 'batch';
 };
 
+/**
+ * Ends a process and everything it started (the crawler's review prefetch, its
+ * OCR helper…), children first, so nothing keeps writing to the library.
+ */
+export function killTree(pid: number | undefined) {
+  if (!pid) return;
+  let kids: number[] = [];
+  try {
+    kids = execFileSync('pgrep', ['-P', String(pid)], { encoding: 'utf-8', timeout: 5000 }).split('\n').map(Number).filter(Boolean);
+  } catch {
+    // No children, or pgrep found none.
+  }
+  for (const kid of kids) killTree(kid);
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    // Already gone.
+  }
+}
+
 /** Ends a running job's process. The screens it published stay. */
 export function stopJob(id: string): boolean {
   load();
@@ -298,7 +318,7 @@ export function stopJob(id: string): boolean {
   }
   job.finishedAt = new Date().toISOString();
   persist();
-  if (child) child.kill('SIGTERM');
+  if (child) killTree(child.pid);
   return true;
 }
 

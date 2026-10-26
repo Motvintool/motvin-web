@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState } from 'react';
 import { adminApi } from '@/lib/inspirations/admin';
 import { PageHeading } from '../PageHeading';
-import { CloseIcon, FlowIcon, FolderIcon, ImageIcon, LayersIcon, PlusIcon, SettingsIcon, UploadIcon } from '../Icons';
+import { CloseIcon, LayersIcon } from '../Icons';
 import { AddScreensPanel } from './AddScreensPanel';
 import { AppsPanel } from './AppsPanel';
 import { BatchPanel } from './BatchPanel';
+import { hasRecordings, onRecordings } from './recordingHandoff';
 import { FlowsPanel } from './FlowsPanel';
 import { RequestsPanel } from './RequestsPanel';
 import { ScreensPanel } from './ScreensPanel';
@@ -23,25 +24,26 @@ import { useAdminState } from './useAdminState';
  * Four sections, each answering one question: Add screens (how do new ones
  * get in), Screens (what is stored, published or not), Apps (the products
  * they belong to, including their version history), Flows (the journeys
- * built from them). Adding screens used to be two separate tabs — Manual and
- * Automatic — which read as unrelated features rather than two ways to do
- * the same thing; they are now one tab with a switch, in AddScreensPanel.
+ * built from them). Manual Upload takes screenshots (AddScreensPanel);
+ * recordings go through Agent Upload.
  */
 
 type Tab = 'add' | 'batch' | 'screens' | 'apps' | 'flows' | 'requests' | 'settings';
 
-const TABS: { id: Tab; label: string; icon: (props: { size?: number }) => ReactElement }[] = [
-  { id: 'add', label: 'Add screens', icon: UploadIcon },
-  { id: 'batch', label: 'Add new apps', icon: LayersIcon },
-  { id: 'screens', label: 'Screens', icon: ImageIcon },
-  { id: 'apps', label: 'Apps', icon: FolderIcon },
-  { id: 'flows', label: 'Flows', icon: FlowIcon },
-  { id: 'requests', label: 'Requests', icon: PlusIcon },
-  { id: 'settings', label: 'Settings', icon: SettingsIcon },
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'add', label: 'Manual Upload' },
+  { id: 'batch', label: 'Agent Upload' },
+  { id: 'screens', label: 'Screens' },
+  { id: 'apps', label: 'Apps' },
+  { id: 'flows', label: 'Flows' },
+  { id: 'requests', label: 'Requests' },
+  { id: 'settings', label: 'Settings' },
 ];
 
 export function AdminView() {
-  const [tab, setTab] = useState<Tab>('add');
+  // Opened for a recording dropped on the Motvin agent: straight to Agent Upload, where it waits.
+  const [tab, setTab] = useState<Tab>(() => (hasRecordings() ? 'batch' : 'add'));
+  useEffect(() => onRecordings(() => setTab('batch')), []);
   const { state, loading, busy, error, report, refresh, run, setError } = useAdminState();
 
   const held = state?.files.filter((f) => !f.published).length ?? 0;
@@ -119,7 +121,6 @@ export function AdminView() {
 
       <div className="ins-tabbar" role="tablist" aria-label="Admin sections">
         {TABS.map((t) => {
-          const Icon = t.icon;
           return (
             <button
               key={t.id}
@@ -133,7 +134,6 @@ export function AdminView() {
                 e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
               }}
             >
-              <Icon size={15} />
               {t.label}
               {t.id === 'screens' && held > 0 && <span className="ins-tab-count">{held}</span>}
             </button>
@@ -145,7 +145,7 @@ export function AdminView() {
         <p className="ins-muted ins-admin-status">Loading the store…</p>
       ) : (
         <section className="ins-tabpanel" role="tabpanel">
-          {tab === 'add' && <AddScreensPanel state={state} busy={busy} run={run} onIngested={refresh} onUploaded={refresh} />}
+          {tab === 'add' && <AddScreensPanel state={state} busy={busy} run={run} onUploaded={refresh} />}
           {tab === 'batch' && <BatchPanel state={state} onChanged={refresh} />}
           {tab === 'screens' && <ScreensPanel state={state} busy={busy} run={run} />}
           {tab === 'apps' && <AppsPanel state={state} busy={busy} run={run} />}

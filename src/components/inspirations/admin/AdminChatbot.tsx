@@ -2,6 +2,7 @@
 
 import { isDesktopPlatform, type Platform } from '@/lib/inspirations/types';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, type DragEvent, type FormEvent, type Ref } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/components/shared/AuthProvider';
@@ -64,6 +65,8 @@ import { cupFor as rankCup, MAX_RANK as MAX_STORE_RANK } from '../StoreRankBadge
 import { forgetStoreStats } from '../useStoreStats';
 import { screenLabel } from './screenFiles';
 import { ClaudeReview } from './AdminChatbotIngestSummary';
+import { ADMIN_PARAM } from './AdminDrawer';
+import { handOffRecordings } from './recordingHandoff';
 
 /**
  * The assistant in the corner — the library owner's helper on every page.
@@ -153,6 +156,9 @@ function appsOnPlatform(state: AdminState, platform: 'ios' | 'webapp' | 'web'): 
 }
 
 export function AdminChatbot() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user, ready } = useAuth();
   const libraryAdmin = useIsLibraryAdmin();
   const admin = ready && Boolean(user && !user.isAnonymous) && libraryAdmin.status === 'admin';
@@ -296,7 +302,7 @@ export function AdminChatbot() {
   /** The library as it stood when a recording was dropped — apps and their versions, for the questions that follow. */
   const libraryRef = useRef<AdminState | null>(null);
 
-  // A batch's uploads are followed in its own queue (Admin → Add new apps), not as the agent's run.
+  // A batch's uploads are followed in its own queue (Admin → Agent Upload), not as the agent's run.
   const visible = jobs.filter((job) => !job.dismissed && job.source !== 'batch').slice(0, 3);
   const batchRunning = jobs.filter((job) => job.source === 'batch' && isActive(job)).length;
   const running = visible.some(isActive);
@@ -405,11 +411,26 @@ export function AdminChatbot() {
 
   const isImage = (file: File) => file.type.startsWith('image/') || /\.(png|jpe?g|webp|svg|gif|avif)$/i.test(file.name);
 
-  /** Dropped or picked files: a recording starts a run, several screenshots are filed, one image becomes a logo or a screen. */
+  /** Dropped or picked files: a recording goes to Agent Upload, several screenshots are filed, one image becomes a logo or a screen. */
   const upload = async (picked: File[]) => {
     if (!user || !picked.length) return;
     const images = picked.filter(isImage);
     const videos = picked.filter((file) => file.type.startsWith('video/') || /\.(mov|mp4|m4v|avi|mkv)$/i.test(file.name));
+    // Recordings are uploaded in one place only — Agent Upload, where a version of the same day
+    // is replaced, never mixed into: handed there, with the admin opened on that tab.
+    if (videos.length) {
+      uploadTargetRef.current = null;
+      handOffRecordings(videos);
+      const adminOpen = searchParams.get(ADMIN_PARAM) === '1' || pathname.startsWith('/inspirations/admin');
+      if (!adminOpen) {
+        const next = new URLSearchParams(searchParams.toString());
+        next.set(ADMIN_PARAM, '1');
+        router.push(`${pathname}?${next.toString()}`, { scroll: false });
+      }
+      adminSays(videos.map((file) => `“${file.name}”`).join(', '));
+      assistantSays(`Recordings are added in Library admin → Agent Upload, so I put ${videos.length === 1 ? 'it' : 'them'} there. Check the name and logo, then press Start.${images.length ? ' Drop the screenshots again on their own to file them.' : ''}`);
+      return;
+    }
     // Opened for a named app: screenshots (even one) or a recording go to it —
     // straight to which of its versions, the platform being the app's own.
     const target = uploadTargetRef.current;
@@ -1142,7 +1163,7 @@ export function AdminChatbot() {
       )}
       {batchRunning > 0 && (
         <p className="ins-dock-batch">
-          <span className="ins-spinner" aria-hidden /> Batch: {batchRunning} app{batchRunning === 1 ? '' : 's'} uploading — follow them in Admin → Add new apps. You can keep chatting.
+          <span className="ins-spinner" aria-hidden /> Batch: {batchRunning} app{batchRunning === 1 ? '' : 's'} uploading — follow them in Admin → Agent Upload. You can keep chatting.
         </p>
       )}
       <form className="ins-dock-composer" onSubmit={(event) => void ask(event)}>

@@ -6,9 +6,10 @@ import { adminApi, type AdminState } from '@/lib/inspirations/admin';
 import { authHeaders } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 import type { Industry } from '@/lib/inspirations/types';
 import { CheckIcon, CloseIcon, CopyIcon, ExternalIcon, FolderIcon, PlayIcon, RetryIcon, StopIcon, UploadIcon } from '../Icons';
+import { onRecordings, takeRecordings } from './recordingHandoff';
 
 /**
- * Add new apps — many at once, with nobody watching.
+ * Agent Upload — many apps at once, with nobody watching.
  *
  * The admin lists the recordings (from the records folder on this machine, or
  * from their computer), with a name and logo each when they want one, and
@@ -179,14 +180,21 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
     return state.apps.find((app) => app.id === id || app.name.toLowerCase() === name.trim().toLowerCase()) ?? null;
   }, [state.apps]);
 
-  const addFiles = (files: FileList | null) => {
+  const addFiles = useCallback((files: FileList | File[] | null) => {
     if (!files) return;
     const next = [...files].filter((file) => /\.(mov|mp4|m4v|avi|mkv)$/i.test(file.name)).map((file): Row => {
       const name = plainName(file.name);
       return { key: `f-${file.name}-${file.size}`, title: file.name, name, video: { kind: 'file', file }, logo: matchLogo(name), sizeBytes: file.size };
     });
     setRows((current) => [...current, ...next.filter((row) => !current.some((other) => other.key === row.key))]);
-  };
+  }, [matchLogo]);
+  // Recordings dropped on the Motvin agent come here, once the logos are known.
+  useEffect(() => {
+    if (!records) return;
+    const take = () => addFiles(takeRecordings());
+    take();
+    return onRecordings(take);
+  }, [records, addFiles]);
   const addRecord = (video: RecordVideo) => {
     const key = `r-${video.path}`;
     setRows((current) => (current.some((row) => row.key === key) ? current : [...current, { key, title: video.file, name: video.name, video: { kind: 'records', path: video.path }, logo: matchLogo(video.name), sizeBytes: video.sizeBytes }]));
@@ -215,11 +223,6 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
         let appId = existing?.id ?? slug(name);
         let detectIndustry = false;
         if (existing && settings.existing === 'replace') await adminApi.deleteApp(existing.id);
-        // A version of that day already there is replaced: an upload adds to its day's folder, mixing old and new.
-        if (existing && settings.existing === 'version' && existing.versions?.some((entry) => entry.id === day)) {
-          setStarting(`Replacing ${existing.name}'s version of ${day}`);
-          await adminApi.deleteVersion(existing.id, day);
-        }
         if (!existing || settings.existing === 'replace') {
           // A new app under the name given; its real category is looked up by the upload.
           appId = slug(name) || `app-${Date.now().toString(36)}`;
@@ -250,7 +253,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
     }
   };
 
-  const control = async (batch: Batch, action: 'pause' | 'resume' | 'retry' | 'skip' | 'stop' | 'clear', item?: string) => {
+  const control = async (batch: Batch, action: 'pause' | 'resume' | 'retry' | 'skip' | 'stop' | 'stop-now' | 'clear', item?: string) => {
     try {
       await api(`/api/crawler/batch?${new URLSearchParams({ id: batch.id, action, ...(item ? { item } : {}) })}`, { method: 'PATCH' });
       await refresh();
@@ -283,7 +286,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
                 ) : (
                   <button type="button" className="ins-btn ins-btn--ghost" onClick={() => void control(last, 'resume')}><PlayIcon size={13} /> Resume</button>
                 )}
-                <button type="button" className="ins-btn ins-btn--ghost" onClick={() => void control(last, 'stop')}><StopIcon size={13} /> Stop after current</button>
+                <button type="button" className="ins-btn ins-btn--ghost" onClick={() => { if (window.confirm('Stop every app now? The apps under way stop at once, the screens they added are taken out of the library again, and the rest are skipped.')) void control(last, 'stop-now'); }}><StopIcon size={13} /> Stop all</button>
               </div>
             )}
           </div>
@@ -318,7 +321,10 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
                   {item.stage === 'choose' && <span className="ins-muted">Open the Motvin agent to choose</span>}
                   {['needs-you', 'skipped'].includes(item.stage) && last.state !== 'done' && <button type="button" className="ins-linkbtn" onClick={() => void control(last, 'retry', item.id)}><RetryIcon size={11} /> Retry</button>}
                   {item.stage === 'needs-you' && last.state === 'done' && <button type="button" className="ins-linkbtn" onClick={() => void control(last, 'retry', item.id)}><RetryIcon size={11} /> Retry</button>}
-                  {['queued', 'review-queued'].includes(item.stage) && <button type="button" className="ins-linkbtn" onClick={() => void control(last, 'skip', item.id)}>Skip</button>}
+                  {['uploading', 'choose', 'review-queued', 'reviewing'].includes(item.stage) && (
+                    <button type="button" className="ins-linkbtn" onClick={() => { if (window.confirm(`Stop ${item.result?.appName ?? item.title} now? It stops at once and the screens it added are taken out of the library again; Retry starts it over.`)) void control(last, 'stop-now', item.id); }}><StopIcon size={11} /> Stop</button>
+                  )}
+                  {item.stage === 'queued' && <button type="button" className="ins-linkbtn" onClick={() => void control(last, 'skip', item.id)}>Skip</button>}
                 </div>
               </li>
             ))}
@@ -327,7 +333,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
       )}
 
       <section className="ins-addflow-block">
-        <p className="ins-addflow-title">Add new apps</p>
+        <p className="ins-addflow-title">Agent Upload</p>
         <p className="ins-field-hint">Add the recordings, give each a name and logo if you like, choose the settings, and start. Each app is uploaded, cleaned up, reviewed and checked by itself — you can close this page.</p>
 
         <div className="ins-admin-actions ins-admin-actions--tight">

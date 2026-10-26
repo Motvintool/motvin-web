@@ -2,7 +2,7 @@ import { execFile, execFileSync, spawn, type ChildProcess } from 'node:child_pro
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { activeJob, getJob, resumeJob, startJob } from '@/lib/server/ingestJobs';
+import { activeJob, dismissJob, getJob, killTree, resumeJob, startJob, stopJob } from '@/lib/server/ingestJobs';
 import { clearReviewFolder, inspirationsDataDir, reviewFolder, reviewState } from '@/lib/server/reviews';
 
 /**
@@ -246,8 +246,8 @@ export function createBatch(input: { createdBy: string; settings: BatchSettings;
   return batch;
 }
 
-/** Pause, resume, retry an item, skip an item, or stop the batch. */
-export function controlBatch(id: string, action: 'pause' | 'resume' | 'retry' | 'skip' | 'stop' | 'clear', itemId?: string): Batch | null {
+/** Pause, resume, retry an item, skip an item, stop the batch after the apps under way, or stop it now. */
+export function controlBatch(id: string, action: 'pause' | 'resume' | 'retry' | 'skip' | 'stop' | 'stop-now' | 'clear', itemId?: string): Batch | null {
   load();
   const batch = runner.batches.find((entry) => entry.id === id);
   if (!batch) return null;
@@ -270,7 +270,42 @@ export function controlBatch(id: string, action: 'pause' | 'resume' | 'retry' | 
     item.note = 'Skipped by you';
     item.finishedAt = new Date().toISOString();
   }
-  if (action === 'stop') {
+  if (action === 'stop-now') {
+    // Everything under way ends at once, and what those apps put in the library comes out again.
+    for (const entry of batch.items) {
+      // One app (its own Stop), or every app under way.
+      if (item && entry !== item) continue;
+      if (!['uploading', 'choose', 'review-queued', 'reviewing'].includes(entry.stage)) continue;
+      const review = runner.reviews.get(`${batch.id}/${entry.id}`);
+      if (review) {
+        killTree(review.child.pid);
+        runner.reviews.delete(`${batch.id}/${entry.id}`);
+      }
+      if (entry.jobId && entry.stage === 'uploading') stopJob(entry.jobId);
+      if (entry.jobId && entry.stage === 'choose') dismissJob(entry.jobId);
+      const touched = entry.stage !== 'choose';
+      entry.stage = 'skipped';
+      entry.finishedAt = new Date().toISOString();
+      entry.note = 'Stopped by you';
+      if (entry.ownsVideo) rmSync(entry.video, { force: true });
+      if (!touched || !entry.appId) continue;
+      // An app this batch made goes whole; for an app already there, only the version it was adding.
+      const version = entry.version ?? batch.settings.version;
+      try {
+        if (entry.detectIndustry) removeUpload(entry.appId, null);
+        else if (version) removeUpload(entry.appId, version);
+        entry.note = 'Stopped by you — its screens were taken out again';
+        entry.result = null;
+        // Gone from the library: a retry uploads it again from the start.
+        entry.version = null;
+        entry.jobId = null;
+      } catch (error) {
+        entry.note = `Stopped by you, but its screens could not be taken out: ${(error as Error).message.slice(0, 200)}`;
+      }
+      logLine(`${entry.title}: stopped now — ${entry.note}`);
+    }
+  }
+  if (action === 'stop' || (action === 'stop-now' && !item)) {
     for (const entry of batch.items) {
       if (['queued', 'review-queued'].includes(entry.stage)) {
         entry.stage = 'skipped';
@@ -282,6 +317,12 @@ export function controlBatch(id: string, action: 'pause' | 'resume' | 'retry' | 
   save();
   void tick();
   return batch;
+}
+
+/** Takes an upload back out of the library: one version of an app, or (version null) the whole app. */
+function removeUpload(appId: string, version: string | null) {
+  const script = join(process.cwd(), 'tools', 'ios-crawler', 'crawl.js');
+  execFileSync(process.execPath, [script, 'remove-upload', '--app-id', appId, ...(version ? ['--version', version] : ['--whole-app'])], { cwd: dirname(script), encoding: 'utf-8', timeout: 180_000, env: { ...process.env, NO_COLOR: '1' } });
 }
 
 /** A command-line tool on this machine: from its env setting, next to this server's node (npm installs), or the usual places. */
@@ -378,6 +419,19 @@ function startNextUpload(batch: Batch): boolean {
     return true;
   }
   const { settings } = batch;
+  // An upload adds to its day's folder: a version of that day already there (an earlier upload,
+  // or this one's own failed try) is taken out first, so the new one replaces it, never mixes in.
+  if (item.appId && !item.detectIndustry && settings.version && existsSync(join(inspirationsDataDir(), 'screens', settings.platform, item.appId, 'versions', settings.version))) {
+    try {
+      removeUpload(item.appId, settings.version);
+      logLine(`${item.title}: replaced its version of ${settings.version}`);
+    } catch (error) {
+      item.stage = 'needs-you';
+      item.note = `Its version of ${settings.version} could not be replaced: ${(error as Error).message.slice(0, 200)}`;
+      item.finishedAt = new Date().toISOString();
+      return true;
+    }
+  }
   const args = [
     'ingest',
     '--from', item.video,
@@ -684,16 +738,19 @@ function keepAwake(on: boolean) {
 
 /** Adds a finished review's usage (Claude Code's JSON result) to the app's total, and logs it. */
 function recordUsage(item: BatchItem, stdout: string) {
-  let result: { usage?: Record<string, number>; num_turns?: number; total_cost_usd?: number } | null = null;
+  let result: { usage?: Record<string, number>; modelUsage?: Record<string, Record<string, number>>; num_turns?: number; total_cost_usd?: number } | null = null;
   try {
     result = JSON.parse(stdout.trim().split('\n').filter(Boolean).at(-1) ?? '');
   } catch {
     return;
   }
+  // modelUsage counts the whole run, the agents it started too; usage is the main agent's alone.
+  const models = Object.values(result?.modelUsage ?? {});
+  const sum = (key: string) => models.reduce((n, entry) => n + (entry[key] ?? 0), 0);
   const usage = result?.usage ?? {};
-  const input = usage.input_tokens ?? 0;
-  const cached = (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
-  const output = usage.output_tokens ?? 0;
+  const input = models.length ? sum('inputTokens') : usage.input_tokens ?? 0;
+  const cached = models.length ? sum('cacheReadInputTokens') + sum('cacheCreationInputTokens') : (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+  const output = models.length ? sum('outputTokens') : usage.output_tokens ?? 0;
   const before = item.usage ?? { tokens: 0, outputTokens: 0, cachedTokens: 0, turns: 0, costUsd: 0, reviews: 0 };
   item.usage = {
     tokens: before.tokens + input + cached + output,

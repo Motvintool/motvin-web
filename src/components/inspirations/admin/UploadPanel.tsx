@@ -2,10 +2,11 @@
 
 import { useRef, useState, type DragEvent } from 'react';
 import { adminApi, safeFileName, type AdminState } from '@/lib/inspirations/admin';
+import { describeAddedScreens } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 import { localDateString } from '@/lib/inspirations/dates';
-import { INDUSTRY_LABEL, PLATFORM_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
+import { INDUSTRY_LABEL, PLATFORM_LABEL, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
 import { splitScreenFile } from '@/lib/inspirations/screenPaths';
-import { PICKABLE_INDUSTRIES, SCREEN_TYPES, type Industry, type Platform, type ScreenType } from '@/lib/inspirations/types';
+import { PICKABLE_INDUSTRIES, SCREEN_TYPES, STYLES, type Industry, type Platform, type ScreenType, type Style } from '@/lib/inspirations/types';
 import { CheckIcon, CloseIcon, PlusIcon, UploadIcon } from '../Icons';
 import { AppModeSelect } from './AppModeSelect';
 
@@ -25,6 +26,8 @@ import { AppModeSelect } from './AppModeSelect';
 
 /** The version picker's "new version" option, alongside the app's real ones. */
 const NEW_VERSION = '__new__';
+/** The flow picker's "new flow" option. */
+const NEW_FLOW = '__new-flow__';
 
 type Staged = {
   key: string;
@@ -32,6 +35,11 @@ type Staged = {
   name: string;
   screenType: ScreenType;
   previewUrl: string;
+  /** Details typed by hand ("Fill details: By hand"); with the AI they are left empty. */
+  title: string;
+  tags: string;
+  elements: string;
+  style: Style[];
   status: 'staged' | 'uploading' | 'done' | 'failed';
   message?: string;
 };
@@ -74,6 +82,12 @@ export function UploadPanel({
   const [queue, setQueue] = useState<Staged[]>([]);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [describeNote, setDescribeNote] = useState<string | null>(null);
+  // Who fills in each screenshot's details: the AI after upload, or the admin here, before it.
+  const [fillBy, setFillBy] = useState<'ai' | 'hand'>('ai');
+  // The flow the screenshots go into, in the order they are listed: none, one of the version's, or a new one.
+  const [flowChoice, setFlowChoice] = useState('');
+  const [newFlow, setNewFlow] = useState({ name: '', parent: '' });
   const inputRef = useRef<HTMLInputElement>(null);
 
   const selectedApp = appMode === 'old' ? state.apps.find((a) => a.id === appId) ?? null : null;
@@ -122,6 +136,10 @@ export function UploadPanel({
         name: safe,
         screenType: guessScreenType(safe),
         previewUrl: URL.createObjectURL(file),
+        title: '',
+        tags: '',
+        elements: '',
+        style: [],
         status: 'staged',
       });
     }
@@ -158,9 +176,21 @@ export function UploadPanel({
         : versionTarget
       : version || undefined;
 
+  // The flows of the version the screenshots go to (none yet for a new app or version).
+  const versionFlows = state.flows.filter((flow) => flow.appId === appId && flow.platform === platform && flow.screenIds.some((sid) => resolvedVersion && sid.includes(`-versions-${resolvedVersion}-`)));
+  const areaFlows = versionFlows.filter((flow) => !flow.parentId || !versionFlows.some((other) => other.id === flow.parentId));
+  const chosenFlow = versionFlows.some((flow) => flow.id === flowChoice) || flowChoice === NEW_FLOW ? flowChoice : '';
+
   const uploadAll = async () => {
     if (!appId) return;
+    if (chosenFlow === NEW_FLOW && !newFlow.name.trim()) {
+      setDescribeNote('Give the new flow a name first.');
+      return;
+    }
+    let flowId = chosenFlow && chosenFlow !== NEW_FLOW ? chosenFlow : '';
     setUploading(true);
+    setDescribeNote(null);
+    const added: string[] = [];
     for (const item of queue) {
       if (item.status === 'done') continue;
       update(item.key, { status: 'uploading', message: undefined });
@@ -172,14 +202,31 @@ export function UploadPanel({
         const type = slugify(item.screenType) || 'other';
         const fileName = base.startsWith(type) ? item.name : `${type}-${base}${ext}`;
 
-        const uploaded = await adminApi.uploadScreen(platform, appId, fileName, item.file, overwrite, resolvedVersion);
-        // The builder only reads known types from a file name, so a new type is also written to the screen's
-        // details — that is what makes it appear in the filters.
-        if (!(SCREEN_TYPES as readonly string[]).includes(type)) {
-          const version = /^versions\/([^/]+)\//.exec(uploaded.file)?.[1] ?? '';
-          const where = splitScreenFile(uploaded.file, version);
+        const uploaded = await adminApi.uploadScreen(platform, appId, fileName, item.file, overwrite, resolvedVersion, undefined, { addToFlow: flowId || undefined });
+        // The stored path comes back as `<platform>/<app>/versions/<date>/…`; the details are saved by the part under the app.
+        const stored = uploaded.file.replace(`${platform}/${appId}/`, '');
+        const version = /^versions\/([^/]+)\//.exec(stored)?.[1] ?? '';
+        const where = splitScreenFile(stored, version);
+        // A new flow starts with its first screenshot; the rest join it in order.
+        if (chosenFlow === NEW_FLOW && !flowId) {
+          const day = version || resolvedVersion || localDateString();
+          const base = `${appId}-${platform}-versions-${day}-${slugify(newFlow.name)}`;
+          let id = base;
+          for (let n = 2; state.flows.some((flow) => flow.id === id); n++) id = `${base}-${n}`;
+          const parent = areaFlows.find((flow) => flow.id === newFlow.parent);
+          await adminApi.saveFlow({ id, appId, name: newFlow.name.trim(), category: parent?.category ?? 'discovery', platform, screenIds: [uploaded.id], parentId: parent?.id ?? null });
+          flowId = id;
+        }
+        const list = (text: string) => text.split(',').map((entry) => entry.trim()).filter(Boolean);
+        if (fillBy === 'hand') {
+          // Filled by hand: written as the screen's details, and the AI leaves it alone.
+          await adminApi.saveScreenMeta(platform, appId, where.name, { name: item.title.trim() || undefined, screenType: type as ScreenType, tags: list(item.tags), elements: list(item.elements), style: item.style }, where.version, where.flow);
+        } else if (!(SCREEN_TYPES as readonly string[]).includes(type)) {
+          // The builder only reads known types from a file name, so a new type is also written to the screen's
+          // details — that is what makes it appear in the filters.
           await adminApi.saveScreenMeta(platform, appId, where.name, { screenType: type as ScreenType }, where.version, where.flow);
         }
+        added.push(stored);
         update(item.key, { status: 'done', message: 'Uploaded' });
       } catch (err) {
         update(item.key, { status: 'failed', message: (err as Error).message });
@@ -187,6 +234,16 @@ export function UploadPanel({
     }
     setUploading(false);
     await onUploaded();
+    // Then filled in like recorded screens — a name, states, UI elements, style, colours (and the
+    // type, when left as "other") — as a run the dock shows. The screens are in either way.
+    if (added.length && fillBy === 'ai') {
+      try {
+        await describeAddedScreens(appId, platform, added, state.apps.find((entry) => entry.id === appId)?.name);
+        setDescribeNote(`Describing ${added.length} new screen${added.length === 1 ? '' : 's'} — names and details appear when the run ends.`);
+      } catch (error) {
+        setDescribeNote(`Added, but not described yet: ${(error as Error).message}`);
+      }
+    }
   };
 
   const pending = queue.filter((i) => i.status !== 'done').length;
@@ -415,6 +472,50 @@ export function UploadPanel({
 
       {queue.length > 0 && (
         <>
+          <div className="ins-admin-modeswitch-main">
+            <div className="ins-segmented" role="radiogroup" aria-label="Who fills in the details">
+              {([['ai', 'Fill details with AI'], ['hand', 'Fill details by hand']] as const).map(([value, label]) => (
+                <button key={value} type="button" role="radio" aria-checked={fillBy === value} className={`ins-segmented-item ${fillBy === value ? 'is-active' : ''}`} onClick={() => setFillBy(value)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="ins-field-hint">
+              {fillBy === 'ai' ? 'After upload, the AI writes each screen’s name, type (when left as “other”), UI elements, tags, style and colours.' : 'Type each screen’s name, tags, UI elements and style below; the AI is not used.'}
+            </p>
+          </div>
+          <div className="ins-admin-row">
+            <label className="ins-field">
+              <span className="ins-field-label">Flow</span>
+              <select className="ins-input" value={chosenFlow} onChange={(e) => setFlowChoice(e.target.value)} disabled={uploading}>
+                <option value="">No flow — loose screens</option>
+                {versionFlows.map((flow) => (
+                  <option key={flow.id} value={flow.id}>
+                    {flow.parentId ? `${versionFlows.find((other) => other.id === flow.parentId)?.name ?? ''} › ` : ''}{flow.name}
+                  </option>
+                ))}
+                <option value={NEW_FLOW}>New flow…</option>
+              </select>
+              <span className="ins-field-hint">The screenshots join it in the order listed below.</span>
+            </label>
+            {chosenFlow === NEW_FLOW && (
+              <>
+                <label className="ins-field">
+                  <span className="ins-field-label">New flow’s name</span>
+                  <input className="ins-input" value={newFlow.name} onChange={(e) => setNewFlow({ ...newFlow, name: e.target.value })} placeholder="Logging in with email" disabled={uploading} />
+                </label>
+                <label className="ins-field">
+                  <span className="ins-field-label">Under area</span>
+                  <select className="ins-input" value={newFlow.parent} onChange={(e) => setNewFlow({ ...newFlow, parent: e.target.value })} disabled={uploading}>
+                    <option value="">None — an area of its own</option>
+                    {areaFlows.map((flow) => (
+                      <option key={flow.id} value={flow.id}>{flow.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            )}
+          </div>
           <div className="ins-admin-queue">
             {queue.map((item) => (
               <div key={item.key} className={`ins-admin-queue-row is-${item.status}`}>
@@ -441,6 +542,35 @@ export function UploadPanel({
                       placeholder="home, paywall, …"
                     />
                   </label>
+                  {fillBy === 'hand' && (
+                    <>
+                      <label className="ins-field">
+                        <span className="ins-field-label">Screen name</span>
+                        <input className="ins-input" value={item.title} onChange={(e) => update(item.key, { title: e.target.value })} disabled={item.status === 'done'} placeholder="Email entry" />
+                      </label>
+                      <label className="ins-field">
+                        <span className="ins-field-label">Tags</span>
+                        <input className="ins-input" value={item.tags} onChange={(e) => update(item.key, { tags: e.target.value })} disabled={item.status === 'done'} placeholder="login, error" />
+                      </label>
+                      <label className="ins-field">
+                        <span className="ins-field-label">UI elements</span>
+                        <input className="ins-input" value={item.elements} onChange={(e) => update(item.key, { elements: e.target.value })} disabled={item.status === 'done'} placeholder="text-field, button, keyboard" />
+                      </label>
+                      <fieldset className="ins-field">
+                        <legend className="ins-field-label">Style</legend>
+                        <div className="ins-filter-options">
+                          {Array.from(new Set<string>([...(state.vocabulary.styles ?? STYLES)])).map((option) => {
+                            const on = item.style.includes(option as Style);
+                            return (
+                              <button key={option} type="button" className={`ins-chip ins-chip--sm ${on ? 'is-active' : ''}`} aria-pressed={on} disabled={item.status === 'done'} onClick={() => update(item.key, { style: on ? item.style.filter((entry) => entry !== option) : [...item.style, option as Style] })}>
+                                {styleLabel(option)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </fieldset>
+                    </>
+                  )}
                 </div>
                 <div className="ins-admin-queue-status">
                   {item.status === 'done' && (
@@ -481,6 +611,7 @@ export function UploadPanel({
               </button>
             )}
           </div>
+          {describeNote && <p className="ins-field-hint">{describeNote}</p>}
         </>
       )}
     </div>
