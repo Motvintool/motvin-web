@@ -1,9 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
+import { useAuth } from '@/components/shared/AuthProvider';
 import { adminApi, type AdminState } from '@/lib/inspirations/admin';
 import { invalidateInspirationsCache } from '@/lib/inspirations/api';
 import { DEFAULT_FRESHNESS } from '@/lib/inspirations/appFreshness';
+import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { CheckIcon } from '../Icons';
 
 /** Longest a tag can last, matching the backend's limit. */
@@ -38,6 +41,7 @@ export function SettingsPanel({
   busy: boolean;
   run: (action: () => Promise<unknown>, onDone?: () => void) => Promise<boolean>;
 }) {
+  const { user } = useAuth();
   const saved = state.settings?.freshness ?? DEFAULT_FRESHNESS;
   const [draft, setDraft] = useState<Draft>(() => toDraft(saved));
   // Pick up a save made elsewhere (the assistant, another tab) when this form hasn't been touched.
@@ -97,6 +101,19 @@ export function SettingsPanel({
         General settings for the whole library. They apply to every visitor, and the app pages update as soon as you
         save.
       </p>
+
+      <section className="ins-admin-form">
+        <p className="ins-admin-form-title">Account</p>
+        <p className="ins-settings-account">
+          <CheckIcon size={14} /> Signed in as <strong>{user?.email}</strong>
+        </p>
+        <p className="ins-field-hint">
+          Changes in Library admin write to the store in motvin-backend.{' '}
+          <Link href={INSPIRATIONS_ROUTES.explore} className="ins-link">
+            View the public library
+          </Link>
+        </p>
+      </section>
 
       <form
         className="ins-admin-form"

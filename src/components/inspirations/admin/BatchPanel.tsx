@@ -3,9 +3,12 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { adminApi, type AdminState } from '@/lib/inspirations/admin';
+import { inspirationsApi } from '@/lib/inspirations/api';
 import { authHeaders } from '@/lib/inspirations/admin-chatbot/ingestJobs';
+import { dayLabel } from '@/lib/inspirations/dates';
 import type { Industry } from '@/lib/inspirations/types';
-import { CheckIcon, CloseIcon, CopyIcon, ExternalIcon, FolderIcon, PlayIcon, RetryIcon, StopIcon, UploadIcon } from '../Icons';
+import { CheckIcon, ChevronDownIcon, CloseIcon, CopyIcon, ExternalIcon, FolderIcon, PlayIcon, RetryIcon, SearchIcon, StopIcon, UploadIcon } from '../Icons';
+import { Summary, Wizard } from './Wizard';
 import { onRecordings, takeRecordings } from './recordingHandoff';
 
 /**
@@ -63,6 +66,13 @@ const STAGE_LABEL: Record<BatchItem['stage'], string> = {
   'needs-you': 'Needs you',
 };
 
+const STEPS = [
+  { id: 'recordings', label: 'Recordings' },
+  { id: 'apps', label: 'Apps' },
+  { id: 'settings', label: 'Settings' },
+  { id: 'start', label: 'Check & start' },
+];
+
 const DEFAULTS: Settings = { cleanup: 'automatic', review: 'auto', afterReview: 'cleanup', existing: 'skip', platform: 'ios', version: null, notify: 'each', appsAtOnce: 3, reviewer: 'claude', reviewModel: 'sonnet' };
 const PLATFORM_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web App', web: 'Web' };
 
@@ -107,7 +117,9 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
   const [rows, setRows] = useState<Row[]>([]);
   const [records, setRecords] = useState<{ root: string; videos: RecordVideo[]; logos: string[] } | null>(null);
   const [choosing, setChoosing] = useState(false);
-  const [picking, setPicking] = useState(false);
+  const [step, setStep] = useState(0);
+  const [recordSearch, setRecordSearch] = useState('');
+  const [started, setStarted] = useState<number | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [autoReview, setAutoReview] = useState(true);
   const [reviewers, setReviewers] = useState<{ claude: boolean; gemini: boolean }>({ claude: true, gemini: false });
@@ -158,10 +170,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
     setError(null);
     try {
       const picked = await api<{ success: boolean; cancelled?: boolean }>('/api/crawler/batch/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pick: true }) });
-      if (picked.success) {
-        await loadRecords();
-        setPicking(true);
-      }
+      if (picked.success) await loadRecords();
     } catch (failure) {
       setError((failure as Error).message);
     } finally {
@@ -195,14 +204,16 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
     take();
     return onRecordings(take);
   }, [records, addFiles]);
-  const addRecord = (video: RecordVideo) => {
+  const toggleRecord = (video: RecordVideo) => {
     const key = `r-${video.path}`;
-    setRows((current) => (current.some((row) => row.key === key) ? current : [...current, { key, title: video.file, name: video.name, video: { kind: 'records', path: video.path }, logo: matchLogo(video.name), sizeBytes: video.sizeBytes }]));
+    setRows((current) => (current.some((row) => row.key === key) ? current.filter((row) => row.key !== key) : [...current, { key, title: video.file, name: video.name, video: { kind: 'records', path: video.path }, logo: matchLogo(video.name), sizeBytes: video.sizeBytes }]));
   };
   const update = (key: string, patch: Partial<Row>) => setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
 
   const active = batches.filter((batch) => batch.state !== 'done').at(-1) ?? null;
   const last = active ?? batches.filter((batch) => !batch.cleared).at(-1) ?? null;
+  // Every recording is an app already in the library, and those are skipped: starting would do nothing.
+  const allSkipped = rows.length > 0 && settings.existing === 'skip' && rows.every((row) => appFor(row.name.trim() || plainName(row.title)));
   const recordsForPlatform = useMemo(() => (records?.videos ?? []).filter((video) => video.platform === settings.platform || video.platform === 'any'), [records, settings.platform]);
 
   const start = async () => {
@@ -243,7 +254,9 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
       }
       setStarting('Starting the queue');
       await api('/api/crawler/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ settings: { ...settings, version: day }, items }) });
+      setStarted(rows.length);
       setRows([]);
+      setStep(0);
       await refresh();
       await onChanged();
     } catch (failure) {
@@ -332,97 +345,218 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
         </section>
       )}
 
-      <section className="ins-addflow-block">
-        <p className="ins-addflow-title">Agent Upload</p>
-        <p className="ins-field-hint">Add the recordings, give each a name and logo if you like, choose the settings, and start. Each app is uploaded, cleaned up, reviewed and checked by itself — you can close this page.</p>
-
-        <div className="ins-admin-actions ins-admin-actions--tight">
-          <button type="button" className="ins-btn ins-btn--ghost" onClick={() => setPicking((open) => !open)}>
-            <FolderIcon size={14} /> From the records folder{records ? ` (${recordsForPlatform.length})` : ''}
-          </button>
-          <button type="button" className="ins-btn ins-btn--ghost" onClick={() => void chooseFolder()} disabled={choosing}>
-            {choosing ? <><span className="ins-spinner" aria-hidden /> Choose in the Finder window…</> : 'Change folder…'}
-          </button>
-          <button type="button" className="ins-btn ins-btn--ghost" onClick={() => videoInput.current?.click()}>
-            <UploadIcon size={14} /> From this computer
-          </button>
-          <input ref={videoInput} type="file" accept="video/*,.mov,.mp4,.m4v" multiple hidden onChange={(event) => { addFiles(event.target.files); event.target.value = ''; }} />
+      {started !== null && (
+        <div className="ins-wizard-result is-ok">
+          <span className="ins-wizard-result-icon"><CheckIcon size={18} /></span>
+          <div>
+            <p className="ins-wizard-result-title">Started {started} app{started === 1 ? '' : 's'}</p>
+            <p className="ins-field-hint">Each one is uploaded, cleaned up, reviewed and checked by itself — follow it above. You can close this page.</p>
+          </div>
+          <button type="button" className="ins-iconbtn ins-iconbtn--plain" aria-label="Dismiss" onClick={() => setStarted(null)}><CloseIcon size={14} /></button>
         </div>
+      )}
 
-        {records?.root && <p className="ins-field-hint">Records folder: {records.root}</p>}
-        {picking && (
-          <div className="ins-batch-picker">
-            {recordsForPlatform.length ? recordsForPlatform.map((video) => {
-              const added = rows.some((row) => row.key === `r-${video.path}`);
-              const known = appFor(video.name);
-              return (
-                <button key={video.path} type="button" className={`ins-batch-pick ${added ? 'is-added' : ''}`} onClick={() => addRecord(video)} disabled={added}>
-                  {added && <CheckIcon size={11} />} {video.name}
-                  <span className="ins-muted">{Math.round(video.sizeBytes / 1024 ** 2)} MB{known ? ' · in library' : ''}</span>
+      <Wizard
+        steps={STEPS}
+        current={step}
+        onStep={(index) => {
+          if (index < 0 || index >= STEPS.length) return;
+          if (index > step && !rows.length) return;
+          setStep(index);
+        }}
+        title={[
+          'Which recordings do you want to add?',
+          'Name each app',
+          'How should they be added?',
+          'Check and start',
+        ][step]}
+        description={[
+          'Each recording becomes one app, or a new version of an app already in the library.',
+          'The name is taken from the file; change it if you like, and add a logo. A logo in the records folder with the same name is picked up by itself.',
+          'The usual choices are already set. Change only what you need.',
+          'Nothing has started yet. After Start, each app is uploaded, cleaned up and reviewed by the agent on its own.',
+        ][step]}
+        canNext={step === 3 ? rows.length > 0 && !active && !allSkipped : rows.length > 0}
+        busy={Boolean(starting)}
+        nextLabel={starting ?? `Start ${rows.length} app${rows.length === 1 ? '' : 's'}`}
+        onNext={() => void start()}
+        footerNote={!rows.length ? 'Pick at least one recording.' : step === 3 && active ? 'A batch is running — start this one when it ends.' : step >= 2 && allSkipped ? 'These apps are all in the library already and would be skipped — in Settings, choose “Add as a new version”.' : `${rows.length} recording${rows.length === 1 ? '' : 's'} picked`}
+      >
+        {step === 0 && (
+          <div className="ins-wizard-stack">
+            <div className="ins-rec-bar">
+              <div className="ins-segmented" role="radiogroup" aria-label="Platform">
+                {([['ios', 'iOS'], ['webapp', 'Web App'], ['web', 'Web']] as const).map(([id, text]) => (
+                  <button key={id} type="button" role="radio" aria-checked={settings.platform === id} className={`ins-segmented-item ${settings.platform === id ? 'is-active' : ''}`} onClick={() => set('platform', id)}>
+                    {text}
+                  </button>
+                ))}
+              </div>
+              <span className="ins-rec-folder" title={records?.root}>
+                <FolderIcon size={13} /> {records?.root ? records.root.split('/').slice(-2).join('/') : 'Records folder'}
+              </span>
+              <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm" onClick={() => void chooseFolder()} disabled={choosing}>
+                {choosing ? <><span className="ins-spinner" aria-hidden /> Choose in Finder…</> : 'Change folder'}
+              </button>
+            </div>
+
+            <div className="ins-rec-tools">
+              <label className="ins-app-search">
+                <SearchIcon size={14} />
+                <input value={recordSearch} onChange={(e) => setRecordSearch(e.target.value)} placeholder={`Search ${recordsForPlatform.length} recordings`} aria-label="Search recordings" />
+              </label>
+              <button
+                type="button"
+                className="ins-btn ins-btn--sm"
+                disabled={!recordsForPlatform.some((video) => !appFor(video.name))}
+                onClick={() => recordsForPlatform.filter((video) => !appFor(video.name) && !rows.some((row) => row.key === `r-${video.path}`)).forEach(toggleRecord)}
+              >
+                Select all new
+              </button>
+              {rows.length > 0 && (
+                <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm" onClick={() => setRows([])}>
+                  Clear ({rows.length})
                 </button>
-              );
-            }) : <span className="ins-muted">No {PLATFORM_LABEL[settings.platform]} recordings in this folder (looked in it and in {settings.platform === 'ios' ? 'iOS' : settings.platform === 'webapp' ? 'Web Apps' : 'Webs'}/).</span>}
+              )}
+            </div>
+
+            <ul className="ins-rec-grid" role="listbox" aria-multiselectable aria-label="Recordings">
+              <li>
+                <button type="button" className="ins-rec ins-rec--add" onClick={() => videoInput.current?.click()}>
+                  <span className="ins-rec-logo"><UploadIcon size={15} /></span>
+                  <span className="ins-rec-text">
+                    <span className="ins-rec-name">Upload{rows.some((row) => row.video.kind === 'file') ? ` (${rows.filter((row) => row.video.kind === 'file').length})` : ''}</span>
+                  </span>
+                </button>
+                <input ref={videoInput} type="file" accept="video/*,.mov,.mp4,.m4v" multiple hidden onChange={(event) => { addFiles(event.target.files); event.target.value = ''; }} />
+              </li>
+              {recordsForPlatform
+                .filter((video) => !recordSearch.trim() || video.name.toLowerCase().includes(recordSearch.trim().toLowerCase()))
+                .map((video) => {
+                  const picked = rows.some((row) => row.key === `r-${video.path}`);
+                  const known = appFor(video.name);
+                  const logo = known ? state.logos.find((name) => name.startsWith(`${known.id}.`)) : undefined;
+                  const recordsLogo = records?.logos.find((entry) => entry.replace(/\.[^.]+$/, '').toLowerCase() === video.name.toLowerCase());
+                  return (
+                    <li key={video.path}>
+                      <button type="button" role="option" aria-selected={picked} className={`ins-rec ${picked ? 'is-on' : ''}`} onClick={() => toggleRecord(video)}>
+                        <span className="ins-rec-logo">
+                          {logo ? <img src={inspirationsApi.mediaUrl(`/api/inspirations/logos/${logo}`) ?? undefined} alt="" /> : recordsLogo ? <RecordsLogo file={recordsLogo} /> : video.name.slice(0, 1)}
+                        </span>
+                        <span className="ins-rec-text">
+                          <span className="ins-rec-name">{video.name}</span>
+                          <span className="ins-rec-meta">
+                            <span className={`ins-pill ${known ? '' : 'is-new'}`}>{known ? 'In library' : 'New'}</span>
+                            {Math.round(video.sizeBytes / 1024 ** 2)} MB
+                          </span>
+                        </span>
+                        <span className="ins-rec-check" aria-hidden>{picked && <CheckIcon size={12} />}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+            </ul>
+            {!recordsForPlatform.length && (
+              <p className="ins-muted">No {PLATFORM_LABEL[settings.platform]} recordings in this folder (looked in it and in {settings.platform === 'ios' ? 'iOS' : settings.platform === 'webapp' ? 'Web Apps' : 'Webs'}/).</p>
+            )}
           </div>
         )}
 
-        {rows.length > 0 && (
-          <ol className="ins-batch-rows">
+        {step === 1 && (
+          <ol className="ins-app-rows">
             {rows.map((row) => {
               const known = appFor(row.name.trim() || plainName(row.title));
+              const pill = !known ? ['is-new', 'New app'] : settings.existing === 'skip' ? ['is-skip', 'In library — skipped'] : settings.existing === 'version' ? ['is-version', 'New version'] : ['is-replace', 'Replaces the app'];
               return (
-                <li key={row.key} className="ins-batch-row">
-                  <span className="ins-batch-row-video" title={row.title}>{row.title} <span className="ins-muted">{Math.round(row.sizeBytes / 1024 ** 2)} MB</span></span>
-                  <input className="ins-input" value={row.name} placeholder="App name (from the screens if empty)" onChange={(event) => update(row.key, { name: event.target.value })} aria-label="App name" />
-                  <label className="ins-batch-row-logo">
-                    {row.logo ? (row.logo.kind === 'records' ? row.logo.file : row.logo.file.name) : 'Add logo'}
+                <li key={row.key} className="ins-app-row">
+                  <label className={`ins-app-logo ${row.logo ? 'has-logo' : ''}`} title={row.logo ? (row.logo.kind === 'records' ? row.logo.file : row.logo.file.name) : 'Add a logo'}>
+                    {row.logo?.kind === 'file' ? <LogoPreview file={row.logo.file} /> : row.logo ? <RecordsLogo file={row.logo.file} /> : 'Logo'}
                     <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) update(row.key, { logo: { kind: 'file', file } }); event.target.value = ''; }} />
                   </label>
-                  <span className={`ins-batch-row-state ${known ? 'is-known' : ''}`}>{known ? `In library — ${settings.existing === 'skip' ? 'will be skipped' : settings.existing === 'version' ? 'new version' : 'will be replaced'}` : 'New app'}</span>
-                  <button type="button" className="ins-linkbtn" aria-label={`Remove ${row.title}`} onClick={() => setRows((current) => current.filter((other) => other.key !== row.key))}><CloseIcon size={13} /></button>
+                  <span className="ins-app-text">
+                    <input className="ins-input" value={row.name} placeholder="App name (read from the screens if empty)" onChange={(event) => update(row.key, { name: event.target.value })} aria-label="App name" />
+                    <span className="ins-muted">{row.title} · {Math.round(row.sizeBytes / 1024 ** 2)} MB{row.logo ? ` · logo ${row.logo.kind === 'records' ? row.logo.file : row.logo.file.name}` : ''}</span>
+                  </span>
+                  <span className={`ins-pill ${pill[0]}`}>{pill[1]}</span>
+                  <button type="button" className="ins-iconbtn ins-iconbtn--plain" aria-label={`Remove ${row.title}`} onClick={() => setRows((current) => current.filter((other) => other.key !== row.key))}><CloseIcon size={14} /></button>
                 </li>
               );
             })}
           </ol>
         )}
-      </section>
 
-      <section className="ins-addflow-block ins-batch-settings">
-        <p className="ins-addflow-title">Settings for every app</p>
-        <Choice label="Clean up" value={settings.cleanup} onChange={(v) => set('cleanup', v)} options={[['automatic', 'Automatically'], ['manual', 'I’ll choose myself']]} hint={settings.cleanup === 'manual' ? 'Each app waits for your choice in the Motvin agent; the next one waits behind it.' : undefined} />
-        <Choice label="Review" value={settings.review} onChange={(v) => set('review', v)} options={[['auto', 'Auto review'], ['manual', 'Manual review']]} hint={settings.review === 'auto' && !autoReview ? 'Auto review needs the Claude Code command-line tool on this computer. Until it is installed, each app ends ready for you to review.' : undefined} />
-        {settings.review === 'auto' && (
-          <Choice
-            label="Reviewer"
-            value={settings.reviewer}
-            onChange={(v) => set('reviewer', v)}
-            options={[['claude', 'Claude'], ['gemini', 'Gemini']]}
-            hint={settings.reviewer === 'gemini' ? (reviewers.gemini ? 'Reviews run with Google’s Gemini CLI (the Gemini models Antigravity uses). New — test it on one app before a big batch.' : 'Needs Google’s Gemini CLI on this computer: npm install -g @google/gemini-cli, then run gemini once to sign in. Until then, each app ends ready for you to review — copy the request into Antigravity.') : undefined}
-          />
-        )}
-        <Choice label="Apps at the same time" value={String(settings.appsAtOnce) as '1' | '2' | '3' | '4'} onChange={(v) => set('appsAtOnce', Number(v) as 1 | 2 | 3 | 4)} options={[['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']]} hint="Each app goes through its own upload, clean-up and review without waiting for the others. More at once finishes sooner; the AI usage is the same in total. 3 suits most Macs." />
-        <Choice label="After a clean review" value={settings.afterReview} onChange={(v) => set('afterReview', v)} options={[['cleanup', 'Clean up working files'], ['keep', 'Keep files for me to check']]} />
-        <Choice label="App already in the library" value={settings.existing} onChange={(v) => set('existing', v)} options={[['skip', 'Skip it'], ['version', 'Add as a new version'], ['replace', 'Replace it']]} hint={settings.existing === 'replace' ? 'Replace removes the app and all its screens before uploading it again.' : settings.existing === 'version' ? 'Versions are by day: a version from the same day is replaced by the new upload.' : undefined} />
-        <Choice label="Platform" value={settings.platform} onChange={(v) => set('platform', v)} options={[['ios', 'iOS'], ['webapp', 'Web App'], ['web', 'Web']]} />
-        <div className="ins-field">
-          <span className="ins-field-label">Version date</span>
-          <div className="ins-admin-actions ins-admin-actions--tight">
-            <div className="ins-segmented" role="radiogroup" aria-label="Version date">
-              <button type="button" role="radio" aria-checked={settings.version === null} className={`ins-segmented-item ${settings.version === null ? 'is-active' : ''}`} onClick={() => set('version', null)}>Today</button>
-              <button type="button" role="radio" aria-checked={settings.version !== null} className={`ins-segmented-item ${settings.version !== null ? 'is-active' : ''}`} onClick={() => set('version', new Date().toISOString().slice(0, 10))}>Choose a date</button>
-            </div>
-            {settings.version !== null && <input type="date" className="ins-input" value={settings.version} onChange={(event) => set('version', event.target.value || null)} aria-label="Version date" />}
+        {step === 2 && (
+          <div className="ins-wizard-stack">
+            <Choice label="An app already in the library" value={settings.existing} onChange={(v) => set('existing', v)} options={[['skip', 'Skip it'], ['version', 'Add as a new version'], ['replace', 'Replace it']]} hint={settings.existing === 'replace' ? 'Replace removes the app and all its screens before uploading it again.' : settings.existing === 'version' ? 'Versions are by day: a version from the same day is replaced by the new upload.' : 'Apps already in the library are left as they are.'} />
+            <Choice label="Notify me" value={settings.notify} onChange={(v) => set('notify', v)} options={[['each', 'Each app and the end'], ['summary', 'Only at the end'], ['off', 'Off']]} />
+            <details className="ins-wizard-more">
+              <summary><ChevronDownIcon size={14} /> More settings</summary>
+              <Choice label="Version date" value={settings.version === null ? 'today' : 'date'} onChange={(v) => set('version', v === 'today' ? null : new Date().toISOString().slice(0, 10))} options={[['today', 'Today'], ['date', 'Choose a date']]} />
+              {settings.version !== null && <input type="date" className="ins-input" value={settings.version} onChange={(event) => set('version', event.target.value || null)} aria-label="Version date" />}
+              <Choice label="Clean up" value={settings.cleanup} onChange={(v) => set('cleanup', v)} options={[['automatic', 'Automatically'], ['manual', 'I’ll choose myself']]} hint={settings.cleanup === 'manual' ? 'Each app waits for your choice in the Motvin agent; the next one waits behind it.' : undefined} />
+              <Choice label="Review" value={settings.review} onChange={(v) => set('review', v)} options={[['auto', 'By the agent'], ['manual', 'I’ll ask for it']]} hint={settings.review === 'auto' && !autoReview ? 'Auto review needs the Claude Code command-line tool on this computer. Until it is installed, each app ends ready for you to review.' : undefined} />
+              {settings.review === 'auto' && (
+                <Choice
+                  label="Reviewer"
+                  value={settings.reviewer}
+                  onChange={(v) => set('reviewer', v)}
+                  options={[['claude', 'Claude'], ['gemini', 'Gemini']]}
+                  hint={settings.reviewer === 'gemini' ? (reviewers.gemini ? 'Reviews run with Google’s Gemini CLI (the Gemini models Antigravity uses). New — test it on one app before a big batch.' : 'Needs Google’s Gemini CLI on this computer: npm install -g @google/gemini-cli, then run gemini once to sign in. Until then, each app ends ready for you to review — copy the request into Antigravity.') : undefined}
+                />
+              )}
+              <Choice label="Apps at the same time" value={String(settings.appsAtOnce) as '1' | '2' | '3' | '4'} onChange={(v) => set('appsAtOnce', Number(v) as 1 | 2 | 3 | 4)} options={[['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']]} hint="More at once finishes sooner; the AI usage is the same in total. 3 suits most Macs." />
+              <Choice label="After a clean review" value={settings.afterReview} onChange={(v) => set('afterReview', v)} options={[['cleanup', 'Clean up working files'], ['keep', 'Keep files for me to check']]} />
+            </details>
           </div>
-        </div>
-        <Choice label="Notify me" value={settings.notify} onChange={(v) => set('notify', v)} options={[['each', 'Each app and the end'], ['summary', 'Only at the end'], ['off', 'Off']]} />
-      </section>
+        )}
 
-      {error && <p className="ins-admin-err">{error}</p>}
-      <div className="ins-admin-actions">
-        <button type="button" className="ins-btn ins-btn--primary" disabled={!rows.length || Boolean(starting) || Boolean(active)} onClick={() => void start()}>
-          {starting ? <><span className="ins-spinner" aria-hidden /> {starting}</> : `Start ${rows.length || ''} app${rows.length === 1 ? '' : 's'}`}
-        </button>
-        {active && <span className="ins-muted">A batch is running — start the next one when it ends.</span>}
-      </div>
+        {step === 3 && (
+          <div className="ins-wizard-stack">
+            <Summary
+              rows={[
+                ['Apps', rows.map((row) => row.name.trim() || plainName(row.title)).join(', ')],
+                ['Platform', PLATFORM_LABEL[settings.platform]],
+                ['New or existing', (() => {
+                  const known = rows.filter((row) => appFor(row.name.trim() || plainName(row.title))).length;
+                  const fresh = rows.length - known;
+                  return [fresh ? `${fresh} new app${fresh === 1 ? '' : 's'}` : '', known ? `${known} already in the library — ${settings.existing === 'skip' ? 'skipped' : settings.existing === 'version' ? 'added as a new version' : 'replaced'}` : ''].filter(Boolean).join(' · ');
+                })()],
+                ['Version', settings.version ? dayLabel(settings.version) : 'Today'],
+                ['Review', settings.review === 'auto' ? `By the agent (${settings.reviewer === 'gemini' ? 'Gemini' : 'Sonnet'}), then checked` : 'You ask for it when each app is in'],
+                ['At the same time', `${settings.appsAtOnce} app${settings.appsAtOnce === 1 ? '' : 's'}`],
+              ]}
+            />
+            {error && <p className="ins-admin-err">{error}</p>}
+          </div>
+        )}
+      </Wizard>
     </div>
   );
+}
+
+/** A logo picked from this computer, shown as it will look. */
+function LogoPreview({ file }: { file: File }) {
+  const url = useMemo(() => URL.createObjectURL(file), [file]);
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  return <img src={url} alt="" />;
+}
+
+/** A logo from the records folder, read with the admin's sign-in. */
+function RecordsLogo({ file }: { file: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    let made: string | null = null;
+    void (async () => {
+      const res = await fetch(`/api/crawler/batch/records?logo=${encodeURIComponent(file)}`, { headers: await authHeaders() });
+      if (!res.ok || !live) return;
+      made = URL.createObjectURL(await res.blob());
+      setUrl(made);
+    })().catch(() => undefined);
+    return () => {
+      live = false;
+      if (made) URL.revokeObjectURL(made);
+    };
+  }, [file]);
+  return url ? <img src={url} alt="" /> : <CheckIcon size={14} />;
 }

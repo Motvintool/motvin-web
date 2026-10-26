@@ -1,11 +1,14 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { adminApi, type AdminFlowRecord, type AdminState } from '@/lib/inspirations/admin';
 import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { Platform } from '@/lib/inspirations/types';
-import { CloseIcon, PlusIcon, TrashIcon } from '../Icons';
+import { CloseIcon, PlusIcon, SearchIcon, TrashIcon } from '../Icons';
 import { screenLabel, thumbUrl } from './screenFiles';
+
+/** Flows listed at a time; Show more adds as many again. */
+const PAGE = 40;
 
 /**
  * Flow builder.
@@ -43,6 +46,16 @@ export function FlowsPanel({
   const [category, setCategory] = useState('onboarding');
   const [steps, setSteps] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // The builder opens for a new flow (＋ Build a flow) or one being edited; the list leads otherwise.
+  const [building, setBuilding] = useState(false);
+  const [query, setQuery] = useState('');
+  const [appFilter, setAppFilter] = useState('');
+  const [shown, setShown] = useState(PAGE);
+  const formRef = useRef<HTMLFormElement>(null);
+  const formOpen = building || Boolean(editingId);
+  useEffect(() => {
+    if (editingId) formRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [editingId]);
   const categoryListId = useId();
 
   const appFiles = state.files.filter((f) => f.appId === appId);
@@ -61,11 +74,15 @@ export function FlowsPanel({
   const usable = candidates.filter((f) => f.published);
   const held = candidates.filter((f) => !f.published);
   const byId = new Map(state.files.map((f) => [f.id, f]));
+  const needle = query.trim().toLowerCase();
+  const appName = (id: string) => state.apps.find((a) => a.id === id)?.name ?? id;
+  const listed = state.flows.filter((flow) => (!appFilter || flow.appId === appFilter) && (!needle || flow.name.toLowerCase().includes(needle) || appName(flow.appId).toLowerCase().includes(needle)));
 
   const reset = () => {
     setName('');
     setSteps([]);
     setEditingId(null);
+    setBuilding(false);
   };
 
   const pickApp = (id: string) => {
@@ -131,19 +148,41 @@ export function FlowsPanel({
 
   return (
     <div className="ins-admin-panel">
-      <p className="ins-field-hint">
-        A flow is an ordered walk through one app on one platform — pick the screens, in order, that a visitor
-        steps through.
-      </p>
+      <div className="ins-admin-toolbar">
+        <label className="ins-toolbar-search">
+          <SearchIcon size={14} />
+          <input value={query} onChange={(e) => { setQuery(e.target.value); setShown(PAGE); }} placeholder={`Search ${state.flows.length} flows`} aria-label="Search flows" />
+        </label>
+        <select className="ins-input ins-toolbar-select" value={appFilter} onChange={(e) => { setAppFilter(e.target.value); setShown(PAGE); }} aria-label="App">
+          <option value="">All apps</option>
+          {[...state.apps].sort((a, b) => a.name.localeCompare(b.name)).map((app) => (
+            <option key={app.id} value={app.id}>
+              {app.name}
+            </option>
+          ))}
+        </select>
+        {!formOpen && (
+          <button type="button" className="ins-btn ins-btn--primary ins-btn--sm" onClick={() => setBuilding(true)}>
+            <PlusIcon size={14} /> Build a flow
+          </button>
+        )}
+      </div>
 
+      {formOpen && (
       <form
+        ref={formRef}
         className="ins-admin-form"
         onSubmit={(e) => {
           e.preventDefault();
           if (valid) save();
         }}
       >
-        <p className="ins-admin-form-title">{editingId ? `Edit ${editingId}` : 'Build a flow'}</p>
+        <div className="ins-admin-form-head">
+          <p className="ins-admin-form-title">{editingId ? `Edit ${name || editingId}` : 'Build a flow'}</p>
+          <button type="button" className="ins-iconbtn ins-iconbtn--plain" aria-label="Close" onClick={reset} disabled={busy}>
+            <CloseIcon size={14} />
+          </button>
+        </div>
 
         <div className="ins-admin-row">
           <label className="ins-field">
@@ -320,17 +359,17 @@ export function FlowsPanel({
           <button type="submit" className="ins-btn ins-btn--primary" disabled={!valid || busy}>
             <PlusIcon size={15} /> {editingId ? 'Save flow' : 'Create flow'}
           </button>
-          {(editingId || steps.length > 0 || name) && (
-            <button type="button" className="ins-btn ins-btn--ghost" onClick={reset} disabled={busy}>
-              {editingId ? 'Cancel' : 'Clear'}
-            </button>
-          )}
+          <button type="button" className="ins-btn ins-btn--ghost" onClick={reset} disabled={busy}>
+            Cancel
+          </button>
         </div>
       </form>
+      )}
 
       <div className="ins-admin-list">
         {state.flows.length === 0 && <p className="ins-muted">No flows yet.</p>}
-        {state.flows.map((flow) => (
+        {listed.length === 0 && state.flows.length > 0 && <p className="ins-muted">No flow matches.</p>}
+        {listed.slice(0, shown).map((flow) => (
           <div key={flow.id} className="ins-admin-item">
             <div className="ins-admin-item-head">
               <div className="ins-flowbuild-mini" aria-hidden>
@@ -384,6 +423,11 @@ export function FlowsPanel({
             </div>
           </div>
         ))}
+        {listed.length > shown && (
+          <button type="button" className="ins-btn ins-show-more" onClick={() => setShown((n) => n + PAGE)}>
+            Show more · {listed.length - shown} left
+          </button>
+        )}
       </div>
     </div>
   );

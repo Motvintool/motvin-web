@@ -23,7 +23,6 @@ export function AddScreensPanel({
 }) {
   return (
     <div className="ins-admin-panel">
-      <p className="ins-field-hint">From screenshots you already have. Pick the app, set each one’s type, and upload. For a recording, use Agent Upload.</p>
       <UploadPanel state={state} busy={busy} onUploaded={onUploaded} run={run} />
     </div>
   );

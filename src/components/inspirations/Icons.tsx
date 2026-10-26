@@ -191,3 +191,29 @@ export const SettingsIcon = (p: IconProps) => (
 export const UserIcon = (p: IconProps) => (
   <svg {...base(p)}><circle cx="12" cy="8" r="3.5" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>
 );
+
+/* The admin menu's set: one shape language (rounded 24-grid outlines) so the eight read as a family. */
+export const ChartIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M4 20h16" /><rect x="5.5" y="11" width="3" height="6" rx="1" /><rect x="10.5" y="5" width="3" height="12" rx="1" /><rect x="15.5" y="8.5" width="3" height="8.5" rx="1" /></svg>
+);
+export const TrayUploadIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M4 14v3.5A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V14" /><path d="M12 15V4" /><path d="m7.5 8.5 4.5-4.5 4.5 4.5" /></svg>
+);
+export const BotIcon = (p: IconProps) => (
+  <svg {...base(p)}><rect x="4" y="8" width="16" height="12" rx="3.5" /><path d="M12 8V5" /><circle cx="12" cy="3.8" r="1.2" /><path d="M9.5 13v1.5M14.5 13v1.5" /></svg>
+);
+export const PhoneIcon = (p: IconProps) => (
+  <svg {...base(p)}><rect x="6.5" y="3" width="11" height="18" rx="2.8" /><path d="M10.5 18h3" /></svg>
+);
+export const AppsIcon = (p: IconProps) => (
+  <svg {...base(p)}><rect x="4" y="4" width="6.5" height="6.5" rx="1.8" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.8" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.8" /></svg>
+);
+export const RouteIcon = (p: IconProps) => (
+  <svg {...base(p)}><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="18" r="2.5" /><path d="M8.5 6H14a4 4 0 0 1 4 4v5.5" /></svg>
+);
+export const InboxIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M4 13h4l1.5 3h5l1.5-3h4" /><path d="M6.4 5.6 4 13v4.5A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V13l-2.4-7.4A2.3 2.3 0 0 0 15.4 4H8.6a2.3 2.3 0 0 0-2.2 1.6z" /></svg>
+);
+export const TuneIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></svg>
+);

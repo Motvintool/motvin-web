@@ -1,12 +1,11 @@
 'use client';
 
-import Link from 'next/link';
 import { type ReactNode } from 'react';
 import { useGoToLogin } from '../useGoToLogin';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { EmptyState } from '../EmptyState';
-import { CheckIcon, CloseIcon } from '../Icons';
+import { CloseIcon } from '../Icons';
 import { useIsLibraryAdmin } from '../useIsLibraryAdmin';
 
 /**
@@ -65,15 +64,6 @@ export function AdminGate({ children }: { children: ReactNode }) {
   }
 
   return (
-    <>
-      <p className="ins-admin-signed-in">
-        <CheckIcon size={13} />
-        Signed in as {user?.email}. Changes here write to the store in motvin-backend.{' '}
-        <Link href={INSPIRATIONS_ROUTES.explore} className="ins-link">
-          View the public library
-        </Link>
-      </p>
-      {children}
-    </>
+    <>{children}</>
   );
 }

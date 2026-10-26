@@ -1,11 +1,11 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { adminApi, type AdminAppRecord, type AdminState } from '@/lib/inspirations/admin';
 import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import { PICKABLE_INDUSTRIES, PLATFORMS, type Industry, type Platform } from '@/lib/inspirations/types';
-import { PlusIcon, TrashIcon, UploadIcon } from '../Icons';
+import { CloseIcon, PlusIcon, SearchIcon, TrashIcon, UploadIcon } from '../Icons';
 import { AppCardScreens } from './AppCardScreens';
 import { AppVersionScreens } from './AppVersionScreens';
 
@@ -40,6 +40,14 @@ export function AppsPanel({
 }) {
   const [draft, setDraft] = useState<AdminAppRecord>(EMPTY);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // The form opens for a new app (＋ Add app) or an app being edited; the list leads otherwise.
+  const [adding, setAdding] = useState(false);
+  const [query, setQuery] = useState('');
+  const formRef = useRef<HTMLFormElement>(null);
+  const formOpen = adding || Boolean(editingId);
+  useEffect(() => {
+    if (editingId) formRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [editingId]);
   const [idTouched, setIdTouched] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [logoFor, setLogoFor] = useState<string | null>(null);
@@ -54,6 +62,7 @@ export function AppsPanel({
     setDraft(EMPTY);
     setEditingId(null);
     setIdTouched(false);
+    setAdding(false);
   };
 
   const edit = (app: AdminAppRecord) => {
@@ -108,21 +117,34 @@ export function AppsPanel({
 
   return (
     <div className="ins-admin-panel">
-      <p className="ins-field-hint">
-        The products screenshots belong to. Open <strong>Versions</strong> on any app below to manage its dated
-        captures — add or remove one, or rename one&rsquo;s date to change which is &ldquo;Latest&rdquo;. Open{' '}
-        <strong>Card screens</strong> to pick the four screens its card cycles through on the Apps page. That is
-        different from the <strong>Screens</strong> tab above, which lists every screen of every app in one place.
-      </p>
+      <div className="ins-admin-toolbar">
+        <label className="ins-toolbar-search">
+          <SearchIcon size={14} />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${state.apps.length} apps`} aria-label="Search apps" />
+        </label>
+        <span className="ins-toolbar-note">Versions and card screens are under each app.</span>
+        {!formOpen && (
+          <button type="button" className="ins-btn ins-btn--primary ins-btn--sm" onClick={() => setAdding(true)}>
+            <PlusIcon size={14} /> Add app
+          </button>
+        )}
+      </div>
 
+      {formOpen && (
       <form
+        ref={formRef}
         className="ins-admin-form"
         onSubmit={(e) => {
           e.preventDefault();
           if (valid) save();
         }}
       >
-        <p className="ins-admin-form-title">{editingId ? `Edit ${editingId}` : 'Add an app'}</p>
+        <div className="ins-admin-form-head">
+          <p className="ins-admin-form-title">{editingId ? `Edit ${draft.name || editingId}` : 'Add an app'}</p>
+          <button type="button" className="ins-iconbtn ins-iconbtn--plain" aria-label="Close" onClick={startNew} disabled={busy}>
+            <CloseIcon size={14} />
+          </button>
+        </div>
 
         <div className="ins-admin-row">
           <label className="ins-field">
@@ -232,17 +254,16 @@ export function AppsPanel({
           <button type="submit" className="ins-btn ins-btn--primary" disabled={!valid || busy}>
             <PlusIcon size={15} /> {editingId ? 'Save changes' : 'Add app'}
           </button>
-          {editingId && (
-            <button type="button" className="ins-btn ins-btn--ghost" onClick={startNew} disabled={busy}>
-              Cancel
-            </button>
-          )}
+          <button type="button" className="ins-btn ins-btn--ghost" onClick={startNew} disabled={busy}>
+            Cancel
+          </button>
         </div>
       </form>
+      )}
 
       <div className="ins-admin-list">
         {state.apps.length === 0 && <p className="ins-muted">No apps yet.</p>}
-        {state.apps.map((app) => {
+        {state.apps.filter((app) => !query.trim() || app.name.toLowerCase().includes(query.trim().toLowerCase()) || app.id.includes(query.trim().toLowerCase())).map((app) => {
           const logo = state.logos.find((f) => f.startsWith(`${app.id}.`));
           const logoUrl = logo ? inspirationsApi.mediaUrl(`/api/inspirations/logos/${logo}`) : null;
           const screens = state.files.filter((f) => f.appId === app.id);

@@ -6,9 +6,12 @@ import { adminApi, type AdminScreenFile, type AdminState, type ScreenSidecar, ad
 import { splitScreenFile } from '@/lib/inspirations/screenPaths';
 import { PLATFORM_LABEL, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
 import { SCREEN_TYPES, STYLES, type Platform, type ScreenType, type Style } from '@/lib/inspirations/types';
-import { CheckIcon, PencilIcon, TrashIcon } from '../Icons';
+import { CheckIcon, PencilIcon, SearchIcon, TrashIcon } from '../Icons';
 
 type StatusFilter = 'all' | 'published' | 'held';
+
+/** Screens listed at a time; Show more adds as many again. */
+const PAGE = 60;
 
 /**
  * Every stored screenshot, published or not.
@@ -37,6 +40,7 @@ export function ScreensPanel({
   const [appFilter, setAppFilter] = useState('');
   const [platformFilter, setPlatformFilter] = useState<Platform | ''>('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [shown, setShown] = useState(PAGE);
 
   const all = [...state.files].sort((a, b) => {
     if (a.published !== b.published) return a.published ? 1 : -1;
@@ -66,67 +70,46 @@ export function ScreensPanel({
 
   return (
     <div className="ins-admin-panel">
-      <div className="ins-admin-row">
-        <label className="ins-field ins-field--wide">
-          <span className="ins-field-label">Search</span>
-          <input
-            className="ins-input"
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Name, file or id"
-          />
+      <div className="ins-admin-toolbar">
+        <label className="ins-toolbar-search">
+          <SearchIcon size={14} />
+          <input type="search" value={query} onChange={(e) => { setQuery(e.target.value); setShown(PAGE); }} placeholder={`Search ${all.length.toLocaleString()} screens by name, file or id`} aria-label="Search screens" />
         </label>
-        <label className="ins-field">
-          <span className="ins-field-label">App</span>
-          <select className="ins-input" value={appFilter} onChange={(e) => setAppFilter(e.target.value)}>
-            <option value="">All apps</option>
-            {appsWithFiles.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="ins-field">
-          <span className="ins-field-label">Platform</span>
-          <select className="ins-input" value={platformFilter} onChange={(e) => setPlatformFilter(e.target.value as Platform | '')}>
-            <option value="">All platforms</option>
-            {state.vocabulary.platforms.map((p) => (
-              <option key={p} value={p}>
-                {PLATFORM_LABEL[p] ?? p}
-              </option>
-            ))}
-          </select>
-        </label>
-        <fieldset className="ins-field">
-          <legend className="ins-field-label">Status</legend>
-          <div className="ins-filter-options">
-            {(['all', 'published', 'held'] as StatusFilter[]).map((s) => (
-              <button
-                key={s}
-                type="button"
-                className={`ins-chip ins-chip--sm ${statusFilter === s ? 'is-active' : ''}`}
-                aria-pressed={statusFilter === s}
-                onClick={() => setStatusFilter(s)}
-              >
-                {s === 'all' ? 'All' : s === 'published' ? 'Published' : 'Held back'}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+        <select className="ins-input ins-toolbar-select" value={appFilter} onChange={(e) => { setAppFilter(e.target.value); setShown(PAGE); }} aria-label="App">
+          <option value="">All apps</option>
+          {appsWithFiles.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+        <select className="ins-input ins-toolbar-select" value={platformFilter} onChange={(e) => { setPlatformFilter(e.target.value as Platform | ''); setShown(PAGE); }} aria-label="Platform">
+          <option value="">All platforms</option>
+          {state.vocabulary.platforms.map((p) => (
+            <option key={p} value={p}>
+              {PLATFORM_LABEL[p] ?? p}
+            </option>
+          ))}
+        </select>
+        <div className="ins-segmented" role="radiogroup" aria-label="Status">
+          {(['all', 'published', 'held'] as StatusFilter[]).map((st) => (
+            <button key={st} type="button" role="radio" aria-checked={statusFilter === st} className={`ins-segmented-item ${statusFilter === st ? 'is-active' : ''}`} onClick={() => { setStatusFilter(st); setShown(PAGE); }}>
+              {st === 'all' ? 'All' : st === 'published' ? 'Published' : 'Held back'}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <p className="ins-admin-note">
+      <p className="ins-toolbar-note">
         {filtered ? (
           <>
-            Showing {files.length} of {all.length} —{' '}
-            <button type="button" className="ins-linkbtn" onClick={() => { setQuery(''); setAppFilter(''); setPlatformFilter(''); setStatusFilter('all'); }}>
-              clear filters
+            {files.length.toLocaleString()} of {all.length.toLocaleString()} screens ·{' '}
+            <button type="button" className="ins-linkbtn" onClick={() => { setQuery(''); setAppFilter(''); setPlatformFilter(''); setStatusFilter('all'); setShown(PAGE); }}>
+              Clear filters
             </button>
           </>
         ) : (
-          <>{all.filter((f) => f.published).length} published, {all.filter((f) => !f.published).length} held back.</>
+          <>{all.filter((f) => f.published).length.toLocaleString()} published · {all.filter((f) => !f.published).length} held back</>
         )}
       </p>
 
@@ -134,7 +117,7 @@ export function ScreensPanel({
         <p className="ins-muted">Nothing matches these filters.</p>
       ) : (
         <div className="ins-admin-list">
-          {files.map((file) => (
+          {files.slice(0, shown).map((file) => (
             <ScreenRow
               key={`${file.platform}/${file.appId}/${file.file}`}
               file={file}
@@ -146,6 +129,11 @@ export function ScreensPanel({
               onClose={() => setEditing(null)}
             />
           ))}
+          {files.length > shown && (
+            <button type="button" className="ins-btn ins-show-more" onClick={() => setShown((n) => n + PAGE)}>
+              Show more · {(files.length - shown).toLocaleString()} left
+            </button>
+          )}
         </div>
       )}
     </div>
