@@ -43,6 +43,7 @@ type BatchItem = {
   waitUntil: string | null;
   result: { appName: string; screens: number; flows: number } | null;
   workMs?: number;
+  usage?: { tokens: number; reviews: number };
 };
 type Batch = { id: string; cleared?: boolean; createdAt: string; settings: Settings & { platform: Platform }; items: BatchItem[]; state: 'running' | 'paused' | 'done'; finishedAt: string | null };
 
@@ -288,6 +289,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
                   {item.note && <span>{item.note}</span>}
                   {item.result && <span>{item.result.screens} screens · {item.result.flows} flows</span>}
                   {/* Working time only — waits for a turn, for AI usage or for you are left out. */}
+                  {item.usage && <span title={`${item.usage.reviews} review run(s)`}>AI {item.usage.tokens >= 1_000_000 ? `${(item.usage.tokens / 1_000_000).toFixed(1)}M` : `${Math.round(item.usage.tokens / 1000)}k`} tokens</span>}
                   {item.workMs !== undefined ? <span title="Time spent uploading and reviewing">{clockOf(item.workMs)}</span> : item.startedAt && <span>{minutes(item.startedAt, item.finishedAt)}</span>}
                 </div>
                 <div className="ins-batch-item-actions">

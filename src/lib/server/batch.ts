@@ -72,6 +72,8 @@ export type BatchItem = {
   reviewStartedAt: string | null;
   finishedAt: string | null;
   result: { appName: string; screens: number; flows: number; problems: number } | null;
+  /** AI usage of this app's reviews (all tries added up), from Claude Code's own figures. */
+  usage?: { tokens: number; outputTokens: number; cachedTokens: number; turns: number; costUsd: number; reviews: number };
   /** Time spent working on this app — uploading or reviewing — leaving out waits for its turn, for AI usage or for the admin. */
   workMs?: number;
   /** When workMs was last brought up to date while the app was working. */
@@ -146,7 +148,7 @@ export function pickFolder(): Promise<string | null> {
 /** This copy of the module, so a timer started by an older copy is replaced (see startBatchRunner). */
 const MODULE = Math.random().toString(36).slice(2);
 
-type Runner = { module?: string; batches: Batch[]; loaded: boolean; timer: ReturnType<typeof setInterval> | null; reviews: Map<string, { child: ChildProcess; output: string; startedAt: number }>; awake: ChildProcess | null; ticking: boolean };
+type Runner = { module?: string; batches: Batch[]; loaded: boolean; timer: ReturnType<typeof setInterval> | null; reviews: Map<string, { child: ChildProcess; output: string; stdout: string; startedAt: number }>; awake: ChildProcess | null; ticking: boolean };
 const runner: Runner = ((globalThis as unknown as { __motvinBatches?: Runner }).__motvinBatches ??= { batches: [], loaded: false, timer: null, reviews: new Map(), awake: null, ticking: false });
 
 function save() {
@@ -492,13 +494,17 @@ function startNextReview(batch: Batch): boolean {
   ].join(' ');
   const tools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Agent', 'Task', 'Bash(cd:*)', 'Bash(node:*)', 'Bash(npm run build:inspirations)', 'Bash(npm run --silent build:inspirations)', 'Bash(cp:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'Bash(mkdir:*)', 'Bash(python3:*)', 'Bash(echo:*)', 'Bash(grep:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(sort:*)', 'Bash(uniq:*)', 'Bash(find:*)', 'Bash(sed:*)', 'Bash(awk:*)', 'Bash(date:*)', 'Bash(pwd)', 'Bash(jq:*)'];
   // The review's model is fixed here, not left to whatever the terminal last picked.
-  const child = spawn(cli, ['-p', prompt, '--model', REVIEW_MODEL, '--allowedTools', tools.join(','), '--permission-mode', 'acceptEdits', '--output-format', 'text'], { cwd: pluginRoot(), env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(cli, ['-p', prompt, '--model', REVIEW_MODEL, '--allowedTools', tools.join(','), '--permission-mode', 'acceptEdits', '--output-format', 'json'], { cwd: pluginRoot(), env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
   const key = `${batch.id}/${item.id}`;
-  const entry = { child, output: '', startedAt: Date.now() };
+  const entry = { child, output: '', stdout: '', startedAt: Date.now() };
   const keep = (chunk: Buffer) => {
     entry.output = (entry.output + chunk.toString()).slice(-8000);
   };
-  child.stdout?.on('data', keep);
+  child.stdout?.on('data', (chunk: Buffer) => {
+    keep(chunk);
+    // The whole result, read for its usage figures when the review ends.
+    if (entry.stdout.length < 4_000_000) entry.stdout += chunk.toString();
+  });
   child.stderr?.on('data', keep);
   child.on('error', (error) => {
     entry.output += `\n${error.message}`;
@@ -521,6 +527,7 @@ function followReview(batch: Batch, item: BatchItem): boolean {
   const running = entry && entry.child.exitCode === null && entry.child.signalCode === null && alive(entry.child.pid);
   if (now.reviewed && !now.reviewing && !now.problems.length) {
     if (running) entry.child.kill('SIGTERM');
+    else recordUsage(item, entry?.stdout ?? '');
     runner.reviews.delete(key);
     logLine(`${item.title}: review finished clean`);
     return finishReview(batch, item);
@@ -535,6 +542,7 @@ function followReview(batch: Batch, item: BatchItem): boolean {
     return false;
   }
   runner.reviews.delete(key);
+  recordUsage(item, entry?.stdout ?? '');
   const state = reviewState(item.appId, platform, item.version);
   logLine(`${item.title}: review ended — ${state.reviewed ? `${state.problems.length} problem(s) left` : 'not reviewed'}; output: ${(entry?.output ?? '').slice(-400).replace(/\s+/g, ' ')}`);
   if (state.reviewed && !state.problems.length && !state.reviewing) return finishReview(batch, item);
@@ -632,6 +640,30 @@ function keepAwake(on: boolean) {
     runner.awake.kill();
     runner.awake = null;
   }
+}
+
+/** Adds a finished review's usage (Claude Code's JSON result) to the app's total, and logs it. */
+function recordUsage(item: BatchItem, stdout: string) {
+  let result: { usage?: Record<string, number>; num_turns?: number; total_cost_usd?: number } | null = null;
+  try {
+    result = JSON.parse(stdout.trim().split('\n').filter(Boolean).at(-1) ?? '');
+  } catch {
+    return;
+  }
+  const usage = result?.usage ?? {};
+  const input = usage.input_tokens ?? 0;
+  const cached = (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+  const output = usage.output_tokens ?? 0;
+  const before = item.usage ?? { tokens: 0, outputTokens: 0, cachedTokens: 0, turns: 0, costUsd: 0, reviews: 0 };
+  item.usage = {
+    tokens: before.tokens + input + cached + output,
+    outputTokens: before.outputTokens + output,
+    cachedTokens: before.cachedTokens + cached,
+    turns: before.turns + (result?.num_turns ?? 0),
+    costUsd: Math.round((before.costUsd + (result?.total_cost_usd ?? 0)) * 100) / 100,
+    reviews: before.reviews + 1,
+  };
+  logLine(`${item.title}: review usage — ${Math.round((input + cached + output) / 1000)}k tokens (${Math.round(cached / 1000)}k cached, ${Math.round(output / 1000)}k written), ${result?.num_turns ?? '?'} turns, about $${(result?.total_cost_usd ?? 0).toFixed(2)} at API prices`);
 }
 
 /** When the limit message says usage comes back ("resets 3:50am"), a minute after that; else null. */
