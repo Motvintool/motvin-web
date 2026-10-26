@@ -34,6 +34,8 @@ export type BatchSettings = {
   notify: 'each' | 'summary' | 'off';
   /** Which AI tool runs the auto reviews: Claude Code (the default) or Google's Gemini CLI. */
   reviewer?: 'claude' | 'gemini';
+  /** The Claude model for the whole review — the lead, its agents and the second check. */
+  reviewModel?: 'opus' | 'sonnet';
   /** How many apps go through their whole process (upload to final check) side by side, each on its own. */
   appsAtOnce?: 1 | 2 | 3 | 4;
   /** Older batches: reviews side by side, uploads one at a time. */
@@ -76,6 +78,8 @@ export type BatchItem = {
   result: { appName: string; screens: number; flows: number; problems: number } | null;
   /** AI usage of this app's reviews (all tries added up), from Claude Code's own figures. */
   usage?: { tokens: number; outputTokens: number; cachedTokens: number; turns: number; costUsd: number; reviews: number };
+  /** The model its last review ran on. */
+  model?: string;
   /** Time spent working on this app — uploading or reviewing — leaving out waits for its turn, for AI usage or for the admin. */
   workMs?: number;
   /** When workMs was last brought up to date while the app was working. */
@@ -107,6 +111,8 @@ const USAGE_WAIT_MS = 30 * 60_000;
 const KEEP_BATCHES = 10;
 /** The model auto reviews run on (MOTVIN_REVIEW_MODEL to change it). */
 const REVIEW_MODEL = process.env.MOTVIN_REVIEW_MODEL || 'claude-opus-5-5';
+/** The lighter Claude model, chosen per batch ("Review model: Sonnet 5.5"). */
+const SONNET_MODEL = process.env.MOTVIN_SONNET_MODEL || 'claude-sonnet-5-5';
 /** The Gemini model auto reviews run on with the Gemini CLI (MOTVIN_GEMINI_MODEL to change it). */
 const GEMINI_MODEL = process.env.MOTVIN_GEMINI_MODEL || 'gemini-3.1-pro';
 
@@ -505,12 +511,16 @@ function startNextReview(batch: Batch): boolean {
   ].join(' ');
   const tools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Agent', 'Task', 'Bash(cd:*)', 'Bash(node:*)', 'Bash(npm run build:inspirations)', 'Bash(npm run --silent build:inspirations)', 'Bash(cp:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'Bash(mkdir:*)', 'Bash(python3:*)', 'Bash(echo:*)', 'Bash(grep:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(sort:*)', 'Bash(uniq:*)', 'Bash(find:*)', 'Bash(sed:*)', 'Bash(awk:*)', 'Bash(date:*)', 'Bash(pwd)', 'Bash(jq:*)'];
   // The review's model is fixed here, not left to whatever the terminal last picked.
+  const claudeModel = batch.settings.reviewModel === 'sonnet' ? SONNET_MODEL : REVIEW_MODEL;
   // Claude Code runs with the tools listed above only. The Gemini CLI has no such list here: it
   // runs with its own approvals switched off (--yolo), so it is for a trusted machine only.
   const args = reviewer === 'gemini'
     ? ['-p', prompt, '-m', GEMINI_MODEL, '--yolo']
-    : ['-p', prompt, '--model', REVIEW_MODEL, '--allowedTools', tools.join(','), '--permission-mode', 'acceptEdits', '--output-format', 'json'];
-  const child = spawn(cli, args, { cwd: pluginRoot(), env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+    : ['-p', prompt, '--model', claudeModel, '--allowedTools', tools.join(','), '--permission-mode', 'acceptEdits', '--output-format', 'json'];
+  // The agents it starts run on the same model, whichever was chosen.
+  const env = reviewer === 'gemini' ? process.env : { ...process.env, CLAUDE_CODE_SUBAGENT_MODEL: claudeModel };
+  const child = spawn(cli, args, { cwd: pluginRoot(), env, stdio: ['ignore', 'pipe', 'pipe'] });
+  item.model = reviewer === 'gemini' ? GEMINI_MODEL : claudeModel;
   const key = `${batch.id}/${item.id}`;
   const entry = { child, output: '', stdout: '', startedAt: Date.now() };
   const keep = (chunk: Buffer) => {
