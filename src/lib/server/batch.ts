@@ -158,7 +158,7 @@ export function pickFolder(): Promise<string | null> {
 /** This copy of the module, so a timer started by an older copy is replaced (see startBatchRunner). */
 const MODULE = Math.random().toString(36).slice(2);
 
-type Runner = { module?: string; batches: Batch[]; loaded: boolean; timer: ReturnType<typeof setInterval> | null; reviews: Map<string, { child: ChildProcess; output: string; stdout: string; startedAt: number }>; awake: ChildProcess | null; ticking: boolean };
+type Runner = { module?: string; batches: Batch[]; loaded: boolean; timer: ReturnType<typeof setInterval> | null; reviews: Map<string, { child: ChildProcess; output: string; stdout: string; startedAt: number; cleanAt?: number }>; awake: ChildProcess | null; ticking: boolean };
 const runner: Runner = ((globalThis as unknown as { __motvinBatches?: Runner }).__motvinBatches ??= { batches: [], loaded: false, timer: null, reviews: new Map(), awake: null, ticking: false });
 
 function save() {
@@ -552,8 +552,12 @@ function followReview(batch: Batch, item: BatchItem): boolean {
   const now = reviewState(item.appId, platform, item.version);
   const running = entry && entry.child.exitCode === null && entry.child.signalCode === null && alive(entry.child.pid);
   if (now.reviewed && !now.reviewing && !now.problems.length) {
-    if (running) entry.child.kill('SIGTERM');
-    else recordUsage(item, entry?.stdout ?? '');
+    // Clean: give Claude a moment to end by itself and report its usage, then stop it if it has not.
+    if (running && entry) {
+      entry.cleanAt ??= Date.now();
+      if (Date.now() - entry.cleanAt < 2 * 60_000) return false;
+      entry.child.kill('SIGTERM');
+    } else recordUsage(item, entry?.stdout ?? '');
     runner.reviews.delete(key);
     logLine(`${item.title}: review finished clean`);
     return finishReview(batch, item);
