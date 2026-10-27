@@ -116,7 +116,7 @@ export function ScreensPanel({
       {files.length === 0 ? (
         <p className="ins-muted">Nothing matches these filters.</p>
       ) : (
-        <div className="ins-admin-list">
+        <div className="ins-admin-list ins-screens-list">
           {files.slice(0, shown).map((file) => (
             <ScreenRow
               key={`${file.platform}/${file.appId}/${file.file}`}
@@ -140,7 +140,8 @@ export function ScreensPanel({
   );
 }
 
-function ScreenRow({
+/** One stored screen: its summary row, and its details form while editing. Also used on an app's Screens tab. */
+export function ScreenRow({
   file,
   state,
   busy,

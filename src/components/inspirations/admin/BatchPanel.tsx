@@ -7,7 +7,7 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { authHeaders } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 import { dayLabel } from '@/lib/inspirations/dates';
 import type { Industry } from '@/lib/inspirations/types';
-import { CheckIcon, ChevronDownIcon, CloseIcon, CopyIcon, ExternalIcon, FolderIcon, PlayIcon, RetryIcon, SearchIcon, StopIcon, UploadIcon } from '../Icons';
+import { CheckIcon, ChevronDownIcon, CloseIcon, CloudUploadIcon, CopyIcon, ExternalIcon, FolderIcon, PlayIcon, RetryIcon, SearchIcon, StopIcon } from '../Icons';
 import { Summary, Wizard } from './Wizard';
 import { onRecordings, takeRecordings } from './recordingHandoff';
 
@@ -423,7 +423,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
             <ul className="ins-rec-grid" role="listbox" aria-multiselectable aria-label="Recordings">
               <li>
                 <button type="button" className="ins-rec ins-rec--add" onClick={() => videoInput.current?.click()}>
-                  <span className="ins-rec-logo"><UploadIcon size={15} /></span>
+                  <span className="ins-rec-logo"><CloudUploadIcon size={18} /></span>
                   <span className="ins-rec-text">
                     <span className="ins-rec-name">Upload{rows.some((row) => row.video.kind === 'file') ? ` (${rows.filter((row) => row.video.kind === 'file').length})` : ''}</span>
                   </span>
@@ -469,7 +469,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
               const pill = !known ? ['is-new', 'New app'] : settings.existing === 'skip' ? ['is-skip', 'In library — skipped'] : settings.existing === 'version' ? ['is-version', 'New version'] : ['is-replace', 'Replaces the app'];
               return (
                 <li key={row.key} className="ins-app-row">
-                  <label className={`ins-app-logo ${row.logo ? 'has-logo' : ''}`} title={row.logo ? (row.logo.kind === 'records' ? row.logo.file : row.logo.file.name) : 'Add a logo'}>
+                  <label className={`ins-batch-logo-pick ${row.logo ? 'has-logo' : ''}`} title={row.logo ? (row.logo.kind === 'records' ? row.logo.file : row.logo.file.name) : 'Add a logo'}>
                     {row.logo?.kind === 'file' ? <LogoPreview file={row.logo.file} /> : row.logo ? <RecordsLogo file={row.logo.file} /> : 'Logo'}
                     <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) update(row.key, { logo: { kind: 'file', file } }); event.target.value = ''; }} />
                   </label>

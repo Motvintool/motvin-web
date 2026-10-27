@@ -218,12 +218,14 @@ export function AdminChatbot() {
   const videoRef = useRef<HTMLInputElement>(null);
   // A picker closed without a pick: offer it again, so the conversation is never left stuck on it.
   const pickerStep = useRef<string | null>(null);
-  pickerStep.current = heldUpload?.plan.step ?? null;
+  useEffect(() => {
+    pickerStep.current = heldUpload?.plan.step ?? null;
+  });
   useEffect(() => {
     const logo = logoRef.current;
     const files = fileRef.current;
     const onLogoCancel = () => {
-      if (pickerStep.current === 'logo') assistantSays('Logo not picked.', [chip('Upload logo'), chip('Skip')]);
+      if (pickerStep.current === 'logo') assistantSays('Logo not picked.', [{ type: 'reply', text: 'Upload logo' }, { type: 'reply', text: 'Skip' }]);
     };
     const onFilesCancel = () => {
       if (!heldUploadFilesNow().length) assistantSays('No file picked.', [{ type: 'upload' }]);

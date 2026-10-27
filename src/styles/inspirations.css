@@ -18363,9 +18363,9 @@ html:has(aside.ins-dock:not(.ins-dock-user)) {
 .ins-source-bar .ins-muted { font-size: 12px; }
 .ins-app-rows { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .ins-app-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--wz-line); border-radius: 18px; }
-.ins-app-logo { display: grid; place-items: center; width: 44px; height: 44px; overflow: hidden; border: 1px dashed #c9cad1; border-radius: 12px; color: var(--ins-muted); font-size: 11px; cursor: pointer; }
-.ins-app-logo.has-logo { border-style: solid; border-color: var(--wz-line); }
-.ins-app-logo img { width: 100%; height: 100%; object-fit: cover; }
+.ins-batch-logo-pick { display: grid; place-items: center; width: 44px; height: 44px; overflow: hidden; border: 1px dashed #c9cad1; border-radius: 12px; color: var(--ins-muted); font-size: 11px; cursor: pointer; }
+.ins-batch-logo-pick.has-logo { border-style: solid; border-color: var(--wz-line); }
+.ins-batch-logo-pick img { width: 100%; height: 100%; object-fit: cover; }
 .ins-app-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .ins-app-text .ins-input { height: 38px; }
 .ins-app-text .ins-muted { overflow: hidden; font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
@@ -19253,3 +19253,168 @@ div.ins-version { cursor: default; flex-wrap: wrap; }
 .ins-rec--add:hover { background: #fafafb; border-color: #b9bac2; border-style: dashed; }
 .ins-rec--add .ins-rec-text { flex: none; }
 .ins-rec--add .ins-rec-logo { width: auto; height: auto; border: 0; border-radius: 0; background: none; color: var(--ins-text); }
+
+/* Admin loading: the home page's four dots, centred in the popup. */
+.ins-admin-loading { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; pointer-events: none; }
+.ins-admin-loading-dots { display: inline-grid; grid-template-columns: repeat(2, 9px); gap: 5px; animation: ins-admin-dots-turn 6s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+.ins-admin-loading-dots i { width: 9px; height: 9px; border-radius: 50%; animation: ins-admin-dot-pulse 1.6s ease-in-out infinite; }
+.ins-admin-loading-dots i:nth-child(1) { background: #ff3737; }
+.ins-admin-loading-dots i:nth-child(2) { background: #874fff; animation-delay: 0.2s; }
+.ins-admin-loading-dots i:nth-child(3) { background: #00b6ff; animation-delay: 0.6s; }
+.ins-admin-loading-dots i:nth-child(4) { background: #24cb71; animation-delay: 0.4s; }
+@keyframes ins-admin-dot-pulse { 0%, 60%, 100% { scale: 1; opacity: 1; } 30% { scale: 0.6; opacity: 0.55; } }
+@keyframes ins-admin-dots-turn { 0%, 40% { rotate: 0deg; } 50%, 90% { rotate: 90deg; } 100% { rotate: 180deg; } }
+@media (prefers-reduced-motion: reduce) { .ins-admin-loading-dots, .ins-admin-loading-dots i { animation: none; } }
+.ins-admin-tree-item { padding-top: 11px; padding-bottom: 11px; }
+
+/* Screen types as a radial bar chart: 200px rings, the total in the empty top-left quarter. */
+.ins-radial { grid-template-columns: 172px minmax(0, 1fr); gap: 24px; }
+.ins-radial .ins-donut-chart { width: 172px; height: 172px; }
+.ins-radial .ins-donut-track { stroke: #f1f2f4; stroke-width: 9px; }
+.ins-radial .ins-donut-seg.is-on { filter: none; }
+.ins-radial-readout { position: absolute; top: 0; left: 0; display: flex; flex-direction: column; align-items: flex-end; width: 50%; padding: 2px 14px 0 0; text-align: right; pointer-events: none; }
+.ins-radial-readout strong { font-size: 19px; font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; color: var(--ins-text); font-variant-numeric: tabular-nums; }
+.ins-radial-readout span { max-width: 92px; overflow: hidden; font-size: 12px; color: var(--ins-muted); white-space: nowrap; text-overflow: ellipsis; text-transform: capitalize; }
+@media (max-width: 860px) { .ins-radial { grid-template-columns: 1fr; justify-items: center; } }
+/* Lighter legend beside the radial chart: no count column, regular-weight shares, a bigger chart to balance it. */
+.ins-radial { grid-template-columns: 208px minmax(0, 1fr); gap: 32px; }
+.ins-radial .ins-donut-chart { width: 208px; height: 208px; }
+.ins-radial-readout strong { font-size: 22px; }
+.ins-radial .ins-donut-legend { gap: 0; }
+.ins-radial .ins-donut-legend li { grid-template-columns: 8px minmax(0, 1fr) auto; column-gap: 10px; padding: 5px 0; font-size: 13px; }
+.ins-radial .ins-donut-legend-bar { display: none; }
+.ins-radial .ins-donut-legend-label { color: var(--ins-sub); }
+.ins-radial .ins-donut-legend-pct { font-weight: 500; color: var(--ins-text); }
+.ins-radial .ins-donut-legend li.is-on .ins-donut-legend-label { color: var(--ins-text); }
+.ins-radial .ins-donut-legend li { padding: 5px 12px; border-radius: 10px; }
+
+/* Phone: the admin popup becomes a bottom sheet — full width, rising from the bottom edge,
+   rounded top corners, a grab handle, the page still showing a little above it. */
+.ins-admin-sheet-handle { display: none; }
+.ins-admin-drawer-close:focus:not(:focus-visible) { outline: none; }
+@media (max-width: 640px) {
+  .ins-admin-drawer-overlay { align-items: flex-end; justify-content: stretch; padding: 0; }
+  .ins-admin-drawer { width: 100%; height: calc(100% - 40px); height: calc(100dvh - 40px); border-radius: 24px 24px 0 0; box-shadow: 0 -12px 40px -12px rgba(0, 0, 0, 0.3); animation-name: insAdminSheetIn; animation-duration: 340ms; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
+  .ins-admin-sheet-handle { position: absolute; top: 8px; left: 50%; z-index: 3; display: block; width: 36px; height: 5px; border-radius: 99px; background: #d6d7dc; translate: -50% 0; pointer-events: none; }
+  .ins-admin-topbar { height: 60px; padding-top: 8px; }
+  .ins-admin-drawer .ins-admin-drawer-close { top: 18px !important; right: 14px !important; width: 32px; height: 32px; }
+  .ins-admin-drawer .ins-admin-drawer-body { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .ins-wizard-foot { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+}
+@keyframes insAdminSheetIn { from { transform: translateY(100%); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ins-admin-drawer { animation-duration: 1ms; } }
+@media (max-width: 640px) {
+  .ins-radial { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 16px; }
+  .ins-radial .ins-donut-legend { width: 100%; }
+}
+
+/* The sheet's drag zone: the top strip (handle and title), leaving the close button free. */
+.ins-admin-sheet-pull { display: none; }
+@media (max-width: 640px) {
+  .ins-admin-sheet-pull { position: absolute; top: 0; left: 0; right: 64px; z-index: 3; display: block; height: 68px; cursor: grab; touch-action: none; }
+  .ins-admin-sheet-pull:active { cursor: grabbing; }
+  .ins-admin-sheet-pull .ins-admin-sheet-handle { position: absolute; top: 8px; left: calc(50% + 32px); }
+}
+/* A little shorter popup: more of the page shows above and below it. */
+@media (min-width: 641px) { .ins-admin-drawer { height: min(820px, calc(100% - 48px)); } }
+
+/* Admin dropdowns: our own chevron, inset 14px from the right edge like the text is from the left. */
+.ins-admin-drawer select.ins-input { appearance: none; -webkit-appearance: none; padding-right: 40px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23111' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; background-size: 16px; cursor: pointer; }
+.ins-admin-drawer select.ins-input { padding-right: 38px; background-position: right 11px center; }
+.ins-requests { display: flex; flex-direction: column; }
+
+/* Screens list: one outlined box with divided rows (like Requests), compact rows,
+   the file id trimmed to one line, and Published as a small pill. */
+.ins-admin-drawer .ins-screens-list { gap: 0; padding: 4px 20px; border: 1px solid var(--ins-border); border-radius: 24px; }
+.ins-admin-drawer .ins-screens-list > .ins-admin-item { padding: 12px 0; border: 0; border-bottom: 1px solid var(--ins-border); border-radius: 0; background: none; box-shadow: none; }
+.ins-admin-drawer .ins-screens-list > .ins-admin-item:last-child { border-bottom: 0; }
+.ins-screens-list .ins-admin-item-head { gap: 14px; align-items: center; }
+.ins-screens-list .ins-admin-thumb { width: 38px; height: 76px; flex: none; border-radius: 8px; object-fit: cover; object-position: top; }
+.ins-screens-list .ins-admin-item-text { min-width: 0; }
+.ins-screens-list .ins-admin-item-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; margin: 0; font-size: 15px; font-weight: 600; }
+.ins-screens-list .ins-admin-item-id { min-width: 0; overflow: hidden; font-size: 12px; font-weight: 400; color: var(--ins-muted); white-space: nowrap; text-overflow: ellipsis; }
+.ins-screens-list .ins-admin-item-sub { margin: 3px 0 0; font-size: 13px; color: var(--ins-sub); }
+.ins-screens-list .ins-admin-ok { display: inline-flex; align-items: center; gap: 4px; margin: 6px 0 0; padding: 2px 8px; border-radius: 99px; background: #eaf7ee; color: #1f8a46; font-size: 12px; font-weight: 500; }
+.ins-screens-list .ins-admin-err { margin: 6px 0 0; font-size: 12px; }
+.ins-screens-list .ins-admin-item-actions { gap: 4px; }
+.ins-screens-list .ins-admin-item-actions .ins-btn--sm { height: 32px; padding: 0 12px; font-size: 13px; }
+@media (max-width: 640px) {
+  .ins-admin-drawer .ins-screens-list { padding: 2px 14px; border-radius: 20px; }
+  .ins-screens-list .ins-admin-item-title { flex-direction: column; gap: 2px; }
+}
+
+/* An app's own page (Apps → Edit): back link, a header with the logo and status, section tabs, then the section. */
+.ins-app-editor { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 80px; }
+.ins-app-editor-head { display: flex; align-items: center; gap: 16px; padding: 18px 20px; border: 1px solid var(--ins-border); border-radius: 24px; }
+.ins-app-editor-logo { position: relative; display: grid; flex: none; place-items: center; width: 56px; height: 56px; padding: 0; border: 1px solid var(--ins-border); border-radius: 16px; background: #f4f4f6; color: var(--ins-sub); font: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
+.ins-app-editor-logo img { width: 100%; height: 100%; border-radius: 15px; object-fit: cover; }
+.ins-app-editor-logo-edit { position: absolute; right: -6px; bottom: -6px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ins-text); color: #fff; box-shadow: 0 0 0 2px #fff; }
+.ins-app-editor-logo:hover { border-color: #c9cad1; }
+.ins-app-editor-text { flex: 1; min-width: 0; }
+.ins-app-editor-name { display: flex; align-items: baseline; gap: 10px; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.ins-app-editor-name .ins-admin-item-id { font-size: 13px; font-weight: 400; color: var(--ins-muted); }
+.ins-app-editor-meta { margin: 4px 0 0; font-size: 13px; color: var(--ins-sub); }
+.ins-btn--danger-ghost { border-color: transparent; background: none; color: #c62828; }
+.ins-btn--danger-ghost:hover:not(:disabled) { background: #fdecec; }
+.ins-app-editor-tabs { align-self: flex-start; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.ins-app-editor-count { margin-left: 6px; padding: 1px 7px; border-radius: 99px; background: rgba(0, 0, 0, 0.06); font-size: 11.5px; font-weight: 600; }
+.ins-segmented-item.is-active .ins-app-editor-count { background: rgba(255, 255, 255, 0.2); }
+@media (max-width: 640px) {
+  .ins-app-editor-head { flex-wrap: wrap; padding: 14px; }
+  .ins-app-editor-head .ins-btn--danger-ghost { margin-left: auto; }
+}
+
+/* Breadcrumbs: take the section title's place on an app's page — "Apps" muted and clickable, the app in full ink. */
+.ins-admin-content:has(.ins-app-editor) > .ins-admin-content-title { display: none; }
+.ins-breadcrumbs ol { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 24px; font-weight: 700; line-height: 34px; letter-spacing: -0.02em; }
+.ins-breadcrumbs button { padding: 0 6px; margin: 0 -6px; border: 0; border-radius: 8px; background: none; color: var(--ins-muted); font: inherit; letter-spacing: inherit; cursor: pointer; transition: color 0.15s, background-color 0.15s; }
+.ins-breadcrumbs button:hover { color: var(--ins-text); background: #f2f3f5; }
+.ins-breadcrumbs-sep { display: inline-flex; color: #c4c5cc; }
+.ins-breadcrumbs [aria-current='page'] { min-width: 0; overflow: hidden; color: var(--ins-text); white-space: nowrap; text-overflow: ellipsis; }
+@media (max-width: 640px) { .ins-breadcrumbs ol { font-size: 19px; line-height: 28px; } }
+/* App details on an app's page: the wizard card, its fields spaced like the wizard's. */
+.ins-app-details-body { display: flex; flex-direction: column; gap: 18px; }
+/* The details card sits outside .ins-wizard, so it brings the wizard's line colour with it. */
+.ins-app-details { --wz-line: #e6e6ea; --wz-tile: #f4f4f6; --wz-ink: #141414; }
+.ins-admin-drawer .ins-app-details { border: 1px solid var(--ins-border); }
+/* Details card: the card draws its own outline, so the footer drops the wizard's bottom line and white strip, and its corners follow the card's inner curve. */
+.ins-admin-drawer .ins-app-details .ins-wizard-foot { border-bottom: 0; border-radius: 0 0 27px 27px; }
+.ins-admin-drawer .ins-app-details .ins-wizard-foot::after { content: none; }
+
+/* Flows of one app, grouped by area: one outlined box per area, the area row on top,
+   its flows indented beside a guide line, rows divided by hairlines. */
+.ins-flow-group { display: flex; flex-direction: column; padding: 4px 20px; border: 1px solid var(--ins-border); border-radius: 24px; }
+.ins-admin-drawer .ins-flow-group .ins-flow-group-row { padding: 14px 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.ins-flow-group > .ins-flow-group-row .ins-admin-item-title { font-size: 16px; }
+.ins-flow-group-children { display: flex; flex-direction: column; margin: 0 0 10px 10px; padding-left: 18px; border-left: 2px solid #ededf0; }
+.ins-flow-group-children .ins-flow-group-row + .ins-flow-group-row { border-top: 1px solid var(--ins-border); }
+.ins-flow-group-children .ins-flow-group-row { padding: 10px 0; }
+.ins-flow-group > .ins-flow-group-row:has(+ .ins-flow-group-children) { border-bottom: 1px solid var(--ins-border); margin-bottom: 6px; }
+@media (max-width: 640px) { .ins-flow-group { padding: 2px 14px; border-radius: 20px; } .ins-flow-group-children { margin-left: 2px; padding-left: 12px; } }
+
+/* Tree connectors instead of the plain guide bar: a line drops from the area's thumbnail,
+   each flow branches off it with a rounded elbow, and the line stops at the last one. */
+.ins-flow-group > .ins-flow-group-row:has(+ .ins-flow-group-children) { border-bottom: 0; margin-bottom: 0; }
+.ins-flow-group-children { margin: 0 0 8px; padding-left: 34px; border-left: 0; }
+.ins-flow-group-children .ins-flow-group-row { position: relative; }
+.ins-flow-group-children .ins-flow-group-row::before,
+.ins-flow-group-children .ins-flow-group-row::after { content: ''; position: absolute; left: -24px; pointer-events: none; }
+/* the trunk, running the row's full height — cut off after the last flow */
+.ins-flow-group-children .ins-flow-group-row::before { top: 0; bottom: 0; border-left: 1.5px solid #dedfe4; }
+.ins-flow-group-children .ins-flow-group-row:last-child::before { display: none; }
+/* the branch into this flow's thumbnails */
+.ins-flow-group-children .ins-flow-group-row::after { top: 0; width: 16px; height: 50%; border-bottom: 1.5px solid #dedfe4; border-left: 1.5px solid #dedfe4; border-bottom-left-radius: 10px; }
+/* dividers between flows start after the branch, not under the trunk */
+.ins-flow-group-children .ins-flow-group-row + .ins-flow-group-row { border-top: 0; }
+.ins-flow-group-children .ins-flow-group-row + .ins-flow-group-row > .ins-admin-item-head { border-top: 1px solid var(--ins-border); padding-top: 10px; margin-top: -10px; }
+@media (max-width: 640px) { .ins-flow-group-children { padding-left: 26px; } .ins-flow-group-children .ins-flow-group-row::before, .ins-flow-group-children .ins-flow-group-row::after { left: -18px; } }
+.ins-flow-group-children .ins-flow-group-row { overflow: visible; }
+.ins-flow-group-children .ins-flow-group-row::before, .ins-flow-group-children .ins-flow-group-row::after { border-color: #d3d4da; }
+
+/* App page → Screens: a pencil beside each tile's delete opens that screen's details above the grid. */
+.ins-admin-thumb-edit { position: absolute; top: 4px; right: 28px; z-index: 1; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; border-radius: 50%; background: rgba(0, 0, 0, 0.6); color: #fff; cursor: pointer; }
+.ins-admin-thumb-edit:hover, .ins-admin-thumb-edit.is-on { background: var(--ins-text); box-shadow: 0 0 0 2px #fff; }
+.ins-avs-screen-edit { margin-bottom: 16px; padding: 4px 20px; border: 1px solid var(--ins-border); border-radius: 24px; scroll-margin: 16px; }
+.ins-admin-drawer .ins-avs-screen-edit > .ins-admin-item { padding: 14px 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.ins-field-hint--error { color: #c62828; }
+.ins-app-editor-count { text-transform: capitalize; }

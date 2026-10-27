@@ -5,9 +5,11 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { adminApi, type AdminAppRecord, type AdminState } from '@/lib/inspirations/admin';
 import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import { PICKABLE_INDUSTRIES, PLATFORMS, type Industry, type Platform } from '@/lib/inspirations/types';
-import { CloseIcon, PlusIcon, SearchIcon, TrashIcon, UploadIcon } from '../Icons';
+import { CheckIcon, ChevronRightIcon, CloseIcon, PencilIcon, PlusIcon, SearchIcon, TrashIcon, UploadIcon } from '../Icons';
 import { AppCardScreens } from './AppCardScreens';
 import { AppVersionScreens } from './AppVersionScreens';
+import { FlowsPanel } from './FlowsPanel';
+import { AppSourcePanel } from './AppSourcePanel';
 
 /**
  * App records: the products screenshots belong to.
@@ -15,7 +17,13 @@ import { AppVersionScreens } from './AppVersionScreens';
  * An app's id doubles as its folder name under `screens/<platform>/`, so it is
  * fixed once created; editing an existing app keeps the id and updates the
  * rest.
+ *
+ * Edit opens the app's own page, CMS-style: its details, every screen by
+ * version, the card's screens, its flows (the Flows tab's own editor, kept
+ * to this app) and its source & licence entry, one tab each, so the whole of an app is managed in one place.
  */
+
+type EditorSection = 'details' | 'screens' | 'card' | 'flows' | 'source';
 
 // A new app starts with no category chosen (not SaaS): the form will not save until
 // somebody picks one, so a category is never an accident of the default.
@@ -43,20 +51,15 @@ export function AppsPanel({
   // The form opens for a new app (＋ Add app) or an app being edited; the list leads otherwise.
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
-  const formRef = useRef<HTMLFormElement>(null);
-  const formOpen = adding || Boolean(editingId);
+  const [section, setSection] = useState<EditorSection>('details');
+  const editorRef = useRef<HTMLDivElement>(null);
+  // Opening an app's page starts at its top.
   useEffect(() => {
-    if (editingId) formRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (editingId) editorRef.current?.scrollIntoView({ block: 'start' });
   }, [editingId]);
   const [idTouched, setIdTouched] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [logoFor, setLogoFor] = useState<string | null>(null);
-  // Which app has an inline panel open under its row, and which one — the
-  // version manager or the card-carousel picker. One at a time: both are
-  // tall, and two open at once is a wall of thumbnails.
-  const [open, setOpen] = useState<{ id: string; panel: 'versions' | 'card' } | null>(null);
-  const isOpen = (id: string, panel: 'versions' | 'card') => open?.id === id && open.panel === panel;
-  const togglePanel = (id: string, panel: 'versions' | 'card') => setOpen(isOpen(id, panel) ? null : { id, panel });
 
   const startNew = () => {
     setDraft(EMPTY);
@@ -65,12 +68,17 @@ export function AppsPanel({
     setAdding(false);
   };
 
-  const edit = (app: AdminAppRecord) => {
-    // An app with no declared platforms is shown with the ones its screens are on.
+  // The details form's values for an app: one with no declared platforms shows the ones its screens are on.
+  const draftFor = (app: AdminAppRecord): AdminAppRecord => {
     const fromScreens = PLATFORMS.filter((p) => state.files.some((f) => f.appId === app.id && f.platform === p));
-    setDraft({ ...EMPTY, ...app, platforms: app.platforms?.length ? app.platforms : fromScreens });
+    return { ...EMPTY, ...app, platforms: app.platforms?.length ? app.platforms : fromScreens };
+  };
+
+  const edit = (app: AdminAppRecord, open: EditorSection = 'details') => {
+    setDraft(draftFor(app));
     setEditingId(app.id);
     setIdTouched(true);
+    setSection(open);
   };
 
   const save = () => {
@@ -81,7 +89,8 @@ export function AppsPanel({
           id: draft.id.trim(),
           name: draft.name.trim(),
         }),
-      startNew,
+      // Saving an edit keeps the app's page open; adding one goes back to the list.
+      editingId ? undefined : startNew,
     );
   };
 
@@ -103,7 +112,9 @@ export function AppsPanel({
       `This cannot be undone.`;
 
     if (!window.confirm(message)) return;
-    void run(() => adminApi.deleteApp(app.id));
+    void run(() => adminApi.deleteApp(app.id), () => {
+      if (editingId === app.id) startNew();
+    });
   };
 
   const uploadLogo = (file: File) => {
@@ -115,6 +126,267 @@ export function AppsPanel({
   // A new app needs a category; an existing one flagged "Needs category" can still be edited without one.
   const valid = draft.id.trim().length > 0 && draft.name.trim().length > 0 && (Boolean(editingId) || !needsCategory);
 
+  const logoInput = (
+  <input
+    ref={logoInputRef}
+    type="file"
+    accept="image/png,image/webp,image/jpeg,image/svg+xml"
+    hidden
+    onChange={(e) => {
+      const file = e.target.files?.[0];
+      if (file) uploadLogo(file);
+      e.target.value = '';
+    }}
+  />
+  );
+
+  const resetDraft = () => {
+    const app = state.apps.find((x) => x.id === editingId);
+    if (app) setDraft(draftFor(app));
+  };
+  const submit = (e: { preventDefault: () => void }) => {
+    e.preventDefault();
+    if (valid) save();
+  };
+
+  const renderFields = () => (
+    <>
+      <div className="ins-admin-row">
+        <label className="ins-field">
+          <span className="ins-field-label">Name</span>
+          <input
+            className="ins-input"
+            value={draft.name}
+            onChange={(e) => {
+              const name = e.target.value;
+              setDraft((d) => ({ ...d, name, id: idTouched ? d.id : slugify(name) }));
+            }}
+            placeholder="Acme"
+            required
+          />
+        </label>
+
+        <label className="ins-field">
+          <span className="ins-field-label">Id / folder</span>
+          <input
+            className="ins-input"
+            value={draft.id}
+            onChange={(e) => {
+              setIdTouched(true);
+              setDraft((d) => ({ ...d, id: slugify(e.target.value) }));
+            }}
+            placeholder="acme"
+            disabled={Boolean(editingId)}
+            required
+          />
+          <span className="ins-field-hint">
+            {editingId ? 'Fixed once created.' : 'Used as the folder name under screens/<platform>/.'}
+          </span>
+        </label>
+
+        <label className="ins-field">
+          <span className="ins-field-label">Industry</span>
+          <select
+            className="ins-input"
+            value={draft.industry}
+            onChange={(e) => setDraft((d) => ({ ...d, industry: e.target.value as Industry }))}
+          >
+            {needsCategory && (
+              <option value="unsorted" disabled={!editingId}>
+                Choose a category…
+              </option>
+            )}
+            {PICKABLE_INDUSTRIES.map((i) => (
+              <option key={i} value={i}>
+                {INDUSTRY_LABEL[i]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="ins-admin-row">
+        <label className="ins-field">
+          <span className="ins-field-label">Website</span>
+          <input
+            className="ins-input"
+            value={draft.website ?? ''}
+            onChange={(e) => setDraft((d) => ({ ...d, website: e.target.value }))}
+            placeholder="https://acme.example"
+            type="url"
+          />
+        </label>
+        <label className="ins-field ins-field--wide">
+          <span className="ins-field-label">Tagline</span>
+          <input
+            className="ins-input"
+            value={draft.tagline ?? ''}
+            onChange={(e) => setDraft((d) => ({ ...d, tagline: e.target.value }))}
+            placeholder="One line about the product."
+          />
+        </label>
+      </div>
+
+      <div className="ins-field">
+        <span className="ins-field-label" id="ins-app-platforms">
+          Platform
+        </span>
+        <div className="ins-admin-chips" role="group" aria-labelledby="ins-app-platforms">
+          {PLATFORMS.map((p) => {
+            const on = draft.platforms?.includes(p) ?? false;
+            return (
+              <button
+                key={p}
+                type="button"
+                aria-pressed={on}
+                className={`ins-chip ins-chip--sm ${on ? 'is-active' : ''}`}
+                onClick={() =>
+                  setDraft((d) => ({
+                    ...d,
+                    platforms: on ? (d.platforms ?? []).filter((x) => x !== p) : PLATFORMS.filter((x) => x === p || d.platforms?.includes(x)),
+                  }))
+                }
+              >
+                {PLATFORM_LABEL[p as Platform]}
+              </button>
+            );
+          })}
+        </div>
+        <span className="ins-field-hint">Where the app is listed. Its screens follow this choice, whichever platform they were uploaded as. Leave all off to follow the uploads.</span>
+      </div>
+    </>
+  );
+
+  // Adding an app: the compact form above the list.
+  const renderForm = () => (
+  <form className="ins-admin-form" onSubmit={submit}>
+    <div className="ins-admin-form-head">
+      <p className="ins-admin-form-title">Add an app</p>
+      <button type="button" className="ins-iconbtn ins-iconbtn--plain" aria-label="Close" onClick={startNew} disabled={busy}>
+        <CloseIcon size={14} />
+      </button>
+    </div>
+    {renderFields()}
+    <div className="ins-admin-actions">
+      <button type="submit" className="ins-btn ins-btn--primary" disabled={!valid || busy}>
+        <PlusIcon size={15} /> Add app
+      </button>
+      <button type="button" className="ins-btn ins-btn--ghost" onClick={startNew} disabled={busy}>
+        Cancel
+      </button>
+    </div>
+  </form>
+  );
+
+  // Editing an app: the upload wizard's card — a titled head, the fields, and a footer bar with Save on the right.
+  const renderDetails = (saved: AdminAppRecord) => {
+    const changed = JSON.stringify(draft) !== JSON.stringify(draftFor(saved));
+    return (
+      <form className="ins-wizard-card ins-app-details" onSubmit={submit} aria-labelledby="ins-app-details-title">
+        <header className="ins-wizard-head">
+          <h3 id="ins-app-details-title" className="ins-wizard-title">App details</h3>
+          <p className="ins-wizard-desc">Its name, category and where it is listed in the library.</p>
+        </header>
+        <div className="ins-wizard-body ins-app-details-body">{renderFields()}</div>
+        <footer className="ins-wizard-foot">
+          <button type="button" className="ins-btn ins-btn--ghost" onClick={resetDraft} disabled={!changed || busy}>
+            Undo changes
+          </button>
+          <span className="ins-wizard-note">{changed ? 'Unsaved changes' : 'All changes saved'}</span>
+          <button type="submit" className="ins-btn ins-btn--primary" disabled={!valid || !changed || busy}>
+            {busy ? <span className="ins-spinner" aria-hidden /> : <CheckIcon size={15} />} Save changes
+          </button>
+        </footer>
+      </form>
+    );
+  };
+
+  // An app's own page: everything about it in one place.
+  const editing = editingId ? state.apps.find((app) => app.id === editingId) : undefined;
+  if (editing) {
+    const logo = state.logos.find((f) => f.startsWith(`${editing.id}.`));
+    const logoUrl = logo ? inspirationsApi.mediaUrl(`/api/inspirations/logos/${logo}`) : null;
+    const screens = state.files.filter((f) => f.appId === editing.id);
+    const published = screens.filter((f) => f.published).length;
+    const flows = state.flows.filter((f) => f.appId === editing.id);
+    const cardCount = editing.cardScreens?.length ?? 0;
+    const SECTIONS: Array<{ id: EditorSection; label: string; count?: string }> = [
+      { id: 'details', label: 'Details' },
+      { id: 'screens', label: 'Screens', count: String(screens.length) },
+      { id: 'card', label: 'Card screens', count: cardCount > 0 ? `${cardCount}/4` : 'Auto' },
+      { id: 'flows', label: 'Flows', count: String(flows.length) },
+      { id: 'source', label: 'Source & licence', count: state.sources[editing.id]?.status === 'approved' ? 'Approved' : state.sources[editing.id]?.status ?? 'Not set' },
+    ];
+    return (
+      <div ref={editorRef} className="ins-admin-panel ins-app-editor">
+        {/* Breadcrumbs in the section title's place: Apps › this app. */}
+        <nav className="ins-breadcrumbs" aria-label="Breadcrumb">
+          <ol>
+            <li>
+              <button type="button" onClick={startNew} disabled={busy}>
+                Apps
+              </button>
+            </li>
+            <li aria-hidden className="ins-breadcrumbs-sep">
+              <ChevronRightIcon size={18} />
+            </li>
+            <li aria-current="page">{editing.name}</li>
+          </ol>
+        </nav>
+
+        <header className="ins-app-editor-head">
+          <button
+            type="button"
+            className="ins-app-editor-logo"
+            title="Change logo"
+            aria-label={`Change ${editing.name}'s logo`}
+            disabled={busy}
+            onClick={() => {
+              setLogoFor(editing.id);
+              logoInputRef.current?.click();
+            }}
+          >
+            {logoUrl ? <img src={logoUrl} alt="" /> : <span>{editing.name.slice(0, 2).toUpperCase()}</span>}
+            <span className="ins-app-editor-logo-edit" aria-hidden>
+              <UploadIcon size={12} />
+            </span>
+          </button>
+          <div className="ins-app-editor-text">
+            <h2 className="ins-app-editor-name">
+              {editing.name}
+              <span className="ins-admin-item-id">{editing.id}</span>
+            </h2>
+            <p className="ins-app-editor-meta">
+              {editing.industry === 'unsorted' ? 'Needs category' : INDUSTRY_LABEL[editing.industry] ?? editing.industry} · {published} of {screens.length} screens published · {flows.length} {flows.length === 1 ? 'flow' : 'flows'}
+            </p>
+          </div>
+          <button type="button" className="ins-btn ins-btn--sm ins-btn--danger-ghost" onClick={() => remove(editing)} disabled={busy}>
+            <TrashIcon size={13} /> Delete app
+          </button>
+        </header>
+
+        <div className="ins-segmented ins-app-editor-tabs" role="tablist" aria-label={`${editing.name} sections`}>
+          {SECTIONS.map((item) => (
+            <button key={item.id} type="button" role="tab" aria-selected={section === item.id} className={`ins-segmented-item ${section === item.id ? 'is-active' : ''}`} onClick={() => setSection(item.id)}>
+              {item.label}
+              {item.count && <span className="ins-app-editor-count">{item.count}</span>}
+            </button>
+          ))}
+        </div>
+
+        {section === 'details' && renderDetails(editing)}
+        {section === 'screens' && (
+          <AppVersionScreens app={editing} files={screens} flows={flows} screenTypes={state.vocabulary.screenTypes} busy={busy} run={run} state={state} />
+        )}
+        {section === 'card' && <AppCardScreens key={`${editing.id}:${(editing.cardScreens ?? []).join(',')}`} app={editing} files={screens} busy={busy} run={run} />}
+        {section === 'source' && <AppSourcePanel key={`${editing.id}:${JSON.stringify(state.sources[editing.id] ?? {})}`} app={editing} state={state} busy={busy} run={run} />}
+        {section === 'flows' && <FlowsPanel key={editing.id} state={state} busy={busy} run={run} appOnly={editing.id} />}
+
+        {logoInput}
+      </div>
+    );
+  }
+
   return (
     <div className="ins-admin-panel">
       <div className="ins-admin-toolbar">
@@ -122,144 +394,15 @@ export function AppsPanel({
           <SearchIcon size={14} />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${state.apps.length} apps`} aria-label="Search apps" />
         </label>
-        <span className="ins-toolbar-note">Versions and card screens are under each app.</span>
-        {!formOpen && (
+        <span className="ins-toolbar-note">Edit an app to manage its details, screens, card and flows.</span>
+        {!adding && (
           <button type="button" className="ins-btn ins-btn--primary ins-btn--sm" onClick={() => setAdding(true)}>
             <PlusIcon size={14} /> Add app
           </button>
         )}
       </div>
 
-      {formOpen && (
-      <form
-        ref={formRef}
-        className="ins-admin-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (valid) save();
-        }}
-      >
-        <div className="ins-admin-form-head">
-          <p className="ins-admin-form-title">{editingId ? `Edit ${draft.name || editingId}` : 'Add an app'}</p>
-          <button type="button" className="ins-iconbtn ins-iconbtn--plain" aria-label="Close" onClick={startNew} disabled={busy}>
-            <CloseIcon size={14} />
-          </button>
-        </div>
-
-        <div className="ins-admin-row">
-          <label className="ins-field">
-            <span className="ins-field-label">Name</span>
-            <input
-              className="ins-input"
-              value={draft.name}
-              onChange={(e) => {
-                const name = e.target.value;
-                setDraft((d) => ({ ...d, name, id: idTouched ? d.id : slugify(name) }));
-              }}
-              placeholder="Acme"
-              required
-            />
-          </label>
-
-          <label className="ins-field">
-            <span className="ins-field-label">Id / folder</span>
-            <input
-              className="ins-input"
-              value={draft.id}
-              onChange={(e) => {
-                setIdTouched(true);
-                setDraft((d) => ({ ...d, id: slugify(e.target.value) }));
-              }}
-              placeholder="acme"
-              disabled={Boolean(editingId)}
-              required
-            />
-            <span className="ins-field-hint">
-              {editingId ? 'Fixed once created.' : 'Used as the folder name under screens/<platform>/.'}
-            </span>
-          </label>
-
-          <label className="ins-field">
-            <span className="ins-field-label">Industry</span>
-            <select
-              className="ins-input"
-              value={draft.industry}
-              onChange={(e) => setDraft((d) => ({ ...d, industry: e.target.value as Industry }))}
-            >
-              {needsCategory && (
-                <option value="unsorted" disabled={!editingId}>
-                  Choose a category…
-                </option>
-              )}
-              {PICKABLE_INDUSTRIES.map((i) => (
-                <option key={i} value={i}>
-                  {INDUSTRY_LABEL[i]}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="ins-admin-row">
-          <label className="ins-field">
-            <span className="ins-field-label">Website</span>
-            <input
-              className="ins-input"
-              value={draft.website ?? ''}
-              onChange={(e) => setDraft((d) => ({ ...d, website: e.target.value }))}
-              placeholder="https://acme.example"
-              type="url"
-            />
-          </label>
-          <label className="ins-field ins-field--wide">
-            <span className="ins-field-label">Tagline</span>
-            <input
-              className="ins-input"
-              value={draft.tagline ?? ''}
-              onChange={(e) => setDraft((d) => ({ ...d, tagline: e.target.value }))}
-              placeholder="One line about the product."
-            />
-          </label>
-        </div>
-
-        <div className="ins-field">
-          <span className="ins-field-label" id="ins-app-platforms">
-            Platform
-          </span>
-          <div className="ins-admin-chips" role="group" aria-labelledby="ins-app-platforms">
-            {PLATFORMS.map((p) => {
-              const on = draft.platforms?.includes(p) ?? false;
-              return (
-                <button
-                  key={p}
-                  type="button"
-                  aria-pressed={on}
-                  className={`ins-chip ins-chip--sm ${on ? 'is-active' : ''}`}
-                  onClick={() =>
-                    setDraft((d) => ({
-                      ...d,
-                      platforms: on ? (d.platforms ?? []).filter((x) => x !== p) : PLATFORMS.filter((x) => x === p || d.platforms?.includes(x)),
-                    }))
-                  }
-                >
-                  {PLATFORM_LABEL[p as Platform]}
-                </button>
-              );
-            })}
-          </div>
-          <span className="ins-field-hint">Where the app is listed. Its screens follow this choice, whichever platform they were uploaded as. Leave all off to follow the uploads.</span>
-        </div>
-
-        <div className="ins-admin-actions">
-          <button type="submit" className="ins-btn ins-btn--primary" disabled={!valid || busy}>
-            <PlusIcon size={15} /> {editingId ? 'Save changes' : 'Add app'}
-          </button>
-          <button type="button" className="ins-btn ins-btn--ghost" onClick={startNew} disabled={busy}>
-            Cancel
-          </button>
-        </div>
-      </form>
-      )}
+      {adding && !editingId && renderForm()}
 
       <div className="ins-admin-list">
         {state.apps.length === 0 && <p className="ins-muted">No apps yet.</p>}
@@ -300,43 +443,8 @@ export function AppsPanel({
                   {app.tagline && <p className="ins-admin-item-sub">{app.tagline}</p>}
                 </div>
                 <div className="ins-admin-item-actions">
-                  <button
-                    type="button"
-                    className="ins-btn ins-btn--sm"
-                    disabled={busy}
-                    aria-expanded={isOpen(app.id, 'versions')}
-                    onClick={() => togglePanel(app.id, 'versions')}
-                  >
-                    {isOpen(app.id, 'versions') ? 'Close' : 'Versions'}
-                  </button>
-                  <button
-                    type="button"
-                    className={`ins-btn ins-btn--sm ${(app.cardScreens?.length ?? 0) > 0 ? 'is-active' : ''}`}
-                    disabled={busy}
-                    aria-expanded={isOpen(app.id, 'card')}
-                    title={
-                      (app.cardScreens?.length ?? 0) > 0
-                        ? `${app.cardScreens!.length} of 4 card screens picked`
-                        : 'The card picks its screens automatically'
-                    }
-                    onClick={() => togglePanel(app.id, 'card')}
-                  >
-                    {isOpen(app.id, 'card') ? 'Close' : 'Card screens'}
-                    {(app.cardScreens?.length ?? 0) > 0 && <span className="ins-chip-count">{app.cardScreens!.length}</span>}
-                  </button>
-                  <button
-                    type="button"
-                    className="ins-btn ins-btn--sm"
-                    disabled={busy}
-                    onClick={() => {
-                      setLogoFor(app.id);
-                      logoInputRef.current?.click();
-                    }}
-                  >
-                    <UploadIcon size={13} /> Logo
-                  </button>
                   <button type="button" className="ins-btn ins-btn--sm" onClick={() => edit(app)} disabled={busy}>
-                    Edit
+                    <PencilIcon size={13} /> Edit
                   </button>
                   <button
                     type="button"
@@ -349,35 +457,12 @@ export function AppsPanel({
                   </button>
                 </div>
               </div>
-              {isOpen(app.id, 'versions') && (
-                <AppVersionScreens
-                  app={app}
-                  files={screens}
-                  flows={state.flows.filter((f) => f.appId === app.id)}
-                  screenTypes={state.vocabulary.screenTypes}
-                  busy={busy}
-                  run={run}
-                />
-              )}
-              {isOpen(app.id, 'card') && (
-                <AppCardScreens key={`${app.id}:${(app.cardScreens ?? []).join(',')}`} app={app} files={screens} busy={busy} run={run} />
-              )}
             </div>
           );
         })}
       </div>
 
-      <input
-        ref={logoInputRef}
-        type="file"
-        accept="image/png,image/webp,image/jpeg,image/svg+xml"
-        hidden
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) uploadLogo(file);
-          e.target.value = '';
-        }}
-      />
+      {logoInput}
     </div>
   );
 }

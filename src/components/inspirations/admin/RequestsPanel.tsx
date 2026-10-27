@@ -104,7 +104,8 @@ export function RequestsPanel() {
   const total = requests.reduce((sum, r) => sum + r.count, 0);
 
   return (
-    <div className="ins-reqlist">
+    <div className="ins-requests">
+      {/* Sort and totals sit above the box; the box holds only the rows. */}
       {requests.length > 0 && (
         <div className="ins-reqlist-bar">
           <div className="ins-segmented" role="radiogroup" aria-label="Sort requests">
@@ -128,6 +129,8 @@ export function RequestsPanel() {
       )}
       {error && <p className="ins-admin-err" role="alert">{error}</p>}
       {requests.length === 0 && !error && <p className="ins-muted ins-admin-status">No app requests yet.</p>}
+      {sorted.length > 0 && (
+      <div className="ins-reqlist">
       {sorted.map((request) => {
         const notes = request.entries;
         return (
@@ -170,6 +173,8 @@ export function RequestsPanel() {
           </article>
         );
       })}
+      </div>
+      )}
     </div>
   );
 }

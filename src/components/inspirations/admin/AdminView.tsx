@@ -48,6 +48,20 @@ export function AdminView() {
 
   const held = state?.files.filter((f) => !f.published).length ?? 0;
 
+  // Still loading: the header and the four dots only — no menu or section title yet.
+  if (loading || !state) {
+    return (
+      <>
+        <div className="ins-admin-topbar">
+          <span className="ins-admin-topbar-title">Library admin</span>
+        </div>
+        <div className="ins-admin-loading" role="status" aria-label="Loading the store">
+          <span className="ins-admin-loading-dots" aria-hidden><i /><i /><i /><i /></span>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       {/* The popup's header: which page this is. */}
@@ -104,9 +118,7 @@ export function AdminView() {
         </div>
       )}
 
-      {loading || !state ? (
-        <p className="ins-muted ins-admin-status">Loading the store…</p>
-      ) : (
+      {state && (
         <section className="ins-tabpanel" role="tabpanel">
           {tab === 'analytics' && <AnalyticsPanel state={state} busy={busy} run={run} onHeld={() => setTab('screens')} />}
           {tab === 'add' && <AddScreensPanel state={state} busy={busy} run={run} onUploaded={refresh} />}

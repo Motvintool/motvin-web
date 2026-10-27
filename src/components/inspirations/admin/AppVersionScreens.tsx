@@ -1,14 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { adminApi, type AdminAppRecord, type AdminFlowRecord, type AdminScreenFile } from '@/lib/inspirations/admin';
+import { adminApi, type AdminAppRecord, type AdminFlowRecord, type AdminScreenFile, type AdminState } from '@/lib/inspirations/admin';
 import { splitScreenFile } from '@/lib/inspirations/screenPaths';
 import { localDateString } from '@/lib/inspirations/dates';
 import { PLATFORM_LABEL, SCREEN_TYPE_LABEL } from '@/lib/inspirations/taxonomy';
 import type { Platform, ScreenType } from '@/lib/inspirations/types';
-import { CheckIcon, PlusIcon, TrashIcon, UploadIcon } from '../Icons';
+import { CheckIcon, PencilIcon, PlusIcon, TrashIcon, UploadIcon } from '../Icons';
 import { screenLabel, thumbUrl } from './screenFiles';
 import { AdminImageLightbox } from './AdminImageLightbox';
+import { ScreenRow } from './ScreensPanel';
 import { describeAddedScreens } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 
 /**
@@ -30,6 +31,7 @@ export function AppVersionScreens({
   screenTypes,
   busy,
   run,
+  state,
 }: {
   app: AdminAppRecord;
   files: AdminScreenFile[];
@@ -39,6 +41,8 @@ export function AppVersionScreens({
   screenTypes: ScreenType[];
   busy: boolean;
   run: (action: () => Promise<unknown>, onDone?: () => void) => Promise<boolean>;
+  /** The whole store: given on an app's page, where each screen's details can be edited here too. */
+  state?: AdminState;
 }) {
   const versions = app.versions ?? [];
   const [selected, setSelected] = useState(app.currentVersion ?? versions[0]?.id ?? '');
@@ -54,6 +58,13 @@ export function AppVersionScreens({
   const inputRef = useRef<HTMLInputElement>(null);
   // The screen opened full-size from a thumbnail, if any.
   const [preview, setPreview] = useState<{ url: string; label: string } | null>(null);
+  // The screen whose details (name, type, tags, style) are open above the grid.
+  const [editingScreen, setEditingScreen] = useState<string | null>(null);
+  const screenEditRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (editingScreen) screenEditRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [editingScreen]);
+  const editingFile = editingScreen ? files.find((f) => f.id === editingScreen) : undefined;
   // Select mode: tiles toggle instead of previewing, and a toolbar deletes the
   // ticked ones in one go. `picked` holds file ids and is pruned against the
   // version's current files, so screens that vanish after a delete drop out.
@@ -461,6 +472,20 @@ export function AppVersionScreens({
           picker, so a screen looks the same in every admin tab — these used
           to be square 84px crops, which cut every phone screen to its top
           third and lined up with nothing else on the page. */}
+      {state && editingFile && (
+        <div ref={screenEditRef} className="ins-avs-screen-edit">
+          <ScreenRow
+            key={editingFile.id}
+            file={editingFile}
+            state={state}
+            busy={busy}
+            run={run}
+            editing
+            onEdit={() => setEditingScreen(null)}
+            onClose={() => setEditingScreen(null)}
+          />
+        </div>
+      )}
       {/* Image files dropped anywhere on the screens go into this version, as "Add screens" would. */}
       <div
         className={`ins-flowbuild-pool ins-flowbuild-pool--full ${dropping ? 'is-dropping' : ''}`}
@@ -554,6 +579,21 @@ export function AppVersionScreens({
                 )}
                 {/* Its place in the order, while reordering. */}
                 {ordering && <span className="ins-admin-thumb-order">{position + 1}</span>}
+                {!selecting && !ordering && state && (
+                <button
+                  type="button"
+                  className={`ins-admin-thumb-edit ${editingScreen === file.id ? 'is-on' : ''}`}
+                  aria-label={`Edit details of ${screenLabel(file)}`}
+                  aria-pressed={editingScreen === file.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingScreen(editingScreen === file.id ? null : file.id);
+                  }}
+                  disabled={busy}
+                >
+                  <PencilIcon size={11} />
+                </button>
+                )}
                 {!selecting && !ordering && (
                 <button
                   type="button"

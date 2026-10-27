@@ -237,7 +237,7 @@ export function AnalyticsPanel({
       <div className="ins-analytics-pair">
         <section className="ins-analytics-card">
           <CardHead title="Screen types" desc="What the published screens are." aside={`${data.typeCount} types`} />
-          <Donut rows={folded(data.types.map(([key, value]) => [screenTypeLabel(key), value]), data.published.length, 6)} total={data.published.length} center="screens" />
+          <RadialBars rows={folded(data.types.map(([key, value]) => [screenTypeLabel(key), value]), data.published.length, 6)} total={data.published.length} center="screens" />
         </section>
         <section className="ins-analytics-card">
           <CardHead title="UI elements" desc="Share of screens that show each one." aside={data.elements[0] ? `${data.elements[0][0].replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())} leads` : undefined} />
@@ -470,63 +470,55 @@ function AreaChart({ points, color, unit }: { points: Array<{ label: string; sho
   );
 }
 
-/** A donut of shares: a thick ring of rounded slices with the total inside, and a legend beside it. */
-function Donut({ rows, total, center }: { rows: Array<[string, number]>; total: number; center: string }) {
+/**
+ * A radial bar chart: one ring per type, outermost first, each bar running
+ * clockwise from twelve o'clock, its length set by the count (the largest
+ * fills three quarters of a turn). The empty quarter at the top left holds the
+ * total, or the hovered type's share.
+ */
+function RadialBars({ rows, total, center }: { rows: Array<[string, number]>; total: number; center: string }) {
   const [hover, setHover] = useState<string | null>(null);
-  const SIZE = 180;
-  const STROKE = 20;
-  const R = (SIZE - STROKE - 8) / 2;
-  const C = 2 * Math.PI * R;
-  // Rounded ends reach half the stroke past each end; leave that plus a small gap between slices.
-  const GAP = STROKE + 3;
+  const SIZE = 200;
+  const STROKE = 9;
+  const PITCH = 13;
+  const OUTER = SIZE / 2 - STROKE / 2 - 1;
+  const SWEEP = 0.75;
   const sum = Math.max(1, total);
-  const starts = rows.map((_, i) => rows.slice(0, i).reduce((acc, [, value]) => acc + (value / sum) * C, 0));
+  const most = Math.max(1, ...rows.map(([, value]) => value));
   const color = (label: string, i: number) => (label === 'Other' ? OTHER : SERIES[i]);
   const shown = rows.find(([label]) => label === hover);
-  const most = Math.max(1, ...rows.map(([, value]) => value));
   return (
-    <div className={`ins-donut ${hover ? 'is-hovering' : ''}`}>
+    <div className={`ins-donut ins-radial ${hover ? 'is-hovering' : ''}`}>
       <div className="ins-donut-chart">
         <svg viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden>
-          <circle cx={SIZE / 2} cy={SIZE / 2} r={R} className="ins-donut-track" style={{ strokeWidth: STROKE }} />
           {rows.map(([label, value], i) => {
-            const arc = (value / sum) * C;
-            const length = Math.max(0.01, arc - GAP);
+            const r = OUTER - i * PITCH;
+            const c = 2 * Math.PI * r;
+            const track = c * SWEEP;
+            const bar = Math.max(0.01, (value / most) * track);
+            const ring = { cx: SIZE / 2, cy: SIZE / 2, r, fill: 'none', strokeWidth: STROKE, strokeLinecap: 'round' as const, transform: `rotate(-90 ${SIZE / 2} ${SIZE / 2})` };
             return (
-              <circle
-                key={label}
-                cx={SIZE / 2}
-                cy={SIZE / 2}
-                r={R}
-                fill="none"
-                stroke={color(label, i)}
-                strokeWidth={STROKE}
-                strokeLinecap="round"
-                strokeDasharray={`${length} ${C - length}`}
-                strokeDashoffset={-(starts[i] + GAP / 2)}
-                transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
-                onMouseEnter={() => setHover(label)}
-                onMouseLeave={() => setHover(null)}
-                className={`ins-donut-seg ${hover === label ? 'is-on' : ''}`}
-              />
+              <g key={label} onMouseEnter={() => setHover(label)} onMouseLeave={() => setHover(null)}>
+                <circle {...ring} className="ins-donut-track" strokeDasharray={`${track} ${c}`} />
+                <circle {...ring} stroke={color(label, i)} strokeDasharray={`${bar} ${c}`} className={`ins-donut-seg ${hover === label ? 'is-on' : ''}`} />
+              </g>
             );
           })}
         </svg>
-        <span className="ins-donut-center">
+        <span className="ins-radial-readout">
           <strong>{shown ? `${Math.round((shown[1] / sum) * 100)}%` : total.toLocaleString()}</strong>
           <span>{shown ? shown[0] : center}</span>
         </span>
       </div>
       <ul className="ins-donut-legend">
         {rows.map(([label, value], i) => (
-          <li key={label} className={hover === label ? 'is-on' : ''} onMouseEnter={() => setHover(label)} onMouseLeave={() => setHover(null)}>
+          <li key={label} className={hover === label ? 'is-on' : ''} data-tip={`${value.toLocaleString()} screens`} onMouseEnter={() => setHover(label)} onMouseLeave={() => setHover(null)}>
             <span className="ins-legend-dot" style={{ background: color(label, i) }} />
             <span className="ins-donut-legend-label">{label}</span>
             <span className="ins-donut-legend-bar">
               <span style={{ width: `${(value / most) * 100}%`, background: color(label, i) }} />
             </span>
             <span className="ins-donut-legend-pct">{Math.round((value / sum) * 100)}%</span>
-            <span className="ins-donut-legend-count">{value.toLocaleString()}</span>
           </li>
         ))}
       </ul>

@@ -217,3 +217,6 @@ export const InboxIcon = (p: IconProps) => (
 export const TuneIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></svg>
 );
+export const CloudUploadIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M7 18.5A4.5 4.5 0 0 1 6.2 9.6a6 6 0 0 1 11.6 0A4.5 4.5 0 0 1 17 18.5" /><path d="M12 20v-8" /><path d="m9 14.5 3-3 3 3" /></svg>
+);

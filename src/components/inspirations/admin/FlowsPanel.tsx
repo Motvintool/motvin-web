@@ -35,12 +35,15 @@ export function FlowsPanel({
   state,
   busy,
   run,
+  appOnly,
 }: {
   state: AdminState;
   busy: boolean;
   run: (action: () => Promise<unknown>, onDone?: () => void) => Promise<boolean>;
+  /** On an app's page: only this app's flows, and new flows are built for it — no app picker. */
+  appOnly?: string;
 }) {
-  const [appId, setAppId] = useState(state.apps[0]?.id ?? '');
+  const [appId, setAppId] = useState(appOnly ?? state.apps[0]?.id ?? '');
   const [platformChoice, setPlatformChoice] = useState<Platform | null>(null);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('onboarding');
@@ -49,7 +52,7 @@ export function FlowsPanel({
   // The builder opens for a new flow (＋ Build a flow) or one being edited; the list leads otherwise.
   const [building, setBuilding] = useState(false);
   const [query, setQuery] = useState('');
-  const [appFilter, setAppFilter] = useState('');
+  const [appFilter, setAppFilter] = useState(appOnly ?? '');
   const [shown, setShown] = useState(PAGE);
   const formRef = useRef<HTMLFormElement>(null);
   const formOpen = building || Boolean(editingId);
@@ -146,13 +149,81 @@ export function FlowsPanel({
     return <p className="ins-muted ins-admin-status">Add an app and publish some screens first.</p>;
   }
 
+  // One flow's row; inside a group it drops its own outline, and an area says how many flows sit under it.
+  const renderRow = (flow: (typeof state.flows)[number], inGroup = false, inside = 0) => (
+    <div key={flow.id} className={`ins-admin-item ${inGroup ? 'ins-flow-group-row' : ''}`}>
+      <div className="ins-admin-item-head">
+        <div className="ins-flowbuild-mini" aria-hidden>
+          {flow.screenIds.slice(0, 5).map((id) => {
+            const file = byId.get(id);
+            const url = file ? thumbUrl(file) : null;
+            return (
+              <span className="ins-flowbuild-mini-shot" key={id}>
+                {url ? <img src={url} alt="" loading="lazy" /> : <span className="ins-flowbuild-noshot" />}
+              </span>
+            );
+          })}
+        </div>
+        <div className="ins-admin-item-text">
+          <p className="ins-admin-item-title">
+            {flow.name}
+            <span className="ins-admin-item-id">{flow.id}</span>
+          </p>
+          <p className="ins-admin-item-sub">
+            {state.apps.find((a) => a.id === flow.appId)?.name ?? flow.appId} ·{' '}
+            {PLATFORM_LABEL[flow.platform] ?? flow.platform} · {flow.category} · {flow.screenIds.length} {flow.screenIds.length === 1 ? 'step' : 'steps'}
+              {inside > 0 && <> · {inside} {inside === 1 ? 'flow' : 'flows'} inside</>}
+          </p>
+          {(() => {
+            // A version that was deleted (or renamed away from) leaves
+            // this flow's screenIds pointing nowhere — the blank tiles
+            // above are a symptom, not the cause, so it's named here
+            // rather than left for the admin to puzzle out from empty
+            // thumbnails alone.
+            const missing = flow.screenIds.filter((id) => !byId.has(id)).length;
+            return missing > 0 ? (
+              <p className="ins-admin-warn">
+                {missing} of {flow.screenIds.length} screens no longer exist — probably from a deleted or renamed version.
+              </p>
+            ) : null;
+          })()}
+        </div>
+        <div className="ins-admin-item-actions">
+          <button type="button" className="ins-btn ins-btn--sm" onClick={() => edit(flow)} disabled={busy}>
+            Edit
+          </button>
+          <button
+            type="button"
+            className="ins-iconbtn ins-iconbtn--plain"
+            aria-label={`Delete ${flow.name}`}
+            onClick={() => remove(flow)}
+            disabled={busy}
+          >
+            <TrashIcon size={14} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // One app's flows: grouped by area — each area a heading, its flows indented under it.
+  const groups = appFilter
+    ? (() => {
+        const ids = new Set(listed.map((flow) => flow.id));
+        return listed
+          .filter((flow) => !flow.parentId || !ids.has(flow.parentId))
+          .map((root) => ({ root, children: listed.filter((flow) => flow.parentId === root.id) }));
+      })()
+    : null;
+
   return (
     <div className="ins-admin-panel">
       <div className="ins-admin-toolbar">
         <label className="ins-toolbar-search">
           <SearchIcon size={14} />
-          <input value={query} onChange={(e) => { setQuery(e.target.value); setShown(PAGE); }} placeholder={`Search ${state.flows.length} flows`} aria-label="Search flows" />
+          <input value={query} onChange={(e) => { setQuery(e.target.value); setShown(PAGE); }} placeholder={`Search ${appOnly ? state.flows.filter((f) => f.appId === appOnly).length : state.flows.length} flows`} aria-label="Search flows" />
         </label>
+        {!appOnly && (
         <select className="ins-input ins-toolbar-select" value={appFilter} onChange={(e) => { setAppFilter(e.target.value); setShown(PAGE); }} aria-label="App">
           <option value="">All apps</option>
           {[...state.apps].sort((a, b) => a.name.localeCompare(b.name)).map((app) => (
@@ -161,6 +232,7 @@ export function FlowsPanel({
             </option>
           ))}
         </select>
+        )}
         {!formOpen && (
           <button type="button" className="ins-btn ins-btn--primary ins-btn--sm" onClick={() => setBuilding(true)}>
             <PlusIcon size={14} /> Build a flow
@@ -185,6 +257,7 @@ export function FlowsPanel({
         </div>
 
         <div className="ins-admin-row">
+          {!appOnly && (
           <label className="ins-field">
             <span className="ins-field-label">App</span>
             <select className="ins-input" value={appId} onChange={(e) => pickApp(e.target.value)} disabled={Boolean(editingId)}>
@@ -195,6 +268,7 @@ export function FlowsPanel({
               ))}
             </select>
           </label>
+          )}
 
           <label className="ins-field ins-field--wide">
             <span className="ins-field-label">Flow name</span>
@@ -369,61 +443,15 @@ export function FlowsPanel({
       <div className="ins-admin-list">
         {state.flows.length === 0 && <p className="ins-muted">No flows yet.</p>}
         {listed.length === 0 && state.flows.length > 0 && <p className="ins-muted">No flow matches.</p>}
-        {listed.slice(0, shown).map((flow) => (
-          <div key={flow.id} className="ins-admin-item">
-            <div className="ins-admin-item-head">
-              <div className="ins-flowbuild-mini" aria-hidden>
-                {flow.screenIds.slice(0, 5).map((id) => {
-                  const file = byId.get(id);
-                  const url = file ? thumbUrl(file) : null;
-                  return (
-                    <span className="ins-flowbuild-mini-shot" key={id}>
-                      {url ? <img src={url} alt="" loading="lazy" /> : <span className="ins-flowbuild-noshot" />}
-                    </span>
-                  );
-                })}
-              </div>
-              <div className="ins-admin-item-text">
-                <p className="ins-admin-item-title">
-                  {flow.name}
-                  <span className="ins-admin-item-id">{flow.id}</span>
-                </p>
-                <p className="ins-admin-item-sub">
-                  {state.apps.find((a) => a.id === flow.appId)?.name ?? flow.appId} ·{' '}
-                  {PLATFORM_LABEL[flow.platform] ?? flow.platform} · {flow.category} · {flow.screenIds.length} steps
-                </p>
-                {(() => {
-                  // A version that was deleted (or renamed away from) leaves
-                  // this flow's screenIds pointing nowhere — the blank tiles
-                  // above are a symptom, not the cause, so it's named here
-                  // rather than left for the admin to puzzle out from empty
-                  // thumbnails alone.
-                  const missing = flow.screenIds.filter((id) => !byId.has(id)).length;
-                  return missing > 0 ? (
-                    <p className="ins-admin-warn">
-                      {missing} of {flow.screenIds.length} screens no longer exist — probably from a deleted or renamed version.
-                    </p>
-                  ) : null;
-                })()}
-              </div>
-              <div className="ins-admin-item-actions">
-                <button type="button" className="ins-btn ins-btn--sm" onClick={() => edit(flow)} disabled={busy}>
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  className="ins-iconbtn ins-iconbtn--plain"
-                  aria-label={`Delete ${flow.name}`}
-                  onClick={() => remove(flow)}
-                  disabled={busy}
-                >
-                  <TrashIcon size={14} />
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-        {listed.length > shown && (
+        {groups
+          ? groups.map(({ root, children }) => (
+              <section key={root.id} className="ins-flow-group" aria-label={root.name}>
+                {renderRow(root, true, children.length)}
+                {children.length > 0 && <div className="ins-flow-group-children">{children.map((child) => renderRow(child, true))}</div>}
+              </section>
+            ))
+          : listed.slice(0, shown).map((flow) => renderRow(flow))}
+        {!groups && listed.length > shown && (
           <button type="button" className="ins-btn ins-show-more" onClick={() => setShown((n) => n + PAGE)}>
             Show more · {listed.length - shown} left
           </button>
