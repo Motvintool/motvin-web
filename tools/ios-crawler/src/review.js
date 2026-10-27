@@ -737,7 +737,7 @@ function writeLookAgain(dir, appId, screens, flows, grayOf, textOf) {
       // Side by side, one name is a state of the same page (empty, typed, error): real steps.
       // Apart, it is the same sequence gone through again — the repeat a light review leaves in.
       if (i - j < 2 || !ga || !gb || a.name !== b.name || !within(ga, gb, LOOK_ALIKE)) continue;
-      items.push({ key: `repeat:${[a.hash, b.hash].sort().join('+')}`, kind: 'repeat', hashes: [a.hash, b.hash], flow: flow.name, screens: [brief(a), brief(b)], ask: `In "${flow.name}", #${a.n} and #${b.n} are both "${a.name}" and look nearly alike. A step gone through twice (the same sequence again) is a repeat — remove one. A different state (empty, typed, error, loading, done) is a step of its own — keep both.` });
+      items.push({ key: `repeat:${[a.hash, b.hash].sort().join('+')}`, kind: 'repeat', hashes: [a.hash, b.hash], flow: flow.name, screens: [brief(a), brief(b)], ask: `In "${flow.name}", #${a.n} and #${b.n} are both "${a.name}" and look nearly alike. A step gone through twice (the same sequence again) is a repeat — remove one. A loading or waiting state seen again later (after an error and a retry, say) is a repeat too — keep the first. A different state (empty, typed, error, done) is a step of its own — keep both.` });
     }
     const timed = steps.filter((screen) => typeof screen.atSeconds === 'number').sort((a, b) => a.atSeconds - b.atSeconds);
     if (timed.length >= 3) {
@@ -803,6 +803,30 @@ function writeLookAgain(dir, appId, screens, flows, grayOf, textOf) {
   for (const flow of flows) {
     if (!/^\w+ing\b.* and /i.test(flow.name) || / and back\b/i.test(flow.name)) continue;
     items.push({ key: `two:${flow.id}`, kind: 'two', hashes: [], flow: flow.name, screens: [], ask: `"${flow.name}" names two things. If they are two tasks (for example adding a connector, then browsing skills), split the flow in two, each with its own steps and an -ing name. If it is one task whose name has "and" in it (for example "Privacy and security"), keep it.` });
+  }
+  // "Previewing a Digicam style" and "Previewing a Kuji style": one task done with two items, split
+  // into a flow per item. Sibling flows whose names differ only by the item, showing the same screens.
+  const words = (name) => String(name).toLowerCase().split(/\s+/).filter(Boolean);
+  for (let i = 1; i < flows.length; i++) for (let j = 0; j < i; j++) {
+    const a = flows[j];
+    const b = flows[i];
+    if (!a.parentId || a.parentId !== b.parentId) continue;
+    const wa = words(a.name);
+    const wb = words(b.name);
+    if (wa.length !== wb.length || wa.length < 3 || wa[0] !== wb[0] || !/ing$/.test(wa[0])) continue;
+    const differ = wa.map((word, k) => (word === wb[k] ? -1 : k)).filter((k) => k >= 0);
+    if (!differ.length || differ.length > 2 || differ.at(-1) - differ[0] !== differ.length - 1) continue;
+    // Short flows showing exactly the same screens: real different tasks ("Booking a flight" /
+    // "Booking a hotel") have steps of their own.
+    if (a.screenIds.length > 2 || b.screenIds.length > 2) continue;
+    const namesOf = (flow) => [...new Set(flow.screenIds.map((sid) => byId.get(sid)?.name).filter(Boolean))].sort();
+    const na = namesOf(a);
+    if (!na.length || na.join('|') !== namesOf(b).join('|')) continue;
+    const shared = na[0];
+    const itemA = String(a.name).split(/\s+/).slice(differ[0], differ.at(-1) + 1).join(' ');
+    const itemB = String(b.name).split(/\s+/).slice(differ[0], differ.at(-1) + 1).join(' ');
+    const steps = [...a.screenIds, ...b.screenIds].map((sid) => byId.get(sid)).filter(Boolean);
+    items.push({ key: `siblings:${[a.id, b.id].sort().join('+')}`, kind: 'siblings', hashes: steps.map((screen) => screen.hash), flow: `${a.name} / ${b.name}`, screens: steps.map(brief), ask: `"${a.name}" and "${b.name}" differ only by the item ("${itemA}" / "${itemB}") and both show "${shared}" — one task done with two items. Merge them into one flow named for the task, without the item (for example "Previewing a style"), as Mobbin does. If they truly are two different tasks, keep both.` });
   }
   // A flow named after what its screens show (a search's words, a list's items), not after the task.
   const appWords = new Set(String(appId).split('-'));

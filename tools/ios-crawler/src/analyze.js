@@ -156,8 +156,12 @@ export async function probeAnalyzer(preferred) {
 
 // ─── Prompt ──────────────────────────────────────────────────────────────────
 
-function systemPrompt() {
-  return `You are the screen analyst for a design-inspiration library. You look at one iOS screenshot and return JSON only.
+/** What the screens are, by the platform they were uploaded as: the model reads a sidebar as a sidebar, not a tab bar. */
+const PLATFORM_KIND = { ios: 'iOS', webapp: 'web app (in a desktop browser)', web: 'website (in a desktop browser)' };
+const kindOf = (platform) => PLATFORM_KIND[platform] ?? PLATFORM_KIND.ios;
+
+function systemPrompt(platform) {
+  return `You are the screen analyst for a design-inspiration library. You look at one ${kindOf(platform)} screenshot and return JSON only.
 
 Return exactly this shape, no prose, no markdown fence:
 {
@@ -183,9 +187,9 @@ Rules for "actions": list only controls that plausibly navigate to a different s
 When an element list is provided, set "ref" to that element's index and leave x/y null. Only use normalised x/y when no element list was given.`;
 }
 
-function userPrompt(elements) {
+function userPrompt(elements, platform) {
   if (!elements.length) {
-    return 'Analyse this iOS screen. No accessibility data is available, so give normalised x/y for each action.';
+    return `Analyse this ${kindOf(platform)} screen. No accessibility data is available, so give normalised x/y for each action.`;
   }
   const lines = elements.map((element, index) => {
     const frame = element.frame;
@@ -193,7 +197,7 @@ function userPrompt(elements) {
     const text = element.label || element.value || '(no label)';
     return `${index}: [${element.kind}/${element.role}] "${text}" ${position}`;
   });
-  return `Analyse this iOS screen.\n\nAccessibility elements on screen (index: [kind/role] "label" @x,y w×h):\n${lines.join('\n')}\n\nReference these by index in "actions".`;
+  return `Analyse this ${kindOf(platform)} screen.\n\nAccessibility elements on screen (index: [kind/role] "label" @x,y w×h):\n${lines.join('\n')}\n\nReference these by index in "actions".`;
 }
 
 // ─── Image preparation ───────────────────────────────────────────────────────
@@ -222,7 +226,7 @@ async function encodeForModel(imagePath) {
 
 // ─── Backends ────────────────────────────────────────────────────────────────
 
-async function callApi(imagePath, elements) {
+async function callApi(imagePath, elements, platform) {
   const base64 = await encodeForModel(imagePath);
   const response = await fetch(API_URL, {
     method: 'POST',
@@ -234,13 +238,13 @@ async function callApi(imagePath, elements) {
     body: JSON.stringify({
       model: DEFAULT_MODEL,
       max_tokens: 2000,
-      system: systemPrompt(),
+      system: systemPrompt(platform),
       messages: [
         {
           role: 'user',
           content: [
             { type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64 } },
-            { type: 'text', text: userPrompt(elements) },
+            { type: 'text', text: userPrompt(elements, platform) },
           ],
         },
         // Prefilling the opening brace keeps the reply to bare JSON.
@@ -259,8 +263,8 @@ async function callApi(imagePath, elements) {
   return `{${text}`;
 }
 
-async function callCli(imagePath, elements) {
-  const prompt = `${systemPrompt()}\n\n${userPrompt(elements)}\n\nThe screenshot is the image file at:\n${imagePath}\n\nRead that image, then reply with the JSON object and nothing else.`;
+async function callCli(imagePath, elements, platform) {
+  const prompt = `${systemPrompt(platform)}\n\n${userPrompt(elements, platform)}\n\nThe screenshot is the image file at:\n${imagePath}\n\nRead that image, then reply with the JSON object and nothing else.`;
   const result = await run('claude', ['-p', prompt, '--output-format', 'json'], { timeout: 180_000 });
 
   // The reason for a failure is in the JSON envelope on stdout, not in stderr,
@@ -510,7 +514,7 @@ export async function identifyApp(imagePaths, options = {}) {
   }
 
   const sample = imagePaths.slice(0, 3);
-  const instruction = `These are ${sample.length} screen(s) from one iOS app. Identify it.`;
+  const instruction = `These are ${sample.length} screen(s) from one ${options.platform === 'web' ? 'website' : options.platform === 'webapp' ? 'web app' : 'iOS app'}. Identify it.`;
 
   let reply;
   if (backend === 'ai') {
@@ -818,7 +822,7 @@ export async function analyseScreen(imagePath, elements = [], options = {}) {
     return analysis;
   }
 
-  const reply = backend === 'api' ? await callApi(imagePath, elements) : await callCli(imagePath, elements);
+  const reply = backend === 'api' ? await callApi(imagePath, elements, options.platform) : await callCli(imagePath, elements, options.platform);
   const analysis = normaliseAnalysis(extractJson(reply), elements);
   analysis.analyzer = backend === 'api' ? DEFAULT_MODEL : 'claude CLI';
   // The model does not see the recording, so what the segmenter measured is

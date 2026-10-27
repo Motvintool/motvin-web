@@ -324,20 +324,20 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
                 </div>
                 <div className="ins-batch-item-actions">
                   {item.appId && ['done', 'review-ready'].includes(item.stage) && (
-                    <Link className="ins-linkbtn" href={`/inspirations/app/${item.appId}`}>Open <ExternalIcon size={11} /></Link>
+                    <Link className="ins-btn ins-btn--ghost ins-btn--sm ins-batch-rowbtn" href={`/inspirations/app/${item.appId}`}>Open <ExternalIcon size={11} /></Link>
                   )}
                   {item.stage === 'review-ready' && item.appId && item.version && (
-                    <button type="button" className="ins-linkbtn" onClick={() => void navigator.clipboard.writeText(`Follow docs/review-motvin.md to review ${item.appId} ${last.settings.platform} ${item.version}`)}>
+                    <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm ins-batch-rowbtn" onClick={() => void navigator.clipboard.writeText(`Follow docs/review-motvin.md to review ${item.appId} ${last.settings.platform} ${item.version}`)}>
                       <CopyIcon size={11} /> Copy review request
                     </button>
                   )}
                   {item.stage === 'choose' && <span className="ins-muted">Open the Motvin agent to choose</span>}
-                  {['needs-you', 'skipped'].includes(item.stage) && last.state !== 'done' && <button type="button" className="ins-linkbtn" onClick={() => void control(last, 'retry', item.id)}><RetryIcon size={11} /> Retry</button>}
-                  {item.stage === 'needs-you' && last.state === 'done' && <button type="button" className="ins-linkbtn" onClick={() => void control(last, 'retry', item.id)}><RetryIcon size={11} /> Retry</button>}
+                  {['needs-you', 'skipped'].includes(item.stage) && last.state !== 'done' && <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm ins-batch-rowbtn" onClick={() => void control(last, 'retry', item.id)}><RetryIcon size={11} /> Retry</button>}
+                  {item.stage === 'needs-you' && last.state === 'done' && <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm ins-batch-rowbtn" onClick={() => void control(last, 'retry', item.id)}><RetryIcon size={11} /> Retry</button>}
                   {['uploading', 'choose', 'review-queued', 'reviewing'].includes(item.stage) && (
-                    <button type="button" className="ins-linkbtn" onClick={() => { if (window.confirm(`Stop ${item.result?.appName ?? item.title} now? It stops at once and the screens it added are taken out of the library again; Retry starts it over.`)) void control(last, 'stop-now', item.id); }}><StopIcon size={11} /> Stop</button>
+                    <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm ins-batch-rowbtn is-stop" onClick={() => { if (window.confirm(`Stop ${item.result?.appName ?? item.title} now? It stops at once and the screens it added are taken out of the library again; Retry starts it over.`)) void control(last, 'stop-now', item.id); }}><StopIcon size={11} /> Stop</button>
                   )}
-                  {item.stage === 'queued' && <button type="button" className="ins-linkbtn" onClick={() => void control(last, 'skip', item.id)}>Skip</button>}
+                  {item.stage === 'queued' && <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm ins-batch-rowbtn" onClick={() => void control(last, 'skip', item.id)}>Skip</button>}
                 </div>
               </li>
             ))}

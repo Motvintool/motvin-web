@@ -236,8 +236,10 @@ async function stage(folder, fileName, stagingDir) {
  * wait out forty timeouts to learn that.
  */
 class Analyzer {
-  constructor(backend) {
+  constructor(backend, platform) {
     this.backend = backend;
+    // What the screens are (iOS, web app, website), for a model's prompt.
+    this.platform = platform;
     // "none" turns classification off outright, for an ingest that only wants
     // the files in — and so the self-test can exercise this path without
     // depending on a reachable model.
@@ -249,7 +251,7 @@ class Analyzer {
   async analyse(imagePath, fallbackName, extra = {}) {
     if (!this.usable) return unclassified(fallbackName);
     try {
-      const analysis = await analyseScreen(imagePath, [], { backend: this.backend, ...extra });
+      const analysis = await analyseScreen(imagePath, [], { backend: this.backend, platform: this.platform, ...extra });
       this.done++;
       return analysis;
     } catch (error) {
@@ -390,7 +392,7 @@ export async function ingestFolder(options) {
   const { app } = options;
   const source = options.folder;
   const staging = mkdtempSync(join(tmpdir(), 'motvin-ingest-'));
-  const analyzer = new Analyzer(options.backend);
+  const analyzer = new Analyzer(options.backend, options.platform);
   const graph = new ScreenGraph();
   const duplicates = [];
   const excluded = [];
@@ -652,6 +654,7 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
         const nodes = [...graph.nodes.values()].filter((node) => !node.skipPublish);
         const identity = await identifyApp(representativeFrames(nodes), {
           backend: options.backend,
+          platform: options.platform,
           lineSets: nodes.map((node) => node.analysis.lines ?? []).filter((lines) => lines.length),
         });
         const tagline = String(identity?.tagline || '').trim();
@@ -1094,7 +1097,7 @@ export async function resumeIngest(options) {
   const { captureInfo, timeline: capturedTimeline, candidates } = manifest;
   const source = manifest.source;
 
-  const analyzer = new Analyzer(options.backend);
+  const analyzer = new Analyzer(options.backend, options.platform);
   const graph = new ScreenGraph();
   const duplicates = [];
   const excluded = [];
@@ -1648,7 +1651,7 @@ export async function classifyStored(options) {
   images.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   if (!images.length) throw new Error(`no images in ${appDir}`);
 
-  const analyzer = new Analyzer(options.backend);
+  const analyzer = new Analyzer(options.backend, options.platform);
   const staging = mkdtempSync(join(tmpdir(), 'motvin-classify-'));
   const results = [];
 
@@ -2026,7 +2029,7 @@ export async function describeStored(options) {
   const backend = await resolveBackend(options.backend);
   const probe = backend === 'local' ? { usable: false } : await probeAnalyzer(backend);
   const modelBackend = probe.usable ? backend : null;
-  const analyzer = new Analyzer(modelBackend ?? 'local');
+  const analyzer = new Analyzer(modelBackend ?? 'local', platform);
   const appsDoc = existsSync(join(dataDir, 'apps.json')) ? JSON.parse(readFileSync(join(dataDir, 'apps.json'), 'utf-8')) : { apps: [] };
   const app = (appsDoc.apps || []).find((entry) => entry.id === options.appId) ?? { id: options.appId, name: options.appId };
   log.info(modelBackend ? `naming with ${probe.provider ?? modelBackend} / ${probe.model ?? ''}`.trim() : 'naming from the on-device rules (no model answering)');

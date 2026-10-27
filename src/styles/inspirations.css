@@ -19418,3 +19418,8 @@ div.ins-version { cursor: default; flex-wrap: wrap; }
 .ins-admin-drawer .ins-avs-screen-edit > .ins-admin-item { padding: 14px 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
 .ins-field-hint--error { color: #c62828; }
 .ins-app-editor-count { text-transform: capitalize; }
+
+/* Agent Upload board: each app's actions (Copy, Retry, Stop, Skip) as small buttons like Pause and Stop all, not links. */
+.ins-admin-drawer .ins-batch-rowbtn { height: 30px; padding: 0 12px; gap: 6px; border-radius: 99px; font-size: 13px; font-weight: 500; color: var(--ins-text); text-decoration: none; }
+.ins-admin-drawer .ins-batch-rowbtn:hover:not(:disabled) { background: #f1f2f4; }
+.ins-admin-drawer .ins-batch-rowbtn.is-stop:hover:not(:disabled) { background: #fdecec; color: #c62828; }
