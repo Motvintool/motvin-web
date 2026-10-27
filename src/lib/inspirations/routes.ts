@@ -1,4 +1,4 @@
-import type { App, Pattern } from './types';
+import type { App, Pattern, Platform } from './types';
 
 /** Every Inspirations URL in one place so links never drift. */
 export const INSPIRATIONS_ROUTES = {
@@ -20,7 +20,17 @@ export const INSPIRATIONS_ROUTES = {
   admin: '/inspirations/admin',
   settings: '/inspirations/settings',
   settingsRequests: '/inspirations/settings?section=requests',
-  app: (app: Pick<App, 'slug'>) => `/inspirations/app/${app.slug}`,
+  /**
+   * An app's page. Given a platform, an app on more than one opens on that one (`?platform=`):
+   * Claude's card in Web Apps opens Claude as a web app, not its iOS screens.
+   */
+  app: (app: Pick<App, 'slug'> & { platforms?: Platform[] }, platform?: Platform, query?: Record<string, string>) => {
+    const sp = new URLSearchParams();
+    if (platform && (app.platforms?.length ?? 0) > 1) sp.set('platform', platform);
+    for (const [key, value] of Object.entries(query ?? {})) sp.set(key, value);
+    const qs = sp.toString();
+    return `/inspirations/app/${app.slug}${qs ? `?${qs}` : ''}`;
+  },
   /**
    * A pattern: the Patterns page narrowed to that one pattern's screens. (The
    * old one-pattern page is gone; next.config.ts sends its addresses here.)

@@ -460,8 +460,10 @@ describe('questions about where an app runs', () => {
   it.each([
     ['is it on ios', 'Yes — Swiggy is on iOS and Web Apps.'],
     ['is it on web apps?', 'Yes — Swiggy is on iOS and Web Apps.'],
-    ['is it on web', 'No — Swiggy isn’t on the web. It’s on iOS and Web Apps.'],
-    ['is it available on the web?', 'No — Swiggy isn’t on the web. It’s on iOS and Web Apps.'],
+    // "The web" is Webs: a web app answers it. Only "website" asks for a website.
+    ['is it on web', 'Yes — Swiggy is on iOS and Web Apps.'],
+    ['is it available on the web?', 'Yes — Swiggy is on iOS and Web Apps.'],
+    ['is it on websites?', 'No — Swiggy has no website here. It’s on iOS and Web Apps.'],
     ['what platform is it on', 'Swiggy is on iOS and Web Apps.'],
     ['where does it run', 'Swiggy is on iOS and Web Apps.'],
     ['is it on ios or web apps', 'Swiggy is on iOS and Web Apps.'],
@@ -475,7 +477,7 @@ describe('questions about where an app runs', () => {
   it('works with the app named', async () => {
     expect((await ask('is zomato on the web')).text).toBe('Yes — Zomato is on iOS and the web.');
     expect((await ask('what platforms is groww on')).text).toBe('Groww is on iOS and Web Apps.');
-    expect((await ask('does swiggy work on web?')).text).toBe('No — Swiggy isn’t on the web. It’s on iOS and Web Apps.');
+    expect((await ask('does swiggy work on web?')).text).toBe('Yes — Swiggy is on iOS and Web Apps.');
   });
 
   it('knows a web-only app is not on mobile', async () => {
@@ -484,14 +486,16 @@ describe('questions about where an app runs', () => {
 
   it('still opens the app for a command, when the app is on that platform', async () => {
     const reply = await ask('show swiggy on web apps');
-    expect(reply.go?.href).toBe('/inspirations/app/swiggy');
-    expect(reply.text).toBe('Swiggy is on iOS and Web Apps.');
+    expect(reply.go?.href).toBe('/inspirations/app/swiggy?platform=webapp');
+    expect(reply.text).toBe('Opening Swiggy on Web App.');
+    expect((await ask('web version of swiggy')).go?.href).toBe('/inspirations/app/swiggy?platform=webapp');
+    expect((await ask('swiggy iphone version')).go?.href).toBe('/inspirations/app/swiggy?platform=ios');
   });
 
   it('does not open the app for a command naming a platform it is not on', async () => {
-    const reply = await ask('swiggy on web');
+    const reply = await ask('swiggy on websites');
     expect(reply.go).toBeUndefined();
-    expect(reply.text).toBe('Swiggy isn’t on the web. It’s on iOS and Web Apps.');
+    expect(reply.text).toBe('Swiggy has no website here. It’s on iOS and Web Apps.');
   });
 
   it('asks which app when nothing has been shown yet', async () => {
@@ -893,11 +897,10 @@ describe('not over-reaching', () => {
 });
 
 describe('small safe actions', () => {
-  it('offers to save an app', async () => {
+  it('does not save — Buddy is for exploring — and says where to save instead', async () => {
     const reply = await ask('save swiggy');
-    expect(reply.action).toEqual({ kind: 'save', item: { type: 'app', id: 'a1' }, label: 'Swiggy' });
-    expect(reply.text).toBe('Save Swiggy to a collection?');
-    expect(reply.kind).toBe('action');
+    expect(reply.action).toBeUndefined();
+    expect(reply.text).toBe('I’m here to help you explore, so I don’t save things. Open Swiggy and use its Save button, or tick screens and choose Save.');
     expect(reply.go).toBeUndefined();
   });
 
@@ -907,11 +910,11 @@ describe('small safe actions', () => {
   });
 
   it('uses the current app or page', async () => {
-    expect((await ask('save it', ctx(SWIGGY))).action?.kind).toBe('save');
+    expect((await ask('copy the link', ctx(SWIGGY))).action?.kind).toBe('copy');
   });
 
   it('asks when there is nothing to act on', async () => {
-    const reply = await ask('save');
+    const reply = await ask('copy the link');
     expect(reply.kind).toBe('clarify');
     expect(reply.action).toBeUndefined();
   });
@@ -937,7 +940,8 @@ describe('every reply says what kind it is', () => {
     ['how many screens does swiggy have', 'answer'],
     ['how many flows does it have', 'clarify'],
     ['blorpfrazzle', 'fallback'],
-    ['save swiggy', 'action'],
+    ['save swiggy', 'answer'],
+    ['copy link to swiggy', 'action'],
   ])('%s → %s', async (text, kind) => {
     expect((await ask(text)).kind).toBe(kind);
   });
@@ -1097,9 +1101,10 @@ describe('what a sentence is about', () => {
   });
 
   it('a word it cannot place becomes a search inside the app, not a dropped word', async () => {
+    // "Paywall" is read as pricing screens.
     const paywall = await ask('zomato paywall');
-    expect(paywall.go?.href).toBe('/inspirations/search?q=Zomato%20paywall');
-    expect(paywall.text).toBe('Searching Zomato for “paywall”.');
+    expect(paywall.go?.href).toBe('/inspirations/search?q=Zomato%20pricing');
+    expect(paywall.text).toBe('Showing Zomato’s pricing screens.');
     expect((await ask('swiggy restaurants')).go?.href).toBe('/inspirations/search?q=Swiggy%20restaurants');
   });
 
@@ -1197,5 +1202,33 @@ describe('a platform in front of "screens" widens to the whole library', () => {
     expect((await ask('ios login screens', ctx(SWIGGY))).go?.href).toBe('/inspirations/screens?type=login&platform=ios');
     expect((await ask('login screens', ctx(SWIGGY))).go?.href).toBe('/inspirations/search?q=Swiggy%20login');
     expect((await ask('is it on ios', ctx(SWIGGY))).text).toBe('Yes — Swiggy is on iOS and Web Apps.');
+  });
+});
+
+describe('the section the visitor is in', () => {
+  // Zoho is web-only; Swiggy, Zomato and Groww are on iOS and the web.
+  const onWebs = { app: null, page: { pathname: '/inspirations', search: '?platform=web' } };
+  const onIos = { app: null, page: { pathname: '/inspirations', search: '' } };
+
+  it('opens list pages in the section the visitor is in', async () => {
+    const webs = await ask('saas apps', onWebs);
+    expect(webs.go?.href).toContain('platform=web');
+    expect(webs.targets.map((target) => target.label)).toContain('Zoho Corporation');
+    // Zoho is web-only: the iOS section has no SaaS app to offer.
+    const ios = await ask('saas apps', onIos);
+    expect(ios.targets.map((target) => target.label)).not.toContain('Zoho Corporation');
+  });
+
+  it('opens an app on several platforms on the section’s one', async () => {
+    expect((await ask('open swiggy', onWebs)).go?.href).toContain('platform=webapp');
+    expect((await ask('open swiggy', onIos)).go?.href).not.toContain('platform=');
+  });
+
+  it('still finds an app named by name from the other section', async () => {
+    expect((await ask('open zoho', onIos)).go?.href).toContain('/inspirations/app/zoho');
+  });
+
+  it('follows a platform the visitor names over the section', async () => {
+    expect((await ask('ios food apps', onWebs)).go?.href ?? '').not.toContain('platform=web');
   });
 });

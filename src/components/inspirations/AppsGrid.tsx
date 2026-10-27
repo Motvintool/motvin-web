@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { appCardScreens } from '@/lib/inspirations/cover';
 
 import { inspirationsApi } from '@/lib/inspirations/api';
-import type { App, Screen } from '@/lib/inspirations/types';
+import type { App, Platform, Screen } from '@/lib/inspirations/types';
+import { savedAppId } from '@/lib/inspirations/savedApps';
 import { AppCard } from './AppCard';
 import { WebCard } from './WebCard';
 import { EmptyState } from './EmptyState';
@@ -34,6 +35,7 @@ export function AppsGrid({
   emptyAction,
   emptyPlay = false,
   webLayout = false,
+  platforms,
 }: {
   apps: App[];
   loading?: boolean;
@@ -43,14 +45,17 @@ export function AppsGrid({
   /** The empty grid is a no-match (filters found nothing): show the playful empty state. */
   emptyPlay?: boolean;
   webLayout?: boolean;
+  /** The platforms being browsed: an app on several shows only these platforms' screens on its card (and its card opens on them). */
+  platforms?: readonly Platform[];
 }) {
-  const key = apps.map((a) => a.id).join(',');
+  const key = `${apps.map((a) => a.id).join(',')}|${platforms?.join(',') ?? ''}`;
   const { data: previews, loading: previewsLoading } = useAsync(async () => {
     // AppCard shows the app's own screens on its card, the same as a screen
     // card — the admin's carousel pick when there is one, else the automatic
     // cover — so each app needs its screens alongside its record.
     const details = await Promise.all(apps.map((app) => inspirationsApi.getApp(app.id)));
-    return new Map(apps.map((app, i) => [app.id, appCardScreens(app, details[i]?.screens ?? [])]));
+    const browsed = (screens: Screen[]) => (platforms?.length ? screens.filter((s) => platforms.includes(s.platform)) : screens);
+    return new Map(apps.map((app, i) => [app.id, appCardScreens(app, browsed(details[i]?.screens ?? []))]));
   }, `apps-grid-previews:${key}`);
   const { selected, toggle, clear } = useAppSelection();
 
@@ -112,7 +117,15 @@ export function AppsGrid({
           />
         ))}
       </div>
-      {selectedApps.length > 0 && <FloatCollectionBar apps={selectedApps} onClose={clear} onSaved={clear} />}
+      {selectedApps.length > 0 && (
+        <FloatCollectionBar
+          apps={selectedApps}
+          // An app on several platforms is saved as the one this grid shows.
+          items={selectedApps.map((app) => ({ type: 'app' as const, id: savedAppId(app.id, app.platforms.find((p) => platforms?.includes(p)), app.platforms.length > 1 && Boolean(platforms?.length)) }))}
+          onClose={clear}
+          onSaved={clear}
+        />
+      )}
     </>
   );
 }

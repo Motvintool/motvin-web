@@ -184,10 +184,17 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
     return file ? { kind: 'records', file } : null;
   }, [records]);
 
-  const appFor = useCallback((name: string) => {
+  // The app record a recording's name matches, on any platform.
+  const recordFor = useCallback((name: string) => {
     const id = slug(name);
     return state.apps.find((app) => app.id === id || app.name.toLowerCase() === name.trim().toLowerCase()) ?? null;
   }, [state.apps]);
+  // "Already in the library" is per platform: Claude on iOS is not Claude as a web app. An app
+  // with no screens on the chosen platform is new there, and keeps its record (name, logo, category).
+  const appFor = useCallback((name: string) => {
+    const app = recordFor(name);
+    return app && state.files.some((file) => file.appId === app.id && file.platform === settings.platform) ? app : null;
+  }, [recordFor, state.files, settings.platform]);
 
   const addFiles = useCallback((files: FileList | File[] | null) => {
     if (!files) return;
@@ -231,10 +238,20 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
           items.push({ title: row.title, video: row.video.kind === 'records' ? row.video.path : '', ownsVideo: false, appId: existing.id, detectIndustry: false, skip: `${existing.name} is already in the library` });
           continue;
         }
-        let appId = existing?.id ?? slug(name);
+        // In the library on another platform only: this upload adds the platform to that app.
+        const elsewhere = existing ? null : recordFor(name);
+        let appId = existing?.id ?? elsewhere?.id ?? slug(name);
         let detectIndustry = false;
-        if (existing && settings.existing === 'replace') await adminApi.deleteApp(existing.id);
-        if (!existing || settings.existing === 'replace') {
+        // Replace on an app that is on other platforms too: only this platform's screens go (on the
+        // server, before its upload) — the app, its other screens, logo and category stay.
+        const onOtherPlatforms = Boolean(existing) && state.files.some((file) => file.appId === existing!.id && file.platform !== settings.platform);
+        const replacePlatform = settings.existing === 'replace' && onOtherPlatforms;
+        if (existing && settings.existing === 'replace' && !replacePlatform) await adminApi.deleteApp(existing.id);
+        if (elsewhere?.platforms?.length && !elsewhere.platforms.includes(settings.platform)) {
+          // An app pinned to its platforms would list the new screens under the old ones.
+          await adminApi.saveApp({ ...elsewhere, platforms: [...elsewhere.platforms, settings.platform] });
+        }
+        if ((!existing && !elsewhere) || (settings.existing === 'replace' && !replacePlatform)) {
           // A new app under the name given; its real category is looked up by the upload.
           appId = slug(name) || `app-${Date.now().toString(36)}`;
           await adminApi.saveApp({ id: appId, name, industry: 'saas' as Industry });
@@ -250,7 +267,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
           const ext = row.video.file.name.split('.').pop() ?? 'mov';
           video = (await api<{ path: string }>(`/api/crawler/batch/upload?ext=${encodeURIComponent(ext)}`, { method: 'POST', body: row.video.file })).path;
         }
-        items.push({ title: row.title, video, ownsVideo: row.video.kind === 'file', appId, detectIndustry });
+        items.push({ title: row.title, video, ownsVideo: row.video.kind === 'file', appId, detectIndustry, replacePlatform });
       }
       setStarting('Starting the queue');
       await api('/api/crawler/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ settings: { ...settings, version: day }, items }) });
@@ -435,7 +452,9 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
                 .map((video) => {
                   const picked = rows.some((row) => row.key === `r-${video.path}`);
                   const known = appFor(video.name);
-                  const logo = known ? state.logos.find((name) => name.startsWith(`${known.id}.`)) : undefined;
+                  // Its logo, from the app's record on whichever platform it is in the library.
+                  const record = recordFor(video.name);
+                  const logo = record ? state.logos.find((name) => name.startsWith(`${record.id}.`)) : undefined;
                   const recordsLogo = records?.logos.find((entry) => entry.replace(/\.[^.]+$/, '').toLowerCase() === video.name.toLowerCase());
                   return (
                     <li key={video.path}>
@@ -466,7 +485,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
           <ol className="ins-app-rows">
             {rows.map((row) => {
               const known = appFor(row.name.trim() || plainName(row.title));
-              const pill = !known ? ['is-new', 'New app'] : settings.existing === 'skip' ? ['is-skip', 'In library — skipped'] : settings.existing === 'version' ? ['is-version', 'New version'] : ['is-replace', 'Replaces the app'];
+              const pill = !known ? ['is-new', recordFor(row.name.trim() || plainName(row.title)) ? `New on ${PLATFORM_LABEL[settings.platform]}` : 'New app'] : settings.existing === 'skip' ? ['is-skip', 'In library — skipped'] : settings.existing === 'version' ? ['is-version', 'New version'] : ['is-replace', 'Replaces the app'];
               return (
                 <li key={row.key} className="ins-app-row">
                   <label className={`ins-batch-logo-pick ${row.logo ? 'has-logo' : ''}`} title={row.logo ? (row.logo.kind === 'records' ? row.logo.file : row.logo.file.name) : 'Add a logo'}>
@@ -487,7 +506,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
 
         {step === 2 && (
           <div className="ins-wizard-stack">
-            <Choice label="An app already in the library" value={settings.existing} onChange={(v) => set('existing', v)} options={[['skip', 'Skip it'], ['version', 'Add as a new version'], ['replace', 'Replace it']]} hint={settings.existing === 'replace' ? 'Replace removes the app and all its screens before uploading it again.' : settings.existing === 'version' ? 'Versions are by day: a version from the same day is replaced by the new upload.' : 'Apps already in the library are left as they are.'} />
+            <Choice label="An app already in the library" value={settings.existing} onChange={(v) => set('existing', v)} options={[['skip', 'Skip it'], ['version', 'Add as a new version'], ['replace', 'Replace it']]} hint={settings.existing === 'replace' ? `Replace removes the app's ${PLATFORM_LABEL[settings.platform]} screens before uploading it again. An app on other platforms keeps those.` : settings.existing === 'version' ? 'Versions are by day: a version from the same day is replaced by the new upload.' : 'Apps already in the library are left as they are.'} />
             <Choice label="Notify me" value={settings.notify} onChange={(v) => set('notify', v)} options={[['each', 'Each app and the end'], ['summary', 'Only at the end'], ['off', 'Off']]} />
             <details className="ins-wizard-more">
               <summary><ChevronDownIcon size={14} /> More settings</summary>
@@ -518,8 +537,10 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
                 ['Platform', PLATFORM_LABEL[settings.platform]],
                 ['New or existing', (() => {
                   const known = rows.filter((row) => appFor(row.name.trim() || plainName(row.title))).length;
-                  const fresh = rows.length - known;
-                  return [fresh ? `${fresh} new app${fresh === 1 ? '' : 's'}` : '', known ? `${known} already in the library — ${settings.existing === 'skip' ? 'skipped' : settings.existing === 'version' ? 'added as a new version' : 'replaced'}` : ''].filter(Boolean).join(' · ');
+                  // In the library on another platform only: the app gains this platform.
+                  const adding = rows.filter((row) => !appFor(row.name.trim() || plainName(row.title)) && recordFor(row.name.trim() || plainName(row.title))).length;
+                  const fresh = rows.length - known - adding;
+                  return [fresh ? `${fresh} new app${fresh === 1 ? '' : 's'}` : '', adding ? `${adding} in the library on another platform — added on ${PLATFORM_LABEL[settings.platform]}` : '', known ? `${known} already in the library — ${settings.existing === 'skip' ? 'skipped' : settings.existing === 'version' ? 'added as a new version' : 'replaced'}` : ''].filter(Boolean).join(' · ');
                 })()],
                 ['Version', settings.version ? dayLabel(settings.version) : 'Today'],
                 ['Review', settings.review === 'auto' ? `By the agent (${settings.reviewer === 'gemini' ? 'Gemini' : 'Sonnet'}), then checked` : 'You ask for it when each app is in'],

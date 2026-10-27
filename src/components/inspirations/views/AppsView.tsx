@@ -102,6 +102,7 @@ export function AppsView() {
         apps={visible}
         loading={loading}
         webLayout={platforms.every(isDesktopPlatform)}
+        platforms={platforms}
         emptyTitle={industry || appFilters.active || params.get('platform') ? 'No apps match these filters' : 'No apps here yet'}
         emptyPlay={Boolean(industry || appFilters.active || params.get('platform'))}
         emptyDescription={

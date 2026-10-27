@@ -4,17 +4,19 @@ import { appCardScreens } from '@/lib/inspirations/cover';
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useMemo, useState, useSyncExternalStore, type FormEvent } from 'react';
+import { useState, useSyncExternalStore, type FormEvent } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { splitScreenItemId } from '@/lib/inspirations/savedItems';
-import type { App, CollectionItem, Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type App, type CollectionItem, type Platform, type Screen } from '@/lib/inspirations/types';
+import { inSection, readSavedAppId } from '@/lib/inspirations/savedApps';
+import { browsedPlatforms } from '@/lib/inspirations/filters';
 import { AppCard } from '../AppCard';
 import { CollectionCard } from '../CollectionCard';
 import { EmptyState } from '../EmptyState';
+import { WebCard } from '../WebCard';
 import { FlowList } from '../FlowList';
 import { FlowListSkeleton } from '../Skeletons';
-import { FloatCollectionBar } from '../FloatCollectionBar';
 import { askConfirm } from '../ConfirmDialog';
 import { BookmarkIcon, CloseIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
@@ -26,7 +28,6 @@ import { useToast } from '../Toast';
 import { useDeleteCollection } from '../useDeleteCollection';
 import { useLibrary } from '../useLibrary';
 import { sameItem, useRemoveWithUndo } from '../useRemoveWithUndo';
-import { useAppSelection } from '../useAppSelection';
 import { useScreensByIds } from '../useScreensByIds';
 
 const noSubscribe = () => () => {};
@@ -63,7 +64,6 @@ export function SavedView() {
   // Takes one thing out, and says so, with an Undo.
   const removeItem = (collectionId: string, item: { type: CollectionItem['type']; id: string }) =>
     removeWithUndo([{ collectionId, match: sameItem(item.type, item.id) }]);
-  const { selected, toggle, clear } = useAppSelection();
   const [creatingBoard, setCreatingBoard] = useState(false);
   const [newBoardName, setNewBoardName] = useState('');
   const [renaming, setRenaming] = useState(false);
@@ -95,10 +95,16 @@ export function SavedView() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
 
-  const items: CollectionItem[] = useMemo(() => {
-    if (!collection) return [];
-    return [...collection.items].sort((a, b) => b.addedAt.localeCompare(a.addedAt));
-  }, [collection]);
+  // The section being browsed (Apps: iOS; Webs: the web): a collection shows that section's saved items
+  // only — its iOS screens, flows and apps under Apps, its web ones under Webs — never the two mixed.
+  const section = browsedPlatforms(params);
+  // Webs (web apps and websites) are landscape: its saved screens and apps get the web grid and cards.
+  const webSection = section.every(isDesktopPlatform);
+  const inSectionHref = (href: string) => (webSection ? `${href}${href.includes('?') ? '&' : '?'}platform=web` : href);
+  const appPlatforms = new Map([...apps.values()].map((app) => [app.id, app.platforms]));
+  const items: CollectionItem[] = collection
+    ? collection.items.filter((item) => inSection(item, section, appPlatforms)).sort((a, b) => b.addedAt.localeCompare(a.addedAt))
+    : [];
 
   const screenIds = items.filter((i) => i.type === 'screen').map((i) => i.id);
   // UI elements, and patterns saved from the Patterns page, are screens too
@@ -139,15 +145,22 @@ export function SavedView() {
   const patterns = (allPatterns ?? []).filter((p) => patternIds.includes(p.id));
 
   const savedAppIds = items.filter((i) => i.type === 'app').map((i) => i.id);
-  const savedApps = savedAppIds.map((id) => apps.get(id)).filter((app): app is App => Boolean(app));
+  // Each saved app on the platform it was saved on ("claude@webapp" is Claude as a web app); one saved
+  // before platforms were kept apart shows as the section's (Claude under Webs is its web app) — never mixed.
+  const savedApps = savedAppIds
+    .map((savedId) => {
+      const { appId, platform } = readSavedAppId(savedId);
+      const app = apps.get(appId);
+      return app ? { savedId, app, platform: platform ?? (app.platforms.length > 1 ? (app.platforms.find((p) => section.includes(p)) ?? app.platforms[0]) : null) } : null;
+    })
+    .filter((entry): entry is { savedId: string; app: App; platform: Platform | null } => Boolean(entry));
   const { data: appPreviews, loading: appPreviewsLoading } = useAsync(async () => {
-    const details = await Promise.all(savedApps.map((app) => inspirationsApi.getApp(app.id)));
-    return new Map(savedApps.map((app, index) => [app.id, appCardScreens(app, details[index]?.screens ?? [])]));
-  }, `saved-app-previews:${savedApps.map((app) => app.id).join(',')}`);
-  const selectedApps = [...selected]
-    .reverse()
-    .map((id) => savedApps.find((app) => app.id === id))
-    .filter((app): app is App => Boolean(app));
+    const details = await Promise.all(savedApps.map(({ app }) => inspirationsApi.getApp(app.id)));
+    const own = (platform: Platform | null, screens: Screen[]) => (platform ? screens.filter((s) => s.platform === platform) : screens);
+    return new Map(savedApps.map(({ savedId, app, platform }, index) => [savedId, appCardScreens(app, own(platform, details[index]?.screens ?? []))]));
+    // Keyed by the apps resolved, not the ids saved: the app list arrives after the collection, and the
+    // previews must load again once it does.
+  }, `saved-app-previews:${savedApps.map((entry) => entry.savedId).join(',')}`);
 
   const count = (t: SavedTab) =>
     t === 'apps'
@@ -383,6 +396,7 @@ export function SavedView() {
           {tab === 'screens' && (
             <section className="ins-result-section ins-shot-panel">
               <ScreenGrid
+                webGrid={webSection}
                 screens={screens}
                 apps={apps}
                 loading={screensLoading}
@@ -397,7 +411,7 @@ export function SavedView() {
                     play
                     title="No saved screens"
                     description="Hover any screen and press Save to keep it here."
-                    action={{ label: 'Explore screens', href: INSPIRATIONS_ROUTES.screens }}
+                    action={{ label: 'Explore screens', href: inSectionHref(INSPIRATIONS_ROUTES.screens) }}
                   />}
               />
             </section>
@@ -412,7 +426,7 @@ export function SavedView() {
                   play
                   title="No saved flows"
                   description="Select flows and save them to keep them here."
-                  action={{ label: 'Explore flows', href: INSPIRATIONS_ROUTES.flows }}
+                  action={{ label: 'Explore flows', href: inSectionHref(INSPIRATIONS_ROUTES.flows) }}
                 />
               ) : (
                 <FlowList
@@ -432,14 +446,14 @@ export function SavedView() {
             <section className="ins-result-section">
               {patternScreenIds.length > 0 && screensLoading ? (
                 <div className="ins-shot-panel">
-                  <ScreenGrid screens={[]} loading showMeta={false} />
+                  <ScreenGrid screens={[]} loading showMeta={false} webGrid={webSection} />
                 </div>
               ) : patterns.length === 0 && patternScreens.length === 0 ? (
                 <EmptyState
                   play
                   title="No saved patterns"
                   description="Select pattern screens and save them to keep them here."
-                  action={{ label: 'Explore patterns', href: INSPIRATIONS_ROUTES.patterns }}
+                  action={{ label: 'Explore patterns', href: inSectionHref(INSPIRATIONS_ROUTES.patterns) }}
                 />
               ) : (
                 <>
@@ -469,6 +483,7 @@ export function SavedView() {
                   {patternScreens.length > 0 && (
                     <div className="ins-shot-panel">
                       <ScreenGrid
+                webGrid={webSection}
                         screens={patternScreens}
                         apps={apps}
                         showApp={false}
@@ -485,6 +500,7 @@ export function SavedView() {
           {tab === 'components' && (
             <section className="ins-result-section ins-shot-panel">
               <ScreenGrid
+                webGrid={webSection}
                 screens={componentScreens}
                 apps={apps}
                 loading={screensLoading}
@@ -495,7 +511,7 @@ export function SavedView() {
                     play
                     title="No saved UI elements"
                     description="Select screens on UI Elements and save them to keep them here."
-                    action={{ label: 'Explore UI elements', href: INSPIRATIONS_ROUTES.uiElements }}
+                    action={{ label: 'Explore UI elements', href: inSectionHref(INSPIRATIONS_ROUTES.uiElements) }}
                   />}
               />
             </section>
@@ -508,7 +524,7 @@ export function SavedView() {
                   play
                   title="No saved apps"
                   description="Hover any app and press Save to keep it here."
-                  action={{ label: 'Explore apps', href: INSPIRATIONS_ROUTES.apps }}
+                  action={{ label: 'Explore apps', href: inSectionHref(INSPIRATIONS_ROUTES.apps) }}
                 />
               ) : appPreviewsLoading ? (
                 <div className="ins-grid" aria-busy="true" />
@@ -518,15 +534,26 @@ export function SavedView() {
                       no dim on hover, its offsets), so a saved app is the very
                       card Explore shows, with the × in its select circle's spot. */}
                   <div className="ins-explore-view">
-                    <div className="ins-grid ins-app-grid" role="list">
-                      {savedApps.map((app) => (
-                        <AppCard
-                          key={app.id}
+                    <div className={`ins-grid ins-app-grid ${webSection ? 'ins-web-grid' : ''}`} role="list">
+                      {savedApps.map(({ savedId, app }) => webSection ? (
+                        <WebCard
+                          key={savedId}
                           app={app}
-                          previewScreens={appPreviews?.get(app.id)}
+                          previewScreens={appPreviews?.get(savedId)}
                           onRemove={() => {
                             void askConfirm({ title: `Remove “${app.name}”?`, description: `It will be removed from “${collection.name}”.` }).then((ok) => {
-                              if (ok) removeItem(collection.id, { type: 'app', id: app.id });
+                              if (ok) removeItem(collection.id, { type: 'app', id: savedId });
+                            });
+                          }}
+                        />
+                      ) : (
+                        <AppCard
+                          key={savedId}
+                          app={app}
+                          previewScreens={appPreviews?.get(savedId)}
+                          onRemove={() => {
+                            void askConfirm({ title: `Remove “${app.name}”?`, description: `It will be removed from “${collection.name}”.` }).then((ok) => {
+                              if (ok) removeItem(collection.id, { type: 'app', id: savedId });
                             });
                           }}
                         />

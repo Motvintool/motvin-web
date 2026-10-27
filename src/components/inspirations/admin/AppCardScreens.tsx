@@ -35,18 +35,29 @@ export function AppCardScreens({
 
   const published = files.filter((f) => f.published);
   const platforms = Array.from(new Set(published.map((f) => f.platform)));
-  const [platform, setPlatform] = useState<Platform>((platforms[0] as Platform) ?? 'ios');
+  const [platform, setPlatformState] = useState<Platform>((platforms[0] as Platform) ?? 'ios');
   // Narrows the pool to one dated capture; '' is every version at once. The
-  // newest is the default because that is what the card should look like.
-  const versions = app.versions ?? [];
-  const [version, setVersion] = useState<string>(app.currentVersion ?? versions[0]?.id ?? '');
+  // newest is the default because that is what the card should look like —
+  // the newest of the platform on show (an app's iOS and web versions differ).
+  const versionsOf = (p: Platform) => (app.versions ?? []).filter((v) => published.some((f) => f.platform === p && f.version === v.id));
+  const versions = versionsOf(platform);
+  const [version, setVersion] = useState<string>(() => versionsOf((platforms[0] as Platform) ?? 'ios')[0]?.id ?? '');
+  const setPlatform = (p: Platform) => {
+    setPlatformState(p);
+    setVersion(versionsOf(p)[0]?.id ?? '');
+  };
 
   const byId = new Map(files.map((f) => [f.id, f]));
+  // Card pictures are per platform: four for the iOS card, four for the web one. This tab edits the
+  // platform on show and keeps the other platforms' picks as they are.
+  const onPlatform = (id: string) => (byId.get(id)?.platform ?? id.split('-').find((part) => part === 'ios' || part === 'webapp' || part === 'web')) === platform;
+  const here = picked.filter(onPlatform);
+  const setHere = (next: string[]) => setPicked((all) => [...all.filter((id) => !onPlatform(id)), ...next]);
   // Kept in the admin state's order, which is the public app page's order —
   // the pool reads like /inspirations/app/<id> does, splash to checkout.
   const pool = published.filter((f) => f.platform === platform && (!version || f.version === version));
 
-  const full = picked.length >= MAX_CARD_SCREENS;
+  const full = here.length >= MAX_CARD_SCREENS;
   const dirty = picked.join('\n') !== saved.join('\n');
 
   if (published.length === 0) {
@@ -54,17 +65,15 @@ export function AppCardScreens({
   }
 
   const toggle = (id: string) => {
-    setPicked((s) => (s.includes(id) ? s.filter((v) => v !== id) : full ? s : [...s, id]));
+    setHere(here.includes(id) ? here.filter((v) => v !== id) : full ? here : [...here, id]);
   };
 
   const move = (index: number, delta: number) => {
-    setPicked((s) => {
-      const next = [...s];
-      const target = index + delta;
-      if (target < 0 || target >= next.length) return s;
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
+    const next = [...here];
+    const target = index + delta;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    setHere(next);
   };
 
   const save = () => {
@@ -84,13 +93,13 @@ export function AppCardScreens({
         <span className="ins-field-label">
           Carousel, in order{' '}
           <span className="ins-field-hint">
-            ({picked.length} of {MAX_CARD_SCREENS} picked{picked.length === 0 ? ' — automatic' : ''})
+            ({here.length} of {MAX_CARD_SCREENS} picked{here.length === 0 ? ' — automatic' : ''})
           </span>
         </span>
 
-        {picked.length > 0 && (
+        {here.length > 0 && (
           <ol className="ins-flowbuild-strip">
-            {picked.map((id, i) => {
+            {here.map((id, i) => {
               const file = byId.get(id);
               const url = file ? thumbUrl(file) : null;
               const label = file ? screenLabel(file) : id;
@@ -115,7 +124,7 @@ export function AppCardScreens({
                       type="button"
                       className="ins-iconbtn ins-iconbtn--plain"
                       aria-label={`Move ${label} later`}
-                      disabled={i === picked.length - 1}
+                      disabled={i === here.length - 1}
                       onClick={() => move(i, 1)}
                     >
                       →
@@ -187,7 +196,7 @@ export function AppCardScreens({
 
       <div className="ins-flowbuild-pool">
         {pool.map((file) => {
-          const order = picked.indexOf(file.id) + 1;
+          const order = here.indexOf(file.id) + 1;
           const url = thumbUrl(file);
           return (
             <button

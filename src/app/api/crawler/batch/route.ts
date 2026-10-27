@@ -60,6 +60,7 @@ export async function POST(request: Request) {
       ownsVideo,
       appId,
       detectIndustry: entry.detectIndustry === true,
+      replacePlatform: entry.replacePlatform === true,
       skip,
     });
   }

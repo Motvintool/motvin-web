@@ -167,7 +167,7 @@ export function CompareShortcut({ app, screen }: { app: App; screen: Screen }) {
           <Link
             key={other.id}
             // CompareScreens' ?compare= / &with= (written out: CompareScreens imports the preview).
-            href={`${INSPIRATIONS_ROUTES.app(app)}?compare=${encodeURIComponent(type)}&with=${encodeURIComponent(other.slug)}`}
+            href={INSPIRATIONS_ROUTES.app(app, screen.platform, { compare: type, with: other.slug })}
             className="ins-details-pill ins-details-pill--app"
             aria-label={`Compare ${app.name}'s ${label} screens with ${other.name}'s`}
           >

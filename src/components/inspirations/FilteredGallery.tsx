@@ -279,6 +279,7 @@ export function FilteredGallery({
             apps={apps}
             loading={appsLoading && !shownApps}
             webLayout={filters.platforms.length > 0 && filters.platforms.every(isDesktopPlatform)}
+            platforms={withDefaultPlatform(filters).platforms}
             emptyTitle={appsLibraryEmpty ? 'No apps here yet' : 'No apps match these filters'}
             emptyPlay={!appsLibraryEmpty}
             emptyDescription={
@@ -304,12 +305,12 @@ export function FilteredGallery({
             onClearAll={clearDimensions}
             beforeSort={<ScreenshotTextSearch applied={textQuery} onApply={setText} />}
           />
-          {/* .ins-shot-panel applies the app-page gallery treatment: five
-              frameless, hairline-bordered shots per row. */}
-          <div ref={gridWrapRef} className={filters.platforms.length > 0 && filters.platforms.every(isDesktopPlatform) ? '' : 'ins-shot-panel'}>
+          {/* .ins-shot-panel applies the app-page gallery treatment: frameless, hairline-bordered shots —
+              five phones per row, or three web pages in Webs, the same cards as Patterns. */}
+          <div ref={gridWrapRef} className="ins-shot-panel">
             <ScreenGrid
               screens={items}
-              webLayout={filters.platforms.length > 0 && filters.platforms.every(isDesktopPlatform)}
+              webGrid={filters.platforms.length > 0 && filters.platforms.every(isDesktopPlatform)}
               showMeta={false}
               selectable
               loading={textOn ? textLoading || !textHits : (!ready && shownItems.length === 0) || loadingMore}

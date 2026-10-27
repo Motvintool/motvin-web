@@ -13,6 +13,7 @@ const SYNONYMS: [RegExp, string][] = [
   [/\b(?:baskets?|shopping carts?)\b/g, 'cart'],
   [/\b(?:welcome screens?|intro(?:duction)?|walk[\s-]?through|tutorials?)\b/g, 'onboarding'],
   [/\blanding pages?\b/g, 'landing'],
+  [/\b(?:paywalls?|subscription (?:plans?|screens?)|plans? screens?|upgrade screens?)\b/g, 'pricing'],
   [/\b(?:preferences|setting)\b/g, 'settings'],
   [/\bnotifs?\b/g, 'notifications'],
 ];
@@ -82,7 +83,8 @@ export const PLATFORM_QUERY: Record<Platform, string> = { ios: 'ios apps', webap
 export function findPlatforms(text: string): Platform[] {
   const lower = text.toLowerCase();
   // "ios apps", or a platform as a place: "on iOS", "on the web", "for web apps".
-  const talksAboutApps = /\b(?:apps?|applications?|platforms?)\b/.test(lower) || /\b(?:on|for|to|via|in)\s+(?:the\s+)?(?:web|webs|web apps?|ios|iphone|ipad|desktop|websites?)\b/.test(lower);
+  // "the web version of Claude", "Claude's iPhone version" name a platform too.
+  const talksAboutApps = /\b(?:apps?|applications?|platforms?|versions?)\b/.test(lower) || /\b(?:on|for|to|via|in)\s+(?:the\s+)?(?:web|webs|web apps?|ios|iphone|ipad|desktop|websites?)\b/.test(lower);
   const bare = lower.replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
   const found: Platform[] = [];
   for (const [key, pattern] of Object.entries(PLATFORM_WORDS) as [Platform, RegExp][]) {

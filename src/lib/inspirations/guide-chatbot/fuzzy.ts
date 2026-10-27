@@ -29,11 +29,14 @@ export function maxTypos(length: number): number {
   return length <= 7 ? 1 : 2;
 }
 
+/** Everyday words that are never a slip, however close to a library word ("there" is not "theme"). */
+const EVERYDAY = new Set(['there', 'their', 'these', 'those', 'where', 'which', 'what', 'about', 'other', 'would', 'could', 'should', 'please', 'thanks', 'think', 'thing', 'things', 'every', 'right', 'first', 'after', 'before', 'again', 'great', 'little', 'today', 'theres', 'having', 'being', 'doing', 'going', 'looking', 'showing', 'shows', 'tells', 'thank', 'hello', 'maybe', 'still', 'never', 'always', 'really', 'better', 'start', 'started', 'state', 'later', 'latest', 'newest', 'apple', 'phone', 'mobile', 'version', 'versions']);
+
 /** The one known word a misspelling most likely means, or null when none fits or two fit equally. */
 export function closestWord(token: string, vocabulary: string[]): string | null {
   const limit = maxTypos(token.length);
   // A known word, or the singular/plural of one, is already right.
-  if (limit === 0 || vocabulary.includes(token) || vocabulary.includes(`${token}s`) || (token.endsWith('s') && vocabulary.includes(token.slice(0, -1)))) return null;
+  if (limit === 0 || EVERYDAY.has(token) || vocabulary.includes(token) || vocabulary.includes(`${token}s`) || (token.endsWith('s') && vocabulary.includes(token.slice(0, -1)))) return null;
   let best: string | null = null;
   let bestDistance = Infinity;
   let tied = false;

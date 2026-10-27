@@ -29,6 +29,9 @@ type EditorSection = 'details' | 'screens' | 'card' | 'flows' | 'source';
 // somebody picks one, so a category is never an accident of the default.
 const EMPTY: AdminAppRecord = { id: '', name: '', industry: 'unsorted', website: '', tagline: '', platforms: ['ios'] };
 
+/** The admin's platform tabs: each app is listed, counted and edited on one at a time, never mixed. */
+const PLATFORM_TAB: Record<Platform, string> = { ios: 'iOS', webapp: 'Web Apps', web: 'Websites' };
+
 function slugify(value: string): string {
   return value
     .toLowerCase()
@@ -51,6 +54,7 @@ export function AppsPanel({
   // The form opens for a new app (＋ Add app) or an app being edited; the list leads otherwise.
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
+  const [platform, setPlatform] = useState<Platform>('ios');
   const [section, setSection] = useState<EditorSection>('details');
   const editorRef = useRef<HTMLDivElement>(null);
   // Opening an app's page starts at its top.
@@ -94,25 +98,31 @@ export function AppsPanel({
     );
   };
 
+  // An app is on a platform when it has screens there, or is declared for it (a new app before its upload).
+  const platformsOf = (app: AdminAppRecord) => PLATFORMS.filter((p) => state.files.some((f) => f.appId === app.id && f.platform === p) || app.platforms?.includes(p));
+  const onPlatform = (app: AdminAppRecord, p: Platform) => platformsOf(app).includes(p);
+
   const remove = (app: AdminAppRecord) => {
-    const files = state.files.filter((f) => f.appId === app.id).length;
-    const flows = state.flows.filter((f) => f.appId === app.id).length;
+    // On an app that is on other platforms too, only this platform's part goes.
+    const partOnly = platformsOf(app).filter((p) => p !== platform && state.files.some((f) => f.appId === app.id && f.platform === p)).length > 0;
+    const files = state.files.filter((f) => f.appId === app.id && (!partOnly || f.platform === platform)).length;
+    const flows = state.flows.filter((f) => f.appId === app.id && (!partOnly || f.platform === platform)).length;
 
     // Deleting an app deletes its files, so the confirmation counts them
     // rather than describing the action in the abstract.
     const parts = [
       `${files} ${files === 1 ? 'screenshot' : 'screenshots'}`,
       flows > 0 ? `${flows} ${flows === 1 ? 'flow' : 'flows'}` : null,
-      'its licence entry',
+      partOnly ? null : 'its licence entry',
     ].filter(Boolean);
 
     const message =
-      `Delete "${app.name}" and everything stored for it?\n\n` +
+      (partOnly ? `Delete ${app.name}'s ${PLATFORM_TAB[platform]} part? Its other platforms stay.\n\n` : `Delete "${app.name}" and everything stored for it?\n\n`) +
       `This removes ${parts.join(', ')} from motvin-backend.\n\n` +
       `This cannot be undone.`;
 
     if (!window.confirm(message)) return;
-    void run(() => adminApi.deleteApp(app.id), () => {
+    void run(() => adminApi.deleteApp(app.id, partOnly ? platform : undefined), () => {
       if (editingId === app.id) startNew();
     });
   };
@@ -306,10 +316,13 @@ export function AppsPanel({
   if (editing) {
     const logo = state.logos.find((f) => f.startsWith(`${editing.id}.`));
     const logoUrl = logo ? inspirationsApi.mediaUrl(`/api/inspirations/logos/${logo}`) : null;
-    const screens = state.files.filter((f) => f.appId === editing.id);
+    // The app's page is of one platform — its screens, card, flows and counts there only.
+    const screens = state.files.filter((f) => f.appId === editing.id && f.platform === platform);
     const published = screens.filter((f) => f.published).length;
-    const flows = state.flows.filter((f) => f.appId === editing.id);
-    const cardCount = editing.cardScreens?.length ?? 0;
+    const flows = state.flows.filter((f) => f.appId === editing.id && f.platform === platform);
+    const cardCount = (editing.cardScreens ?? []).filter((id) => id.startsWith(`${editing.id}-${platform}-`)).length;
+    const otherPlatforms = platformsOf(editing).filter((p) => p !== platform);
+    const partOnly = otherPlatforms.some((p) => state.files.some((f) => f.appId === editing.id && f.platform === p));
     const SECTIONS: Array<{ id: EditorSection; label: string; count?: string }> = [
       { id: 'details', label: 'Details' },
       { id: 'screens', label: 'Screens', count: String(screens.length) },
@@ -325,6 +338,14 @@ export function AppsPanel({
             <li>
               <button type="button" onClick={startNew} disabled={busy}>
                 Apps
+              </button>
+            </li>
+            <li aria-hidden className="ins-breadcrumbs-sep">
+              <ChevronRightIcon size={18} />
+            </li>
+            <li>
+              <button type="button" onClick={startNew} disabled={busy}>
+                {PLATFORM_TAB[platform]}
               </button>
             </li>
             <li aria-hidden className="ins-breadcrumbs-sep">
@@ -357,11 +378,24 @@ export function AppsPanel({
               <span className="ins-admin-item-id">{editing.id}</span>
             </h2>
             <p className="ins-app-editor-meta">
-              {editing.industry === 'unsorted' ? 'Needs category' : INDUSTRY_LABEL[editing.industry] ?? editing.industry} · {published} of {screens.length} screens published · {flows.length} {flows.length === 1 ? 'flow' : 'flows'}
+              {PLATFORM_TAB[platform]} · {editing.industry === 'unsorted' ? 'Needs category' : INDUSTRY_LABEL[editing.industry] ?? editing.industry} · {published} of {screens.length} screens published · {flows.length} {flows.length === 1 ? 'flow' : 'flows'}
             </p>
+            {otherPlatforms.length > 0 && (
+              <p className="ins-app-editor-meta">
+                Also on{' '}
+                {otherPlatforms.map((p, i) => (
+                  <span key={p}>
+                    {i > 0 && ', '}
+                    <button type="button" className="ins-linkbtn" onClick={() => setPlatform(p)} disabled={busy}>
+                      {PLATFORM_TAB[p]}
+                    </button>
+                  </span>
+                ))}
+              </p>
+            )}
           </div>
           <button type="button" className="ins-btn ins-btn--sm ins-btn--danger-ghost" onClick={() => remove(editing)} disabled={busy}>
-            <TrashIcon size={13} /> Delete app
+            <TrashIcon size={13} /> {partOnly ? `Delete ${PLATFORM_TAB[platform]} part` : 'Delete app'}
           </button>
         </header>
 
@@ -378,9 +412,9 @@ export function AppsPanel({
         {section === 'screens' && (
           <AppVersionScreens app={editing} files={screens} flows={flows} screenTypes={state.vocabulary.screenTypes} busy={busy} run={run} state={state} />
         )}
-        {section === 'card' && <AppCardScreens key={`${editing.id}:${(editing.cardScreens ?? []).join(',')}`} app={editing} files={screens} busy={busy} run={run} />}
+        {section === 'card' && <AppCardScreens key={`${editing.id}:${platform}:${(editing.cardScreens ?? []).join(',')}`} app={editing} files={screens} busy={busy} run={run} />}
         {section === 'source' && <AppSourcePanel key={`${editing.id}:${JSON.stringify(state.sources[editing.id] ?? {})}`} app={editing} state={state} busy={busy} run={run} />}
-        {section === 'flows' && <FlowsPanel key={editing.id} state={state} busy={busy} run={run} appOnly={editing.id} />}
+        {section === 'flows' && <FlowsPanel key={`${editing.id}:${platform}`} state={state} busy={busy} run={run} appOnly={editing.id} platformOnly={platform} />}
 
         {logoInput}
       </div>
@@ -389,14 +423,26 @@ export function AppsPanel({
 
   return (
     <div className="ins-admin-panel">
+      <div className="ins-segmented ins-app-platform-tabs" role="tablist" aria-label="Platform">
+        {PLATFORMS.map((p) => (
+          <button key={p} type="button" role="tab" aria-selected={platform === p} className={`ins-segmented-item ${platform === p ? 'is-active' : ''}`} onClick={() => setPlatform(p)}>
+            {PLATFORM_TAB[p]}
+            <span className="ins-app-editor-count">{state.apps.filter((app) => onPlatform(app, p)).length}</span>
+          </button>
+        ))}
+      </div>
       <div className="ins-admin-toolbar">
         <label className="ins-toolbar-search">
           <SearchIcon size={14} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${state.apps.length} apps`} aria-label="Search apps" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${state.apps.filter((app) => onPlatform(app, platform)).length} ${PLATFORM_TAB[platform]} apps`} aria-label="Search apps" />
         </label>
         <span className="ins-toolbar-note">Edit an app to manage its details, screens, card and flows.</span>
         {!adding && (
-          <button type="button" className="ins-btn ins-btn--primary ins-btn--sm" onClick={() => setAdding(true)}>
+          <button type="button" className="ins-btn ins-btn--primary ins-btn--sm" onClick={() => {
+            // A new app starts on the platform being looked at.
+            setDraft({ ...EMPTY, platforms: [platform] });
+            setAdding(true);
+          }}>
             <PlusIcon size={14} /> Add app
           </button>
         )}
@@ -405,12 +451,13 @@ export function AppsPanel({
       {adding && !editingId && renderForm()}
 
       <div className="ins-admin-list">
-        {state.apps.length === 0 && <p className="ins-muted">No apps yet.</p>}
-        {state.apps.filter((app) => !query.trim() || app.name.toLowerCase().includes(query.trim().toLowerCase()) || app.id.includes(query.trim().toLowerCase())).map((app) => {
+        {!state.apps.some((app) => onPlatform(app, platform)) && <p className="ins-muted">No {PLATFORM_TAB[platform]} apps yet.</p>}
+        {state.apps.filter((app) => onPlatform(app, platform)).filter((app) => !query.trim() || app.name.toLowerCase().includes(query.trim().toLowerCase()) || app.id.includes(query.trim().toLowerCase())).map((app) => {
           const logo = state.logos.find((f) => f.startsWith(`${app.id}.`));
           const logoUrl = logo ? inspirationsApi.mediaUrl(`/api/inspirations/logos/${logo}`) : null;
-          const screens = state.files.filter((f) => f.appId === app.id);
+          const screens = state.files.filter((f) => f.appId === app.id && f.platform === platform);
           const published = screens.filter((f) => f.published).length;
+          const elsewhere = platformsOf(app).filter((p) => p !== platform);
 
           return (
             <div key={app.id} className="ins-admin-item">
@@ -439,6 +486,7 @@ export function AppsPanel({
                       </>
                     )}{' '}
                     · {published} of {screens.length} screens published
+                    {elsewhere.length > 0 && <span className="ins-admin-also"> · also on {elsewhere.map((p) => PLATFORM_TAB[p]).join(', ')}</span>}
                   </p>
                   {app.tagline && <p className="ins-admin-item-sub">{app.tagline}</p>}
                 </div>

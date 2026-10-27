@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import type { App, Flow, Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type App, type Flow, type Screen } from '@/lib/inspirations/types';
 import { FLOW_PARAM, STEP_PARAM } from './FlowPreview';
 import { Screenshot } from './Screenshot';
 import { useScreenContextMenu } from './useScreenContextMenu';
@@ -37,7 +37,7 @@ export function FlowStripShot({
   });
   return (
     <>
-      <Link href={href} scroll={false} className="ins-flows-row-shot" aria-label={label} onContextMenu={shotMenu.onContextMenu}>
+      <Link href={href} scroll={false} className={`ins-flows-row-shot ${isDesktopPlatform(screen.platform) ? 'is-web' : ''}`} aria-label={label} onContextMenu={shotMenu.onContextMenu}>
         <Screenshot screen={screen} />
       </Link>
       {shotMenu.menu}

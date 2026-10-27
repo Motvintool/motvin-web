@@ -72,10 +72,12 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
   // This app's types (the type picker), and every other app's screens of this type.
   const ownTypes = useMemo(() => [...typeCounts(screens).entries()].sort((a, b) => b[1] - a[1]), [screens]);
   const ownScreens = useMemo(() => screens.filter((s) => s.screenType === type), [screens, type]);
+  // Phone screens are compared with phone screens, a web page with web pages: never across.
+  const ownFamily = familyOf(ownScreens[0]?.platform ?? screens[0]?.platform ?? app.platforms[0]);
   const others = useMemo(() => {
     const byApp = new Map<string, Screen[]>();
     for (const s of ofType ?? []) {
-      if (s.appId === app.id) continue;
+      if (s.appId === app.id || familyOf(s.platform) !== ownFamily) continue;
       byApp.set(s.appId, [...(byApp.get(s.appId) ?? []), s]);
     }
     const appById = new Map((apps ?? []).map((a) => [a.id, a]));
@@ -83,7 +85,7 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
       .map(([id, list]) => ({ app: appById.get(id), screens: list }))
       .filter((o): o is { app: App; screens: Screen[] } => Boolean(o.app))
       .sort((a, b) => b.screens.length - a.screens.length);
-  }, [ofType, apps, app.id]);
+  }, [ofType, apps, app.id, ownFamily]);
   // The asked-for app if it has this type, else the one with the most.
   const other = others.find((o) => o.app.slug === withSlug) ?? others[0] ?? null;
   const otherScreens = useMemo(() => other?.screens ?? [], [other]);
@@ -104,7 +106,7 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
     (ctx && (ctx.side === 'left' ? ownScreens : otherScreens).find((s) => s.id === ctx.id)) || ownScreens[left] || otherScreens[right] || null;
   const ctxApp = ctx?.side === 'right' ? (other?.app ?? null) : app;
   const shotMenu = useScreenContextMenu(ctxScreen, ctxApp, () =>
-    `${window.location.origin}${INSPIRATIONS_ROUTES.app(ctxApp ?? app)}?${SCREEN_PARAM}=${ctxScreen?.id ?? ''}`,
+    `${window.location.origin}${INSPIRATIONS_ROUTES.app(ctxApp ?? app, ctxScreen?.platform, { [SCREEN_PARAM]: ctxScreen?.id ?? '' })}`,
   );
   const onShotMenu = (side: 'left' | 'right') => (s: Screen, e: React.MouseEvent) => {
     setCtx({ side, id: s.id });
@@ -266,7 +268,8 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
   const label = screenTypeLabel(type);
 
   const platform = PLATFORM_LABEL[ownScreens[0]?.platform ?? app.platforms[0]] ?? '';
-  const swapHref = other ? `${INSPIRATIONS_ROUTES.app(other.app)}?${COMPARE_PARAM}=${encodeURIComponent(type)}&${COMPARE_WITH_PARAM}=${encodeURIComponent(app.slug)}` : null;
+  // The other app on the same platform as the screens being compared, this app as its partner.
+  const swapHref = other ? INSPIRATIONS_ROUTES.app(other.app, otherScreens[0]?.platform, { [COMPARE_PARAM]: type, [COMPARE_WITH_PARAM]: app.slug }) : null;
 
   return createPortal(
     <div className="ins-search-overlay ins-sheet-overlay" role="presentation" onClick={close}>
@@ -350,7 +353,7 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
           </div>
 
           <BrandProbe app={app} screens={screens} version={app.currentVersion ?? ''} onBrand={setLeftBrand} />
-          {other ? <OtherBrandProbe key={other.app.id} app={other.app} onBrand={setRightBrand} /> : null}
+          {other ? <OtherBrandProbe key={other.app.id} app={other.app} family={ownFamily} onBrand={setRightBrand} /> : null}
 
           <div className="ins-screen-preview-filmstrip-wrap ins-compare-stage" ref={stageRef}>
             <CompareSide
@@ -830,15 +833,24 @@ function BrandProbe({ app, screens, version, onBrand }: { app: App; screens: Scr
  * just this type's, which can be dominated by one screen's photo; it then
  * matches that app's own Palette button, and shares its cache.
  */
-function OtherBrandProbe({ app, onBrand }: { app: App; onBrand: (hex: string | null) => void }) {
+function OtherBrandProbe({ app, family, onBrand }: { app: App; family: PlatformFamily; onBrand: (hex: string | null) => void }) {
   const { data } = useAsync(() => inspirationsApi.getApp(app.slug), `compare-app:${app.slug}`);
-  const version = data?.app.currentVersion ?? '';
-  const screens = useMemo(() => (data ? data.screens.filter((s) => !version || s.version === version) : []), [data, version]);
+  // Its screens on the platform being compared, from that platform's newest capture.
+  const onFamily = useMemo(() => (data ? data.screens.filter((s) => familyOf(s.platform) === family) : []), [data, family]);
+  const version = useMemo(() => {
+    const own = (data?.app.versions ?? []).filter((v) => onFamily.some((s) => s.version === v.id));
+    return own.reduce<(typeof own)[number] | null>((best, v) => (!best || v.capturedAt > best.capturedAt ? v : best), null)?.id ?? '';
+  }, [data, onFamily]);
+  const screens = useMemo(() => onFamily.filter((s) => !version || s.version === version), [onFamily, version]);
   useEffect(() => {
     if (!data) onBrand(null);
   }, [data, onBrand]);
   return data ? <BrandProbe app={data.app} screens={screens} version={version} onBrand={onBrand} /> : null;
 }
+
+/** Phone or browser: screens are only compared within one. */
+type PlatformFamily = 'mobile' | 'browser';
+const familyOf = (platform: string | undefined): PlatformFamily => (platform === 'ios' ? 'mobile' : 'browser');
 
 /** A padlock, shut when locked, its shackle open when not. */
 function LockIcon({ locked }: { locked: boolean }) {

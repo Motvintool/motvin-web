@@ -78,7 +78,7 @@ export function WebScreenCard({
             <>
               <AppLogo app={app} size={50} className="ins-web-card-logo" />
               <div className="ins-web-card-meta-text">
-                <Link href={INSPIRATIONS_ROUTES.app(app)} className="ins-web-card-app">{app.name}</Link>
+                <Link href={INSPIRATIONS_ROUTES.app(app, screen.platform)} className="ins-web-card-app">{app.name}</Link>
                 {app.tagline && <p className="ins-web-card-tagline">{app.tagline}</p>}
               </div>
             </>

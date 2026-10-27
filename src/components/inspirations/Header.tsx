@@ -87,6 +87,8 @@ export function Header() {
     INSPIRATIONS_ROUTES.flows,
     INSPIRATIONS_ROUTES.patterns,
     INSPIRATIONS_ROUTES.search,
+    // A collection too: Apps shows its iOS items, Webs its web ones.
+    INSPIRATIONS_ROUTES.collections,
   ];
   // "Apps" is iOS; "Webs" is websites and web apps together (isWebsPlatforms).
   // Switching keeps the visitor on the same browse page with the same filters, only the platform changes.

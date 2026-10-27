@@ -397,7 +397,7 @@ export function SearchView() {
           {kind === 'apps' && data.apps.length > 0 && (
             <section className="ins-result-section">
               {/* Same cards as the Apps page: each app's own screens, with the hover carousel and selection. */}
-              <AppsGrid apps={data.apps} webLayout={data.apps.every((app) => app.platforms.every(isDesktopPlatform))} />
+              <AppsGrid apps={data.apps} webLayout={data.apps.every((app) => app.platforms.every(isDesktopPlatform))} platforms={filters.platforms} />
             </section>
           )}
 

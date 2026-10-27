@@ -309,8 +309,9 @@ export const adminApi = {
     return unwrap(res);
   },
 
-  async deleteApp(appId: string): Promise<{ removed: RemovedSummary; report: BuildReport }> {
-    const res = await fetch(`${baseUrl()}/apps/${appId}`, {
+  /** With `platform`, only that platform's part of an app on several; its last platform deletes the app. */
+  async deleteApp(appId: string, platform?: Platform): Promise<{ removed: RemovedSummary; report: BuildReport }> {
+    const res = await fetch(`${baseUrl()}/apps/${appId}${platform ? `?platform=${platform}` : ''}`, {
       method: 'DELETE',
       headers: await authHeaders(),
     });

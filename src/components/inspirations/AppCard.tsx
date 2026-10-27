@@ -11,6 +11,7 @@ import { AppLogo } from './AppLogo';
 import { CardShots } from './CardShots';
 import { Screenshot } from './Screenshot';
 import { useSiblingCycle } from './useSiblingCycle';
+import { useAsync } from './useAsync';
 import { useToast } from './Toast';
 import { useDownloadGate } from './useDownloadGate';
 import { inspirationsApi } from '@/lib/inspirations/api';
@@ -59,7 +60,9 @@ export function AppCard({
   onToggleSelect?: () => void;
   onRemove?: () => void;
 }) {
-  const href = INSPIRATIONS_ROUTES.app(app);
+  // On the platform the card shows (its preview's): Claude's card in Web Apps opens Claude as a web app.
+  const cardPlatform = (preview ?? presetScreens?.[0])?.platform;
+  const href = INSPIRATIONS_ROUTES.app(app, cardPlatform);
   const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step, cardRef, swipe, trackRef, swipeProps } = useSiblingCycle(
     preview ?? presetScreens?.[0] ?? null,
     { preset: presetScreens, preferredIds: app.cardScreens },
@@ -69,6 +72,14 @@ export function AppCard({
   const { allow: allowDownload } = useDownloadGate();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showVersions, setShowVersions] = useState(false);
+  // The version menu of an app on several platforms lists only this card's platform's versions — read
+  // from the app's screens once the menu opens (the same fetch a version download makes).
+  const several = app.platforms.length > 1 && Boolean(cardPlatform);
+  const { data: versionData } = useAsync(
+    () => (showVersions && several ? inspirationsApi.getApp(app.slug) : Promise.resolve(null)),
+    `app-card-versions:${app.slug}:${showVersions && several ? cardPlatform : '-'}`,
+  );
+  const cardVersions = several && versionData ? app.versions.filter((v) => versionData.screens.some((s) => s.version === v.id && s.platform === cardPlatform)) : app.versions;
   const hideTimeout = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -191,7 +202,8 @@ export function AppCard({
     try {
       const data = await inspirationsApi.getApp(app.slug);
       if (!data) throw new Error('Failed to download');
-      const versionScreens = data.screens.filter(s => s.version === versionId);
+      // The card's own platform only: an app on iOS and the web downloads the version it shows.
+      const versionScreens = data.screens.filter(s => s.version === versionId && (!cardPlatform || app.platforms.length < 2 || s.platform === cardPlatform));
       
       if (versionScreens.length === 0) {
         showToast('No screens found for this version', { tone: 'error' });
@@ -380,7 +392,7 @@ export function AppCard({
             onMouseEnter={handleMouseEnterVersion}
             onMouseLeave={handleMouseLeaveVersion}
           >
-            {app.versions.map(v => (
+            {cardVersions.map(v => (
               <button key={v.id} type="button" className="ins-context-menu-btn" onClick={(e) => handleDownloadVersion(e, v.id)}>
                 <p className="ins-context-menu-text" style={{ whiteSpace: 'nowrap' }}>
                   {v.label}

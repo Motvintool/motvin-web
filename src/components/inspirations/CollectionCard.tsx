@@ -1,9 +1,12 @@
 'use client';
 
+import { inSection, readSavedAppId } from '@/lib/inspirations/savedApps';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { browsedPlatforms } from '@/lib/inspirations/filters';
 import { useState } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import type { App, Collection, SavedItemType } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type App, type Collection, type SavedItemType } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { askConfirm } from './ConfirmDialog';
 import { useToast } from './Toast';
@@ -20,14 +23,21 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
   const { show } = useToast();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(collection.name);
-  const coverApps = collection.items
+  // The section's items only (Apps: iOS; Webs: the web), as the collection itself shows them.
+  const section = browsedPlatforms(useSearchParams());
+  const appPlatforms = new Map([...apps.values()].map((app) => [app.id, app.platforms]));
+  const items = collection.items.filter((item) => inSection(item, section, appPlatforms));
+  // Opening it keeps the section (Webs opens the collection's web side).
+  const openHref = `${INSPIRATIONS_ROUTES.collections}?collection=${collection.id}${section.every(isDesktopPlatform) ? '&platform=web' : ''}`;
+  const coverApps = items
     .filter((item) => item.type === 'app')
-    .map((item) => apps.get(item.id))
+    // "claude@webapp": the app it names (saved on one of its platforms).
+    .map((item) => apps.get(readSavedAppId(item.id).appId))
     .filter((app): app is App => Boolean(app))
     .slice(-3);
   const coverPositions = ['back', 'middle', 'front'].slice(-coverApps.length);
   const coverAppsByPosition = new Map(coverPositions.map((position, index) => [position, coverApps[index]]));
-  const counts = collection.items.reduce<Record<SavedItemType, number>>(
+  const counts = items.reduce<Record<SavedItemType, number>>(
     (total, item) => ({ ...total, [item.type]: total[item.type] + 1 }),
     { screen: 0, app: 0, flow: 0, pattern: 0, component: 0, icon: 0 },
   );
@@ -54,7 +64,7 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
 
   return (
     <div className="ins-collection-card">
-      <Link href={`${INSPIRATIONS_ROUTES.collections}?collection=${collection.id}`} className="ins-collection-covers" aria-label={`Open ${collection.name}`}>
+      <Link href={openHref} className="ins-collection-covers" aria-label={`Open ${collection.name}`}>
         {['back', 'middle', 'front'].map((position) => {
           const app = coverAppsByPosition.get(position);
           return (
@@ -103,7 +113,7 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
           ) : (
             <p className="ins-collection-name" title={collection.name}>
               {/* Opens it too, as the covers do; one tab stop is enough. */}
-              <Link href={`${INSPIRATIONS_ROUTES.collections}?collection=${collection.id}`} className="ins-collection-name-link" tabIndex={-1}>
+              <Link href={openHref} className="ins-collection-name-link" tabIndex={-1}>
                 {collection.name}
               </Link>
             </p>

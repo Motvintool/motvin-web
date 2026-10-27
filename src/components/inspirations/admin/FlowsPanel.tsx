@@ -36,12 +36,15 @@ export function FlowsPanel({
   busy,
   run,
   appOnly,
+  platformOnly,
 }: {
   state: AdminState;
   busy: boolean;
   run: (action: () => Promise<unknown>, onDone?: () => void) => Promise<boolean>;
   /** On an app's page: only this app's flows, and new flows are built for it — no app picker. */
   appOnly?: string;
+  /** With `appOnly`, on one platform's page of the app: only that platform's flows, and new ones are built on it. */
+  platformOnly?: Platform;
 }) {
   const [appId, setAppId] = useState(appOnly ?? state.apps[0]?.id ?? '');
   const [platformChoice, setPlatformChoice] = useState<Platform | null>(null);
@@ -71,6 +74,7 @@ export function FlowsPanel({
   });
   const busiest = [...byPlatform].sort((a, b) => b.usable - a.usable || b.total - a.total)[0];
   const platform: Platform =
+    platformOnly ??
     platformChoice ?? (busiest && busiest.total > 0 ? busiest.platform : state.vocabulary.platforms[0] ?? 'web');
 
   const candidates = appFiles.filter((f) => f.platform === platform);
@@ -79,7 +83,7 @@ export function FlowsPanel({
   const byId = new Map(state.files.map((f) => [f.id, f]));
   const needle = query.trim().toLowerCase();
   const appName = (id: string) => state.apps.find((a) => a.id === id)?.name ?? id;
-  const listed = state.flows.filter((flow) => (!appFilter || flow.appId === appFilter) && (!needle || flow.name.toLowerCase().includes(needle) || appName(flow.appId).toLowerCase().includes(needle)));
+  const listed = state.flows.filter((flow) => (!appFilter || flow.appId === appFilter) && (!platformOnly || flow.platform === platformOnly) && (!needle || flow.name.toLowerCase().includes(needle) || appName(flow.appId).toLowerCase().includes(needle)));
 
   const reset = () => {
     setName('');
@@ -221,7 +225,7 @@ export function FlowsPanel({
       <div className="ins-admin-toolbar">
         <label className="ins-toolbar-search">
           <SearchIcon size={14} />
-          <input value={query} onChange={(e) => { setQuery(e.target.value); setShown(PAGE); }} placeholder={`Search ${appOnly ? state.flows.filter((f) => f.appId === appOnly).length : state.flows.length} flows`} aria-label="Search flows" />
+          <input value={query} onChange={(e) => { setQuery(e.target.value); setShown(PAGE); }} placeholder={`Search ${appOnly ? state.flows.filter((f) => f.appId === appOnly && (!platformOnly || f.platform === platformOnly)).length : state.flows.length} flows`} aria-label="Search flows" />
         </label>
         {!appOnly && (
         <select className="ins-input ins-toolbar-select" value={appFilter} onChange={(e) => { setAppFilter(e.target.value); setShown(PAGE); }} aria-label="App">
@@ -301,6 +305,7 @@ export function FlowsPanel({
           </label>
         </div>
 
+        {!platformOnly && (
         <fieldset className="ins-field">
           <legend className="ins-field-label">Platform</legend>
           <div className="ins-filter-options">
@@ -319,6 +324,7 @@ export function FlowsPanel({
             ))}
           </div>
         </fieldset>
+        )}
 
         <div className="ins-field">
           <span className="ins-field-label">

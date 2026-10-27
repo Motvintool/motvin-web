@@ -944,7 +944,7 @@ async function main() {
         return await runReview(command, flags);
       case 'remove-upload':
         // The batch queue taking an upload back out: one version, or the whole app it made.
-        await removeUpload({ appId: flags.appId, version: typeof flags.version === 'string' ? flags.version : undefined, wholeApp: Boolean(flags.wholeApp), dataDir: flags.dataDir });
+        await removeUpload({ appId: flags.appId, version: typeof flags.version === 'string' ? flags.version : undefined, wholeApp: Boolean(flags.wholeApp), platform: typeof flags.platform === 'string' ? flags.platform : undefined, dataDir: flags.dataDir });
         return 0;
       case 'ai':
         return await runAi(flags);

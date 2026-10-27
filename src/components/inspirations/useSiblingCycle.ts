@@ -93,7 +93,8 @@ export function useSiblingCycle(screen: Screen | null, options: SiblingCycleOpti
   const preferredKey = (options.preferredIds ?? []).join(',');
   const loadSiblings = (from: Screen) =>
     void fetchSiblings(from.appId).then((siblings) => {
-      const all = [from, ...siblings.filter((s) => s.id !== from.id)];
+      // Its own platform's screens only: a web screen's card flips through web screens, never the app's iOS ones.
+      const all = [from, ...siblings.filter((s) => s.id !== from.id && s.platform === from.platform)];
       const preferred = (preferredKey ? preferredKey.split(',') : [])
         .map((id) => all.find((s) => s.id === id))
         .filter((s): s is Screen => Boolean(s));

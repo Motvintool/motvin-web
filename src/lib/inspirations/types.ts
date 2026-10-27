@@ -129,6 +129,8 @@ export type AppVersion = {
   capturedAt: string;
   /** Whether this is the newest version by date — the version pill calls it "Latest". */
   isLatest: boolean;
+  /** The platforms this upload has screens on (older manifests leave it out). */
+  platforms?: Platform[];
 };
 
 export type App = {
@@ -143,6 +145,8 @@ export type App = {
   logo: string | null;
   screenCount: number;
   flowCount: number;
+  /** Screens and flows per platform it is on: an app on several is counted by the section it is seen in. */
+  platformCounts?: Partial<Record<Platform, { screens: number; flows: number }>>;
   license: string | null;
   attribution: string;
   /**

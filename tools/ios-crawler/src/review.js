@@ -350,7 +350,7 @@ export async function writeReviewPack(options) {
   const appRecord = (Array.isArray(appsDoc) ? appsDoc : appsDoc.apps ?? []).find((entry) => entry.id === appId);
   // The contact sheet each screen is on, for a verdict given sheet by sheet.
   for (const screen of screens) screen.sheet = Math.floor((screen.n - 1) / (SHEET_COLUMNS * SHEET_ROWS)) + 1;
-  writeJson(join(dir, 'screens.json'), { app: appId, platform, version, generatedAt: new Date().toISOString(), appName: appRecord?.name ?? null, tagline: appRecord?.tagline ?? null, industry: appRecord?.industry ?? null, cardScreens: appRecord?.cardScreens ?? [], industries: INDUSTRIES, flowCategories: PUBLISHED_FLOW_CATEGORIES, types: PUBLISHED_TYPES, elements: ELEMENTS, tags: tagList, tree, patterns, problems: checkVersion({ appId, platform, version, dataDir }), missed: readJson(join(dir, 'missed.json'), []), screens });
+  writeJson(join(dir, 'screens.json'), { app: appId, platform, version, generatedAt: new Date().toISOString(), appName: appRecord?.name ?? null, tagline: appRecord?.tagline ?? null, industry: appRecord?.industry ?? null, cardScreens: (appRecord?.cardScreens ?? []).filter((sid) => sid.startsWith(`${appId}-${platform}-`)), industries: INDUSTRIES, flowCategories: PUBLISHED_FLOW_CATEGORIES, types: PUBLISHED_TYPES, elements: ELEMENTS, tags: tagList, tree, patterns, problems: checkVersion({ appId, platform, version, dataDir }), missed: readJson(join(dir, 'missed.json'), []), screens });
   for (const moment of readJson(join(dir, 'missed.json'), [])) doubts.push({ n: null, id: null, name: null, type: null, why: `a moment at ${moment.at}s that no screen shows (after #${moment.afterN ?? '?'}) — add it or skip it; see ${moment.picture}` });
   writeJson(join(dir, 'doubts.json'), doubts);
 
@@ -804,6 +804,27 @@ function writeLookAgain(dir, appId, screens, flows, grayOf, textOf) {
     if (!/^\w+ing\b.* and /i.test(flow.name) || / and back\b/i.test(flow.name)) continue;
     items.push({ key: `two:${flow.id}`, kind: 'two', hashes: [], flow: flow.name, screens: [], ask: `"${flow.name}" names two things. If they are two tasks (for example adding a connector, then browsing skills), split the flow in two, each with its own steps and an -ing name. If it is one task whose name has "and" in it (for example "Privacy and security"), keep it.` });
   }
+  // On the web (Web Apps, Webs) Mobbin shows Onboarding as one flow, the first run in order: flows kept
+  // inside it are split pieces. On iOS, Onboarding stays an area with flows of its own.
+  for (const area of flows) {
+    if (area.parentId || !['webapp', 'web'].includes(area.platform) || !/^(onboarding|welcome|getting started)$/i.test(area.name)) continue;
+    const inside = flows.filter((flow) => flow.parentId === area.id);
+    if (!inside.length) continue;
+    items.push({ key: `split:${area.id}`, kind: 'split', hashes: [], flow: area.name, screens: [], flows: inside.map((flow) => flow.name), ask: `"${area.name}" holds flows of its own (${inside.map((flow) => `"${flow.name}"`).join(', ')}). Mobbin shows Onboarding as one flow: merge the first-run steps (signing up or logging in, codes, permissions, name, setup, a tour) into it with "merges", in the order the recording shows them ("order"). A second way of signing in recorded afterwards (logging in with a password, resetting a password) becomes a flow of its own at the top level ("parent": null), and so does a later task (managing cookies).` });
+  }
+  // Onboarding opens on the first thing the app shows (its welcome or sign-in page). An area whose
+  // own screens come later than its tasks' — a home page with a cookie banner, a tour after signing
+  // in — opens in the middle of the story, and the first screen is buried in a task.
+  for (const area of flows) {
+    if (area.parentId || !/^(onboarding|welcome|getting started)$/i.test(area.name)) continue;
+    const own = area.screenIds.map((sid) => byId.get(sid)).filter((screen) => typeof screen?.atSeconds === 'number');
+    const inTasks = flows.filter((flow) => flow.parentId === area.id).flatMap((flow) => flow.screenIds.map((sid) => byId.get(sid))).filter((screen) => typeof screen?.atSeconds === 'number');
+    if (!own.length || !inTasks.length) continue;
+    const opens = own.reduce((a, b) => (b.atSeconds < a.atSeconds ? b : a));
+    const first = inTasks.reduce((a, b) => (b.atSeconds < a.atSeconds ? b : a));
+    if (opens.atSeconds <= first.atSeconds) continue;
+    items.push({ key: `start:${area.id}`, kind: 'start', hashes: [opens.hash, first.hash], flow: area.name, screens: [brief(first), brief(opens)], ask: `"${area.name}" opens on #${opens.n} "${opens.name}" (${opens.atSeconds}s), but its tasks start earlier: #${first.n} "${first.name}" (${first.atSeconds}s) is the first thing the app shows. Make the area open on that first screen (move it in with "moves" and "order"), and move the later screens into the task they belong to — a cookie banner into "Managing cookies", a welcome tour into a task of its own ("Taking the app tour").` });
+  }
   // "Previewing a Digicam style" and "Previewing a Kuji style": one task done with two items, split
   // into a flow per item. Sibling flows whose names differ only by the item, showing the same screens.
   const words = (name) => String(name).toLowerCase().split(/\s+/).filter(Boolean);
@@ -1178,11 +1199,36 @@ async function applyReviewUnlocked(options) {
   const listed = (Array.isArray(corrections.flows) ? corrections.flows : []).map((fix) => flowById.get(fix.id)).filter((flow) => owned(flow) && flowsDoc.flows.includes(flow));
   const slots = flowsDoc.flows.map((flow, at) => (listed.includes(flow) ? at : -1)).filter((at) => at >= 0);
   slots.forEach((at, n) => { flowsDoc.flows[at] = listed[n]; });
-  // The app's areas as Mobbin lists them: Onboarding first, Settings last, the rest in their order.
+  // The tree in the order the recording went through it: an area, or a task in its area, is placed
+  // by the first moment any of its screens was captured (screens without a time keep their place).
+  // Areas then as Mobbin lists them: Onboarding first, Settings last, the rest by that moment.
+  const capturedAt = new Map();
+  const timeOf = (id) => {
+    if (!capturedAt.has(id)) {
+      const image = fileOfId.get(id);
+      const at = image ? readJson(image.replace(/\.[^.]+$/, '.json'), {})?.capture?.atSeconds : undefined;
+      capturedAt.set(id, typeof at === 'number' ? at : Infinity);
+    }
+    return capturedAt.get(id);
+  };
+  const childrenOf = (flow) => flowsDoc.flows.filter((entry) => owned(entry) && entry.parentId === flow.id);
+  const firstSeen = (flow, depth = 0) => Math.min(...flow.screenIds.map(timeOf), ...(depth < 4 ? childrenOf(flow).map((child) => firstSeen(child, depth + 1)) : []));
+  const bySeen = (a, b) => {
+    const ta = firstSeen(a);
+    const tb = firstSeen(b);
+    return ta === tb || !Number.isFinite(ta) || !Number.isFinite(tb) ? 0 : ta - tb;
+  };
+  const inPlace = (group, compare) => {
+    const slots = flowsDoc.flows.map((flow, at) => (group.includes(flow) ? at : -1)).filter((at) => at >= 0);
+    [...group].sort(compare).forEach((flow, n) => { flowsDoc.flows[slots[n]] = flow; });
+  };
   const rank = (flow) => (/^(onboarding|welcome|getting started)$/i.test(flow.name) ? 0 : /^(settings|account|profile)$/i.test(flow.name) ? 2 : 1);
   const areas = flowsDoc.flows.filter((flow) => owned(flow) && !flow.parentId);
-  const areaSlots = flowsDoc.flows.map((flow, at) => (areas.includes(flow) ? at : -1)).filter((at) => at >= 0);
-  [...areas].sort((a, b) => rank(a) - rank(b)).forEach((flow, n) => { flowsDoc.flows[areaSlots[n]] = flow; });
+  inPlace(areas, (a, b) => rank(a) - rank(b) || bySeen(a, b));
+  for (const parent of flowsDoc.flows.filter((flow) => owned(flow))) {
+    const tasks = childrenOf(parent);
+    if (tasks.length > 1) inPlace(tasks, bySeen);
+  }
   writeJson(flowsFile, flowsDoc);
 
   // The app's category and its card pictures, when the review corrects them.
@@ -1207,7 +1253,10 @@ async function applyReviewUnlocked(options) {
     if (record && Array.isArray(corrections.app.cardScreens)) {
       const cards = corrections.app.cardScreens.filter((id) => fileOfId.has(id)).slice(0, 4);
       if (cards.length) {
-        record.cardScreens = cards;
+        // Card pictures are per platform: this review picks this platform's four, an app's iOS picks
+        // stay when its web app is reviewed (and the other way round).
+        const otherPlatforms = (record.cardScreens ?? []).filter((sid) => !sid.startsWith(`${appId}-${platform}-`));
+        record.cardScreens = [...otherPlatforms, ...cards];
         changed = true;
       }
     }
@@ -1412,7 +1461,8 @@ export function checkVersion(options) {
     const logos = existsSync(join(dataDir, 'logos')) ? readdirSync(join(dataDir, 'logos')) : [];
     if (!logos.some((entry) => entry.replace(/\.[^.]+$/, '') === appId)) problems.push(`app ${appId} has no logo — add one with the Logo button in the admin, or ask the agent`);
     const appIds = new Set(readdirSync(join(appDir, VERSIONS_DIR_NAME)).filter((v) => statSync(join(appDir, VERSIONS_DIR_NAME, v)).isDirectory()).flatMap((v) => listImages(join(appDir, VERSIONS_DIR_NAME, v)).map((rel) => idOf(`${VERSIONS_DIR_NAME}/${v}/${rel}`))));
-    const cards = Array.isArray(record.cardScreens) ? record.cardScreens : [];
+    // This platform's card pictures: an app on several has four per platform.
+    const cards = (Array.isArray(record.cardScreens) ? record.cardScreens : []).filter((sid) => sid.startsWith(`${appId}-${platform}-`));
     if (cards.some((sid) => !appIds.has(sid))) problems.push(`app ${appId} card pictures point at screens that are gone`);
     else if (cards.length < 4) problems.push(`app ${appId} has fewer than four card pictures`);
     const weak = cards.filter((sid) => ['splash', 'loading', 'permission', 'error'].includes(typeOf.get(sid)));

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import type { App } from '@/lib/inspirations/types';
+import type { App, Platform } from '@/lib/inspirations/types';
 
 /** The most logos dropped, each app once. */
 const MAX_ICONS = 12;
@@ -71,7 +71,7 @@ const BOING_MIN = 1.5;
  * With reduced motion, the icons are laid out in a still, stacked heap
  * instead.
  */
-export function LogoPile({ apps, inline = false }: { apps: App[]; inline?: boolean }) {
+export function LogoPile({ apps, inline = false, platforms }: { apps: App[]; inline?: boolean; /** The section shown: each logo opens its app there. */ platforms?: readonly Platform[] }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const shelfRef = useRef<HTMLDivElement>(null);
   const batRef = useRef<HTMLDivElement>(null);
@@ -679,7 +679,7 @@ export function LogoPile({ apps, inline = false }: { apps: App[]; inline?: boole
           ref={(el) => {
             itemRefs.current[i] = el;
           }}
-          href={INSPIRATIONS_ROUTES.app(app)}
+          href={INSPIRATIONS_ROUTES.app(app, app.platforms.find((p) => !platforms?.length || platforms.includes(p)))}
           className="ins-search-pile-item"
           aria-label={`Open ${app.name}`}
           title={app.name}

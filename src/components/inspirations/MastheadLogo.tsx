@@ -7,7 +7,7 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
-import type { App, Industry } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type App, type Industry, type Platform } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { CloseIcon, SearchIcon } from './Icons';
 import { useAsync } from './useAsync';
@@ -102,7 +102,11 @@ function LogoLightbox({ app, onClose }: { app: App; onClose: () => void }) {
   // Every app with a logo file, the page's own app included even before the
   // list arrives (so the view opens at once).
   const { data: apps } = useAsync(() => inspirationsApi.listApps(), 'logo-view-apps');
-  const listed = (apps ?? []).filter((a) => inspirationsApi.mediaUrl(a.logo));
+  // The logos of the section the page is in (iOS apps beside an iOS page, web apps and websites beside a
+  // web one), each opening on that platform — the page's app is scoped to its platform already.
+  const desktop = app.platforms.some(isDesktopPlatform);
+  const inSection = (p: Platform) => isDesktopPlatform(p) === desktop;
+  const listed = (apps ?? []).filter((a) => inspirationsApi.mediaUrl(a.logo) && a.platforms.some(inSection));
   const logos = listed.some((a) => a.id === app.id) ? listed : [app, ...listed];
   const index = Math.max(0, logos.findIndex((a) => a.id === currentId));
   const current = logos[index] ?? app;
@@ -420,7 +424,7 @@ function LogoLightbox({ app, onClose }: { app: App; onClose: () => void }) {
               <strong>{current.name}</strong>
               {size?.id === current.id && <span className="ins-logo-view-chip">{size.w} × {size.h} · PNG</span>}
               {current.slug !== app.slug && (
-                <Link href={INSPIRATIONS_ROUTES.app(current)} className="ins-logo-view-open">
+                <Link href={INSPIRATIONS_ROUTES.app(current, current.platforms.find(inSection))} className="ins-logo-view-open">
                   Open page
                 </Link>
               )}

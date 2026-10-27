@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { browsedPlatforms } from '@/lib/inspirations/filters';
 import { LogoPile } from './LogoPile';
 import { useAsync } from './useAsync';
 
@@ -31,7 +33,9 @@ export function PlayEmpty({
   children?: ReactNode;
 }) {
   const { data: apps } = useAsync(() => inspirationsApi.listApps(), 'apps:all');
-  const withLogos = (apps ?? []).filter((a) => inspirationsApi.mediaUrl(a.logo));
+  // Only the apps of the section being browsed (Webs: its web apps), each opening there.
+  const platforms = browsedPlatforms(useSearchParams());
+  const withLogos = (apps ?? []).filter((a) => inspirationsApi.mediaUrl(a.logo) && a.platforms.some((p) => platforms.includes(p)));
 
   return (
     <div className={`ins-search-empty${inline ? ' is-inline' : ''}`} role="status">
@@ -53,7 +57,7 @@ export function PlayEmpty({
         )}
       </div>
 
-      <LogoPile apps={withLogos} inline={inline} />
+      <LogoPile apps={withLogos} inline={inline} platforms={platforms} />
 
       {children}
     </div>

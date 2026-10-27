@@ -153,3 +153,9 @@ describe('stripChatter', () => {
     expect(stripChatter('nobody knows')).toBe('nobody knows');
   });
 });
+
+describe('everyday words', () => {
+  it('leaves "there" alone even next to "theme"', () => {
+    expect(closestWord('there', ['theme', 'flows'])).toBeNull();
+  });
+});

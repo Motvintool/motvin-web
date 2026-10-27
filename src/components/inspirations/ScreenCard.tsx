@@ -295,7 +295,7 @@ function ScreenCardImpl({
             <>
               <AppLogo app={app} size={48} className="ins-card-logo" />
               <div className="ins-card-meta-text">
-                <Link href={INSPIRATIONS_ROUTES.app(app)} className="ins-card-app">{appTitle}</Link>
+                <Link href={INSPIRATIONS_ROUTES.app(app, screen.platform)} className="ins-card-app">{appTitle}</Link>
                 {appDescription && <p className="ins-card-tagline">{appDescription}</p>}
               </div>
             </>

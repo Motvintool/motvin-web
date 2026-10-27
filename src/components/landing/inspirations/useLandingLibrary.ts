@@ -1,5 +1,6 @@
 'use client';
 
+import { countsOn } from '@/lib/inspirations/appCounts';
 import { useEffect, useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { appCardScreens } from '@/lib/inspirations/cover';
@@ -41,7 +42,9 @@ export function useLandingLibrary(): { apps: LandingApp[]; counts: LibraryCounts
       setApps(
         list.map((app, i) => {
           const wide = app.platforms.length > 0 && app.platforms.every((p) => isDesktopPlatform(p));
-          const cover = appCardScreens(app, details[i]?.screens ?? [])[0];
+          // An app on several platforms: its first platform's cover (iOS before the web), linked to that page.
+          const screens = details[i]?.screens ?? [];
+          const cover = appCardScreens(app, app.platforms.length > 1 ? screens.filter((s) => s.platform === app.platforms[0]) : screens)[0];
           return {
             id: app.id,
             name: app.name,
@@ -50,7 +53,8 @@ export function useLandingLibrary(): { apps: LandingApp[]; counts: LibraryCounts
             industry: INDUSTRY_LABEL[app.industry] ?? app.industry,
             cover: cover ? inspirationsApi.mediaUrl(cover.url) : null,
             wide,
-            screenCount: app.screenCount,
+            // The count of the platform its cover is from (iOS first), as the cover itself.
+            screenCount: countsOn(app, app.platforms.length > 1 ? [app.platforms[0]] : undefined).screens,
           };
         }),
       );

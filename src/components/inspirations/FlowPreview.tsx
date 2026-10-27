@@ -11,6 +11,7 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
 import { flowCategoryLabel, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type App, type Flow, type Platform, type Screen } from '@/lib/inspirations/types';
+import { savedAppId } from '@/lib/inspirations/savedApps';
 import type { StoreAction } from '@/lib/inspirations/storeAction';
 import { AppLogo } from './AppLogo';
 import { AppMenu } from './AppMenu';
@@ -35,19 +36,24 @@ export const STEP_PARAM = 'step';
 export const PLAY_PARAM = 'play';
 
 /**
- * `?flow=app:<slug>`: not a recorded flow but the whole app as a prototype —
- * every screen of its current capture, in the app's own order, played in
- * this same player (the app page's "Prototype" card).
+ * `?flow=app:<slug>` (or `app:<slug>@<platform>` for an app on several platforms): not a recorded
+ * flow but the whole app as a prototype — every screen of its newest capture on that platform, in
+ * the app's own order, played in this same player (the app page's "Prototype" card).
  */
 const APP_FLOW_PREFIX = 'app:';
-export const appPrototypeFlowId = (slug: string) => `${APP_FLOW_PREFIX}${slug}`;
+export const appPrototypeFlowId = (slug: string, platform?: string) => `${APP_FLOW_PREFIX}${slug}${platform ? `@${platform}` : ''}`;
 
 async function loadAppPrototype(flowId: string): Promise<{ flow: Flow; screens: Screen[]; app: App | null } | null> {
-  const res = await inspirationsApi.getApp(flowId.slice(APP_FLOW_PREFIX.length));
+  const [slug, platform] = flowId.slice(APP_FLOW_PREFIX.length).split('@');
+  const res = await inspirationsApi.getApp(slug);
   if (!res) return null;
-  const { app, screens: all } = res;
-  // One capture's screens, not every dated version's copies of them.
-  const current = app.currentVersion ? all.filter((s) => s.version === app.currentVersion) : all;
+  const { app } = res;
+  // One platform's screens: Claude's iOS prototype never plays its web pages.
+  const all = platform ? res.screens.filter((s) => s.platform === platform) : res.screens;
+  // One capture's screens, not every dated version's copies of them: that platform's newest.
+  const ownVersions = (app.versions ?? []).filter((v) => all.some((s) => s.version === v.id));
+  const newest = platform ? ownVersions.reduce<(typeof ownVersions)[number] | null>((best, v) => (!best || v.capturedAt > best.capturedAt ? v : best), null)?.id ?? null : app.currentVersion;
+  const current = newest ? all.filter((s) => s.version === newest) : all;
   const screens = current.length ? current : all;
   const flow: Flow = {
     id: flowId,
@@ -599,7 +605,9 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   // row, More holding "Individual screen" (back to the player).
   const phoneMulti = phone && multiScreen && screens.length > 1;
   // The whole-app prototype isn't a flow of its own: its Save saves the app.
-  const saveTarget = isAppPrototype && app ? { type: 'app' as const, id: app.id } : { type: 'flow' as const, id: flow.id };
+  // The prototype of one platform ("app:claude@webapp") saves that platform's app.
+  const prototypePlatform = isAppPrototype ? (flow.id.split('@')[1] as Platform | undefined) : undefined;
+  const saveTarget = isAppPrototype && app ? { type: 'app' as const, id: savedAppId(app.id, prototypePlatform, Boolean(prototypePlatform)) } : { type: 'flow' as const, id: flow.id };
   const flowSaved = collectionsContaining(saveTarget.type, saveTarget.id).length > 0;
   const menuLeading = [
     {
@@ -654,7 +662,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
             <div className="ins-screen-preview-head">
               <div className="ins-screen-preview-head-app">
                 {app && (
-                  <Link href={INSPIRATIONS_ROUTES.app(app)} aria-label={app.name}>
+                  <Link href={INSPIRATIONS_ROUTES.app(app, active?.platform)} aria-label={app.name}>
                     <AppLogo app={app} size={40} className="ins-screen-preview-head-logo" />
                   </Link>
                 )}

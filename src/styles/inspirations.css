@@ -11493,6 +11493,13 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
     right: 12px;
     bottom: 76px;
   }
+
+  /* Beside the admin assistant the guide's button sits one up, so its bubble goes above it. */
+  .ins-guide-nudge.is-beside-admin,
+  body:has(aside.ins-dock:not(.ins-dock-user)) .ins-guide-nudge.is-beside-admin,
+  body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-admin {
+    bottom: 144px;
+  }
 }
 
 /* The visitor: a black bubble on the right, its top-right corner squared. */
@@ -19423,3 +19430,67 @@ div.ins-version { cursor: default; flex-wrap: wrap; }
 .ins-admin-drawer .ins-batch-rowbtn { height: 30px; padding: 0 12px; gap: 6px; border-radius: 99px; font-size: 13px; font-weight: 500; color: var(--ins-text); text-decoration: none; }
 .ins-admin-drawer .ins-batch-rowbtn:hover:not(:disabled) { background: #f1f2f4; }
 .ins-admin-drawer .ins-batch-rowbtn.is-stop:hover:not(:disabled) { background: #fdecec; color: #c62828; }
+
+/* App page → Platform: an app on several platforms lists them as links ("iOS, Web Apps"), the open one in full ink. */
+.ins-fact-platform { color: var(--ins-muted); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; transition: color 0.15s; }
+.ins-fact-platform:hover { color: var(--ins-text); text-decoration-color: currentColor; }
+.ins-fact-platform.is-current { color: var(--ins-text); text-decoration: none; }
+
+/* Flow rows of web screens: a browser page has square corners, so its frame is a modest 12px and clips
+   the picture to that curve (no inner rounding of its own); the row around it is 12px + its 16px padding
+   = 28px on every corner, top and bottom alike. Phone rows keep their deep, phone-shaped corners. */
+.ins-flows-row-shot.is-web { border-radius: 12px; }
+.ins-flows-row-shot.is-web .ins-shot-img { border-radius: 0; }
+.ins-flows-row:has(.ins-flows-row-shot.is-web) { border-radius: 28px; }
+
+/* A saved web app's × (in a Webs collection): the select circle's spot over the web card, shown on hover. */
+.ins-web-card-shot > .ins-card-remove-btn { top: 32px; right: auto; left: 32px; }
+.ins-web-card:hover .ins-card-remove-btn { opacity: 1; transform: scale(1); }
+
+/* Admin › Apps: one platform at a time (iOS · Web Apps · Websites). */
+.ins-app-platform-tabs {
+  align-self: flex-start;
+  margin-bottom: 16px;
+}
+
+.ins-admin-also {
+  color: var(--ins-muted, #8a8a8a);
+}
+
+/* Library admin's ×, like the confirm box's: a white circle sitting on the popup's top-right corner,
+   a quarter-spin in, springy on hover, sinking when pressed. Phones keep the bottom sheet's own close. */
+@media (min-width: 641px) {
+  /* The confirm box's 28px corner too, so the × sits on the same curve. */
+  .ins-admin-drawer { overflow: visible; border-radius: 28px !important; }
+  .ins-admin-drawer .ins-admin-drawer-body { border-radius: 28px; }
+  .ins-admin-drawer .ins-admin-drawer-close {
+    position: absolute;
+    /* Over the earlier header-aligned placements, which use !important. */
+    top: -5px !important;
+    right: -6px !important;
+    z-index: 8;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: #fff;
+    color: #111;
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.06);
+    animation: insConfirmCloseIn 260ms cubic-bezier(0.34, 1.56, 0.64, 1) 60ms backwards;
+    transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 160ms;
+  }
+  .ins-admin-drawer .ins-admin-drawer-close:hover {
+    border: 0;
+    background: #fff;
+    transform: scale(1.06);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.13), 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+  .ins-admin-drawer .ins-admin-drawer-close:active { scale: 1; transform: scale(0.94); transition-duration: 80ms; }
+  .ins-admin-drawer .ins-admin-drawer-close svg { width: 16px; height: 16px; stroke-width: 2.8; }
+}
+@media (min-width: 641px) and (prefers-reduced-motion: reduce) {
+  .ins-admin-drawer .ins-admin-drawer-close { animation: none; transition: none; }
+}

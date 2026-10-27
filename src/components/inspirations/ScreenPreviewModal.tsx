@@ -137,10 +137,12 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   // literal is a new array each time, which previously fought a user's
   // manual filmstrip scroll by re-triggering scrollIntoView on any unrelated
   // re-render (e.g. typing in the save-to-collection input).
-  const screens = useMemo(
-    () => (screen && siblingScreens.length === 0 ? [screen] : siblingScreens),
-    [screen, siblingScreens],
-  );
+  // Only the opened screen's platform: Claude's web screen steps through Claude's web screens, never
+  // on into its iOS ones (the app's list holds every platform it is on).
+  const screens = useMemo(() => {
+    const onPlatform = screen ? siblingScreens.filter((s) => s.platform === screen.platform) : siblingScreens;
+    return screen && onPlatform.length === 0 ? [screen] : onPlatform;
+  }, [screen, siblingScreens]);
   const activeIndex = Math.max(0, screens.findIndex((s) => s.id === activeId));
   // The patterns of the screen on show, not only the one the preview opened
   // on: stepping to the next screen reads its own (cached once read).
@@ -531,7 +533,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
             <Link
               className="ins-popover-item"
               role="menuitem"
-              href={`${INSPIRATIONS_ROUTES.app(app)}?compare=${encodeURIComponent(view.screenType)}`}
+              href={INSPIRATIONS_ROUTES.app(app, view.platform, { compare: view.screenType })}
               onClick={() => setMoreOpen(false)}
             >
               <MenuIcon src={ICON_COMPARE} /> <span>Compare {screenTypeLabel(view.screenType).toLowerCase()}</span>
@@ -561,7 +563,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
             <div className="ins-screen-preview-head">
               <div className="ins-screen-preview-head-app">
                 {app && (
-                  <Link href={INSPIRATIONS_ROUTES.app(app)} aria-label={app.name}>
+                  <Link href={INSPIRATIONS_ROUTES.app(app, view.platform)} aria-label={app.name}>
                     <AppLogo app={app} size={40} className="ins-screen-preview-head-logo" />
                   </Link>
                 )}
@@ -757,7 +759,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                     <div className="ins-screen-preview-details-row">
                       <dt className="ins-screen-preview-details-term">App</dt>
                       <dd className="ins-screen-preview-details-value">
-                        <Link href={INSPIRATIONS_ROUTES.app(app)} className="ins-details-pill ins-details-pill--app">
+                        <Link href={INSPIRATIONS_ROUTES.app(app, view.platform)} className="ins-details-pill ins-details-pill--app">
                           <AppLogo app={app} size={20} />
                           {app.name}
                         </Link>

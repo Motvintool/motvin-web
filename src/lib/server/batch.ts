@@ -63,6 +63,8 @@ export type BatchItem = {
   /** The app the upload adds to — made by the browser for a new one — or null to have the screens name it. */
   appId: string | null;
   detectIndustry: boolean;
+  /** "Replace it" for an app on other platforms too: this platform's screens go before the upload, the rest stay. */
+  replacePlatform?: boolean;
   stage: BatchStage;
   note: string | null;
   jobId: string | null;
@@ -209,7 +211,7 @@ export function listBatches(): Batch[] {
   return runner.batches;
 }
 
-export function createBatch(input: { createdBy: string; settings: BatchSettings; items: Array<Pick<BatchItem, 'title' | 'video' | 'ownsVideo' | 'appId' | 'detectIndustry'> & { skip?: string }> }): Batch {
+export function createBatch(input: { createdBy: string; settings: BatchSettings; items: Array<Pick<BatchItem, 'title' | 'video' | 'ownsVideo' | 'appId' | 'detectIndustry' | 'replacePlatform'> & { skip?: string }> }): Batch {
   load();
   const now = new Date().toISOString();
   const batch: Batch = {
@@ -226,6 +228,7 @@ export function createBatch(input: { createdBy: string; settings: BatchSettings;
       ownsVideo: entry.ownsVideo,
       appId: entry.appId,
       detectIndustry: entry.detectIndustry,
+      replacePlatform: entry.replacePlatform === true,
       stage: entry.skip ? 'skipped' : 'queued',
       note: entry.skip ?? null,
       jobId: null,
@@ -292,8 +295,8 @@ export function controlBatch(id: string, action: 'pause' | 'resume' | 'retry' | 
       // An app this batch made goes whole; for an app already there, only the version it was adding.
       const version = entry.version ?? batch.settings.version;
       try {
-        if (entry.detectIndustry) removeUpload(entry.appId, null);
-        else if (version) removeUpload(entry.appId, version);
+        if (entry.detectIndustry) removeUpload(entry.appId, null, batch.settings.platform);
+        else if (version) removeUpload(entry.appId, version, batch.settings.platform);
         entry.note = 'Stopped by you — its screens were taken out again';
         entry.result = null;
         // Gone from the library: a retry uploads it again from the start.
@@ -320,9 +323,10 @@ export function controlBatch(id: string, action: 'pause' | 'resume' | 'retry' | 
 }
 
 /** Takes an upload back out of the library: one version of an app, or (version null) the whole app. */
-function removeUpload(appId: string, version: string | null) {
+/** Takes an upload back out: one platform's part only, so an app's other platforms keep their screens. */
+function removeUpload(appId: string, version: string | null, platform: string) {
   const script = join(process.cwd(), 'tools', 'ios-crawler', 'crawl.js');
-  execFileSync(process.execPath, [script, 'remove-upload', '--app-id', appId, ...(version ? ['--version', version] : ['--whole-app'])], { cwd: dirname(script), encoding: 'utf-8', timeout: 180_000, env: { ...process.env, NO_COLOR: '1' } });
+  execFileSync(process.execPath, [script, 'remove-upload', '--app-id', appId, '--platform', platform, ...(version ? ['--version', version] : ['--whole-app'])], { cwd: dirname(script), encoding: 'utf-8', timeout: 180_000, env: { ...process.env, NO_COLOR: '1' } });
 }
 
 /** A command-line tool on this machine: from its env setting, next to this server's node (npm installs), or the usual places. */
@@ -419,11 +423,21 @@ function startNextUpload(batch: Batch): boolean {
     return true;
   }
   const { settings } = batch;
+  // Replacing an app that is on other platforms too: all of this platform's screens go first, once.
+  if (item.appId && item.replacePlatform) {
+    try {
+      removeUpload(item.appId, null, settings.platform);
+      logLine(`${item.title}: its ${settings.platform} screens taken out to be replaced; its other platforms are kept`);
+    } catch (error) {
+      logLine(`${item.title}: could not take out its ${settings.platform} screens — ${(error as Error).message.split('\n')[0]}`);
+    }
+    item.replacePlatform = false;
+  }
   // An upload adds to its day's folder: a version of that day already there (an earlier upload,
   // or this one's own failed try) is taken out first, so the new one replaces it, never mixes in.
   if (item.appId && !item.detectIndustry && settings.version && existsSync(join(inspirationsDataDir(), 'screens', settings.platform, item.appId, 'versions', settings.version))) {
     try {
-      removeUpload(item.appId, settings.version);
+      removeUpload(item.appId, settings.version, settings.platform);
       logLine(`${item.title}: replaced its version of ${settings.version}`);
     } catch (error) {
       item.stage = 'needs-you';

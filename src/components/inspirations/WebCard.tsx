@@ -7,6 +7,7 @@ import { AppLogo } from './AppLogo';
 import { CardShots } from './CardShots';
 import { Screenshot } from './Screenshot';
 import { useSiblingCycle } from './useSiblingCycle';
+import { CloseIcon } from './Icons';
 
 /** Desktop-web app card matching Figma's Web Screen Preview component. */
 export function WebCard({
@@ -16,6 +17,7 @@ export function WebCard({
   selected = false,
   selectable = false,
   onToggleSelect,
+  onRemove,
 }: {
   app: App;
   preview?: Screen | null;
@@ -23,8 +25,11 @@ export function WebCard({
   selected?: boolean;
   selectable?: boolean;
   onToggleSelect?: () => void;
+  /** In a collection: the × that takes the app out of it, as on an app card. */
+  onRemove?: () => void;
 }) {
-  const href = INSPIRATIONS_ROUTES.app(app);
+  // On the platform the card shows (its preview's): an app on iOS and the web opens as the web one here.
+  const href = INSPIRATIONS_ROUTES.app(app, (preview ?? presetScreens?.[0])?.platform);
   const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step, cardRef, swipe, trackRef, swipeProps } = useSiblingCycle(
     preview ?? presetScreens?.[0] ?? null,
     { preset: presetScreens, preferredIds: app.cardScreens },
@@ -46,6 +51,20 @@ export function WebCard({
             }}
           >
             {selected && <span className="ins-card-select-check" aria-hidden />}
+          </button>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            className="ins-card-remove-btn"
+            aria-label={`Remove ${app.name}`}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onRemove();
+            }}
+          >
+            <CloseIcon size={14} />
           </button>
         )}
         <div className="ins-web-card-inset" {...swipeProps}>

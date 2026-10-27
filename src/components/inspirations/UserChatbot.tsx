@@ -14,8 +14,21 @@ import { nextNudge, nudgeMessages, readNudgeState, writeNudgeState } from '@/lib
 import { groupChats, newChatId, previewOf, readHistory, relativeTime, removeChat, upsertChat, writeHistory, type SavedChat, type SavedLine } from '@/lib/inspirations/guide-chatbot/guideHistory';
 import { recordMiss } from '@/lib/inspirations/guide-chatbot/guideTelemetry';
 import { QUICK_PAGES, resolveNavigation, type GuideAction, type NavCard, type NavTarget, type ReplyKind } from '@/lib/inspirations/guide-chatbot/navAssistant';
-import { libraryStore } from '@/lib/inspirations/store';
 import type { App } from '@/lib/inspirations/types';
+import { countsOn } from '@/lib/inspirations/appCounts';
+import { browsedPlatforms } from '@/lib/inspirations/filters';
+
+// A short reply that starts with yes or no ("yes copy it", "yes, bro", "nope not now"), not a new question.
+const TYPED_YES = /^(?:y|yes|yeah|yep|yup|ya|yea|sure|ok|okay|k|please|do it|go ahead|go for it|copy it|confirm|of course|absolutely|definitely)\b(?![^?]*\?)(?:[\s,!.]+[\p{L}'’]+){0,4}[\s!.]*$/iu;
+const TYPED_NO = /^(?:n|no|nope|nah|not now|cancel|no thanks|don'?t|stop|never mind|nevermind|skip)\b(?![^?]*\?)(?:[\s,!.]+[\p{L}'’]+){0,4}[\s!.]*$/iu;
+
+/** The apps of the section being browsed (Webs or iOS), biggest there first — what examples and nudges name. */
+function sectionApps(apps: App[]): App[] {
+  const section = browsedPlatforms(new URLSearchParams(typeof window !== 'undefined' ? window.location.search : ''));
+  return apps
+    .filter((app) => app.platforms.some((platform) => section.includes(platform)))
+    .sort((a, b) => countsOn(b, section).screens - countsOn(a, section).screens);
+}
 import {
   ArrowRightIcon,
   CheckIcon,
@@ -34,7 +47,6 @@ import {
 type Line = { id: number; role: 'user' | 'assistant'; text: string; targets?: NavTarget[]; card?: NavCard; opened?: NavTarget; pending?: boolean; streaming?: boolean; full?: string; shown?: number; slow?: boolean; error?: boolean; kind?: ReplyKind; action?: GuideAction };
 
 /** Where the guide files what a visitor asks to keep. */
-const GUIDE_COLLECTION = 'Saved from the guide';
 
 /** The query parameter that opens the guide with a question (see INSPIRATIONS_ROUTES.askBuddy). */
 const BUDDY_PARAM = 'buddy';
@@ -222,7 +234,7 @@ export function UserChatbot() {
   // has taken the visitor somewhere, so they can see where they landed.
   const [dimmed, setDimmed] = useState(true);
   const [nudge, setNudge] = useState<{ text: string; key: number } | null>(null);
-  const topAppName = useRef<string | null>(null);
+  const allApps = useRef<App[]>([]);
   const panelRef = useRef<HTMLElement>(null);
   // On a phone the guide is a sheet, as the modals are: its top drags up to fill the screen, down to settle or close.
   const { ref: sheetRef, className: sheetClass, dragProps: sheetDrag, handle: sheetHandle } = useSheet(() => setOpen(false));
@@ -238,6 +250,10 @@ export function UserChatbot() {
   // Past conversations, kept in this browser, and which screen the panel shows.
   const [history, setHistory] = useState<SavedChat[]>([]);
   const [view, setView] = useState<'chat' | 'history'>('chat');
+  const viewRef = useRef(view);
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
   const [now, setNow] = useState(0);
   // The welcome screen: a time-of-day greeting and example questions drawn from the real library.
   const [hour, setHour] = useState(12);
@@ -265,6 +281,7 @@ export function UserChatbot() {
   const wasOpen = useRef(false);
   const nextId = useRef(1);
   const lastApp = useRef<App | null>(null);
+  const lastSection = useRef<string | null>(null);
   // What the last answer listed, so "the second one" has something to point at.
   const lastResults = useRef<NavTarget[] | null>(null);
   const alive = useRef(true);
@@ -346,7 +363,10 @@ export function UserChatbot() {
     if (!open) return;
     inputRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      // Escape steps back one level: out of chat history first, and never while typing in another script (IME).
+      if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return;
+      if (viewRef.current === 'history') setView('chat');
+      else setOpen(false);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -368,7 +388,7 @@ export function UserChatbot() {
     void inspirationsApi
       .listApps()
       .then((apps) => {
-        topAppName.current = [...apps].sort((a, b) => b.screenCount - a.screenCount)[0]?.name ?? null;
+        allApps.current = apps;
       })
       .catch(() => undefined);
   }, []);
@@ -388,7 +408,7 @@ export function UserChatbot() {
     const callOut = () => {
       if (cancelled) return;
       const state = readNudgeState();
-      const text = nextNudge(state, nudgeMessages(topAppName.current));
+      const text = nextNudge(state, nudgeMessages(sectionApps(allApps.current)[0]?.name ?? null));
       if (!text) return;
       writeNudgeState({ ...state, shown: state.shown + 1 });
       setNudge({ text, key: state.shown });
@@ -417,7 +437,7 @@ export function UserChatbot() {
     void inspirationsApi
       .listApps()
       .then((apps) => {
-        const top = [...apps].sort((a, b) => b.screenCount - a.screenCount).slice(0, 2);
+        const top = sectionApps(apps).slice(0, 2);
         if (top.length === 0) return;
         const [first, second] = top;
         setExamples([`Open ${first.name}`, `Which app has the most flows?`, ...(second ? [`Compare ${first.name} and ${second.name}`] : [`How many screens does ${first.name} have?`])]);
@@ -426,17 +446,54 @@ export function UserChatbot() {
     setOpen(true);
   };
 
-  const go = (target: NavTarget) => {
+  const go = (target: NavTarget, said?: string) => {
     if (target.href === '__back__') router.back();
     // A screen or flow the assistant opens on this page lays over it, without scrolling the page.
     else router.push(target.href, isOverlayMove(target.href, pathname, new URLSearchParams(window.location.search)) ? { scroll: false } : undefined);
     setDimmed(false);
-    if (window.matchMedia('(max-width: 900px)').matches) setOpen(false);
+    if (window.matchMedia('(max-width: 900px)').matches) {
+      // On a phone the sheet would hide the page, so it closes — the answer stays readable in a bubble by the
+      // button for a few seconds, and a tap opens the chat again where it was.
+      setOpen(false);
+      if (said) {
+        setNudge({ text: said, key: -1 });
+        setTimeout(() => setNudge((shown) => (shown?.key === -1 && shown.text === said ? null : shown)), 6000);
+      }
+    }
+  };
+
+  const say = (text: string, extra: Partial<Line> = {}) => setLines((all) => [...all, { id: nextId.current++, role: 'assistant', text, kind: 'answer', ...extra }]);
+
+  /** The visitor said yes to copying a link. */
+  const confirmAction = async (line: Line) => {
+    const action = line.action;
+    if (!action) return;
+    patch(line.id, { action: undefined });
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${action.href}`);
+      say(`Copied the link to ${action.label}.`);
+    } catch {
+      say(`I couldn’t reach the clipboard. Here’s the link to copy: ${window.location.origin}${action.href}`);
+    }
+  };
+
+  const declineAction = (line: Line) => {
+    patch(line.id, { action: undefined });
+    say('No problem.');
   };
 
   const send = async (raw: string) => {
     const text = raw.trim();
     if (!text || busy) return;
+    // A typed "yes" or "no" answers the copy Buddy just asked about, like its buttons.
+    const asking = [...lines].reverse().find((line) => line.role === 'assistant' && !line.pending);
+    if (asking?.action && (TYPED_YES.test(text) || TYPED_NO.test(text))) {
+      setQuestion('');
+      setLines((all) => [...all, { id: nextId.current++, role: 'user', text }]);
+      if (TYPED_YES.test(text)) await confirmAction(asking);
+      else declineAction(asking);
+      return;
+    }
     setQuestion('');
     setBusy(true);
     if (!chatId.current) {
@@ -455,6 +512,13 @@ export function UserChatbot() {
     // A reply that is quick needs only the dots; one that drags says what it is doing.
     const slowTimer = setTimeout(() => patch(replyId, { slow: true }), SLOW_AFTER_MS);
     try {
+      // The app talked about belongs to its section: after moving from iOS to Webs, "how many screens?" is not about the iOS app.
+      const section = browsedPlatforms(new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')).join(',');
+      if (section !== lastSection.current) {
+        lastSection.current = section;
+        lastApp.current = null;
+        lastResults.current = null;
+      }
       const reply = await resolveNavigation(text, { app: lastApp.current, results: lastResults.current, page: { pathname, search: typeof window !== 'undefined' ? window.location.search : '' } });
       if (reply.app) {
         lastApp.current = reply.app;
@@ -473,7 +537,7 @@ export function UserChatbot() {
       // The last words finish fading in before the answer settles.
       if (!calm) await sleep(320);
       patch(replyId, { text: reply.text, pending: false, streaming: false, card: reply.card, targets: reply.targets, opened: reply.go, error: reply.error, kind: reply.kind, action: reply.action });
-      if (reply.go && alive.current) go(reply.go);
+      if (reply.go && alive.current) go(reply.go, reply.text);
     } catch {
       // Never left on the dots: say it went wrong, so the question can be asked again.
       patch(replyId, { text: 'Something went wrong on my side. Try asking that again.', pending: false, streaming: false, slow: false, error: true, kind: 'error' });
@@ -619,31 +683,6 @@ export function UserChatbot() {
     setQuestion(last.text);
   };
 
-  const say = (text: string, extra: Partial<Line> = {}) => setLines((all) => [...all, { id: nextId.current++, role: 'assistant', text, kind: 'answer', ...extra }]);
-
-  /** The visitor said yes to a save or a copy. Each is small and reversible. */
-  const confirmAction = async (line: Line) => {
-    const action = line.action;
-    if (!action) return;
-    patch(line.id, { action: undefined });
-    if (action.kind === 'copy') {
-      try {
-        await navigator.clipboard.writeText(`${window.location.origin}${action.href}`);
-        say(`Copied the link to ${action.label}.`);
-      } catch {
-        say(`I couldn’t reach the clipboard. Here’s the link to copy: ${window.location.origin}${action.href}`);
-      }
-      return;
-    }
-    const collection = libraryStore.getOrCreateCollectionByName(GUIDE_COLLECTION);
-    const added = libraryStore.addToCollection(collection.id, action.item);
-    say(added ? `Saved ${action.label} to “${collection.name}”.` : `${action.label} is already in “${collection.name}”.`, { targets: [{ label: 'Open collections', hint: 'Page', href: QUICK_PAGES[5].href }] });
-  };
-
-  const declineAction = (line: Line) => {
-    patch(line.id, { action: undefined });
-    say('No problem.');
-  };
 
   // The suggestion row above the composer follows the conversation: the places
   // to go at first, then whatever the latest answer offers next. While a reply
@@ -653,7 +692,7 @@ export function UserChatbot() {
   const pendingAction = latest?.action;
   const suggestions = pendingAction
     ? [
-        { label: pendingAction.kind === 'copy' ? 'Yes, copy the link' : 'Yes, save it', hint: 'Confirm', href: '', ask: '__confirm__' },
+        { label: 'Yes, copy the link', hint: 'Confirm', href: '', ask: '__confirm__' },
         { label: 'Not now', hint: 'Dismiss', href: '', ask: '__decline__' },
       ]
     : latest?.targets && latest.targets.length > 0
@@ -686,7 +725,7 @@ export function UserChatbot() {
   // While the guide is a modal, Tab stays inside it instead of wandering into the dimmed page.
   const keepFocusInside = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Tab' || !dimmed) return;
-    const items = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)')].filter((item) => item.offsetParent !== null);
+    const items = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), a[href]')].filter((item) => item.offsetParent !== null);
     if (items.length === 0) return;
     const first = items[0];
     const last = items[items.length - 1];
@@ -872,7 +911,7 @@ export function UserChatbot() {
             )}
           </div>
         ) : (
-          <div ref={bodyRef} className="ins-guide-thread" role="log" aria-live="polite" onScroll={onThreadScroll} onWheel={leaveBottom} onTouchMove={leaveBottom}>
+          <div ref={bodyRef} className="ins-guide-thread" role="log" aria-live="polite" aria-busy={busy} onScroll={onThreadScroll} onWheel={leaveBottom} onTouchMove={leaveBottom}>
             {lines.map((line) => (
               <div key={line.id} className="ins-chat">
                 <div className={`ins-chat-msg ins-chat-msg--${line.role} ${line.pending ? 'is-typing' : ''} ${line.error ? 'is-error' : ''} ${line.id === freshId ? 'is-fresh' : ''}`}>

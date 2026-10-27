@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { screenItemId } from '@/lib/inspirations/savedItems';
 import { elementLabel, INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
-import { isDesktopPlatform, type App, type ElementKind, type Flow, type Pattern, type Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, PLATFORMS, type App, type ElementKind, type Flow, type Pattern, type Platform, type Screen } from '@/lib/inspirations/types';
 import { appPlatform, storeAction } from '@/lib/inspirations/storeAction';
+import { savedAppId } from '@/lib/inspirations/savedApps';
 import { AppLogo } from '../AppLogo';
 import { MastheadLogo } from '../MastheadLogo';
 import { appPrototypeFlowId, FLOW_PARAM, PLAY_PARAM } from '../FlowPreview';
@@ -396,17 +398,63 @@ function FlowTreePill({
   );
 }
 
-/** /inspirations/app/[slug] — one product, all of its stored screens and flows. */
-export function AppDetailView({
+/** A link to the same app on one of its platforms, for the masthead's Platform line. */
+type PlatformLink = { platform: Platform; href: string; current: boolean };
+
+/**
+ * /inspirations/app/[slug] — one product, one platform at a time. An app on more than one
+ * platform (Claude on iOS and as a web app) shows the one in `?platform=` — iOS first by
+ * default — with only that platform's screens, flows and versions, and its Platform line
+ * links to the others.
+ */
+export function AppDetailView({ app, screens, flows, patterns }: { app: App; screens: Screen[]; flows: Flow[]; patterns: Pattern[] }) {
+  const params = useSearchParams();
+  const pathname = usePathname();
+  const present = PLATFORMS.filter((p) => screens.some((s) => s.platform === p));
+  if (present.length < 2) return <AppDetailBody app={app} screens={screens} flows={flows} patterns={patterns} />;
+
+  const asked = params.get('platform') as Platform | null;
+  const platform = asked && present.includes(asked) ? asked : present[0];
+  const onPlatform = screens.filter((s) => s.platform === platform);
+  const onPlatformIds = new Set(onPlatform.map((s) => s.id));
+  const platformFlows = flows.filter((f) => f.platform === platform);
+  // This platform's versions only, the newest of them "Latest".
+  const versions = (app.versions ?? []).filter((v) => onPlatform.some((s) => s.version === v.id));
+  const newest = versions.reduce<typeof versions[number] | null>((best, v) => (!best || v.capturedAt > best.capturedAt ? v : best), null);
+  const scoped: App = {
+    ...app,
+    platforms: [platform],
+    versions: versions.map((v) => ({ ...v, isLatest: v.id === newest?.id })),
+    currentVersion: newest?.id ?? null,
+    screenCount: onPlatform.length,
+    flowCount: platformFlows.length,
+    cardScreens: (app.cardScreens ?? []).filter((id) => onPlatformIds.has(id)),
+  };
+  // Switching keeps the tab, nothing else: a screen or flow open on one platform is not on the other.
+  const links: PlatformLink[] = present.map((p) => {
+    const sp = new URLSearchParams();
+    const tab = params.get('tab');
+    if (tab) sp.set('tab', tab);
+    if (p !== present[0]) sp.set('platform', p);
+    const query = sp.toString();
+    return { platform: p, current: p === platform, href: query ? `${pathname}?${query}` : pathname };
+  });
+  return <AppDetailBody key={platform} app={scoped} screens={onPlatform} flows={platformFlows} patterns={patterns} platformLinks={links} />;
+}
+
+function AppDetailBody({
   app,
   screens,
   flows,
   patterns,
+  platformLinks,
 }: {
   app: App;
   screens: Screen[];
   flows: Flow[];
   patterns: Pattern[];
+  /** The app's platforms as links, when it has more than one; the current one first in weight. */
+  platformLinks?: PlatformLink[];
 }) {
   const params = useSearchParams();
   const router = useRouter();
@@ -430,7 +478,9 @@ export function AppDetailView({
   const textPlaceholder = useMediaQuery(SHEET_QUERY) ? 'Search text…' : 'Search text in screenshot...';
   const [debouncedTextQuery, setDebouncedTextQuery] = useState('');
   const textSearchRef = useRef<HTMLDivElement>(null);
-  const saved = collectionsContaining('app', app.id).length > 0;
+  // Saved by platform when the app is on several (this page shows one of them).
+  const savedId = savedAppId(app.id, app.platforms[0], Boolean(platformLinks));
+  const saved = collectionsContaining('app', savedId).length > 0;
 
   // Same debounced hand-off as GlobalSearch's own suggestions — the OCR pass
   // behind this is real work per screen, not worth re-running on every
@@ -473,7 +523,7 @@ export function AppDetailView({
   const handleSaveClick = () => {
     if (saved) {
       // Out of every collection it's in; the collections themselves stay.
-      removeWithUndo(collectionsContaining('app', app.id).map((c) => ({ collectionId: c.id, match: sameItem('app', app.id) })));
+      removeWithUndo(collectionsContaining('app', savedId).map((c) => ({ collectionId: c.id, match: sameItem('app', savedId) })));
     } else {
       setFloatOpen(true);
     }
@@ -481,7 +531,15 @@ export function AppDetailView({
 
   const rawTab = params.get('tab');
   const tab: AppTab = TABS.some((t) => t.id === rawTab) ? (rawTab as AppTab) : 'screens';
-  const setTab = (t: AppTab) => router.replace(t === 'screens' ? pathname : `${pathname}?tab=${t}`, { scroll: false });
+  // The tab is in the address; so is the platform on an app that has several, and switching tabs keeps it.
+  const setTab = (t: AppTab) => {
+    const sp = new URLSearchParams();
+    const platform = params.get('platform');
+    if (platform) sp.set('platform', platform);
+    if (t !== 'screens') sp.set('tab', t);
+    const query = sp.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
 
   // "View in App Store" for a phone app, "Visit website" for a Web one.
   const store = storeAction(appPlatform(app), app.website);
@@ -518,7 +576,8 @@ export function AppDetailView({
     const sp = new URLSearchParams(params.toString());
     sp.delete('screen');
     sp.delete('step');
-    sp.set(FLOW_PARAM, appPrototypeFlowId(app.slug));
+    // On an app with several platforms, the prototype of the one on show (its page is scoped to it).
+    sp.set(FLOW_PARAM, appPrototypeFlowId(app.slug, platformLinks ? app.platforms[0] : undefined));
     // Opened playing: a prototype, not a still.
     sp.set(PLAY_PARAM, '1');
     return `${pathname}?${sp.toString()}`;
@@ -812,7 +871,20 @@ export function AppDetailView({
           <div className="ins-fact">
             <dt>Platform</dt>
             <dd>
-              {app.platforms.map((p) => PLATFORM_LABEL[p] ?? p).join(', ')}{' '}
+              {platformLinks
+                ? platformLinks.map((link, i) => (
+                    <span key={link.platform}>
+                      {i > 0 && ', '}
+                      {link.current ? (
+                        <span className="ins-fact-platform is-current" aria-current="page">{PLATFORM_LABEL[link.platform] ?? link.platform}</span>
+                      ) : (
+                        <Link href={link.href} className="ins-fact-platform" scroll={false}>
+                          {PLATFORM_LABEL[link.platform] ?? link.platform}
+                        </Link>
+                      )}
+                    </span>
+                  ))
+                : app.platforms.map((p) => PLATFORM_LABEL[p] ?? p).join(', ')}{' '}
               <ReviewBadge appId={app.id} platform={appPlatform(app)} version={version || app.currentVersion} />
             </dd>
           </div>
@@ -880,6 +952,7 @@ export function AppDetailView({
       {floatOpen && (
         <FloatCollectionBar
           apps={[app]}
+          items={[{ type: 'app', id: savedId }]}
           onClose={() => setFloatOpen(false)}
           onSaved={() => setFloatOpen(false)}
         />
