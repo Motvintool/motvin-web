@@ -147,6 +147,9 @@ export function applyRulesToGraph(graph, appId, dataDir) {
 
 // ─── Package ────────────────────────────────────────────────────────────────
 
+/** The longest "<name> — <tagline>" that fits the app page title in two lines. */
+const TITLE_MAX = 55;
+
 export function reviewDir(dataDir, appId, platform, version) {
   return join(resolveDataDir(dataDir), '..', 'reviews', `${appId}-${platform}-${version}`);
 }
@@ -1457,6 +1460,10 @@ export function checkVersion(options) {
     if (!INDUSTRIES.includes(record.industry) || record.industry === 'other') problems.push(`app ${appId} has no proper category (industry "${record.industry}")`);
     if (!String(record.name ?? '').trim()) problems.push(`app ${appId} has no name`);
     if (!String(record.tagline ?? '').trim()) problems.push(`app ${appId} has no tagline`);
+    // The app page title, "<name> — <tagline>", must fit in two lines: past 55 characters it takes three.
+    else if (`${record.name ?? ''} — ${String(record.tagline).trim()}`.length > TITLE_MAX) {
+      problems.push(`app ${appId} tagline is too long for two lines: "${record.name} — ${String(record.tagline).trim()}" is ${`${record.name ?? ''} — ${String(record.tagline).trim()}`.length} characters, keep name + " — " + tagline within ${TITLE_MAX} (like "Claude — AI assistant for writing, coding and analysis")`);
+    }
     // The logo is a file named for the app in logos/ — none means the app shows its initials.
     const logos = existsSync(join(dataDir, 'logos')) ? readdirSync(join(dataDir, 'logos')) : [];
     if (!logos.some((entry) => entry.replace(/\.[^.]+$/, '') === appId)) problems.push(`app ${appId} has no logo — add one with the Logo button in the admin, or ask the agent`);

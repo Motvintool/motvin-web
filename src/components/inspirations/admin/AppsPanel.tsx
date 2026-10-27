@@ -30,6 +30,9 @@ type EditorSection = 'details' | 'screens' | 'card' | 'flows' | 'source';
 const EMPTY: AdminAppRecord = { id: '', name: '', industry: 'unsorted', website: '', tagline: '', platforms: ['ios'] };
 
 /** The admin's platform tabs: each app is listed, counted and edited on one at a time, never mixed. */
+/** The longest "<name> — <tagline>" that fits the app page title in two lines. */
+const TITLE_MAX = 55;
+
 const PLATFORM_TAB: Record<Platform, string> = { ios: 'iOS', webapp: 'Web Apps', web: 'Websites' };
 
 function slugify(value: string): string {
@@ -234,6 +237,15 @@ export function AppsPanel({
             onChange={(e) => setDraft((d) => ({ ...d, tagline: e.target.value }))}
             placeholder="One line about the product."
           />
+          {/* The app page title, "<name> — <tagline>", fits two lines up to 55 characters (the review checks the same). */}
+          {(() => {
+            const used = `${draft.name.trim()} — ${(draft.tagline ?? '').trim()}`.length;
+            return (
+              <span className={`ins-field-hint ${used > TITLE_MAX ? 'ins-field-hint--warn' : ''}`}>
+                {used > TITLE_MAX ? `Too long for two lines on the app page: ${used} of ${TITLE_MAX} characters with the name.` : `${used} of ${TITLE_MAX} characters with the name, so the app page title stays within two lines.`}
+              </span>
+            );
+          })()}
         </label>
       </div>
 

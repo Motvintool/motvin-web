@@ -19494,3 +19494,5 @@ div.ins-version { cursor: default; flex-wrap: wrap; }
 @media (min-width: 641px) and (prefers-reduced-motion: reduce) {
   .ins-admin-drawer .ins-admin-drawer-close { animation: none; transition: none; }
 }
+
+.ins-field-hint--warn { color: #c2410c; }
