@@ -239,6 +239,12 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
         if (!shot.offsetWidth) return 'keep';
         const r = shot.getBoundingClientRect();
         const cx = r.left + r.width / 2 - fr.left;
+        // A web page is wide, so its centre often sits close to the tags: its strip takes the free room
+        // beside them, as near the middle as it can, rather than shrinking to one thumbnail or hiding.
+        if (side?.querySelector('.ins-compare-shot.is-web')) {
+          const w = Math.min(Math.min(shot.offsetWidth, STRIP_MAX), max - min);
+          return w >= 60 ? { x: Math.round(Math.min(Math.max(cx - w / 2, min), max - w)), w: Math.round(w) } : undefined;
+        }
         const half = Math.min(Math.min(shot.offsetWidth, STRIP_MAX) / 2, cx - min, max - cx);
         return half >= 30 ? { x: Math.round(cx - half), w: Math.round(half * 2) } : undefined;
       };
@@ -256,9 +262,12 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
     observer.observe(foot);
     stage.querySelectorAll('.ins-compare-shot > *').forEach((el) => observer.observe(el));
     wide.addEventListener('change', measure);
+    // A screenshot that loads after the first measure (a wide web page, often) gets its strip placed then.
+    stage.addEventListener('load', measure, true);
     return () => {
       observer.disconnect();
       wide.removeEventListener('change', measure);
+      stage.removeEventListener('load', measure, true);
     };
   }, [mounted, left, right, pairKey, ownScreens.length, otherScreens.length]);
 
@@ -503,10 +512,18 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
                   aria-label={`Screen type: ${label}. Change`}
                   onClick={() => setMenu(menu === 'type' ? null : 'type')}
                 >
-                  <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-                    <rect x="2.25" y="1.75" width="7" height="12.5" rx="1.75" />
-                    <path d="M12.25 3.5v9" strokeLinecap="round" />
-                  </svg>
+                  {/* A phone for app screens, a browser window for web ones. */}
+                  {ownScreens[0] && isDesktopPlatform(ownScreens[0].platform) ? (
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                      <rect x="1.75" y="2.75" width="12.5" height="9.5" rx="1.75" />
+                      <path d="M1.75 5.5h12.5M5.5 14.25h5" strokeLinecap="round" />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                      <rect x="2.25" y="1.75" width="7" height="12.5" rx="1.75" />
+                      <path d="M12.25 3.5v9" strokeLinecap="round" />
+                    </svg>
+                  )}
                   {label}
                   <Chevron />
                 </button>
@@ -601,6 +618,8 @@ type StripPlacement = { line: number; l?: StripBox; r?: StripBox };
 const STRIP_MAX = 252;
 /** Half the current thumbnail's width with its 3px margin (.ins-compare-thumb.is-current). */
 const CURRENT_HALF = 18;
+/** The same for a web page's wide thumbnail (.ins-compare-strip.is-web: 88px, plus its margin). */
+const CURRENT_HALF_WEB = 47;
 /** The thumbnails' size change (.ins-compare-thumb: width .35s cubic-bezier(.22, 1, .36, 1)), which the strip's glide matches. */
 const GLIDE_MS = 350;
 const GLIDE_EASE = cubicBezier(0.22, 1, 0.36, 1);
@@ -734,11 +753,13 @@ function ThumbStrip({
     setPeek((p) => ({ i, x, on: true, glide: Boolean(p?.on) }));
   };
   const peeked = peek ? screens[peek.i] : undefined;
+  // Web screens are wide: landscape thumbnails, not phone-shaped ones.
+  const web = Boolean(screens[0] && isDesktopPlatform(screens[0].platform));
 
   return (
     <>
       <div
-        className={`ins-compare-strip ${more.before ? 'has-before' : ''} ${more.after ? 'has-after' : ''}`}
+        className={`ins-compare-strip ${web ? 'is-web' : ''} ${more.before ? 'has-before' : ''} ${more.after ? 'has-after' : ''}`}
         // Placed: half the box of air at each end, so even the first and last
         // screens scroll to the middle and the current one always sits
         // centred under its screen, the rest grading away to either side.
@@ -746,7 +767,7 @@ function ThumbStrip({
           box === undefined
             ? undefined
             : box
-              ? { left: box.x, width: box.w, paddingInline: Math.max(6, Math.round(box.w / 2 - CURRENT_HALF)) }
+              ? { left: box.x, width: box.w, paddingInline: Math.max(6, Math.round(box.w / 2 - (web ? CURRENT_HALF_WEB : CURRENT_HALF))) }
               : { display: 'none' }
         }
         ref={ref}
@@ -804,7 +825,7 @@ function ThumbStrip({
         ))}
       </div>
       {/* Outside the strip, which clips; positioned in the footer's strips. */}
-      <div className={`ins-compare-peek ${peek?.on && peeked ? 'is-visible' : ''} ${peek?.glide ? 'is-gliding' : ''}`} style={peek ? ({ '--x': `${peek.x}px` } as CSSProperties) : undefined} aria-hidden>
+      <div className={`ins-compare-peek ${peeked && isDesktopPlatform(peeked.platform) ? 'is-web' : ''} ${peek?.on && peeked ? 'is-visible' : ''} ${peek?.glide ? 'is-gliding' : ''}`} style={peek ? ({ '--x': `${peek.x}px` } as CSSProperties) : undefined} aria-hidden>
         {peeked && (
           <>
             <Screenshot key={peeked.id} screen={peeked} />

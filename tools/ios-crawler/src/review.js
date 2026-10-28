@@ -1447,6 +1447,11 @@ export function checkVersion(options) {
     const hasChildren = flows.some((other) => other.parentId === flow.id);
     if (own.length && !hasChildren && own.every((sid) => ['permission', 'loading', 'splash'].includes(typeOf.get(sid)))) problems.push(`flow "${flow.name}" holds only a prompt or loading screen — it belongs to the flow before it`);
     if (/ - |\(|\)|\bflow\b/i.test(flow.name)) problems.push(`flow "${flow.name}" is not a plain task name`);
+    // Like Mobbin, no journey of one screen: a one-screen task inside a section is a screen of that section
+    // (merge it into the section), a one-screen task on its own joins the task it belongs to.
+    if (own.length === 1 && !hasChildren && !own.every((sid) => ['permission', 'loading', 'splash'].includes(typeOf.get(sid)))) {
+      problems.push(`flow "${flow.name}" has only one screen — ${flow.parentId ? `merge it into its section "${byId.get(flow.parentId)?.name ?? 'parent'}"` : 'merge it into the task it belongs to'}; a flow needs two screens or more`);
+    }
   }
 
   problems.push(...reviewLayerProblems({ dataDir, appId, platform, version, appDir, screens, flows, tag }));

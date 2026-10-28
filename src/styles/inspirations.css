@@ -19496,3 +19496,10 @@ div.ins-version { cursor: default; flex-wrap: wrap; }
 }
 
 .ins-field-hint--warn { color: #c2410c; }
+
+/* Compare on Webs: the thumbnails and the hover peek in a web page's shape (wide), not a phone's. */
+/* A little under the app thumbnails' height (88 × 55 current, down to 54 × 34), in a web page's 16:10 shape. */
+.ins-compare-strip.is-web { --ins-thumb: 82px; --ins-thumb-step: 8px; --ins-thumb-min: 54px; --ins-thumb-current: 88px; }
+.ins-compare-strip.is-web .ins-compare-thumb { aspect-ratio: 16 / 10; border-radius: 3px; }
+.ins-compare-peek.is-web { width: 200px; }
+.ins-compare-peek.is-web img { border-radius: 8px; }

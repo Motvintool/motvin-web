@@ -40,7 +40,8 @@ export function FlowsView() {
     `flows:${category ?? 'all'}`,
   );
 
-  const visible = (flows ?? []).filter((f) => platforms.includes(f.platform));
+  // Real journeys only, as Mobbin lists them: a section heading with one screen of its own is not a flow.
+  const visible = (flows ?? []).filter((f) => platforms.includes(f.platform) && f.screenIds.length > 1);
 
   // Flow cards need their screens; one request per flow, cached by the client.
   const { data: resolved } = useAsync<{ flow: Flow; screens: Screen[] }[]>(async () => {

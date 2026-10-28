@@ -92,7 +92,8 @@ export function FlowsBrowser({ entries, apps }: { entries: Entry[]; apps: Map<st
 
   // The stream reads in tree order — a section, then the journeys that branch
   // from it — so the rail and the strips agree about what comes next.
-  const ordered = useMemo(() => flatten(visible), [visible]);
+  // A section with one screen of its own (Home, Images…) is a heading in the rail, not a "1 screen" strip.
+  const ordered = useMemo(() => flatten(visible).filter((node) => !(node.children.length > 0 && node.entry.screens.length <= 1)), [visible]);
 
   const toggle = (flowId: string) => {
     setCollapsed((current) => {
@@ -105,7 +106,9 @@ export function FlowsBrowser({ entries, apps }: { entries: Entry[]; apps: Map<st
 
   const jumpTo = (flowId: string) => {
     setSelected(flowId);
-    rowRefs.current.get(flowId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // A heading-only section has no strip: its first journey stands in for it.
+    const target = ordered.find((node) => node.entry.flow.id === flowId) ?? ordered.find((node) => node.entry.flow.parentId === flowId);
+    if (target) rowRefs.current.get(target.entry.flow.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   /**
