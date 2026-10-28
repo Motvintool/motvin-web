@@ -12,6 +12,7 @@ import { appPlatform, storeAction } from '@/lib/inspirations/storeAction';
 import { savedAppId } from '@/lib/inspirations/savedApps';
 import { AppLogo } from '../AppLogo';
 import { MastheadLogo } from '../MastheadLogo';
+import { PlatformPeek } from '../PlatformPeek';
 import { appPrototypeFlowId, FLOW_PARAM, PLAY_PARAM } from '../FlowPreview';
 import { AppMenu } from '../AppMenu';
 import { COMPARE_PARAM, CompareScreens, defaultCompareType } from '../CompareScreens';
@@ -399,7 +400,7 @@ function FlowTreePill({
 }
 
 /** A link to the same app on one of its platforms, for the masthead's Platform line. */
-type PlatformLink = { platform: Platform; href: string; current: boolean };
+type PlatformLink = { platform: Platform; href: string; current: boolean; preview: Screen[] };
 
 /**
  * /inspirations/app/[slug] — one product, one platform at a time. An app on more than one
@@ -437,7 +438,10 @@ export function AppDetailView({ app, screens, flows, patterns }: { app: App; scr
     if (tab) sp.set('tab', tab);
     if (p !== present[0]) sp.set('platform', p);
     const query = sp.toString();
-    return { platform: p, current: p === platform, href: query ? `${pathname}?${query}` : pathname };
+    // Its hover preview: that platform's card pictures, else its first screens.
+    const theirs = screens.filter((s) => s.platform === p);
+    const picked = (app.cardScreens ?? []).map((id) => theirs.find((s) => s.id === id)).filter((s): s is Screen => Boolean(s));
+    return { platform: p, current: p === platform, href: query ? `${pathname}?${query}` : pathname, preview: (picked.length ? picked : theirs).slice(0, 4) };
   });
   return <AppDetailBody key={platform} app={scoped} screens={onPlatform} flows={platformFlows} patterns={patterns} platformLinks={links} />;
 }
@@ -878,9 +882,9 @@ function AppDetailBody({
                       {link.current ? (
                         <span className="ins-fact-platform is-current" aria-current="page">{PLATFORM_LABEL[link.platform] ?? link.platform}</span>
                       ) : (
-                        <Link href={link.href} className="ins-fact-platform" scroll={false}>
+                        <PlatformPeek app={app} platform={link.platform} label={PLATFORM_LABEL[link.platform] ?? link.platform} href={link.href} screens={link.preview}>
                           {PLATFORM_LABEL[link.platform] ?? link.platform}
-                        </Link>
+                        </PlatformPeek>
                       )}
                     </span>
                   ))

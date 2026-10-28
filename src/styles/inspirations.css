@@ -19508,3 +19508,60 @@ div.ins-version { cursor: default; flex-wrap: wrap; }
 /* The web card's "Latest" / "Updated" tag: the app cards' tag, over the screenshot's top-right corner
    (32px in, so the same few px over the corner as on the app cards). */
 .ins-web-card-shot > .ins-card-fresh-badge { top: 24px; right: 24px; }
+
+/* Hovering the other platform's link on an app page ("Web Apps" on Claude's iOS page): a dark preview card
+   below it — a few of that platform's screens over "Claude on Web Apps". */
+.ins-platform-peek-wrap { position: relative; display: inline-block; }
+.ins-platform-peek {
+  position: absolute;
+  top: calc(100% + 14px);
+  left: -20px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  /* The "Scroll to top" button's smoked glass (.ins-back-to-top): grey over a blur, a soft shadow and a
+     hairline highlight along the top edge. */
+  padding: 16px 16px 14px;
+  box-sizing: border-box;
+  border-radius: 24px;
+  /* A shade darker than the button's glass, so the screens stand out on it. */
+  background: rgba(50, 50, 50, 0.78);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 28px -10px rgba(0, 0, 0, 0.45),
+    0 2px 6px -2px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px) scale(0.98);
+  transform-origin: 30px 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.22s;
+}
+@media (hover: hover) {
+  .ins-platform-peek-wrap:hover .ins-platform-peek,
+  .ins-platform-peek-wrap:focus-within .ins-platform-peek {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition-delay: 0.12s, 0.12s, 0s;
+  }
+}
+/* The phone preview keeps the rounder 32px top corners, to sit with the phones' own deep corners, and
+   slightly smaller ones under the caption; web is 24px all round. */
+.ins-platform-peek:not(.is-web) { border-radius: 32px 32px 26px 26px; }
+.ins-platform-peek-shots { display: flex; gap: 10px; }
+.ins-platform-peek-shot { display: block; width: 92px; overflow: hidden; border-radius: 16px; background: rgba(255, 255, 255, 0.08); }
+.ins-platform-peek.is-web .ins-platform-peek-shot { width: 190px; border-radius: 8px; }
+.ins-platform-peek-shot .ins-shot-img,
+.ins-platform-peek-shot .ins-shot-missing { display: block; width: 100%; height: auto; border: 0; border-radius: 0; }
+.ins-platform-peek-caption { display: flex; align-items: center; gap: 10px; padding-left: 2px; color: #fff; font-size: 17px; font-weight: 600; line-height: 1.2; white-space: nowrap; }
+.ins-platform-peek-on { color: rgba(255, 255, 255, 0.55); font-weight: 500; }
+.ins-platform-peek-logo { border-radius: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  .ins-platform-peek { transition: opacity 0.12s ease, visibility 0s linear 0.12s; transform: none; }
+}
