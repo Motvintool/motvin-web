@@ -19548,7 +19548,20 @@ div.ins-version { cursor: default; flex-wrap: wrap; }
     opacity: 1;
     visibility: visible;
     transform: none;
-    transition-delay: 0.12s, 0.12s, 0s;
+    /* A short pause first, so passing over the link doesn't flash it. */
+    transition-delay: 0.2s, 0.2s, 0s;
+  }
+  /* The screens rise in one after another as it opens. */
+  .ins-platform-peek-shot {
+    opacity: 0;
+    translate: 0 6px;
+    transition: opacity 0.2s ease, translate 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .ins-platform-peek-wrap:hover .ins-platform-peek-shot,
+  .ins-platform-peek-wrap:focus-within .ins-platform-peek-shot {
+    opacity: 1;
+    translate: none;
+    transition-delay: calc(0.22s + var(--i, 0) * 0.04s);
   }
 }
 /* The phone preview keeps the rounder 32px top corners, to sit with the phones' own deep corners, and
@@ -19557,11 +19570,18 @@ div.ins-version { cursor: default; flex-wrap: wrap; }
 .ins-platform-peek-shots { display: flex; gap: 10px; }
 .ins-platform-peek-shot { display: block; width: 92px; overflow: hidden; border-radius: 16px; background: rgba(255, 255, 255, 0.08); }
 .ins-platform-peek.is-web .ins-platform-peek-shot { width: 190px; border-radius: 8px; }
+/* The slot keeps its screen's shape before the picture arrives, so the card never changes size. */
+.ins-platform-peek-shot { aspect-ratio: 1170 / 2532; }
+.ins-platform-peek.is-web .ins-platform-peek-shot { aspect-ratio: 16 / 10; }
+.ins-platform-peek-shot .ins-shot-img { height: 100%; object-fit: cover; object-position: top; }
 .ins-platform-peek-shot .ins-shot-img,
 .ins-platform-peek-shot .ins-shot-missing { display: block; width: 100%; height: auto; border: 0; border-radius: 0; }
 .ins-platform-peek-caption { display: flex; align-items: center; gap: 10px; padding-left: 2px; color: #fff; font-size: 17px; font-weight: 600; line-height: 1.2; white-space: nowrap; }
 .ins-platform-peek-on { color: rgba(255, 255, 255, 0.55); font-weight: 500; }
+/* That platform's counts, quiet, at the caption's far end. */
+.ins-platform-peek-counts { margin-left: auto; padding-left: 16px; color: rgba(255, 255, 255, 0.55); font-size: 14px; font-weight: 500; }
 .ins-platform-peek-logo { border-radius: 8px; }
 @media (prefers-reduced-motion: reduce) {
   .ins-platform-peek { transition: opacity 0.12s ease, visibility 0s linear 0.12s; transform: none; }
+  .ins-platform-peek-shot { opacity: 1 !important; translate: none !important; transition: none !important; }
 }
