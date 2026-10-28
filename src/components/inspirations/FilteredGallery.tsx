@@ -242,7 +242,7 @@ export function FilteredGallery({
   const appFilters = useAppFilters(matchingApps);
   // "+N more" beside the applied filters opens the Filters panel.
   const [openFilters, setOpenFilters] = useState(0);
-  const apps = sort === 'curated' ? freshFirst(appFilters.filtered, freshness) : appFilters.filtered;
+  const apps = sort === 'curated' ? freshFirst(appFilters.filtered, freshness, undefined, withDefaultPlatform(filters).platforms) : appFilters.filtered;
   const appsLibraryEmpty = meta.counts.apps === 0;
 
   // The only ScreenFilters dimensions an app feed can't honor.

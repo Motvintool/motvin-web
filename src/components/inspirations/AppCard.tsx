@@ -264,7 +264,8 @@ export function AppCard({
   };
 
   // "Latest" or "Updated", from its dated versions and how long the admin's Settings keep each tag.
-  const freshness = appFreshness(app, useLibrarySettings().freshness);
+  // Counted on the card's own platform (an app on iOS and the web isn't "Latest" in iOS for a web upload).
+  const freshness = appFreshness(app, useLibrarySettings().freshness, undefined, cardPlatform ? [cardPlatform] : ['ios']);
 
   return (
     <article ref={cardRef} className="ins-card" data-id={app.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>

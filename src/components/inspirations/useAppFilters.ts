@@ -161,7 +161,7 @@ export function useAppFilters(apps: App[]) {
       options: (['new', 'updated'] as AppFreshness[]).map((value) => ({
         value,
         label: value === 'new' ? 'Latest' : 'Updated',
-        test: (a) => appFreshness(a, freshDays, today) === value,
+        test: (a) => appFreshness(a, freshDays, today, platforms) === value,
       })),
     },
     {

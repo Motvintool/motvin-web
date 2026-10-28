@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import type { App, Screen } from '@/lib/inspirations/types';
+import { APP_FRESHNESS_LABEL, appFreshness } from '@/lib/inspirations/appFreshness';
+import { useLibrarySettings } from './useMeta';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { AppLogo } from './AppLogo';
 import { CardShots } from './CardShots';
@@ -35,9 +37,17 @@ export function WebCard({
     { preset: presetScreens, preferredIds: app.cardScreens },
   );
 
+  // "Latest" or "Updated", as on the app cards, from this web part's own uploads.
+  const freshness = appFreshness(app, useLibrarySettings().freshness, undefined, ['webapp', 'web']);
+
   return (
     <article ref={cardRef} className="ins-web-card" data-id={app.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
       <div className="ins-web-card-shot">
+        {freshness && (
+          <span className={`ins-card-fresh-badge is-${freshness}`} aria-label={`${APP_FRESHNESS_LABEL[freshness]} app`}>
+            {APP_FRESHNESS_LABEL[freshness]}
+          </span>
+        )}
         {selectable && (
           <button
             type="button"

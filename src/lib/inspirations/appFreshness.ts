@@ -1,4 +1,4 @@
-import type { App, LibrarySettings } from './types';
+import type { App, LibrarySettings, Platform } from './types';
 import { localDateString } from './dates';
 
 /** How long an app counts as "Latest", or "Updated" after a new version, in days — until the admin's Settings say otherwise. */
@@ -31,8 +31,9 @@ export function appFreshness(
   app: Pick<App, 'versions'>,
   days: LibrarySettings['freshness'] = DEFAULT_FRESHNESS,
   today: string = localDateString(),
+  platforms?: readonly Platform[],
 ): AppFreshness | null {
-  const dates = versionDates(app);
+  const dates = versionDates(app, platforms);
   if (!dates.length) return null;
   const within = (id: string, limit: number) => {
     const age = daysBetween(id, today);
@@ -45,9 +46,16 @@ export function appFreshness(
 
 const FRESH_RANK: Record<AppFreshness, number> = { new: 0, updated: 1 };
 
-/** An app's dated versions, oldest first. */
-function versionDates(app: Pick<App, 'versions'>): string[] {
-  return (app.versions ?? []).map((v) => v.id).filter((id) => /^\d{4}-\d{2}-\d{2}$/.test(id)).sort();
+/**
+ * An app's dated versions, oldest first — on the given platforms only (the section it is seen in): Claude's
+ * web upload makes it "Latest" in Webs, never in iOS. A version that doesn't say its platforms counts everywhere.
+ */
+function versionDates(app: Pick<App, 'versions'>, platforms?: readonly Platform[]): string[] {
+  return (app.versions ?? [])
+    .filter((v) => !platforms?.length || !v.platforms?.length || v.platforms.some((p) => platforms.includes(p)))
+    .map((v) => v.id)
+    .filter((id) => /^\d{4}-\d{2}-\d{2}$/.test(id))
+    .sort();
 }
 
 /**
@@ -60,10 +68,11 @@ export function freshFirst<T extends Pick<App, 'versions'>>(
   apps: T[],
   days: LibrarySettings['freshness'] = DEFAULT_FRESHNESS,
   today: string = localDateString(),
+  platforms?: readonly Platform[],
 ): T[] {
   const ranked = apps.map((app, i) => {
-    const fresh = appFreshness(app, days, today);
-    const dates = versionDates(app);
+    const fresh = appFreshness(app, days, today, platforms);
+    const dates = versionDates(app, platforms);
     const since = fresh === 'new' ? dates[0] : fresh === 'updated' ? dates[dates.length - 1] : '';
     return { app, i, r: fresh ? FRESH_RANK[fresh] : 2, since };
   });

@@ -2641,7 +2641,7 @@ select.ins-input {
   position: relative;
   padding: 32px;
   overflow: hidden;
-  border-radius: 9.09% / 13.57%;
+  border-radius: 7.27% / 10.86%;
   background: #f5f5f5;
 }
 
@@ -2649,7 +2649,8 @@ select.ins-input {
   aspect-ratio: 420 / 260.19;
   overflow: hidden;
   border: 1px solid #eee;
-  border-radius: 3.81% / 6.15%;
+  /* The outer corner (48px at 670px) less the 32px padding: 16px, so the two curves run side by side. */
+  border-radius: 2.64% / 4.27%;
   background: #e5e5e5;
 }
 
@@ -2859,7 +2860,7 @@ select.ins-input {
 .ins-shot-panel .ins-grid.ins-web-grid .ins-card-shot {
   aspect-ratio: 420 / 260.19;
   border: 1px solid #eee;
-  border-radius: 1% / 1.75%;
+  border-radius: 1.67% / 2.7%;
 }
 
 .ins-shot-panel .ins-grid {
@@ -2885,7 +2886,7 @@ select.ins-input {
 .ins-shot-panel .ins-grid.ins-web-grid .ins-card-inset {
   border: 0;
   height: 100%;
-  border-radius: 1% / 1.75%;
+  border-radius: 1.67% / 2.7%;
 }
 
 .ins-shot-panel .ins-grid.ins-web-grid .ins-card-link,
@@ -2893,7 +2894,7 @@ select.ins-input {
 .ins-shot-panel .ins-grid.ins-web-grid .ins-card-inset .ins-shot-missing {
   display: block;
   height: 100%;
-  border-radius: 1% / 1.75%;
+  border-radius: 1.67% / 2.7%;
 }
 
 /* Selected: a thick black stroke outside the card, a white gap off its
@@ -6474,7 +6475,7 @@ select.ins-input {
 }
 
 .ins-shot-panel .ins-grid.ins-web-grid .ins-card--skeleton .ins-skel--shot {
-  border-radius: 1% / 1.75%;
+  border-radius: 1.67% / 2.7%;
 }
 
 /* Explore loading frame (Figma 1141:36936). The taxonomy remains visible so
@@ -19503,3 +19504,7 @@ div.ins-version { cursor: default; flex-wrap: wrap; }
 .ins-compare-strip.is-web .ins-compare-thumb { aspect-ratio: 16 / 10; border-radius: 3px; }
 .ins-compare-peek.is-web { width: 200px; }
 .ins-compare-peek.is-web img { border-radius: 8px; }
+
+/* The web card's "Latest" / "Updated" tag: the app cards' tag, over the screenshot's top-right corner
+   (32px in, so the same few px over the corner as on the app cards). */
+.ins-web-card-shot > .ins-card-fresh-badge { top: 24px; right: 24px; }

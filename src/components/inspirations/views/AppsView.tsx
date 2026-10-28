@@ -70,7 +70,7 @@ export function AppsView() {
   const appFilters = useAppFilters(onPlatform);
   // "+N more" beside the applied filters opens the Filters panel.
   const [openFilters, setOpenFilters] = useState(0);
-  const visible = sort === 'curated' ? freshFirst(appFilters.filtered, freshness) : appFilters.filtered;
+  const visible = sort === 'curated' ? freshFirst(appFilters.filtered, freshness, undefined, platforms) : appFilters.filtered;
 
   return (
     <>
