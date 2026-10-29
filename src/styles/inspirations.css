@@ -19585,3 +19585,208 @@ div.ins-version { cursor: default; flex-wrap: wrap; }
   .ins-platform-peek { transition: opacity 0.12s ease, visibility 0s linear 0.12s; transform: none; }
   .ins-platform-peek-shot { opacity: 1 !important; translate: none !important; transition: none !important; }
 }
+
+/* Zoom out (the screen view's Similar screens): this screen in the middle of a grid of the same screen
+   in other apps — 3 × 3 web pages, 5 across for phones — fitting the stage, the rest scrolling. */
+.ins-similar {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 4px 0 0;
+  box-sizing: border-box;
+}
+.ins-similar-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-content: start;
+  gap: 16px;
+  overflow-y: auto;
+  padding: 6px 8px 0;
+  scrollbar-width: thin;
+}
+.ins-similar.is-web .ins-similar-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.ins-similar-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: var(--ins-cursor-hand, pointer);
+  animation: insSimilarIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 0.03s);
+}
+@keyframes insSimilarIn {
+  from { opacity: 0; transform: scale(0.94); }
+}
+.ins-similar-shot {
+  display: block;
+  overflow: hidden;
+  /* A phone's deep corners; a web page's gentle ones. */
+  border-radius: 12.41% / 5.65%;
+  background: #f3f3f2;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-similar.is-web .ins-similar-shot { border-radius: 1.67% / 2.7%; }
+.ins-similar-shot .ins-shot-img,
+.ins-similar-shot .ins-shot-missing { display: block; width: 100%; height: auto; border: 0; border-radius: 0; }
+/* Hover lifts it a touch, no shadow. */
+.ins-similar-cell:hover .ins-similar-shot,
+.ins-similar-cell:focus-visible .ins-similar-shot {
+  transform: translateY(-3px);
+}
+.ins-similar-cell:focus-visible { outline: none; }
+/* This screen, ringed like a selected card, so where you came from is clear. */
+.ins-similar-cell.is-current .ins-similar-shot { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #141414; }
+/* The zoom: this screen arrives from the full-size view, shrinking into its place; the rest fade in round it. */
+.ins-similar-cell.is-current { animation: insSimilarCurrentIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes insSimilarCurrentIn { from { opacity: 0.4; transform: scale(1.6); } }
+/* While the other apps' screens load: soft blanks in their places (a phone's shape, or a web page's), pulsing. */
+.ins-similar-blank { display: block; aspect-ratio: 1179 / 2556; border-radius: 12.41% / 5.65%; background: #f3f3f2; animation: insSimilarBlank 1.2s ease-in-out infinite alternate; }
+.ins-similar.is-web .ins-similar-blank { aspect-ratio: 16 / 10; border-radius: 1.67% / 2.7%; }
+@keyframes insSimilarBlank { to { opacity: 0.5; } }
+@media (max-width: 640px) {
+  .ins-similar-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 10px; }
+  .ins-similar.is-web .ins-similar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-similar-cell { animation: none; }
+  .ins-similar-shot { transition: none; }
+  .ins-similar-blank { animation: none; }
+}
+
+/* Zoomed out, the header names the grid (in the breadcrumb's place) and offers the way back beside Shortcuts. */
+.ins-similar-head-title { display: flex; align-items: center; gap: 12px; min-width: 0; margin: 0; color: var(--ins-text); font-size: 20px; font-weight: 600; line-height: 1.25; white-space: nowrap; animation: insSimilarFootIn 0.28s ease both; }
+.ins-similar-head-back {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #f2f3f5;
+  color: var(--ins-text);
+  cursor: var(--ins-cursor-hand, pointer);
+  animation: insSimilarFootIn 0.28s ease both;
+  transition: background 0.15s ease, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-similar-head-back:hover { background: #e7e8eb; transform: translateX(-2px); }
+.ins-similar-head-back:active { transform: scale(0.94); }
+.ins-similar-head-back:focus-visible { outline: 2px solid #141414; outline-offset: 2px; }
+@media (max-width: 640px) {
+  .ins-similar-head-title { font-size: 16px; }
+}
+
+/* Zoomed out (Similar screens): no Details panel — it is about the one screen — so the grid spans the modal.
+   Beside the screen it folds away (its width to nothing, sliding right as it fades) while the screen view
+   grows into the room, and unfolds again on the way back; its content keeps its width meanwhile, so nothing
+   inside reflows. Stacked on smaller screens it just goes. */
+@media (min-width: 901px) {
+  .ins-screen-preview-modal > .ins-screen-preview-details {
+    transition:
+      width 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      margin-left 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.24s ease,
+      transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .ins-screen-preview-modal > .ins-screen-preview-details > * { min-width: 320px; }
+  .ins-screen-preview-modal.is-zoomed-out > .ins-screen-preview-details {
+    width: 0;
+    margin-left: -10px;
+    opacity: 0;
+    transform: translateX(40px);
+    pointer-events: none;
+  }
+}
+@media (max-width: 900px) {
+  .ins-screen-preview-modal.is-zoomed-out .ins-screen-preview-details { display: none; }
+}
+/* The screen's own footer coming back fades in. */
+.ins-screen-preview-modal.is-zoomed-back .ins-screen-preview-foot { animation: insSimilarFootIn 0.28s ease both; }
+@keyframes insSimilarFootIn { from { opacity: 0; transform: translateY(4px); } }
+/* Back from the grid: the screen grows out from its place to full size. */
+.ins-screen-preview-modal.is-zoomed-back .ins-screen-preview-filmstrip--single .ins-screen-preview-shot { animation: insShotZoomIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes insShotZoomIn { from { opacity: 0.4; transform: scale(0.62); } }
+@media (prefers-reduced-motion: reduce) {
+  .ins-screen-preview-modal > .ins-screen-preview-details { transition: none !important; }
+  .ins-similar-cell.is-current,
+  .ins-similar-head-title,
+  .ins-similar-head-back,
+  .ins-screen-preview-modal.is-zoomed-back .ins-screen-preview-foot,
+  .ins-screen-preview-modal.is-zoomed-back .ins-screen-preview-filmstrip--single .ins-screen-preview-shot { animation: none !important; }
+}
+
+/* "Scroll to similar": a white pill over the screen view's bottom edge, centred under it (the view is the
+   modal less the 320px Details and its 10px gap), half over the backdrop. */
+.ins-screen-preview-modal { position: relative; }
+.ins-similar-pill {
+  position: absolute;
+  /* Over the edge, yet clear of the window's bottom (the modal sits 20px from it). */
+  bottom: -7px;
+  left: calc((100% - 330px) / 2);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px 0 13px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14), 0 1px 3px rgba(0, 0, 0, 0.06);
+  color: #141414;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  translate: -50% 0;
+  cursor: var(--ins-cursor-hand, pointer);
+  animation: insSimilarPillIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) 0.15s backwards;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease;
+}
+.ins-similar-pill:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.06); }
+.ins-similar-pill svg { width: 13px; height: 13px; }
+.ins-similar-pill:hover svg { animation: insSimilarPillNudge 0.9s ease-in-out infinite; }
+.ins-similar-pill:active { transform: scale(0.97); }
+.ins-similar-pill:focus-visible { outline: 2px solid #141414; outline-offset: 3px; }
+@keyframes insSimilarPillIn { from { opacity: 0; transform: translateY(8px); } }
+@keyframes insSimilarPillNudge { 50% { transform: translateY(3px); } }
+@media (max-width: 900px) { .ins-similar-pill { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .ins-similar-pill, .ins-similar-pill:hover svg { animation: none; }
+}
+
+
+/* Zoom out's screens take a screen card's hover (.ins-card): the app over a fade, Save and Copy. The shot is
+   its frame; the screenshot itself is the button that opens it. A card's off-screen placeholder size isn't
+   wanted here — the grid is small and laid out at once. */
+.ins-similar-cell.ins-card { content-visibility: visible; contain-intrinsic-size: none; }
+.ins-similar-shot { position: relative; }
+.ins-similar-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: var(--ins-cursor-hand, pointer);
+}
+.ins-similar-open:focus-visible { outline: none; }
+.ins-similar-cell .ins-card-hover-title,
+.ins-similar-cell .ins-card-hover-tagline { display: block; }
+.ins-similar-cell .ins-card-hover-tagline { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ins-similar-cell .ins-card-hover-app-text { min-width: 0; }
+/* Its select circle sits where a screen card's does, a few px into the screenshot's corner. */
+.ins-similar-shot > .ins-card-select-ring { top: clamp(8px, 2.36%, 16px); left: clamp(8px, 4.6%, 16px); }
+/* A screen here is often a fraction of a pixel wide, and the fade then stops just short of its edge: a thin
+   strip of the screenshot shows down the side. The fade runs a pixel past each edge (the frame clips it). */
+.ins-similar-shot .ins-card-hover-footer::before { right: -1px; bottom: -1px; left: -1px; }

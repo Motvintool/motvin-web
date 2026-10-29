@@ -17,6 +17,7 @@ import { SaveButton } from './SaveButton';
 import { saveItemFor } from './previewSaveAs';
 import { Screenshot } from './Screenshot';
 import { ScreenLightbox } from './ScreenLightbox';
+import { SimilarScreens, hasSimilar, warmSimilar } from './SimilarScreens';
 import { useToast } from './Toast';
 import { useScreenContextMenu } from './useScreenContextMenu';
 import { useAsync } from './useAsync';
@@ -26,6 +27,9 @@ import { flowOfScreen, screenTitleIn, screenTrail } from '@/lib/inspirations/scr
 
 /** Search-param name that opens the overlay — see FLOW_PARAM in FlowPreview.tsx. */
 export const SCREEN_PARAM = 'screen';
+// On a screen's history entry: it was zoomed out when another app's screen was picked, so going back returns
+// to the grid rather than the one screen.
+const SIMILAR_PARAM = 'similar';
 
 /** The mounted flag never changes after hydration, so nothing to subscribe to. */
 function subscribeNever() {
@@ -96,6 +100,15 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   // "multi-screen" (the full filmstrip) without leaving the modal, and the
   // same button (now reading "Individual screen") switches back.
   const [multiScreen, setMultiScreen] = useState(false);
+  // Zoom out: this screen, smaller, among the same screen in other apps (SimilarScreens).
+  const [zoomedOut, setZoomedOut] = useState(() => params.get(SIMILAR_PARAM) === '1');
+  // Just back from the grid: the screen plays its grow-back entrance (cleared on the next screen).
+  const [zoomedBack, setZoomedBack] = useState(false);
+  // The grid's own name, for the footer that stands in for the screen's actions while zoomed out.
+  const [similarSummary, setSimilarSummary] = useState<{ title: string } | null>(null);
+  // Whether other apps have this kind of screen, asked ahead (the grid then opens on screens already loaded):
+  // "Scroll to similar" shows only when they do.
+  const [similarFor, setSimilarFor] = useState<{ id: string; has: boolean } | null>(null);
   const [activeId, setActiveId] = useState(screenId);
   const [zoomScreen, setZoomScreen] = useState<Screen | null>(null);
   const [contextScreenId, setContextScreenId] = useState<string | null>(null);
@@ -126,6 +139,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     setSiblingScreens([]);
     setActiveId(screenId);
     setMultiScreen(false);
+    setZoomedOut(params.get(SIMILAR_PARAM) === '1');
+    setZoomedBack(false);
     setMoreOpen(false);
     setZoomScreen(null);
   }
@@ -151,6 +166,19 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     () => (viewId === screenId ? Promise.resolve(null) : inspirationsApi.getScreen(viewId)),
     `screen-preview-patterns:${viewId}`,
   );
+  const shownScreen = screens[activeIndex];
+  useEffect(() => {
+    if (!shownScreen?.screenType || shownScreen.screenType === 'other') return;
+    let cancelled = false;
+    hasSimilar(shownScreen)
+      .then((has) => !cancelled && setSimilarFor({ id: shownScreen.id, has }))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [shownScreen]);
+  // Nothing to compare with: no other app has this kind of screen (unknown until asked counts as some).
+  const noSimilar = useCallback((id?: string) => similarFor?.id === id && similarFor?.has === false, [similarFor]);
 
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
 
@@ -165,12 +193,66 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const close = useCallback(() => {
     const sp = new URLSearchParams(params.toString());
     sp.delete(SCREEN_PARAM);
+    sp.delete(SIMILAR_PARAM);
     const qs = sp.toString();
     // back() keeps history tidy when the overlay was opened from this page;
     // replace() covers arriving here from a shared link.
     if (window.history.length > 1) router.back();
     else router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [params, pathname, router]);
+
+  // Zooming out shrinks the screen into its place in the grid as Details folds away; zooming back grows it
+  // out again (CSS: .is-zoomed-out, then .is-zoomed-back for the way back's own entrance).
+  const zoom = useCallback((out: boolean) => {
+    // Back on the one screen, this entry no longer returns to the grid.
+    if (!out) {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has(SIMILAR_PARAM)) {
+        url.searchParams.delete(SIMILAR_PARAM);
+        window.history.replaceState(window.history.state, '', url);
+      }
+    }
+    setZoomedOut(out);
+    setZoomedBack(!out);
+    // Once played, so stepping on to other screens doesn't play it again.
+    if (!out) window.setTimeout(() => setZoomedBack(false), 500);
+  }, []);
+  // "Scroll to similar": scrolling down on the screen zooms out to the grid. Scrolling never zooms back —
+  // only the header's back arrow (or Z / Esc) does, so scrolling the grid can't drop you out of it.
+  // A whole gesture counts once (its small steps add up; a short pause after zooming).
+  const wheelSum = useRef(0);
+  const wheelIdle = useRef(0);
+  const wheelLock = useRef(0);
+  const onStageWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (multiScreen || Date.now() < wheelLock.current) return;
+    window.clearTimeout(wheelIdle.current);
+    wheelIdle.current = window.setTimeout(() => (wheelSum.current = 0), 180);
+    wheelSum.current += e.deltaY;
+    const shown = screens.find((s) => s.id === activeId) ?? screens[0];
+    const zoomable = Boolean(shown?.screenType && shown.screenType !== 'other') && !noSimilar(shown?.id);
+    // The first scroll down starts fetching the grid's screenshots, so they're in as it opens.
+    if (!zoomedOut && zoomable && e.deltaY > 0) warmSimilar(shown);
+    if (!zoomedOut && zoomable && wheelSum.current > 60) {
+      wheelSum.current = 0;
+      wheelLock.current = Date.now() + 700;
+      zoom(true);
+    }
+  };
+
+  // Another app's screen from the grid opens in this view, as a step in history: Esc / back returns here.
+  const openSimilar = useCallback(
+    (target: Screen) => {
+      // This entry remembers the grid, so back (Esc's history, or the browser's) lands on it again.
+      const here = new URL(window.location.href);
+      here.searchParams.set(SIMILAR_PARAM, '1');
+      window.history.replaceState(window.history.state, '', here);
+      const sp = new URLSearchParams(params.toString());
+      sp.set(SCREEN_PARAM, target.id);
+      sp.delete(SIMILAR_PARAM);
+      router.push(`${pathname}?${sp.toString()}`, { scroll: false });
+    },
+    [params, pathname, router],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -198,8 +280,9 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
         // let that own the key instead of also closing the preview under it.
         if (zoomScreen) return;
         e.preventDefault();
-        // The shortcuts card first, then the preview.
+        // The shortcuts card first, then the zoomed-out grid, then the preview.
         if (showKeys) setShowKeys(false);
+        else if (zoomedOut) zoom(false);
         else close();
         return;
       }
@@ -207,6 +290,17 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
       const target = e.target as HTMLElement | null;
       const isTyping = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
       if (isTyping) return;
+      // Z zooms out to the same screen in other apps, and back.
+      if ((e.key === 'z' || e.key === 'Z') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const shown = screens.find((s) => s.id === activeId) ?? screens[0];
+        if (zoomedOut || (shown && shown.screenType && shown.screenType !== 'other' && !noSimilar(shown.id))) {
+          e.preventDefault();
+          zoom(!zoomedOut);
+        }
+        return;
+      }
+      // The grid has no previous / next screen.
+      if (zoomedOut) return;
       if (e.key === 'ArrowLeft' && screens.length > 1) {
         e.preventDefault();
         if (multiScreen) filmRef.current?.scrollBy({ left: -284, behavior: 'smooth' });
@@ -232,7 +326,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [close, screens, multiScreen, zoomScreen, showKeys]);
+  }, [close, screens, multiScreen, zoomScreen, showKeys, zoomedOut, zoom, activeId, noSimilar]);
 
   useEffect(() => {
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
@@ -425,6 +519,9 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   // details follow it rather than staying on the one first opened.
   const view = screens[activeIndex] ?? screen;
   const showAllTypes = typesOpenFor === view.id;
+  // Zoom out needs a real screen type to find the same screen in other apps by.
+  // (And another app must have one: with none, there's nothing to zoom out to.)
+  const canZoom = Boolean(view.screenType && view.screenType !== 'other') && !noSimilar(view.id);
   // The section this screen is in — iOS, or Webs (web apps and websites) —
   // so a tag or type opened from it stays in that section.
   const viewSection = isDesktopPlatform(view.platform) ? 'web' : view.platform;
@@ -471,6 +568,19 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
       </button>
       {moreOpen && (
         <div className="ins-popover ins-popover--right" role="menu" onMouseLeave={() => setMoreOpen(false)}>
+          {phone && canZoom && (
+            <button
+              type="button"
+              className="ins-popover-item"
+              role="menuitem"
+              onClick={() => {
+                setMoreOpen(false);
+                zoom(!zoomedOut);
+              }}
+            >
+              <ZoomOutIcon back={zoomedOut} /> <span>{zoomedOut ? 'Back to screen' : 'Similar screens'}</span>
+            </button>
+          )}
           {phone && (flowHref && viewFlow || screens.length > 1) && (
             <>
               {flowHref && viewFlow && (
@@ -551,7 +661,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
       <div className="ins-search-overlay ins-sheet-overlay" role="presentation" onClick={close}>
         <div
           ref={sheetRef}
-          className={`ins-screen-preview-modal ins-sheet--tall ${sheetClass}`}
+          // Zoomed out, the grid takes the whole width: the Details panel is about one screen, not the grid.
+          className={`ins-screen-preview-modal ins-sheet--tall ${sheetClass} ${zoomedOut ? 'is-zoomed-out' : ''} ${zoomedBack ? 'is-zoomed-back' : ''}`}
           {...sheetDrag}
           role="dialog"
           aria-modal="true"
@@ -562,14 +673,27 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
           <div className="ins-screen-preview-main">
             <div className="ins-screen-preview-head">
               <div className="ins-screen-preview-head-app">
-                {app && (
-                  <Link href={INSPIRATIONS_ROUTES.app(app, view.platform)} aria-label={app.name}>
-                    <AppLogo app={app} size={40} className="ins-screen-preview-head-logo" />
-                  </Link>
+                {zoomedOut ? (
+                  // Zoomed out, a back arrow in the logo's place returns to the screen (as Z and Esc do).
+                  <button type="button" className="ins-similar-head-back" aria-label="Back to screen (Z)" title="Back to screen (Z)" onClick={() => zoom(false)}>
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M15 9H3M8 4 3 9l5 5" />
+                    </svg>
+                  </button>
+                ) : (
+                  app && (
+                    <Link href={INSPIRATIONS_ROUTES.app(app, view.platform)} aria-label={app.name}>
+                      <AppLogo app={app} size={40} className="ins-screen-preview-head-logo" />
+                    </Link>
+                  )
                 )}
                 {/* Named the way the flow preview names the same screen: the
                     app, the flow it is a step of, then the screen — its type,
                     or its own name when its type is only "Other". */}
+                {zoomedOut ? (
+                  // Zoomed out, the header names the grid ("Login screens in other apps").
+                  <p className="ins-similar-head-title">{similarSummary?.title ?? 'Finding similar screens…'}</p>
+                ) : (
                 <div className="ins-screen-preview-head-title">
                   {app && <span>{app.name}</span>}
                   {app && <span className="ins-screen-preview-head-sep">/</span>}
@@ -581,6 +705,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   )}
                   <span className={viewFlow ? 'ins-flow-head-step' : undefined}>{screenTitleIn(viewFlow, view)}</span>
                 </div>
+                )}
               </div>
               <div className="ins-flow-head-actions">
                 {/* Keyboard shortcuts beside Close, like the flow preview's Present. */}
@@ -606,8 +731,10 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               </div>
             </div>
 
-            <div className="ins-screen-preview-filmstrip-wrap">
-              {multiScreen ? (
+            <div className="ins-screen-preview-filmstrip-wrap" onWheel={onStageWheel}>
+              {zoomedOut ? (
+                <SimilarScreens current={view} currentFlow={viewFlow} onPick={openSimilar} onBack={() => zoom(false)} onSummary={setSimilarSummary} />
+              ) : multiScreen ? (
                 <div className="ins-screen-preview-filmstrip" ref={filmRef} onScroll={updateScrollState}>
                   {screens.map((s) => (
                     <div
@@ -636,7 +763,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   </div>
                 </div>
               )}
-              {screens.length > 1 && (
+              {screens.length > 1 && !zoomedOut && (
                 <>
                   <button
                     type="button"
@@ -660,6 +787,9 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               )}
             </div>
 
+            {/* Zoomed out there's no footer: the screen's actions (Save, its store, Prototype, its tags) aren't the
+                grid's, and the header names it and offers the way back — the grid runs to the bottom. */}
+            {zoomedOut ? null : (
             <div className="ins-screen-preview-foot">
               <div className="ins-screen-preview-foot-tags">
                 <span className="ins-screen-preview-foot-tag">{INDUSTRY_LABEL[view.industry]}</span>
@@ -697,7 +827,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                     </span>
                   </Link>
                 )}
-                {screens.length > 1 && (
+                {screens.length > 1 && !zoomedOut && (
                   <button
                     type="button"
                     className="ins-screen-preview-foot-btn"
@@ -716,6 +846,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               </div>
               )}
             </div>
+            )}
 
             {/* The keyboard shortcuts, on ? (or the header's Shortcuts): a small
                 black card under that button; Esc, ? or a click closes it. */}
@@ -738,6 +869,16 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
             )}
           </div>
 
+          {/* "Scroll to similar": over the screen view's bottom edge, it zooms out to the same screen in
+              other apps (as Z, or scrolling down on the screen, does). */}
+          {canZoom && similarFor?.id === view.id && similarFor.has && !zoomedOut && !phone && (
+            <button type="button" className="ins-similar-pill" onPointerEnter={() => warmSimilar(view)} onFocus={() => warmSimilar(view)} onClick={() => zoom(true)}>
+              Scroll to similar
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M9 3v12M4 10l5 5 5-5" />
+              </svg>
+            </button>
+          )}
           <div className="ins-screen-preview-details">
             <div className="ins-screen-preview-details-head">
               <h2>Details</h2>
@@ -896,6 +1037,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
 /** The shortcuts card's rows: keys, then what they do. */
 const KEYS: [string[], string][] = [
   [['←', '→'], 'Previous / next screen'],
+  [['Z'], 'Similar screens in other apps'],
   [['S'], 'Save'],
   [['C'], 'Copy PNG'],
   [['L'], 'Copy link'],
@@ -918,4 +1060,21 @@ const ICON_DOWNLOAD = '/ASSET/Icons/Motvin/download-png.svg';
 
 function MenuIcon({ src }: { src: string }) {
   return <img src={src} alt="" width={16} height={16} aria-hidden />;
+}
+
+/** Zoom out: a screen among others (a small grid), or, zoomed out, back to the one screen. */
+function ZoomOutIcon({ back }: { back: boolean }) {
+  return back ? (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+      <rect x="4.75" y="2.75" width="8.5" height="12.5" rx="2" />
+    </svg>
+  ) : (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+      <rect x="6.75" y="5.75" width="4.5" height="6.5" rx="1.2" />
+      <rect x="1.75" y="2.75" width="3" height="4.5" rx="0.9" />
+      <rect x="13.25" y="2.75" width="3" height="4.5" rx="0.9" />
+      <rect x="1.75" y="10.75" width="3" height="4.5" rx="0.9" />
+      <rect x="13.25" y="10.75" width="3" height="4.5" rx="0.9" />
+    </svg>
+  );
 }

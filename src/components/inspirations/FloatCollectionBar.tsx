@@ -277,7 +277,8 @@ export function FloatCollectionBar({
           <div className="ins-float-collection-logos" style={{ width: logosWidth }}>
             {visible.map((app, i) => (
               <span
-                key={app.id}
+                // One logo per screen: the same app can stand in more than once.
+                key={`${app.id}-${i}`}
                 className="ins-float-collection-logo"
                 style={{ left: 8 + (visible.length - 1 - i) * 22 }}
               >
