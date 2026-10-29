@@ -224,9 +224,33 @@ export function UserChatbot() {
   const alongsideAdmin = signedIn && libraryAdmin.status === 'admin';
   const displayName = signedIn ? user?.displayName : null;
   const [open, setOpen] = useState(false);
+  // Closing on a desktop plays the panel's way out (back down into the Buddy button) before it goes. A phone's
+  // sheet has its own, and reduced motion just closes.
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef(0);
+  const closeBuddy = useCallback(() => {
+    window.clearTimeout(closeTimer.current);
+    if (window.matchMedia('(max-width: 759px), (prefers-reduced-motion: reduce)').matches) {
+      setOpen(false);
+      return;
+    }
+    setClosing(true);
+    closeTimer.current = window.setTimeout(() => {
+      setClosing(false);
+      setOpen(false);
+    }, 170);
+  }, []);
   const [lines, setLines] = useState<Line[]>([]);
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
+  // The box's glow at rest, a slow soft invitation: on each time Buddy opens (and on a new chat), off once
+  // something is typed or sent. While an answer is worked out it glows as the loader instead, faster and brighter.
+  const [restGlow, setRestGlow] = useState(true);
+  const [seenOpen, setSeenOpen] = useState(open);
+  if (seenOpen !== open) {
+    setSeenOpen(open);
+    if (open) setRestGlow(true);
+  }
   // The message just sent: only its bubble plays the sent animation (not history, on reopening).
   const [freshId, setFreshId] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
@@ -366,22 +390,22 @@ export function UserChatbot() {
       // Escape steps back one level: out of chat history first, and never while typing in another script (IME).
       if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return;
       if (viewRef.current === 'history') setView('chat');
-      else setOpen(false);
+      else closeBuddy();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [open, closeBuddy]);
 
   // Once the guide has taken the visitor somewhere it floats over the live page (no backdrop), so a
   // click anywhere outside it closes it.
   useEffect(() => {
     if (!open || dimmed) return;
     const onDown = (event: PointerEvent) => {
-      if (!panelRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!panelRef.current?.contains(event.target as Node)) closeBuddy();
     };
     document.addEventListener('pointerdown', onDown);
     return () => document.removeEventListener('pointerdown', onDown);
-  }, [open, dimmed]);
+  }, [open, dimmed, closeBuddy]);
 
   // The most-browsed app's name, so one of the nudges can mention something real.
   useEffect(() => {
@@ -443,6 +467,9 @@ export function UserChatbot() {
         setExamples([`Open ${first.name}`, `Which app has the most flows?`, ...(second ? [`Compare ${first.name} and ${second.name}`] : [`How many screens does ${first.name} have?`])]);
       })
       .catch(() => undefined);
+    // Opened again mid-close: it stays.
+    window.clearTimeout(closeTimer.current);
+    setClosing(false);
     setOpen(true);
   };
 
@@ -485,6 +512,7 @@ export function UserChatbot() {
   const send = async (raw: string) => {
     const text = raw.trim();
     if (!text || busy) return;
+    setRestGlow(false);
     // A typed "yes" or "no" answers the copy Buddy just asked about, like its buttons.
     const asking = [...lines].reverse().find((line) => line.role === 'assistant' && !line.pending);
     if (asking?.action && (TYPED_YES.test(text) || TYPED_NO.test(text))) {
@@ -582,6 +610,7 @@ export function UserChatbot() {
     lastResults.current = null;
     nextId.current = 1;
     setLines([]);
+    setRestGlow(true);
   };
 
   const clear = () => {
@@ -663,6 +692,7 @@ export function UserChatbot() {
   const regenerate = async (line: Line) => {
     const asked = questionFor(line);
     if (!asked || busy) return;
+    setRestGlow(false);
     setBusy(true);
     patch(line.id, { text: '', pending: true, streaming: false, slow: false, error: false, full: undefined, shown: undefined, card: undefined, targets: undefined, opened: undefined, kind: undefined, action: undefined });
     await answer(asked, line.id);
@@ -778,10 +808,10 @@ export function UserChatbot() {
 
   return (
     <>
-      {dimmed && <div className="ins-guide-backdrop" onClick={() => setOpen(false)} aria-hidden />}
+      {dimmed && <div className={`ins-guide-backdrop ${closing ? 'is-closing' : ''}`} onClick={closeBuddy} aria-hidden />}
       <aside
         ref={setPanel}
-        className={`ins-guide ${dimmed ? '' : 'is-floating'} ${sheetClass}`}
+        className={`ins-guide ${dimmed ? '' : 'is-floating'} ${closing ? 'is-closing' : ''} ${sheetClass}`}
         role="dialog"
         aria-modal={dimmed || undefined}
         aria-label="Motvin Buddy"
@@ -897,7 +927,6 @@ export function UserChatbot() {
               </span>
             </p>
             <h2 className="ins-guide-title">Where would you like to go?</h2>
-            <p className="ins-guide-sub">Open any app or page, or ask a quick question like how many screens an app has.</p>
             {examples.length > 0 && (
               <div className="ins-guide-examples">
                 <span className="ins-guide-examples-label">Try asking</span>
@@ -1041,10 +1070,20 @@ export function UserChatbot() {
           )}
         </div>
 
-        <form className={`ins-guide-composer ${busy ? 'is-working' : ''}`} onSubmit={submit}>
-          <textarea ref={inputRef} rows={1} value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={onComposerKey} placeholder="Ask for an app or a page…" aria-label="Ask where to go" />
+        {/* The border beam (CSS: .ins-guide-beam): slow and soft each time Buddy opens (and on a new chat) until
+            something is typed or sent; faster and brighter as the loader while an answer is worked out. */}
+        <form className={`ins-guide-composer ${busy ? 'is-working' : restGlow ? 'is-fresh' : ''}`} onSubmit={submit}>
+          <span className="ins-guide-beam" aria-hidden>
+            <span className="ins-guide-beam-glow">
+              <span />
+            </span>
+          </span>
+          <textarea ref={inputRef} rows={1} value={question} onChange={(e) => {
+              setQuestion(e.target.value);
+              if (e.target.value.trim()) setRestGlow(false);
+            }} onKeyDown={onComposerKey} placeholder="Ask for an app or a page…" aria-label="Ask where to go" />
           <div className="ins-guide-composer-bar">
-            <button type="button" className="ins-guide-esc" onClick={() => setOpen(false)} title="Close Motvin Buddy">
+            <button type="button" className="ins-guide-esc" onClick={closeBuddy} title="Close Motvin Buddy">
               <kbd>Esc</kbd>
               <span className="ins-guide-esc-label">to close</span>
               <span className="ins-guide-close-label">Close</span>

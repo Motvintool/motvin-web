@@ -11029,7 +11029,21 @@ select.ins-input {
   color: var(--ins-text);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
   overflow: hidden;
-  animation: insToastIn 200ms var(--ins-ease);
+  /* Opening grows up out of the Buddy button, at the bottom right; closing sinks back into it. */
+  transform-origin: 100% 100%;
+  animation: insGuideOpen 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes insGuideOpen {
+  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+}
+.ins-guide.is-closing { animation: insGuideClose 170ms cubic-bezier(0.4, 0, 1, 1) forwards; }
+@keyframes insGuideClose {
+  to { opacity: 0; transform: translateY(10px) scale(0.97); }
+}
+.ins-guide-backdrop.is-closing { animation: insGuideBackdropOut 170ms ease forwards; }
+@keyframes insGuideBackdropOut { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .ins-guide, .ins-guide.is-closing, .ins-guide-backdrop.is-closing { animation: none; }
 }
 
 /* The top bar, from Figma "Design Post Site" node 1261:9766: 16px of padding
@@ -11190,13 +11204,9 @@ select.ins-input {
   letter-spacing: -0.015em;
   color: #0b0c0e;
 }
-
-.ins-guide-sub {
-  margin: 8px 0 22px;
-  max-width: 280px;
-  font-size: 13px;
-  line-height: 1.55;
-  color: #6b6f7a;
+/* The suggestions sit a little way under the question. */
+.ins-guide-title + .ins-guide-examples {
+  margin-top: 40px;
 }
 
 .ins-guide-examples {
@@ -11663,62 +11673,81 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   border-color: color-mix(in srgb, var(--ins-text) 10%, #e6e7ea);
 }
 
-/* While Buddy works on the answer after a message is sent: a turning
-   rainbow ring round the box (pink, red-orange, amber, yellow, lavender,
-   blue) over a soft lavender-blue tint, as refero's composer does while it
-   answers — a loader. The ring is the ::before's 3.5px edge (the rest masked
-   away); it fades in and out. */
+/* Buddy's box before the first message, and while Buddy works on an answer (a loader): a border beam (as libraries.dev/beam's). A short
+   rainbow glow rides round the edge, bleeding a little way in (no line on the border itself), while the rest
+   of the border stays as it is. The glow is a turning conic gradient kept to a ring by a mask, blurred and
+   clipped to the box. */
 @property --ins-guide-ring {
   syntax: '<angle>';
-  inherits: false;
+  inherits: true;
   initial-value: 0deg;
 }
 .ins-guide-composer {
   position: relative;
-  transition: background 240ms ease, border-color 240ms ease;
+  transition: border-color 240ms ease;
 }
-.ins-guide-composer::before {
-  content: '';
+.ins-guide-beam {
+  --ins-guide-arc: conic-gradient(
+    from var(--ins-guide-ring),
+    transparent 0%,
+    transparent 52%,
+    #b3d4f7 60%,
+    #4ba6f0 67%,
+    #d8a6f6 74%,
+    #e57ce6 80%,
+    #f0582c 87%,
+    #f5d062 94%,
+    transparent 100%
+  );
   position: absolute;
   inset: -1px;
   z-index: 2;
-  padding: 3.5px;
   border-radius: inherit;
-  background: conic-gradient(
-    from var(--ins-guide-ring),
-    #e57ce6,
-    #f0582c,
-    #f2a14c,
-    #f5d062,
-    #e9dccb,
-    #d8d2f6,
-    #9bc6f6,
-    #4ba6f0,
-    #b3d4f7,
-    #e57ce6
-  );
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 360ms ease;
+}
+/* The glow: a wider ring of the arc, blurred (the blur sits on this wrapper, so it softens the ring after
+   the mask cuts it), and only inside the box. */
+.ins-guide-beam-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  filter: blur(10px) saturate(1.3);
+  opacity: 0.72;
+}
+.ins-guide-beam-glow > span {
+  position: absolute;
+  inset: 0;
+  padding: 10px;
+  border-radius: inherit;
+  background: var(--ins-guide-arc);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 240ms ease;
 }
-.ins-guide-composer.is-working {
-  /* The ring sits over the 1px border: nothing clipped away. */
+.ins-guide-composer {
+  /* The beam sits over the 1px border: nothing clipped away. */
   overflow: visible;
-  border-color: transparent;
-  background: linear-gradient(120deg, #f8f4fb, #f3f4fa 45%, #eef3fb);
+  border-color: #e3e4e8;
 }
-.ins-guide-composer.is-working::before {
+/* At rest, an invitation: slow and soft. */
+.ins-guide-composer.is-fresh .ins-guide-beam {
+  opacity: 0.6;
+  animation: insGuideRing 4s linear infinite;
+}
+/* Working on an answer, the loader: faster and full. */
+.ins-guide-composer.is-working .ins-guide-beam {
   opacity: 1;
-  animation: insGuideRing 1.6s linear infinite;
+  animation: insGuideRing 1.96s linear infinite;
 }
 @keyframes insGuideRing {
   to { --ins-guide-ring: 360deg; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ins-guide-composer.is-working::before { animation: none; }
+  .ins-guide-composer.is-fresh .ins-guide-beam,
+  .ins-guide-composer.is-working .ins-guide-beam { animation: none; }
 }
 
 /* A box that grows with what's typed, line by line (its height is set from
