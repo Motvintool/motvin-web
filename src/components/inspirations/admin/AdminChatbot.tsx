@@ -9,6 +9,7 @@ import { useAuth } from '@/components/shared/AuthProvider';
 import { useHydrated } from '@/components/shared/useHydrated';
 import { adminApi, type AdminAppRecord, type AdminState } from '@/lib/inspirations/admin';
 import { useIsLibraryAdmin } from '../useIsLibraryAdmin';
+import { setAssistantChoice, useAssistantChoice } from '../assistantChoice';
 import { dayLabel, localDateString, parseDateInput } from '@/lib/inspirations/dates';
 import { describeOp, labelFor, type AdminOp, type ScreensAction } from '@/lib/inspirations/admin-chatbot/assistantActions';
 import { inspirationsApi, invalidateInspirationsCache } from '@/lib/inspirations/api';
@@ -197,6 +198,11 @@ export function AdminChatbot() {
       return false;
     }
   });
+  // Only one assistant's button shows in the corner (assistantChoice.ts); opening the agent makes it that one.
+  const assistant = useAssistantChoice();
+  useEffect(() => {
+    if (admin && !collapsed) setAssistantChoice('agent');
+  }, [admin, collapsed]);
   const [wide, setWide] = useState(() => {
     if (typeof window === 'undefined') return false;
     try {
@@ -946,6 +952,8 @@ export function AdminChatbot() {
   );
 
   if (collapsed) {
+    // Motvin Buddy is the one in the corner: the agent keeps only its file picker (⌘/ still opens it).
+    if (assistant === 'buddy') return picker;
     return (
       <>
         {picker}

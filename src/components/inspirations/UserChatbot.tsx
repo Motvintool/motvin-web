@@ -8,6 +8,7 @@ import { askConfirm } from './ConfirmDialog';
 import { useToast } from './Toast';
 import { useSheet } from './useSheet';
 import { useIsLibraryAdmin } from './useIsLibraryAdmin';
+import { setAssistantChoice, useAssistantChoice, type AssistantChoice } from './assistantChoice';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { greetingFor } from '@/lib/inspirations/guide-chatbot/guideGreeting';
 import { nextNudge, nudgeMessages, readNudgeState, writeNudgeState } from '@/lib/inspirations/guide-chatbot/guideNudge';
@@ -214,6 +215,68 @@ function ThinkingStatus({ slow }: { slow?: boolean }) {
   );
 }
 
+/**
+ * A pick closes the switch, even with the pointer still over it or the button: it stays closed until the
+ * pointer has left both, then hover opens it again as usual.
+ */
+let releaseAssistantSwitch: (() => void) | null = null;
+
+function closeAssistantSwitch() {
+  releaseAssistantSwitch?.();
+  const body = document.body;
+  body.classList.add('ins-assist-picked');
+  // By position, not by target: the closed switch lets the pointer through to the page behind it.
+  const over = (e: PointerEvent, selector: string, pad = 0) => {
+    const r = document.querySelector(selector)?.getBoundingClientRect();
+    return !!r && e.clientX >= r.left - pad && e.clientX <= r.right + pad && e.clientY >= r.top - pad && e.clientY <= r.bottom + pad;
+  };
+  const release = () => {
+    body.classList.remove('ins-assist-picked');
+    window.removeEventListener('pointermove', onMove);
+    document.documentElement.removeEventListener('pointerleave', release);
+    window.removeEventListener('blur', release);
+    releaseAssistantSwitch = null;
+  };
+  const onMove = (e: PointerEvent) => {
+    if (over(e, '.ins-assist-switch', 12) || over(e, '.ins-dock-pill')) return;
+    release();
+  };
+  window.addEventListener('pointermove', onMove);
+  // Leaving the window (or switching away from it) counts as leaving too: otherwise a pointer that goes off
+  // the edge and comes back straight onto the button would find the switch still closed.
+  document.documentElement.addEventListener('pointerleave', release);
+  window.addEventListener('blur', release);
+  releaseAssistantSwitch = release;
+}
+
+/** Above the corner button, for the owner: Buddy or Agent. Shows on hover (always on touch screens). */
+function AssistantSwitch({ value }: { value: AssistantChoice }) {
+  const options: { id: AssistantChoice; label: string }[] = [
+    { id: 'buddy', label: 'Buddy' },
+    { id: 'agent', label: 'Agent' },
+  ];
+  return (
+    <div className="ins-assist-switch" role="radiogroup" aria-label="Assistant in the corner">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          role="radio"
+          aria-checked={value === o.id}
+          className={value === o.id ? 'is-active' : ''}
+          onClick={(e) => {
+            setAssistantChoice(o.id);
+            e.currentTarget.blur();
+            closeAssistantSwitch();
+          }}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function UserChatbot() {
   const router = useRouter();
   const pathname = usePathname();
@@ -222,6 +285,8 @@ export function UserChatbot() {
   const signedIn = ready && Boolean(user && !user.isAnonymous);
   const libraryAdmin = useIsLibraryAdmin();
   const alongsideAdmin = signedIn && libraryAdmin.status === 'admin';
+  // The owner has Motvin Agent too: one button at a time, picked with the switch above it.
+  const assistant = useAssistantChoice();
   const displayName = signedIn ? user?.displayName : null;
   const [open, setOpen] = useState(false);
   // Closing on a desktop plays the panel's way out (back down into the Buddy button) before it goes. A phone's
@@ -451,6 +516,7 @@ export function UserChatbot() {
   const patch = (id: number, change: Partial<Line>) => setLines((all) => all.map((line) => (line.id === id ? { ...line, ...change } : line)));
 
   const openGuide = () => {
+    setAssistantChoice('buddy');
     setNudge(null);
     writeNudgeState({ ...readNudgeState(), dismissed: true });
     setDimmed(true);
@@ -769,10 +835,15 @@ export function UserChatbot() {
   };
 
   if (!open) {
+    // The owner's switch between the two assistants; the agent draws its own button when it's the one.
+    const switcher = alongsideAdmin && <AssistantSwitch value={assistant} />;
+    if (alongsideAdmin && assistant === 'agent') return switcher;
     return (
       <>
-        {nudge && (
-          <div key={nudge.key} className={`ins-guide-nudge ${alongsideAdmin ? 'is-beside-admin' : ''}`} role="status">
+        {switcher}
+        {/* The owner gets no hints: they know where Buddy is. */}
+        {nudge && !alongsideAdmin && (
+          <div key={nudge.key} className="ins-guide-nudge" role="status">
             <button type="button" className="ins-guide-nudge-text" onClick={openGuide}>
               {nudge.text}
             </button>
@@ -792,7 +863,7 @@ export function UserChatbot() {
         <button
           ref={pillRef}
           type="button"
-          className={`ins-dock-pill ins-dock-user ${alongsideAdmin ? 'is-beside-admin' : ''} ${nudge ? 'is-calling' : ''}`}
+          className={`ins-dock-pill ins-dock-user ${nudge && !alongsideAdmin ? 'is-calling' : ''}`}
           onClick={openGuide}
           aria-label="Open Motvin Buddy"
           title="Ask Motvin Buddy"

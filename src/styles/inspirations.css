@@ -13997,6 +13997,114 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 .ins-request-done p { margin: 0 0 22px; font-size: 15px; max-width: 400px; text-wrap: balance; }
 .ins-request-badge--done svg { width: 24px; height: 24px; }
 
+/* Refresh: tighter and calmer. Less air above the title, white fields with a hairline (crisper on the card's
+   grey), and the platform as one segmented switch — like the header's Apps / Webs — instead of three pills. */
+.ins-request-form h2 { font-size: 26px; margin-bottom: 6px; }
+.ins-request-badge { width: 48px; height: 48px; margin-bottom: 14px; }
+.ins-request-body { margin-top: 28px; gap: 20px; }
+.ins-request-field > span { font-size: 14px; color: #111; }
+.ins-request-field input,
+.ins-request-field textarea { border: 1px solid rgba(0, 0, 0, 0.09); background: #fff; }
+/* The same height as the platform switch below it (about 46px), not taller. */
+.ins-request-field input { padding: 12px 16px; border-radius: 10px; }
+.ins-request-field textarea { border-radius: 10px; }
+.ins-request-field input:hover:not(:focus),
+.ins-request-field textarea:hover:not(:focus) { background: #fff; border-color: rgba(0, 0, 0, 0.18); }
+.ins-request-field input:focus,
+.ins-request-field textarea:focus { border-color: #111; box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.06); }
+.ins-request-platforms { gap: 4px; padding: 4px; border-radius: 100px; background: rgba(0, 0, 0, 0.05); }
+.ins-request-platforms button { padding: 10px 14px; background: transparent; color: #555; }
+/* Hover only darkens the label; no fill, so the black pick stays the one shape in the track. */
+.ins-request-platforms button:hover:not(.is-active) { background: transparent; color: #111; }
+.ins-request-platforms button.is-active { background: #111; color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16); }
+/* The logo stack above the title (RequestLogos): the library's own apps, fanned, then a dashed empty slot
+   with the sparkle ticks over it. Fixed height, so nothing jumps while the logos load. */
+.ins-request-logos { display: flex; align-items: center; justify-content: center; height: 60px; margin-bottom: 16px; }
+.ins-request-logo,
+.ins-request-slot {
+  display: grid; place-items: center; width: 52px; height: 52px; margin-left: -10px; border-radius: 15px;
+  background: #fff; box-shadow: 0 0 0 3px #f3f3f3, 0 6px 14px -6px rgba(0, 0, 0, 0.28);
+}
+.ins-request-logo { animation: ins-request-deal 380ms cubic-bezier(0.2, 1.2, 0.3, 1) both; }
+.ins-request-logo:first-child { margin-left: 0; rotate: -8deg; }
+.ins-request-logo:nth-child(2) { rotate: -1deg; translate: 0 -3px; }
+.ins-request-logo img,
+.ins-request-logo > * { border-radius: 12px; }
+.ins-request-logo.is-blank { color: #9a9a98; background: linear-gradient(145deg, #fff, #f0f0f0); }
+@keyframes ins-request-deal { from { opacity: 0; transform: translateY(8px) scale(0.85); } to { opacity: 1; transform: none; } }
+.ins-request-slot {
+  position: relative; rotate: 9deg; color: #8a8a88;
+  outline: 1.5px dashed #c9cace; outline-offset: -6px;
+  animation: ins-request-slot-pop 520ms cubic-bezier(0.2, 1.2, 0.3, 1) 120ms both;
+}
+.ins-request-slot::before,
+.ins-request-slot::after {
+  content: ''; position: absolute; width: 2.5px; height: 12px; border-radius: 2px; background: #1a1a1a;
+  transform-origin: bottom center; animation: ins-tick 2.8s ease-in-out 700ms infinite;
+}
+.ins-request-slot::before { top: -18px; right: 6px; transform: rotate(2deg); }
+.ins-request-slot::after { top: -14px; right: -9px; transform: rotate(38deg); animation-delay: 900ms; }
+@keyframes ins-request-slot-pop { from { opacity: 0; transform: rotate(-16deg) scale(0.6); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .ins-request-logo, .ins-request-slot, .ins-request-slot::before, .ins-request-slot::after { animation: none; }
+}
+/* Sent: a solid green circle pops in — a soft shine on top, two fading halo rings — a ring pulses
+   out once, six small dots burst around it, and the tick draws itself. */
+.ins-request-success {
+  position: relative; display: grid; place-items: center; width: 60px; height: 60px; margin: 16px 0 32px;
+  border-radius: 50%; color: #fff;
+  background: #1fa855;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.08),
+    0 0 0 10px rgba(31, 168, 85, 0.13),
+    0 0 0 21px rgba(31, 168, 85, 0.05),
+    0 12px 24px -8px rgba(26, 158, 76, 0.55);
+  animation: ins-request-success-in 560ms cubic-bezier(0.2, 1.4, 0.3, 1) both;
+}
+.ins-request-success svg { position: relative; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.12)); }
+.ins-request-success::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%; border: 2px solid #1fa855; pointer-events: none;
+  animation: ins-request-pulse 1000ms cubic-bezier(0.2, 0.8, 0.2, 1) 380ms both;
+}
+.ins-request-success i {
+  position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%;
+  background: #2bbd63; opacity: 0; pointer-events: none;
+  animation: ins-request-burst 700ms cubic-bezier(0.2, 0.8, 0.2, 1) 420ms both;
+}
+.ins-request-success i:nth-child(even) { width: 4px; height: 4px; margin: -2px 0 0 -2px; background: #8fe0ae; }
+@keyframes ins-request-success-in { from { opacity: 0; scale: 0.4; } to { opacity: 1; scale: 1; } }
+@keyframes ins-request-pulse { from { opacity: 0.5; scale: 1; } to { opacity: 0; scale: 1.9; } }
+@keyframes ins-request-burst {
+  0% { opacity: 0; transform: rotate(var(--a)) translateY(-30px) scale(0.4); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(-50px) scale(1); }
+}
+.ins-request-tick { stroke-dasharray: 1; stroke-dashoffset: 1; animation: ins-request-tick-draw 380ms cubic-bezier(0.65, 0, 0.35, 1) 300ms forwards; }
+@keyframes ins-request-tick-draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .ins-request-success { animation: none; }
+  .ins-request-success::after, .ins-request-success i { display: none; }
+  .ins-request-tick { animation: none; stroke-dashoffset: 0; }
+}
+/* The done screen in the form's own sizes, so the popup doesn't change scale on sending. */
+.ins-request-done { gap: 0; }
+.ins-request-done h3 { margin: 0; font-size: 26px; }
+.ins-request-done p { margin: 0; }
+/* What was asked for, as a chip: the name, then its platform. */
+.ins-request-done .ins-request-done-app {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%; margin: 14px 0 10px; padding: 6px 6px 6px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 100px; background: #fff; font-size: 15px;
+}
+.ins-request-done-app strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ins-request-done-app span { padding: 3px 10px; border-radius: 100px; background: rgba(0, 0, 0, 0.05); color: #555; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.ins-request-done p:not(.ins-request-done-app) { margin-bottom: 26px; }
+@media (min-width: 760px) {
+  .ins-request-form { padding: 52px 44px 0; }
+  .ins-request-actions { margin: 0 -44px; }
+  .ins-request-done { padding: 52px 44px 32px; }
+}
+
 /* Admin → Requests */
 .ins-reqlist { display: flex; flex-direction: column; gap: 4px; }
 /* Above the requests: the sort switch, and how many apps and requests there are. */
@@ -17447,15 +17555,42 @@ html.ins-bat-on .ins-search-bat { display: block; }
   .ins-header { transition: none; }
 }
 
-/* Back to top (BackToTop): at the end of a long page, a pill centred at the foot of the window — arrow and
-   "Scroll to top" — clear of the assistant's button in the corner. In the cards' selection tick's
-   see-through grey glass (.ins-card-select-ring.is-selected), so it reads over any screen behind it. It rises and fades in, and drops away again once the page leaves the end; the arrow nudges up
-   under the pointer. */
-.ins-back-to-top {
+/* Back to top (BackToTop): at the end of a long page, a row centred at the foot of the window — "Scroll to
+   top" and "Request an app" — clear of the assistant's button in the corner. In the cards' selection tick's
+   see-through grey glass (.ins-card-select-ring.is-selected), so it reads over any screen behind it. The row
+   rises and fades in, and drops away again once the page leaves the end; each arrow / plus nudges up under
+   the pointer. */
+.ins-end-actions {
   position: fixed;
   left: 50%;
   bottom: 24px;
   z-index: 74;
+  display: flex;
+  gap: 10px;
+  opacity: 0;
+  translate: -50% 20px;
+  scale: 0.92;
+  pointer-events: none;
+  transition:
+    opacity 220ms var(--ins-ease),
+    translate 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    scale 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ins-end-actions.is-shown {
+  opacity: 1;
+  translate: -50% 0;
+  scale: 1;
+  pointer-events: auto;
+}
+/* The collection bar (selecting screens or flows) takes the same spot at the foot of the window: the row
+   yields. (Matched by the bar itself; the toast host shares the `.ins-float-collection` class.) */
+.ins-root:has(.ins-float-collection-bar) .ins-end-actions {
+  opacity: 0;
+  translate: -50% 20px;
+  scale: 0.92;
+  pointer-events: none;
+}
+.ins-back-to-top {
   display: inline-flex;
   align-items: center;
   gap: 12px;
@@ -17477,45 +17612,75 @@ html.ins-bat-on .ins-search-bat { display: block; }
   letter-spacing: 0.01em;
   white-space: nowrap;
   cursor: var(--ins-cursor-hand, pointer);
-  opacity: 0;
-  translate: -50% 20px;
-  scale: 0.92;
-  pointer-events: none;
   transition:
-    opacity 220ms var(--ins-ease),
     translate 420ms cubic-bezier(0.22, 1, 0.36, 1),
     scale 420ms cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow var(--ins-fast) var(--ins-ease),
     background var(--ins-fast) var(--ins-ease);
 }
-.ins-back-to-top.is-shown {
+/* "Request an app": just the plus, a round button the pill's height. */
+.ins-back-to-top.is-icon {
+  justify-content: center;
+  width: 52px;
+  padding: 0;
+}
+/* Its name, in a small dark tip above it on hover or keyboard focus. */
+.ins-back-to-top.is-icon {
+  position: relative;
+}
+.ins-end-tip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #141414;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  translate: -50% 4px;
+  transition: opacity 160ms var(--ins-ease), translate 160ms var(--ins-ease);
+}
+/* Only where there's a real hover: a tap on a phone would leave it stuck on. */
+@media (hover: hover) {
+  .ins-back-to-top.is-icon:hover .ins-end-tip {
+    opacity: 1;
+    translate: -50% 0;
+    transition-delay: 120ms;
+  }
+}
+.ins-back-to-top.is-icon:focus-visible .ins-end-tip {
   opacity: 1;
   translate: -50% 0;
-  scale: 1;
-  pointer-events: auto;
 }
-/* The collection bar (selecting screens or flows) takes the same spot at the foot of the window: the pill
-   yields. (Matched by the bar itself; the toast host shares the `.ins-float-collection` class.) */
-.ins-root:has(.ins-float-collection-bar) .ins-back-to-top {
-  opacity: 0;
-  translate: -50% 20px;
-  scale: 0.92;
-  pointer-events: none;
+/* The plus keeps the arrow's round chip at rest; on hover the chip fades out and the plus turns a quarter
+   instead of nudging up — "add", not "go up". */
+.ins-back-to-top.is-icon .ins-back-to-top-arrow {
+  transition: rotate 320ms cubic-bezier(0.34, 1.56, 0.64, 1), background var(--ins-fast) var(--ins-ease);
+}
+.ins-back-to-top.is-icon:hover .ins-back-to-top-arrow {
+  translate: none;
+  rotate: 90deg;
+  background: transparent;
 }
 /* Hover lifts it a step with a deeper shadow; the press sinks it, quickly. */
 .ins-back-to-top:hover {
-  translate: -50% -2px;
+  translate: 0 -2px;
   background: rgba(55, 55, 55, 0.8);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.14),
     0 14px 32px -10px rgba(0, 0, 0, 0.5),
     0 3px 8px -2px rgba(0, 0, 0, 0.28);
-  transition-duration: 220ms, 220ms, 220ms, 220ms, 220ms;
+  transition-duration: 220ms, 220ms, 220ms, 220ms;
 }
 .ins-back-to-top:active {
   scale: 0.96;
-  translate: -50% 0;
-  transition-duration: 80ms, 80ms, 80ms, 80ms, 80ms;
+  translate: 0 0;
+  transition-duration: 80ms, 80ms, 80ms, 80ms;
 }
 /* The arrow sits in a round chip; on hover it nudges up (theme.css keeps svgs from transitioning, so the
    movement is on the wrapper). */
@@ -17533,28 +17698,44 @@ html.ins-bat-on .ins-search-bat { display: block; }
   translate: 0 -2px;
   background: rgba(255, 255, 255, 0.2);
 }
-/* Room for it at the end of Explore (with .ins-main's own 32px): there the pill rests on empty page, clear of
+/* Room for it at the end of Explore (with .ins-main's own 32px): there the row rests on empty page, clear of
    the last row's names. */
 .ins-explore-view {
   padding-bottom: 64px;
 }
 @media (max-width: 640px) {
-  .ins-back-to-top {
+  .ins-end-actions {
     bottom: 16px;
+    gap: 8px;
   }
+  /* Two pills side by side on a phone: a touch slimmer, so both fit with Buddy in the corner. */
+  .ins-back-to-top {
+    height: 46px;
+    gap: 8px;
+    padding: 0 16px 0 7px;
+    font-size: 15px;
+  }
+  .ins-back-to-top-arrow {
+    width: 32px;
+    height: 32px;
+  }
+  .ins-back-to-top.is-icon { width: 46px; }
 }
-/* A phone picking cards to save: the save bar takes the window's foot, so the pill steps aside. */
+/* A phone picking cards to save: the save bar takes the window's foot, so the row steps aside. */
 @media (max-width: 759px) {
-  .ins-root:has(.ins-float-collection-bar) .ins-back-to-top {
+  .ins-root:has(.ins-float-collection-bar) .ins-end-actions {
     opacity: 0;
     pointer-events: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ins-back-to-top { translate: -50% 0; scale: 1; transition: opacity 120ms linear; }
-  .ins-back-to-top:hover { translate: -50% 0; }
+  .ins-end-actions { translate: -50% 0; scale: 1; transition: opacity 120ms linear; }
+  .ins-root:has(.ins-float-collection-bar) .ins-end-actions { translate: -50% 0; scale: 1; }
+  .ins-back-to-top:hover { translate: none; }
   .ins-back-to-top:active { scale: none; }
   .ins-back-to-top:hover .ins-back-to-top-arrow { translate: none; }
+  .ins-end-tip { translate: -50% 0; transition: opacity 120ms linear; }
+  .ins-back-to-top.is-icon:hover .ins-back-to-top-arrow { rotate: none; }
 }
 
 /* ─── Press feedback ───────────────────────────────────────────────────────────────────────────────────────
@@ -19819,3 +20000,78 @@ div.ins-version { cursor: default; flex-wrap: wrap; }
 /* A screen here is often a fraction of a pixel wide, and the fade then stops just short of its edge: a thin
    strip of the screenshot shows down the side. The fade runs a pixel past each edge (the frame clips it). */
 .ins-similar-shot .ins-card-hover-footer::before { right: -1px; bottom: -1px; left: -1px; }
+
+/* The owner's assistant switch (UserChatbot's AssistantSwitch): "Buddy | Agent" just above the corner button.
+   It shows while the button or the switch is hovered — a strip under it bridges the gap — and always on a
+   touch screen; it steps away while either assistant is open. */
+.ins-assist-switch {
+  position: fixed;
+  right: 20px;
+  bottom: 85px;
+  z-index: 76;
+  display: flex;
+  gap: 2px;
+  /* The platform peek's smoked glass (.ins-platform-peek): dark grey over a blur, a hairline highlight
+     along the top edge and a soft shadow. */
+  padding: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(50, 50, 50, 0.78);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 28px -10px rgba(0, 0, 0, 0.45),
+    0 2px 6px -2px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  translate: 0 6px;
+  pointer-events: none;
+  transition: opacity 160ms var(--ins-ease), translate 200ms var(--ins-ease);
+}
+.ins-assist-switch::after {
+  content: '';
+  position: absolute;
+  inset: 100% 0 auto;
+  height: 12px;
+}
+.ins-assist-switch button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: background var(--ins-fast) var(--ins-ease), color var(--ins-fast) var(--ins-ease);
+}
+.ins-assist-switch button:hover:not(.is-active) { color: #fff; }
+/* The pick: a light see-through white on the glass, its label white. */
+.ins-assist-switch button.is-active { background: rgba(255, 255, 255, 0.1); color: #fff; }
+body:has(.ins-dock-pill:hover) .ins-assist-switch,
+.ins-assist-switch:hover,
+.ins-assist-switch:focus-within {
+  opacity: 1;
+  translate: 0 0;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .ins-assist-switch { opacity: 1; translate: 0 0; pointer-events: auto; }
+}
+/* Just picked (closeAssistantSwitch): closed until the pointer leaves. Important, to win over the hover rules. */
+body.ins-assist-picked .ins-assist-switch {
+  opacity: 0 !important;
+  translate: 0 6px !important;
+  pointer-events: none !important;
+}
+@media (max-width: 759px) {
+  .ins-assist-switch { right: 12px; bottom: 77px; }
+}
+body:has(aside.ins-dock) .ins-assist-switch,
+body:has(aside.ins-guide) .ins-assist-switch {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-assist-switch { translate: none; transition: opacity 120ms linear; }
+}

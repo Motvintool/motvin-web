@@ -8,8 +8,11 @@ import { submitAppRequest, updateMyRequest, type MyRequest } from '@/lib/firebas
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { Platform } from '@/lib/inspirations/types';
-import { AppleIcon, CheckIcon, CloseIcon, WebAppIcon, WebIcon } from './Icons';
+import { AppleIcon, CheckIcon, CloseIcon, PlusIcon, WebAppIcon, WebIcon } from './Icons';
 import { useSheet } from './useSheet';
+import { useAsync } from './useAsync';
+import { AppLogo } from './AppLogo';
+import { inspirationsApi } from '@/lib/inspirations/api';
 
 /**
  * "Request an app": the popup behind the search modal's "Request app" link. It looks like the
@@ -24,11 +27,33 @@ const PLATFORMS: { value: Platform; Icon: typeof AppleIcon }[] = [
   { value: 'web', Icon: WebIcon },
 ];
 
-function SparkIcon() {
+/**
+ * Above the title: two apps already in the library on the chosen platform, fanned, and an empty slot
+ * beside them — "yours goes here". Switching the platform deals that platform's apps.
+ */
+function RequestLogos({ platform }: { platform: Platform }) {
+  const { data: apps } = useAsync(() => inspirationsApi.listApps(), 'request-logos');
+  const shown = (apps ?? []).filter((a) => a.logo && a.platforms.includes(platform)).slice(0, 2);
+  // A platform with no apps yet (once the list has loaded) keeps the stack's shape with two plain tiles
+  // showing its own icon, rather than borrowing another platform's logos.
+  const Icon = PLATFORMS.find((p) => p.value === platform)?.Icon ?? AppleIcon;
+  const blanks = apps && shown.length === 0 ? 2 : 0;
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <path d="M12 2c.6 4.8 2.2 7.4 5.2 8.8L22 12l-4.8 1.2C14.200 14.600 12.600 17.200 12 22c-.6-4.800-2.200-7.400-5.200-8.800L2 12l4.800-1.200C9.800 9.400 11.400 6.800 12 2z" />
-    </svg>
+    <span className="ins-request-logos" aria-hidden>
+      {shown.map((app, i) => (
+        <span key={`${platform}-${app.id}`} className="ins-request-logo" style={{ animationDelay: `${i * 50}ms` }}>
+          <AppLogo app={app} size={44} />
+        </span>
+      ))}
+      {Array.from({ length: blanks }, (_, i) => (
+        <span key={`${platform}-blank-${i}`} className="ins-request-logo is-blank" style={{ animationDelay: `${i * 50}ms` }}>
+          <Icon size={20} />
+        </span>
+      ))}
+      <span className="ins-request-slot">
+        <PlusIcon size={20} strokeWidth={2.2} />
+      </span>
+    </span>
   );
 }
 
@@ -154,13 +179,27 @@ export function RequestAppModal({
 
         {state === 'sent' ? (
           <div className="ins-request-done" role="status">
-            <span className="ins-request-badge ins-request-badge--done" aria-hidden>
-              <CheckIcon size={24} />
+            {/* Success: a green circle in a soft halo, its tick drawing itself in. */}
+            <span className="ins-request-success" aria-hidden>
+              {/* Six small dots that burst out once, around the circle. */}
+              {Array.from({ length: 6 }, (_, i) => (
+                <i key={i} style={{ ['--a' as string]: `${i * 60 + 30}deg` }} />
+              ))}
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                <path className="ins-request-tick" pathLength={1} d="M5 12.5l4.5 4.5L19 7.5" />
+              </svg>
             </span>
-            <h3>{existing ? 'Saved.' : 'Thanks — we’ve got it.'}</h3>
+            <h3>{existing ? 'Saved' : 'Request sent'}</h3>
+            <p className="ins-request-done-app">
+              <strong>{name.trim()}</strong>
+              <span>{PLATFORM_LABEL[platform]}</span>
+            </p>
             <p>
-              <strong>{name.trim()}</strong> ({PLATFORM_LABEL[platform]}){' '}
-              {existing ? 'has been updated.' : 'is on our list. The most-requested apps are added first.'}
+              {existing
+                ? 'Your request has been updated.'
+                : emailValue.trim()
+                  ? 'The most-requested apps go in first. We’ll email you when it’s added.'
+                  : 'The most-requested apps go in first.'}
             </p>
             <div className="ins-request-buttons">
               {/* Where to find it again; the same page "Request apps" opens from now on. */}
@@ -176,9 +215,7 @@ export function RequestAppModal({
           </div>
         ) : (
           <form className="ins-request-form" onSubmit={step === 0 ? next : submit} noValidate>
-            <span className="ins-request-badge" aria-hidden>
-              <SparkIcon />
-            </span>
+            <RequestLogos platform={platform} />
             <h2>{step === 0 ? (existing ? 'Edit request' : 'Request an app') : 'Anything else?'}</h2>
             <p className="ins-request-intro">
               {step === 0
@@ -192,16 +229,12 @@ export function RequestAppModal({
               {step === 0 ? (
                 <>
                   <label className="ins-request-field">
-                    <span>
-                      <i className="ins-request-req" aria-hidden>*</i>App name
-                    </span>
+                    <span>App name</span>
                     <input ref={nameRef} aria-required="true" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="e.g. Notion" autoComplete="off" />
                   </label>
 
                   <div className="ins-request-field">
-                    <span id="ins-request-platform">
-                      <i className="ins-request-req" aria-hidden>*</i>Platform
-                    </span>
+                    <span id="ins-request-platform">Platform</span>
                     <div className="ins-request-platforms" role="radiogroup" aria-labelledby="ins-request-platform">
                       {PLATFORMS.map(({ value, Icon }) => (
                         <button
