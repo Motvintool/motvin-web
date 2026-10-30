@@ -48,7 +48,7 @@ const KINDS: Array<{ id: Kind; title: string; desc: string }> = [
   { id: 'phone', title: 'Phone numbers', desc: 'Any real phone number on the screen.' },
   { id: 'email', title: 'Emails', desc: 'Email addresses. Your “motvin” test emails are left alone.' },
   { id: 'address', title: 'Home addresses', desc: 'Street or home addresses of real people.' },
-  { id: 'name', title: 'Names in chats and messages', desc: 'Real people’s names in chats, contacts and comments.' },
+  { id: 'name', title: 'Names', desc: 'Your own name (profile, forms) and names in your chats and contacts.' },
   { id: 'card', title: 'Card or bank numbers', desc: 'Card, bank or account numbers.' },
 ];
 const KIND_LABEL: Record<Kind, string> = { photo: 'Photo', phone: 'Phone', email: 'Email', address: 'Address', name: 'Name', card: 'Card' };
@@ -191,9 +191,14 @@ export function ProtectPanel() {
               <p className="ins-addflow-title">To review · {toReview.length}</p>
               <p className="ins-muted">Check the boxes, then Protect. Click a box’s × to leave that part as it is, or drag on a screen to hide more.</p>
             </div>
+            <div className="ins-admin-actions ins-admin-actions--tight">
+            <button type="button" className="ins-btn ins-btn--ghost" onClick={() => void control(last, 'recheck-all')} title="The agent looks at every screen waiting here again">
+              Check all again
+            </button>
             <button type="button" className="ins-btn ins-btn--primary" onClick={() => { if (window.confirm(`Protect all ${toReview.length} screens? Each picture is replaced by the protected one — the original can’t be brought back.`)) void control(last, 'approve-all'); }}>
               <CheckIcon size={13} /> Protect all
             </button>
+            </div>
           </div>
           <div className={`ins-protect-grid ${last.settings.platform === 'ios' ? '' : 'is-web'}`}>
             {toReview.map((item) => (
@@ -205,6 +210,7 @@ export function ProtectPanel() {
                 onBoxes={(boxes) => void control(last, 'boxes', item.screenId, boxes)}
                 onApprove={() => void control(last, 'approve', item.screenId)}
                 onSkip={() => void control(last, 'skip', item.screenId)}
+                onRecheck={() => void control(last, 'recheck', item.screenId)}
               />
             ))}
           </div>
@@ -387,15 +393,17 @@ function JobBoard({ job, onControl }: { job: Job; onControl: (job: Job, action: 
           const mine = job.items.filter((i) => i.appId === app.appId);
           const of = (stages: Stage[]) => mine.filter((i) => stages.includes(i.stage)).length;
           const busy = of(['queued', 'checking']) > 0 && job.state !== 'done';
-          const stage = busy ? (job.state === 'paused' ? 'paused' : 'checking') : 'done';
+          // One app at a time: the one with screens with the agent is checking, the ones not reached yet wait.
+          const started = of(['checking']) > 0 || of(['queued', 'checking']) < mine.length;
+          const stage = !busy ? 'done' : job.state === 'paused' ? 'paused' : of(['checking']) > 0 ? 'checking' : started ? 'checking' : 'waiting';
           return (
-            <li key={app.appId} className={`ins-batch-item is-${stage === 'done' ? 'done' : 'uploading'}`}>
+            <li key={app.appId} className={`ins-batch-item is-${stage === 'done' ? 'done' : stage === 'waiting' ? 'queued' : 'uploading'}`}>
               <div className="ins-batch-item-main">
                 <span className="ins-batch-item-title">{app.name}</span>
                 <span className="ins-batch-stage">
                   {stage === 'checking' && <span className="ins-spinner" aria-hidden />}
                   {stage === 'done' && <CheckIcon size={12} />}
-                  {stage === 'checking' ? 'Checking' : stage === 'paused' ? 'Paused' : 'Done'}
+                  {stage === 'checking' ? 'Checking' : stage === 'waiting' ? 'Waiting' : stage === 'paused' ? 'Paused' : 'Done'}
                 </span>
               </div>
               <div className="ins-batch-item-sub">
@@ -417,7 +425,7 @@ function JobBoard({ job, onControl }: { job: Job; onControl: (job: Job, action: 
 }
 
 /** One screen to review: its boxes over it, previewed as they'll look; × on a box removes it, a drag adds one. */
-function ReviewShot({ item, style, stamp, onBoxes, onApprove, onSkip }: { item: Item; style: Settings['style']; stamp: number; onBoxes: (boxes: Box[]) => void; onApprove: () => void; onSkip: () => void }) {
+function ReviewShot({ item, style, stamp, onBoxes, onApprove, onSkip, onRecheck }: { item: Item; style: Settings['style']; stamp: number; onBoxes: (boxes: Box[]) => void; onApprove: () => void; onSkip: () => void; onRecheck: () => void }) {
   const frame = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<{ x0: number; y0: number; x: number; y: number } | null>(null);
   const src = `${inspirationsApi.mediaUrl(`/api/inspirations/screens/${item.file}`)}?t=${stamp}`;
@@ -459,6 +467,7 @@ function ReviewShot({ item, style, stamp, onBoxes, onApprove, onSkip }: { item: 
         <span className="ins-protect-shot-name" title={item.name}>{item.name}</span>
         <span className="ins-muted">{[...new Set(item.boxes.map((b) => KIND_LABEL[b.kind]))].join(', ')}</span>
         <div className="ins-protect-shot-actions">
+          <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm" onClick={onRecheck} title="The agent looks at this screen again">Check again</button>
           <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm" onClick={onSkip}>Skip</button>
           <button type="button" className="ins-btn ins-btn--primary ins-btn--sm" onClick={onApprove} disabled={!item.boxes.length}>Protect</button>
         </div>

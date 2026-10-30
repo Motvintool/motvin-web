@@ -8,11 +8,11 @@ import { PROTECT_KINDS, controlProtectJob, createProtectJob, listProtectJobs, pr
  * GET    ?platform=   every check, the platform's apps (screens, and how many not checked yet), and
  *                     whether the agent can run here.
  * POST   a new check: { settings, appIds }.
- * PATCH  ?id=&action=pause|resume|stop|clear|approve|skip|approve-all|boxes[&screen=]; boxes sends { boxes }.
+ * PATCH  ?id=&action=pause|resume|stop|clear|approve|skip|approve-all|boxes|recheck|recheck-all[&screen=]; boxes sends { boxes }.
  */
 
 const PLATFORMS = ['ios', 'webapp', 'web'] as const;
-const ACTIONS: ProtectAction[] = ['pause', 'resume', 'stop', 'clear', 'approve', 'skip', 'approve-all', 'boxes'];
+const ACTIONS: ProtectAction[] = ['pause', 'resume', 'stop', 'clear', 'approve', 'skip', 'approve-all', 'boxes', 'recheck', 'recheck-all'];
 const denied = () => fail('This account may not administer the library.', 403);
 const platformOf = (value: unknown): ProtectSettings['platform'] => (PLATFORMS.includes(value as ProtectSettings['platform']) ? (value as ProtectSettings['platform']) : 'ios');
 

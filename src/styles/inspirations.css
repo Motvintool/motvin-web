@@ -20125,4 +20125,6 @@ body:has(aside.ins-guide) .ins-assist-switch {
 .ins-protect-shot-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .ins-protect-shot-name { flex: 1 1 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
 .ins-protect-shot-foot .ins-muted { flex: 1; min-width: 0; font-size: 13px; }
-.ins-protect-shot-actions { display: flex; gap: 6px; margin-left: auto; }
+/* The three actions share the card's own width, so they never spill into the next card. */
+.ins-protect-shot-actions { display: flex; gap: 4px; width: 100%; }
+.ins-protect-shot-actions .ins-btn { flex: 1 1 0; min-width: 0; height: 34px; padding: 0 8px; font-size: 14px; }

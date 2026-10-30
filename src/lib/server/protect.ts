@@ -78,7 +78,7 @@ const jobsFile = () => join(protectDir(), 'protect.json');
 const checkedFile = () => join(protectDir(), 'protect-checked.json');
 const workDir = () => join(protectDir(), 'protect-work');
 
-type Runner = { jobs: ProtectJob[]; loaded: boolean; timer: ReturnType<typeof setInterval> | null; ticking: boolean; child: ChildProcess | null; callStarted: number; lastTick: number };
+type Runner = { jobs: ProtectJob[]; loaded: boolean; timer: ReturnType<typeof setInterval> | null; ticking: boolean; child: ChildProcess | null; callStarted: number; lastTick: number; module?: symbol };
 const store = globalThis as unknown as { __motvinProtect?: Runner };
 const runner: Runner = (store.__motvinProtect ??= { jobs: [], loaded: false, timer: null, ticking: false, child: null, callStarted: 0, lastTick: 0 });
 
@@ -162,10 +162,14 @@ export function listProtectJobs(): ProtectJob[] {
   return runner.jobs.filter((job) => !job.cleared);
 }
 
+/** This copy of the module: after an edit (hot reload) the runner's timer moves over to the new code. */
+const MODULE = Symbol('protect');
+
 export function startProtectRunner() {
   load();
-  if (runner.timer) return;
-  runner.lastTick = Date.now();
+  if (runner.timer && runner.module === MODULE) return;
+  if (runner.timer) clearInterval(runner.timer);
+  runner.module = MODULE;
   runner.timer = setInterval(() => void tick(), 2000);
 }
 
@@ -200,7 +204,7 @@ export function createProtectJob(input: { createdBy: string; settings: ProtectSe
   return job;
 }
 
-export type ProtectAction = 'pause' | 'resume' | 'stop' | 'clear' | 'approve' | 'skip' | 'approve-all' | 'boxes';
+export type ProtectAction = 'pause' | 'resume' | 'stop' | 'clear' | 'approve' | 'skip' | 'approve-all' | 'boxes' | 'recheck' | 'recheck-all';
 
 export async function controlProtectJob(id: string, action: ProtectAction, screenId?: string, boxes?: ProtectBox[]): Promise<ProtectJob | null> {
   load();
@@ -241,6 +245,32 @@ export async function controlProtectJob(id: string, action: ProtectAction, scree
         if (item.boxes.length) markChecked([item]);
       }
       break;
+    case 'recheck':
+      // The agent looks at this screen again; a finished check picks up again for it.
+      if (item && ['found', 'clean', 'failed'].includes(item.stage)) {
+        item.stage = 'queued';
+        item.boxes = [];
+        item.error = undefined;
+        if (job.state === 'done') {
+          job.state = 'running';
+          job.finishedAt = null;
+        }
+        startProtectRunner();
+      }
+      break;
+    case 'recheck-all':
+      // Everything waiting for review goes back to the agent (after its instructions changed, say).
+      for (const i of job.items) {
+        if (i.stage !== 'found') continue;
+        i.stage = 'queued';
+        i.boxes = [];
+      }
+      if (job.state === 'done' && job.items.some((i) => i.stage === 'queued')) {
+        job.state = 'running';
+        job.finishedAt = null;
+      }
+      startProtectRunner();
+      break;
     case 'approve-all':
       for (const i of job.items) if (i.stage === 'found') await applyItem(job, i);
       break;
@@ -256,19 +286,13 @@ function finish(job: ProtectJob) {
 }
 
 async function tick() {
-  if (runner.ticking) return;
+  // One call at a time: the tick that started a call holds this until the call is over.
+  if (runner.ticking || runner.child) return;
   runner.ticking = true;
   const now = Date.now();
-  const since = now - runner.lastTick;
-  runner.lastTick = now;
   try {
     const job = runner.jobs.find((j) => j.state === 'running' && !j.cleared);
     if (!job) return;
-    if (runner.child) {
-      job.workMs += since;
-      if (now - runner.callStarted > CALL_TIMEOUT_MS) runner.child.kill('SIGTERM');
-      return;
-    }
     if (job.waitUntil && Date.parse(job.waitUntil) > now) return;
     job.waitUntil = null;
     const next = job.items.filter((i) => i.stage === 'queued').slice(0, PER_CALL);
@@ -277,24 +301,30 @@ async function tick() {
       save();
       return;
     }
+    const began = Date.now();
     await checkScreens(job, next);
+    // Working time: preparing the pictures, the agent's call and saving what it found.
+    job.workMs += Date.now() - began;
+    save();
   } finally {
     runner.ticking = false;
   }
 }
 
+// Only what is private to the person who recorded the screens — never what the app shows to everyone.
 const KIND_TEXT: Record<ProtectKind, string> = {
-  photo: '"photo": a real personal photo or video thumbnail — real people, faces, homes, family or private moments, profile pictures of real people. In a photo picker, camera roll or gallery that shows the phone owner\'s own library, EVERY thumbnail is personal (screenshots and photos of screens too) — box each one, including ones cut off at the edges. NOT the app\'s own artwork, marketing images, promo banners, sample templates, illustrations, icons or logos.',
-  phone: '"phone": a real phone number.',
-  email: '"email": an email address. Leave out any email that contains "motvin" — those are the library\'s own test accounts.',
-  address: '"address": a home or street address of a real person.',
-  name: '"name": a real private person\'s name in chats, messages, contacts or comments (not brand, product or celebrity names, and not the app\'s own sample names).',
-  card: '"card": a card, bank or account number.',
+  photo: '"photo": photos that belong to the phone owner (the person who recorded these screens): every thumbnail in their own camera roll, photo picker, album or gallery grid, whatever it shows — people, places, screenshots of other apps, chats, ads, documents, photos of screens — box each one, including ones cut off at the edges; their own profile picture; photos in their private chats. NOT anything the app shows from its own catalog or from other people publicly: listings, homes, hotels, hosts, sellers, creators, restaurants, food, products, posts in public feeds, reviews, ads, banners, the app\'s artwork, sample templates, illustrations, icons or logos — even when real people are in them.',
+  phone: '"phone": the phone owner\'s own phone number, or one of their contacts\' — not a business, host, support or helpline number the app shows.',
+  email: '"email": the phone owner\'s own email, or a contact\'s — not a business or support email the app shows. Leave out any email that contains "motvin": those are the library\'s own test accounts.',
+  address: '"address": the phone owner\'s own home or delivery address — not the address of a listing, hotel, restaurant, shop or business the app shows.',
+  name: '"name": the phone owner\'s own name wherever it shows (their profile, account menu, greeting, forms they filled in), or a private person\'s name from their own chats, messages, contacts or family — not hosts, sellers, creators, reviewers, businesses, brands or celebrities the app shows publicly, and not the app\'s sample names. Names containing "motvin" are the library\'s test accounts: leave them.',
+  card: '"card": the phone owner\'s card, bank or account number.',
 };
 
-function prompt(kinds: ProtectKind[], files: string[]) {
+export function protectPrompt(kinds: ProtectKind[], files: string[]) {
   return [
     'You check app screenshots for personal content that must be hidden before they are published in a public UI library.',
+    'Hide only what is private to the phone owner — the person who recorded these screens — and the people in their own chats and contacts. What the app shows to every user (its listings, hosts, sellers, posts, products, reviews, ads) is not private: leave it alone.',
     `Read each image file in the current folder: ${files.join(', ')}. Only read them; do not write, change or run anything.`,
     '',
     'Find only these kinds:',
@@ -338,7 +368,7 @@ async function checkScreens(job: ProtectJob, items: ProtectItem[]) {
     return;
   }
 
-  const args = ['-p', prompt(job.settings.kinds, files), '--model', MODEL, '--allowedTools', 'Read', '--output-format', 'json'];
+  const args = ['-p', protectPrompt(job.settings.kinds, files), '--model', MODEL, '--allowedTools', 'Read', '--output-format', 'json'];
   runner.callStarted = Date.now();
   const output = await new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve) => {
     const child = spawn(cli, args, { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, NO_COLOR: '1' } });
@@ -351,7 +381,12 @@ async function checkScreens(job: ProtectJob, items: ProtectItem[]) {
     child.stderr?.on('data', (chunk: Buffer) => {
       if (stderr.length < 100_000) stderr += chunk.toString();
     });
-    child.on('close', (code) => resolve({ code, stdout, stderr }));
+    // A call that hangs is ended, and its screens are marked failed below.
+    const limit = setTimeout(() => child.kill('SIGTERM'), CALL_TIMEOUT_MS);
+    child.on('close', (code) => {
+      clearTimeout(limit);
+      resolve({ code, stdout, stderr });
+    });
     child.on('error', (failure) => resolve({ code: -1, stdout, stderr: failure.message }));
   });
   runner.child = null;
