@@ -20076,3 +20076,53 @@ body:has(aside.ins-guide) .ins-assist-switch {
 @media (prefers-reduced-motion: reduce) {
   .ins-assist-switch { translate: none; transition: opacity 120ms linear; }
 }
+
+/* Admin → Protect screens (ProtectPanel). The apps and the kinds to hide as tickable rows; the screens to
+   review as a grid of cards, each with its boxes drawn over it, previewed as they'll look. */
+.ins-protect-apphead { display: flex; align-items: center; gap: 10px; }
+.ins-protect-apphead .ins-app-search { flex: 1; }
+.ins-protect-apps,
+.ins-protect-kinds { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ins-protect-apps { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); max-height: 320px; overflow-y: auto; }
+.ins-protect-app,
+.ins-protect-kind {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--ins-border); border-radius: 14px;
+  background: var(--ins-card); cursor: var(--ins-cursor-hand, pointer); transition: border-color var(--ins-fast) var(--ins-ease), background var(--ins-fast) var(--ins-ease);
+}
+.ins-protect-kind { align-items: flex-start; padding: 14px 16px; }
+.ins-protect-kind > span { display: flex; flex-direction: column; gap: 2px; }
+.ins-protect-app:hover,
+.ins-protect-kind:hover { border-color: var(--ins-border-strong); }
+.ins-protect-app.is-on,
+.ins-protect-kind.is-on { border-color: #111; }
+.ins-protect-app input,
+.ins-protect-kind input { width: 16px; height: 16px; margin: 0; accent-color: #111; flex: none; }
+.ins-protect-kind input { margin-top: 2px; }
+.ins-protect-app-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ins-protect-usage { margin: 10px 2px 0; font-size: 13px; }
+
+.ins-protect-review { margin-bottom: 24px; }
+.ins-protect-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-top: 14px; }
+.ins-protect-grid.is-web { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.ins-protect-shot { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ins-protect-frame {
+  position: relative; overflow: hidden; border: 1px solid var(--ins-border); border-radius: 18px; background: #f3f3f2;
+  cursor: crosshair; touch-action: none; user-select: none;
+}
+.ins-protect-frame img { display: block; width: 100%; height: auto; pointer-events: none; }
+/* The preview of a hidden part: the same blur or grey box the saved picture will get, with a dashed edge. */
+.ins-protect-box { position: absolute; box-sizing: border-box; border: 1.5px dashed rgba(229, 72, 77, 0.95); border-radius: 4px; }
+.ins-protect-box.is-blur { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.08); }
+.ins-protect-box.is-box { background: #c9c9cc; }
+.ins-protect-box.is-draft { border-color: #111; background: rgba(17, 17, 17, 0.08); }
+.ins-protect-box-x {
+  position: absolute; top: -9px; right: -9px; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0;
+  border-radius: 50%; background: #e5484d; color: #fff; cursor: var(--ins-cursor-hand, pointer); opacity: 0; transition: opacity var(--ins-fast) var(--ins-ease);
+}
+.ins-protect-frame:hover .ins-protect-box-x,
+.ins-protect-box-x:focus-visible { opacity: 1; }
+@media (hover: none) { .ins-protect-box-x { opacity: 1; } }
+.ins-protect-shot-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.ins-protect-shot-name { flex: 1 1 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
+.ins-protect-shot-foot .ins-muted { flex: 1; min-width: 0; font-size: 13px; }
+.ins-protect-shot-actions { display: flex; gap: 6px; margin-left: auto; }
