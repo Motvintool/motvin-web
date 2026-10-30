@@ -284,7 +284,7 @@ async function tick() {
 }
 
 const KIND_TEXT: Record<ProtectKind, string> = {
-  photo: '"photo": a real personal photo or video thumbnail — real people, faces, homes, family or private moments (gallery grids, photo pickers, profile pictures of real people). NOT the app\'s own artwork, marketing images, stock-style promo banners, illustrations, icons or logos.',
+  photo: '"photo": a real personal photo or video thumbnail — real people, faces, homes, family or private moments, profile pictures of real people. In a photo picker, camera roll or gallery that shows the phone owner\'s own library, EVERY thumbnail is personal (screenshots and photos of screens too) — box each one, including ones cut off at the edges. NOT the app\'s own artwork, marketing images, promo banners, sample templates, illustrations, icons or logos.',
   phone: '"phone": a real phone number.',
   email: '"email": an email address. Leave out any email that contains "motvin" — those are the library\'s own test accounts.',
   address: '"address": a home or street address of a real person.',
