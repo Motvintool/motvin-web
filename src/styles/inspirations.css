@@ -20128,3 +20128,280 @@ body:has(aside.ins-guide) .ins-assist-switch {
 /* The three actions share the card's own width, so they never spill into the next card. */
 .ins-protect-shot-actions { display: flex; gap: 4px; width: 100%; }
 .ins-protect-shot-actions .ins-btn { flex: 1 1 0; min-width: 0; height: 34px; padding: 0 8px; font-size: 14px; }
+
+/* One sheet, Dribbble-style: on a desktop the screen view and Details meet with no gap and no line between
+   them, the outer corners alone rounded. Zoomed out (Details folded away) the screen view takes all four. */
+@media (min-width: 901px) {
+  .ins-screen-preview-modal { gap: 0; }
+  .ins-screen-preview-modal > .ins-screen-preview-main {
+    border-radius: 24px 0 0 24px;
+    clip-path: inset(0 round 24px 0 0 24px);
+    transition: border-radius 0.42s cubic-bezier(0.22, 1, 0.36, 1), clip-path 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .ins-screen-preview-modal > .ins-screen-preview-details {
+    border-radius: 0 24px 24px 0;
+    clip-path: inset(0 round 0 24px 24px 0);
+  }
+  .ins-screen-preview-modal.is-zoomed-out > .ins-screen-preview-main {
+    border-radius: 24px;
+    clip-path: inset(0 round 24px);
+  }
+  .ins-screen-preview-modal.is-zoomed-out > .ins-screen-preview-details { margin-left: 0; border-left-width: 0; }
+  /* Centred on the whole sheet now it reads as one. */
+  .ins-similar-pill { left: 50%; }
+  /* A little more room around the sheet: 36px from every edge of the window instead of 20px. */
+  .ins-search-overlay:has(> .ins-screen-preview-modal) { padding: 36px; }
+  .ins-screen-preview-modal { width: calc(100vw - 72px); height: calc(100vh - 72px); }
+}
+
+/* The sheet's Details side: white like the stage, a faint line before it. Its pills are
+   clear with a hairline, and the groups part by the usual edge-to-edge line, only fainter. */
+@media (min-width: 901px) {
+  .ins-screen-preview-modal > .ins-screen-preview-details { border-left: 1px solid #f0f0f2; }
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-pill {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px #e3e3e6;
+  }
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-pill:hover { background: rgba(64, 64, 64, 0.05); }
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-skel.ins-preview-skel-value { background-color: #efeff1; }
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-group + .ins-details-group {
+    border-top-color: #f0f0f2;
+  }
+}
+
+/* Details folds away Dribbble-style: the button at its header's end folds it right out of the sheet (no rail
+   left behind), and an (i) beside Shortcuts unfolds it again. Both wear Close's own small grey circle. Wide
+   screens only; stacked, Details sits below and needs no folding. */
+.ins-details-toggle { display: none; }
+/* Close on the sheet's corner, the confirm dialogs' white button (.ins-request-close): wide screens only;
+   the stacked sheet keeps the header's. */
+.ins-screen-preview-corner-close { display: none; }
+@media (min-width: 901px) {
+  .ins-screen-preview-modal .ins-screen-preview-head .ins-screen-preview-close { display: none; }
+  .ins-screen-preview-corner-close {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    z-index: 4;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: #fff;
+    color: #111;
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.06);
+    cursor: var(--ins-cursor-hand, pointer);
+    transition: transform 160ms, box-shadow 160ms;
+  }
+  .ins-screen-preview-corner-close:hover { transform: scale(1.06); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.13), 0 1px 3px rgba(0, 0, 0, 0.06); }
+  .ins-screen-preview-corner-close:active { transform: scale(0.94); }
+  .ins-screen-preview-corner-close:focus-visible { outline: 2px solid #141414; outline-offset: 2px; }
+  .ins-screen-preview-corner-close svg { width: 16px; height: 16px; stroke-width: 2.8; }
+
+  /* border-box, so the 320px it keeps while folding includes its padding and the button stays inside. */
+  .ins-screen-preview-details-head { justify-content: space-between; box-sizing: border-box; }
+  .ins-details-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 9999px;
+    background: rgba(64, 64, 64, 0.06);
+    color: #141414;
+    cursor: var(--ins-cursor-hand, pointer);
+    transition: background var(--ins-fast) var(--ins-ease);
+  }
+  .ins-details-toggle:hover { background: rgba(64, 64, 64, 0.12); }
+  .ins-details-toggle:focus-visible { outline: 2px solid #141414; outline-offset: 2px; }
+  .ins-details-toggle svg { width: 16px; height: 16px; }
+  /* Folded: one motion. The panel's width closes while its content, pinned to its right edge, slides out
+     under the sheet's edge (no fade or drift of its own), the screen view's corners rounding on the same
+     curve, and the (i) grows in where the panel's button went. */
+  .ins-screen-preview-modal > .ins-screen-preview-details { align-items: flex-end; }
+  .ins-screen-preview-modal > .ins-screen-preview-details > * { width: 320px; flex-shrink: 0; }
+  .ins-screen-preview-modal.is-details-hidden:not(.is-zoomed-out) > .ins-screen-preview-details {
+    width: 0;
+    border-left-color: transparent;
+    pointer-events: none;
+  }
+  .ins-screen-preview-modal.is-details-hidden > .ins-screen-preview-main {
+    border-radius: 24px;
+    clip-path: inset(0 round 24px);
+  }
+  /* Dribbble's info panel: closing, the facts fade and drift right first and the panel then closes after them;
+     opening, the panel widens first and the facts slide in from the right and fade up as it settles. */
+  .ins-screen-preview-modal > .ins-screen-preview-details > * {
+    transition: opacity 0.3s ease 0.14s, transform 0.42s cubic-bezier(0.22, 1, 0.36, 1) 0.1s;
+  }
+  .ins-screen-preview-modal.is-details-hidden:not(.is-zoomed-out) > .ins-screen-preview-details > * {
+    opacity: 0;
+    transform: translateX(28px);
+    transition: opacity 0.16s ease, transform 0.22s cubic-bezier(0.4, 0, 1, 1);
+  }
+  .ins-screen-preview-modal.is-details-hidden:not(.is-zoomed-out) > .ins-screen-preview-details {
+    transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s, border-color 0.2s ease 0.08s;
+  }
+  /* The sheet's own white, rounded, behind both panes: while the panel closes, the screen view keeps its right
+     corners square (they sit against the panel, not the edge), so no grey notch shows between them; they round
+     only once the panel is gone and they are the edge. No curve to animate either, so the motion stays smooth. */
+  .ins-screen-preview-modal:not(.ins-screen-preview-modal--loading) { background: #fff; border-radius: 24px; }
+  .ins-screen-preview-modal.is-details-hidden:not(.is-zoomed-out) > .ins-screen-preview-main {
+    transition: border-radius 0s 0.48s, clip-path 0s 0.48s;
+  }
+  .ins-screen-preview-modal:not(.is-details-hidden):not(.is-zoomed-out) > .ins-screen-preview-main { transition: none; }
+  .ins-details-show { animation: insDetailsShowIn 0.36s cubic-bezier(0.22, 1, 0.36, 1) 0.26s backwards; }
+  @keyframes insDetailsShowIn { from { opacity: 0; margin-left: -38px; transform: scale(0.6); } }
+}
+@media (min-width: 901px) and (prefers-reduced-motion: reduce) {
+  .ins-details-show { animation: none; }
+  .ins-screen-preview-modal > .ins-screen-preview-details > *,
+  .ins-screen-preview-modal.is-details-hidden > .ins-screen-preview-details { transition: none !important; }
+}
+
+/* A sheet with no Details panel (the flow preview, compare): the screen view is the whole sheet, all four
+   corners round. */
+@media (min-width: 901px) {
+  .ins-screen-preview-modal:not(:has(> .ins-screen-preview-details)) > .ins-screen-preview-main {
+    border-radius: 24px;
+    clip-path: inset(0 round 24px);
+  }
+}
+
+/* Compare opened from a screen preview, as its own modal over it (StackedCompare): it rises in (a touch
+   lower and smaller, fading up) while the preview behind sinks back a little, and leaves the same way
+   reversed. Wide screens only; a phone's sheet has its own slide. */
+@media (min-width: 901px) {
+  .ins-compare-overlay--stacked { animation: insStackDimIn 0.28s ease both; }
+  .ins-compare-overlay--stacked > .ins-compare-modal { animation: insStackIn 0.38s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .ins-compare-overlay--stacked.is-leaving { animation: insStackDimOut 0.2s ease both; }
+  .ins-compare-overlay--stacked.is-leaving > .ins-compare-modal { animation: insStackOut 0.2s cubic-bezier(0.4, 0, 1, 1) both; }
+  .ins-screen-preview-modal:not(.ins-compare-modal) { transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1), filter 0.38s ease; }
+  body:has(.ins-compare-overlay--stacked:not(.is-leaving)) .ins-screen-preview-modal:not(.ins-compare-modal) {
+    transform: scale(0.96);
+    filter: brightness(0.97);
+  }
+}
+@keyframes insStackDimIn { from { background-color: transparent; } }
+@keyframes insStackDimOut { to { background-color: transparent; } }
+@keyframes insStackIn { from { opacity: 0; transform: translateY(18px) scale(0.97); } }
+@keyframes insStackOut { to { opacity: 0; transform: translateY(14px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) {
+  .ins-compare-overlay--stacked,
+  .ins-compare-overlay--stacked > .ins-compare-modal { animation: none !important; }
+  .ins-screen-preview-modal:not(.ins-compare-modal) { transition: none !important; }
+  body:has(.ins-compare-overlay--stacked) .ins-screen-preview-modal:not(.ins-compare-modal) { transform: none; filter: none; }
+}
+
+/* Fold Details, Dribbble-style: a small white circle with a grey × sitting on the line between the screen and
+   Details, near the top, centred on the line. It fades away as the panel folds (the header's (i) brings it
+   back) and is not there when zoomed out. Wide screens only. */
+.ins-details-collapse { display: none; }
+@media (min-width: 901px) {
+  .ins-details-collapse {
+    position: absolute;
+    top: 24px;
+    right: 320px;
+    z-index: 3;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid #e6e6e9;
+    border-radius: 50%;
+    background: #fff;
+    color: #8a8a8e;
+    translate: 50% 0;
+    cursor: var(--ins-cursor-hand, pointer);
+    transition: color var(--ins-fast) var(--ins-ease), border-color var(--ins-fast) var(--ins-ease), opacity 0.24s ease 0.42s;
+  }
+  .ins-details-collapse svg { width: 14px; height: 14px; stroke-width: 2; }
+  .ins-details-collapse:hover { color: #141414; border-color: #d4d4d8; }
+  .ins-details-collapse:focus-visible { outline: 2px solid #141414; outline-offset: 2px; }
+  .ins-screen-preview-modal.is-details-hidden > .ins-details-collapse,
+  .ins-screen-preview-modal.is-zoomed-out > .ins-details-collapse {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+  }
+}
+
+/* Room around the fold button on the line: the screen view's header keeps its buttons 30px from the line
+   (Shortcuts, the (i)) and Details sets its title and facts 32px in from it, so the × sits in clear space
+   rather than squeezed between Shortcuts and "Details". */
+@media (min-width: 901px) {
+  .ins-screen-preview-modal:has(> .ins-screen-preview-details):not(.is-details-hidden):not(.is-zoomed-out) > .ins-screen-preview-main > .ins-screen-preview-head {
+    padding-right: 30px;
+  }
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-screen-preview-details-head { padding-left: 32px; }
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-group { padding-left: 32px; padding-right: 28px; }
+}
+
+/* Details a little wider beside the screen: 340px (its content, kept at that width while it folds, and the
+   fold button on its line follow). */
+@media (min-width: 901px) {
+  .ins-screen-preview-modal:not(.is-zoomed-out):not(.is-details-hidden) > .ins-screen-preview-details { width: 340px; }
+  .ins-screen-preview-modal > .ins-screen-preview-details > * { width: 340px; min-width: 340px; }
+  .ins-details-collapse { right: 340px; }
+}
+
+/* Details' groups as their own sections: each a soft grey card with rounded corners (Screen, Colours,
+   Patterns, Compare, Source, Tags), parted by a little space instead of divider lines, its pills clear with a
+   darker outline. */
+@media (min-width: 901px) {
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-group,
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-group:first-child {
+    margin: 0 16px 10px 20px;
+    padding: 16px 16px 18px;
+    border-radius: 18px;
+    background: #f7f7f8;
+  }
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-group + .ins-details-group { border-top: 0; }
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-screen-preview-details-head { padding-left: 36px; }
+  /* Clear pills, their outline a shade darker than the card so they still read on the grey. */
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-pill {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px #dedee2;
+  }
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-pill:hover { background: rgba(0, 0, 0, 0.04); }
+  /* Tidier cards: rows a little closer (the pills already give each its height), the title nearer its rows,
+     even room on both sides of the cards, and no gap left under the last one. */
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-group,
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-group:first-child { margin: 0 18px 8px; }
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-screen-preview-details-head { padding-left: 34px; }
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-group:last-child { margin-bottom: 0; }
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-list { gap: 4px; }
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-group-title { margin-bottom: 10px; }
+}
+
+/* "Scroll to similar" folds Details the same way the × on its line does (the older fold drifted and faded the
+   whole panel while its content slid on its own, so the two fought and the facts were cut off over the
+   header): the facts fade and drift right first, then the panel closes behind them. The screen view's header
+   eases its right padding at the same pace instead of jumping. */
+@media (min-width: 901px) {
+  .ins-screen-preview-modal.is-zoomed-out > .ins-screen-preview-details {
+    opacity: 1;
+    transform: none;
+    transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s, border-color 0.2s ease 0.08s;
+  }
+  .ins-screen-preview-modal.is-zoomed-out > .ins-screen-preview-details > * {
+    opacity: 0;
+    transform: translateX(28px);
+    transition: opacity 0.16s ease, transform 0.22s cubic-bezier(0.4, 0, 1, 1);
+  }
+  .ins-screen-preview-modal > .ins-screen-preview-main > .ins-screen-preview-head {
+    transition: padding-right 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+@media (min-width: 901px) and (prefers-reduced-motion: reduce) {
+  .ins-screen-preview-modal.is-zoomed-out > .ins-screen-preview-details,
+  .ins-screen-preview-modal.is-zoomed-out > .ins-screen-preview-details > *,
+  .ins-screen-preview-modal > .ins-screen-preview-main > .ins-screen-preview-head { transition: none !important; }
+}

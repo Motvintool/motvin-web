@@ -17,6 +17,7 @@ import { UserChatbot } from './UserChatbot';
 import { LongPressScreenMenus } from './useScreenContextMenu';
 import { RevealPressedPills } from './RevealPressedPills';
 import { BackToTop } from './BackToTop';
+import { StackedCompare } from './CompareScreens';
 import { LibraryUpdateNotice } from './LibraryUpdateNotice';
 
 function InspirationsHeaderSkeleton() {
@@ -79,6 +80,10 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
         {/* Reads ?screen= and renders over whatever page is showing. */}
         <Suspense fallback={null}>
           <ScreenPreviewOverlay />
+        </Suspense>
+        {/* Reads ?compare=&of= (a preview's "Compare … with") and renders over the preview. */}
+        <Suspense fallback={null}>
+          <StackedCompare />
         </Suspense>
         {/* Reads ?admin= and renders the library admin as a drawer over
             whatever page is showing — see ProfileMenu's "Admin" item. */}

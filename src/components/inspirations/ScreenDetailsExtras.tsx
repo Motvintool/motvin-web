@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { extractPalette, isLightColor, readCachedPalette, writeCachedPalette, type PaletteColor } from '@/lib/inspirations/palette';
-import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { screenTypeLabel } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type App, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
@@ -111,8 +111,17 @@ export function ScreenColours({ screen }: { screen: Screen }) {
  * "Compare {type} with": the apps with the most screens of this type (not
  * this one), each opening the compare view with that pair.
  */
+/** The page's current query with `changes` set on top. */
+function withParams(params: URLSearchParams, changes: Record<string, string>): string {
+  const sp = new URLSearchParams(params.toString());
+  for (const [key, value] of Object.entries(changes)) sp.set(key, value);
+  return sp.toString();
+}
+
 export function CompareShortcut({ app, screen }: { app: App; screen: Screen }) {
   const type = screen.screenType;
+  const pathname = usePathname();
+  const params = useSearchParams();
   // Same keys as the compare view's own lists, so they share the fetch.
   const { data: ofType } = useAsync(() => inspirationsApi.listScreensOfType(type), `compare-type:${type}`);
   const { data: apps } = useAsync(() => inspirationsApi.listApps(), 'compare-apps');
@@ -166,8 +175,10 @@ export function CompareShortcut({ app, screen }: { app: App; screen: Screen }) {
         {picks.map((other) => (
           <Link
             key={other.id}
-            // CompareScreens' ?compare= / &with= (written out: CompareScreens imports the preview).
-            href={INSPIRATIONS_ROUTES.app(app, screen.platform, { compare: type, with: other.slug })}
+            // CompareScreens' ?compare= / &with= / &of= (written out: CompareScreens imports the preview): the
+            // compare view opens as a new modal over this preview, on this page, and closing it comes back here.
+            href={`${pathname}?${withParams(params, { compare: type, with: other.slug, of: app.slug })}`}
+            scroll={false}
             className="ins-details-pill ins-details-pill--app"
             aria-label={`Compare ${app.name}'s ${label} screens with ${other.name}'s`}
           >

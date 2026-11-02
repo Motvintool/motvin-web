@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { CloseIcon } from './Icons';
 import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { PLATFORM_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
@@ -21,6 +22,9 @@ import { screenTitle } from '@/lib/inspirations/screenNaming';
 /** `?compare=<screen type>` opens the compare view on an app page; `&with=<app slug>` picks the other app. */
 export const COMPARE_PARAM = 'compare';
 export const COMPARE_WITH_PARAM = 'with';
+/** `&of=<app slug>`: the compare view opened from a screen preview, as its own modal over it on whatever page
+ *  is showing (StackedCompare), rather than on that app's page. */
+export const COMPARE_OF_PARAM = 'of';
 
 /** The type the compare view opens on when none is asked for: login if the app has any, else its most common. */
 export function defaultCompareType(screens: Screen[]): string | null {
@@ -49,16 +53,52 @@ function subscribeNever() {
 export function CompareScreens({ app, screens }: { app: App; screens: Screen[] }) {
   const params = useSearchParams();
   const type = params.get(COMPARE_PARAM);
-  if (!type) return null;
+  // Opened from a screen preview: StackedCompare draws it, over the preview.
+  if (!type || params.get(COMPARE_OF_PARAM)) return null;
   return <CompareModal app={app} screens={screens} type={type} withSlug={params.get(COMPARE_WITH_PARAM)} />;
 }
 
-function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Screen[]; type: string; withSlug: string | null }) {
+/**
+ * The compare view opened from a screen preview's "Compare … with": a new modal on top of the preview, on
+ * whatever page is showing (mounted after the preview in InspirationsShell, so it draws over it). Closing it
+ * comes back to the preview underneath.
+ */
+export function StackedCompare() {
+  const params = useSearchParams();
+  const type = params.get(COMPARE_PARAM);
+  const slug = params.get(COMPARE_OF_PARAM);
+  if (!type || !slug) return null;
+  return <StackedCompareFor slug={slug} type={type} withSlug={params.get(COMPARE_WITH_PARAM)} />;
+}
+
+function StackedCompareFor({ slug, type, withSlug }: { slug: string; type: string; withSlug: string | null }) {
+  const { data } = useAsync(() => inspirationsApi.getApp(slug), `compare-of:${slug}`);
+  if (!data) return null;
+  return <CompareModal app={data.app} screens={data.screens} type={type} withSlug={withSlug} stacked />;
+}
+
+function CompareModal({
+  app,
+  screens,
+  type,
+  withSlug,
+  stacked = false,
+}: {
+  app: App;
+  screens: Screen[];
+  type: string;
+  withSlug: string | null;
+  stacked?: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
   const closeRef = useRef<HTMLButtonElement>(null);
+  // Wide screens: Close floats on the sheet's corner (as in ScreenPreviewModal); the header's is for the
+  // stacked sheet. Focus goes to whichever of the two is showing.
+  const cornerCloseRef = useRef<HTMLButtonElement>(null);
+  const shownClose = () => (cornerCloseRef.current?.offsetParent ? cornerCloseRef.current : closeRef.current);
   const [menu, setMenu] = useState<'type' | 'app' | null>(null);
   // Each side's brand colour (from its screenshots, as the Palette button
   // does), shown as a small dot by its name.
@@ -160,14 +200,32 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
     [params, pathname, router],
   );
 
-  const close = useCallback(() => setParams({ [COMPARE_PARAM]: null, [COMPARE_WITH_PARAM]: null }), [setParams]);
-  // A screenshot opens the usual preview on top; closing it comes back here.
-  const openScreen = (s: Screen) => setParams({ [SCREEN_PARAM]: s.id }, 'push');
+  const closeNow = useCallback(
+    () => setParams({ [COMPARE_PARAM]: null, [COMPARE_WITH_PARAM]: null, [COMPARE_OF_PARAM]: null }),
+    [setParams],
+  );
+  // Over a preview, on a wide screen, it leaves the way it came (sinks and fades, the preview behind growing
+  // back) before it goes. A phone's sheet slides away on its own.
+  const [leaving, setLeaving] = useState(false);
+  const close = useCallback(() => {
+    const animate =
+      stacked && window.matchMedia('(min-width: 901px)').matches && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!animate) return closeNow();
+    setLeaving(true);
+    window.setTimeout(closeNow, 200);
+  }, [closeNow, stacked]);
+  // A screenshot opens the usual preview on top; closing it comes back here. Over a preview already, this
+  // closes and the preview underneath shows that screen instead (Back returns here).
+  const openScreen = (s: Screen) =>
+    setParams(
+      stacked ? { [SCREEN_PARAM]: s.id, [COMPARE_PARAM]: null, [COMPARE_WITH_PARAM]: null, [COMPARE_OF_PARAM]: null } : { [SCREEN_PARAM]: s.id },
+      'push',
+    );
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    focusOnOpen(closeRef.current);
+    focusOnOpen(shownClose());
     return () => {
       document.body.style.overflow = previousOverflow;
     };
@@ -175,8 +233,8 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // A screen preview opened from here takes the keyboard while it's open.
-      if (params.get(SCREEN_PARAM)) return;
+      // A screen preview opened from here takes the keyboard while it's open (over a preview, this is on top).
+      if (!stacked && params.get(SCREEN_PARAM)) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         if (menu) setMenu(null);
@@ -190,7 +248,7 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [close, menu, params, step]);
+  }, [close, menu, params, step, stacked]);
 
   // Above phones, each side's thumbnails sit centred under its own screen,
   // as wide as the screen (up to STRIP_MAX) but always clear of the seam's
@@ -278,10 +336,24 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
 
   const platform = PLATFORM_LABEL[ownScreens[0]?.platform ?? app.platforms[0]] ?? '';
   // The other app on the same platform as the screens being compared, this app as its partner.
-  const swapHref = other ? INSPIRATIONS_ROUTES.app(other.app, otherScreens[0]?.platform, { [COMPARE_PARAM]: type, [COMPARE_WITH_PARAM]: app.slug }) : null;
+  // Over a preview, the swap stays here too: the other app becomes this modal's own.
+  const swapHref = !other
+    ? null
+    : stacked
+      ? `${pathname}?${(() => {
+          const sp = new URLSearchParams(params.toString());
+          sp.set(COMPARE_OF_PARAM, other.app.slug);
+          sp.set(COMPARE_WITH_PARAM, app.slug);
+          return sp.toString();
+        })()}`
+      : INSPIRATIONS_ROUTES.app(other.app, otherScreens[0]?.platform, { [COMPARE_PARAM]: type, [COMPARE_WITH_PARAM]: app.slug });
 
   return createPortal(
-    <div className="ins-search-overlay ins-sheet-overlay" role="presentation" onClick={close}>
+    <div
+      className={`ins-search-overlay ins-sheet-overlay ${stacked ? 'ins-compare-overlay--stacked' : ''} ${leaving ? 'is-leaving' : ''}`}
+      role="presentation"
+      onClick={close}
+    >
       <div
         ref={sheetRef}
         className={`ins-screen-preview-modal ins-compare-modal ins-sheet--tall ${sheetClass}`}
@@ -295,6 +367,10 @@ function CompareModal({ app, screens, type, withSlug }: { app: App; screens: Scr
         }}
       >
         {sheetHandle}
+        {/* Wide screens' Close, on the sheet's corner. */}
+        <button ref={cornerCloseRef} type="button" className="ins-screen-preview-corner-close" aria-label="Close" onClick={close}>
+          <CloseIcon size={18} />
+        </button>
         <div className="ins-screen-preview-main ins-compare-main">
           {/* The flow / screen preview's own header: logos, then breadcrumbs. */}
           <div className="ins-screen-preview-head">

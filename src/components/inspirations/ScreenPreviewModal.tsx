@@ -13,6 +13,7 @@ import { INDUSTRY_LABEL, PLATFORM_LABEL, SCREEN_STATE_LABEL, SCREEN_TYPE_LABEL, 
 import { isDesktopPlatform, type Flow, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { CompareShortcut, ScreenColours } from './ScreenDetailsExtras';
+import { CloseIcon } from './Icons';
 import { SaveButton } from './SaveButton';
 import { saveItemFor } from './previewSaveAs';
 import { Screenshot } from './Screenshot';
@@ -30,8 +31,16 @@ export const SCREEN_PARAM = 'screen';
 // On a screen's history entry: it was zoomed out when another app's screen was picked, so going back returns
 // to the grid rather than the one screen.
 const SIMILAR_PARAM = 'similar';
+const DETAILS_HIDDEN_KEY = 'motvin:details-hidden';
+/** A compare view opened from this preview (CompareScreens' ?compare=&of=, written out: it imports this file)
+ *  sits on top and takes the keyboard while it's open. */
+const compareOnTop = () => {
+  const sp = new URLSearchParams(window.location.search);
+  return Boolean(sp.get('compare') && sp.get('of'));
+};
 
 /** The mounted flag never changes after hydration, so nothing to subscribe to. */
+
 function subscribeNever() {
   return () => {};
 }
@@ -79,6 +88,12 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const params = useSearchParams();
 
   const closeRef = useRef<HTMLButtonElement>(null);
+  // Wide screens: Close floats on the sheet's corner (the confirm dialogs' own); the header's is for the
+  // stacked sheet. Focus goes to whichever of the two is showing.
+  const cornerCloseRef = useRef<HTMLButtonElement>(null);
+  // Details folds only beside the screen (wide screens); stacked below it, it always shows.
+  const sideBySide = useMediaQuery('(min-width: 901px)');
+  const shownClose = () => (cornerCloseRef.current?.offsetParent ? cornerCloseRef.current : closeRef.current);
   const saveBtnRef = useRef<HTMLButtonElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const filmRef = useRef<HTMLDivElement>(null);
@@ -116,6 +131,23 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const [showKeys, setShowKeys] = useState(false);
   // The screen whose extra types were opened with "+N": moving to another screen folds them again.
   const [typesOpenFor, setTypesOpenFor] = useState<string | null>(null);
+  // Details folded into a slim rail (Dribbble-style), its (i) button unfolding it again; kept in this browser.
+  const [detailsHidden, setDetailsHidden] = useState(() => {
+    try {
+      return localStorage.getItem(DETAILS_HIDDEN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleDetails = () =>
+    setDetailsHidden((hidden) => {
+      try {
+        localStorage.setItem(DETAILS_HIDDEN_KEY, hidden ? '0' : '1');
+      } catch {
+        // Blocked storage: the choice still holds while the preview is open.
+      }
+      return !hidden;
+    });
   const keysRef = useRef<HTMLDivElement>(null);
   const keysBtnRef = useRef<HTMLButtonElement>(null);
   // A click anywhere outside the card closes it (the button toggles it itself).
@@ -187,7 +219,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   // below runs before either on a fresh page load, when nothing is drawn yet.
   const contentReady = Boolean(screen) && !loading;
   useEffect(() => {
-    if (mounted) focusOnOpen(closeRef.current);
+    if (mounted) focusOnOpen(shownClose());
   }, [mounted, contentReady]);
 
   const close = useCallback(() => {
@@ -275,6 +307,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (compareOnTop()) return;
       if (e.key === 'Escape') {
         // The lightbox has its own Escape handler when it's the thing on top;
         // let that own the key instead of also closing the preview under it.
@@ -332,7 +365,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    focusOnOpen(closeRef.current);
+    focusOnOpen(shownClose());
     return () => {
       document.body.style.overflow = previousOverflow;
       restoreFocusRef.current?.focus?.();
@@ -398,7 +431,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const copyCurrentPng = currentShot.copyPng;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (zoomScreen || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (zoomScreen || e.metaKey || e.ctrlKey || e.altKey || compareOnTop()) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
       if (e.key === 'c' || e.key === 'C') {
@@ -442,6 +475,10 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
           onClick={(e) => e.stopPropagation()}
         >
           {sheetHandle}
+          {/* Wide screens' Close, on the sheet's corner. */}
+          <button ref={cornerCloseRef} type="button" className="ins-screen-preview-corner-close" aria-label="Close" onClick={close}>
+            <CloseIcon size={18} />
+          </button>
           {/* The loaded modal's own layout in placeholder shapes (its panels,
               header, screenshot, footer and Details rows, on the same classes),
               so the content lands in place instead of replacing a spinner. */}
@@ -662,7 +699,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
         <div
           ref={sheetRef}
           // Zoomed out, the grid takes the whole width: the Details panel is about one screen, not the grid.
-          className={`ins-screen-preview-modal ins-sheet--tall ${sheetClass} ${zoomedOut ? 'is-zoomed-out' : ''} ${zoomedBack ? 'is-zoomed-back' : ''}`}
+          className={`ins-screen-preview-modal ins-sheet--tall ${sheetClass} ${zoomedOut ? 'is-zoomed-out' : ''} ${zoomedBack ? 'is-zoomed-back' : ''} ${detailsHidden ? 'is-details-hidden' : ''}`}
           {...sheetDrag}
           role="dialog"
           aria-modal="true"
@@ -670,6 +707,22 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
           onClick={(e) => e.stopPropagation()}
         >
           {sheetHandle}
+          {/* Wide screens' Close, on the sheet's corner. */}
+          <button ref={cornerCloseRef} type="button" className="ins-screen-preview-corner-close" aria-label="Close" onClick={close}>
+            <CloseIcon size={18} />
+          </button>
+          {/* Dribbble's fold: a small round × sitting on the line between the screen and Details. */}
+          <button
+            type="button"
+            className="ins-details-collapse"
+            aria-label="Hide details"
+            aria-expanded={!detailsHidden}
+            title="Hide details"
+            onClick={toggleDetails}
+            tabIndex={detailsHidden || zoomedOut ? -1 : undefined}
+          >
+            <CloseIcon size={14} />
+          </button>
           <div className="ins-screen-preview-main">
             <div className="ins-screen-preview-head">
               <div className="ins-screen-preview-head-app">
@@ -725,6 +778,12 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   </span>
                   <span>Shortcuts</span>
                 </button>
+                {/* Details folded away: the (i) that unfolds it, at the header's end where Close was. */}
+                {detailsHidden && !zoomedOut && (
+                  <button type="button" className="ins-details-toggle ins-details-show" aria-label="Show details" title="Show details" onClick={toggleDetails}>
+                    <DetailsInfoIcon />
+                  </button>
+                )}
                 <button ref={closeRef} type="button" className="ins-screen-preview-close" aria-label="Close" onClick={close}>
                   <img src="/ASSET/Icons/Motvin/screen-preview-modal-close.svg" alt="" width={16} height={16} />
                 </button>
@@ -879,7 +938,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               </svg>
             </button>
           )}
-          <div className="ins-screen-preview-details">
+          {/* Folded away, out of reach of Tab and screen readers too. */}
+          <div className="ins-screen-preview-details" inert={detailsHidden && sideBySide}>
             <div className="ins-screen-preview-details-head">
               <h2>Details</h2>
             </div>
@@ -1057,6 +1117,17 @@ const ICON_COPY_LINK = '/ASSET/Icons/Motvin/copy-link.svg';
 const ICON_COPY_PNG = '/ASSET/Icons/Motvin/copy-png.svg';
 const ICON_COMPARE = '/ASSET/Icons/Motvin/compare.svg';
 const ICON_DOWNLOAD = '/ASSET/Icons/Motvin/download-png.svg';
+
+/** Details folded away: the (i) that brings it back, in Shortcuts' own 1.5px line on a 16px grid. */
+function DetailsInfoIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
+      <circle cx="8" cy="8" r="7.25" />
+      <path d="M8 7.25v4" strokeWidth="1.8" />
+      <circle cx="8" cy="4.9" r="0.95" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
 
 function MenuIcon({ src }: { src: string }) {
   return <img src={src} alt="" width={16} height={16} aria-hidden />;

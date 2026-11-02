@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { createPortal } from 'react-dom';
 import { useStoredValue, writeStoredValue } from '@/hooks/useStoredValue';
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { CloseIcon } from './Icons';
 import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
@@ -117,6 +118,10 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   const params = useSearchParams();
 
   const closeRef = useRef<HTMLButtonElement>(null);
+  // Wide screens: Close floats on the sheet's corner (as in ScreenPreviewModal); the header's is for the
+  // stacked sheet. Focus goes to whichever of the two is showing.
+  const cornerCloseRef = useRef<HTMLButtonElement>(null);
+  const shownClose = () => (cornerCloseRef.current?.offsetParent ? cornerCloseRef.current : closeRef.current);
   const saveBtnRef = useRef<HTMLButtonElement>(null);
   // A phone's footer is the player and More: Save and Nearby screens move into More.
   const phone = useMediaQuery(SHEET_QUERY);
@@ -297,7 +302,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   // runs before either on a fresh page load.
   const flowReady = Boolean(flow) && !loading;
   useEffect(() => {
-    if (mounted) focusOnOpen(closeRef.current);
+    if (mounted) focusOnOpen(shownClose());
   }, [mounted, flowReady]);
 
   const close = useCallback(() => {
@@ -451,7 +456,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    focusOnOpen(closeRef.current);
+    focusOnOpen(shownClose());
     return () => {
       document.body.style.overflow = previousOverflow;
       restoreFocusRef.current?.focus?.();
@@ -494,6 +499,10 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
           onClick={(e) => e.stopPropagation()}
         >
           {sheetHandle}
+          {/* Wide screens' Close, on the sheet's corner. */}
+          <button ref={cornerCloseRef} type="button" className="ins-screen-preview-corner-close" aria-label="Close" onClick={close}>
+            <CloseIcon size={18} />
+          </button>
           {/* The loaded player's own layout in placeholder shapes (one wide
               pane: header, the step's screenshot, and the footer's tags,
               player bar, Save and Nearby screens on the same classes), so the
@@ -658,6 +667,10 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
           onClick={(e) => e.stopPropagation()}
         >
           {sheetHandle}
+          {/* Wide screens' Close, on the sheet's corner. */}
+          <button ref={cornerCloseRef} type="button" className="ins-screen-preview-corner-close" aria-label="Close" onClick={close}>
+            <CloseIcon size={18} />
+          </button>
           <div className="ins-screen-preview-main">
             <div className="ins-screen-preview-head">
               <div className="ins-screen-preview-head-app">
