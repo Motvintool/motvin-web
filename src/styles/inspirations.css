@@ -20370,7 +20370,12 @@ body:has(aside.ins-guide) .ins-assist-switch {
     background: transparent;
     box-shadow: inset 0 0 0 1px #dedee2;
   }
-  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-pill:hover { background: rgba(0, 0, 0, 0.04); }
+  /* Hover as the footer's outlined buttons (Nearby screens): no fill, the outline a shade darker. */
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-pill { transition: box-shadow var(--ins-fast) var(--ins-ease); }
+  .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-pill:hover {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px #c8c8cc;
+  }
   /* Tidier cards: rows a little closer (the pills already give each its height), the title nearer its rows,
      even room on both sides of the cards, and no gap left under the last one. */
   .ins-screen-preview-modal > .ins-screen-preview-details .ins-details-group,
