@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { useStoredValue, writeStoredValue } from '@/hooks/useStoredValue';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { CloseIcon } from './Icons';
+import { ExpandButton, useExpandedPreview } from './PreviewExpand';
 import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
@@ -118,6 +119,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   const params = useSearchParams();
 
   const closeRef = useRef<HTMLButtonElement>(null);
+  const expanded = useExpandedPreview();
   // Wide screens: Close floats on the sheet's corner (as in ScreenPreviewModal); the header's is for the
   // stacked sheet. Focus goes to whichever of the two is showing.
   const cornerCloseRef = useRef<HTMLButtonElement>(null);
@@ -659,7 +661,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
       <div className="ins-search-overlay ins-sheet-overlay" role="presentation" onClick={close}>
         <div
           ref={sheetRef}
-          className={`ins-screen-preview-modal ins-sheet--tall ${sheetClass}`}
+          className={`ins-screen-preview-modal ins-sheet--tall ${sheetClass} ${expanded ? 'is-full' : ''}`}
           {...sheetDrag}
           role="dialog"
           aria-modal="true"
@@ -692,6 +694,8 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
                 </div>
               </div>
               <div className="ins-flow-head-actions">
+                {/* Expand to the whole window, or back to the floating sheet. */}
+                <ExpandButton />
                 {/* Where Figma / Slides keep theirs: top right, beside Close. */}
                 {screens.length > 1 && (
                   <button type="button" className="ins-flow-present-open" aria-label="Present flow" onClick={startPresent}>

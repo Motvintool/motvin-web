@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { CloseIcon } from './Icons';
+import { ExpandButton, useExpandedPreview } from './PreviewExpand';
 import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { PLATFORM_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
@@ -95,6 +96,7 @@ function CompareModal({
   const params = useSearchParams();
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const expanded = useExpandedPreview();
   // Wide screens: Close floats on the sheet's corner (as in ScreenPreviewModal); the header's is for the
   // stacked sheet. Focus goes to whichever of the two is showing.
   const cornerCloseRef = useRef<HTMLButtonElement>(null);
@@ -356,7 +358,7 @@ function CompareModal({
     >
       <div
         ref={sheetRef}
-        className={`ins-screen-preview-modal ins-compare-modal ins-sheet--tall ${sheetClass}`}
+        className={`ins-screen-preview-modal ins-compare-modal ins-sheet--tall ${sheetClass} ${expanded ? 'is-full' : ''}`}
         {...sheetDrag}
         role="dialog"
         aria-modal="true"
@@ -432,6 +434,8 @@ function CompareModal({
                 </div>
               </div>
             </div>
+            {/* Expand to the whole window, or back to the floating sheet. */}
+            <ExpandButton />
             <button ref={closeRef} type="button" className="ins-screen-preview-close" aria-label="Close" onClick={close}>
               <img src="/ASSET/Icons/Motvin/screen-preview-modal-close.svg" alt="" width={16} height={16} />
             </button>

@@ -14,6 +14,7 @@ import { isDesktopPlatform, type Flow, type Screen } from '@/lib/inspirations/ty
 import { AppLogo } from './AppLogo';
 import { CompareShortcut, ScreenColours } from './ScreenDetailsExtras';
 import { CloseIcon } from './Icons';
+import { ExpandButton, useExpandedPreview } from './PreviewExpand';
 import { SaveButton } from './SaveButton';
 import { saveItemFor } from './previewSaveAs';
 import { Screenshot } from './Screenshot';
@@ -139,6 +140,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
       return false;
     }
   });
+  // Expanded: the preview fills the window edge to edge, like a page (the button before Shortcuts).
+  const expanded = useExpandedPreview();
   const toggleDetails = () =>
     setDetailsHidden((hidden) => {
       try {
@@ -699,7 +702,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
         <div
           ref={sheetRef}
           // Zoomed out, the grid takes the whole width: the Details panel is about one screen, not the grid.
-          className={`ins-screen-preview-modal ins-sheet--tall ${sheetClass} ${zoomedOut ? 'is-zoomed-out' : ''} ${zoomedBack ? 'is-zoomed-back' : ''} ${detailsHidden ? 'is-details-hidden' : ''}`}
+          className={`ins-screen-preview-modal ins-sheet--tall ${sheetClass} ${zoomedOut ? 'is-zoomed-out' : ''} ${zoomedBack ? 'is-zoomed-back' : ''} ${detailsHidden ? 'is-details-hidden' : ''} ${expanded ? 'is-full' : ''}`}
           {...sheetDrag}
           role="dialog"
           aria-modal="true"
@@ -761,6 +764,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                 )}
               </div>
               <div className="ins-flow-head-actions">
+                {/* Expand to the whole window, or back to the floating sheet. */}
+                <ExpandButton />
                 {/* Keyboard shortcuts beside Close, like the flow preview's Present. */}
                 <button
                   ref={keysBtnRef}

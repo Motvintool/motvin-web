@@ -20410,3 +20410,73 @@ body:has(aside.ins-guide) .ins-assist-switch {
   .ins-screen-preview-modal.is-zoomed-out > .ins-screen-preview-details > *,
   .ins-screen-preview-modal > .ins-screen-preview-main > .ins-screen-preview-head { transition: none !important; }
 }
+
+/* Expand (the button before Shortcuts): the preview fills the window edge to edge like a page — no margin
+   round it, no rounded corners — growing out from where it sat; again, it settles back into the floating
+   sheet. Close moves inside, onto the top-right corner, and "Scroll to similar" up off the window's edge.
+   Wide screens only; on a phone the sheet already fills the screen. */
+.ins-preview-expand { display: none; }
+@media (min-width: 901px) {
+  .ins-preview-expand {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(64, 64, 64, 0.06);
+    color: #141414;
+    cursor: var(--ins-cursor-hand, pointer);
+    transition: background var(--ins-fast) var(--ins-ease), scale 0.15s ease;
+  }
+  .ins-preview-expand:hover { background: rgba(64, 64, 64, 0.12); }
+  .ins-preview-expand:active { scale: 0.94; }
+  .ins-preview-expand:focus-visible { outline: 2px solid #141414; outline-offset: 2px; }
+
+  .ins-search-overlay:has(> .ins-screen-preview-modal) { transition: padding 0.38s cubic-bezier(0.22, 1, 0.36, 1); }
+  /* With the stacked compare's sink-back (transform, filter) kept. */
+  .ins-screen-preview-modal:not(.ins-compare-modal) {
+    transition: width 0.38s cubic-bezier(0.22, 1, 0.36, 1), height 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+      border-radius 0.38s cubic-bezier(0.22, 1, 0.36, 1), transform 0.38s cubic-bezier(0.22, 1, 0.36, 1), filter 0.38s ease;
+  }
+  .ins-search-overlay:has(> .ins-screen-preview-modal.is-full) { padding: 0; }
+  .ins-search-overlay > .ins-screen-preview-modal.is-full {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+  .ins-search-overlay > .ins-screen-preview-modal.is-full > .ins-screen-preview-main,
+  .ins-search-overlay > .ins-screen-preview-modal.is-full > .ins-screen-preview-details {
+    border-radius: 0;
+    clip-path: none;
+  }
+  .ins-search-overlay > .ins-screen-preview-modal.is-full > .ins-screen-preview-corner-close { top: 22px; right: 22px; }
+  .ins-search-overlay > .ins-screen-preview-modal.is-full > .ins-similar-pill { bottom: 14px; }
+}
+@media (min-width: 901px) and (prefers-reduced-motion: reduce) {
+  .ins-search-overlay:has(> .ins-screen-preview-modal),
+  .ins-screen-preview-modal { transition: none !important; }
+}
+
+/* Compare grows to the whole window and back on the same curve as the screen and flow previews. */
+@media (min-width: 901px) {
+  .ins-compare-modal {
+    transition: width 0.38s cubic-bezier(0.22, 1, 0.36, 1), height 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+      border-radius 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+@media (min-width: 901px) and (prefers-reduced-motion: reduce) {
+  .ins-compare-modal { transition: none !important; }
+}
+
+/* Full width, Close sits inside the top-right corner: wherever the screen view's header runs to that corner
+   (Details folded or zoomed out, or a flow / compare with no Details) it keeps clear of Close, so the (i),
+   Present or expand button at its end is not hidden under it. */
+@media (min-width: 901px) {
+  .ins-search-overlay > .ins-screen-preview-modal.is-full:is(.is-details-hidden, .is-zoomed-out, :not(:has(> .ins-screen-preview-details)))
+    > .ins-screen-preview-main > .ins-screen-preview-head {
+    padding-right: 72px;
+  }
+}
