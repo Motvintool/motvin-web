@@ -420,7 +420,9 @@ export function useDockingRow(enabled = true) {
     anchor.style.minHeight = `${inFlowRowHeightRef.current}px`;
     const check = () => {
       const grid = anchor.parentElement?.querySelector<HTMLElement>('.ins-grid');
-      const trigger = grid ?? anchor;
+      // No grid (Flows' list of rows): what follows the row. The row itself sits close enough under a phone's
+      // header to count as "reaching the bar" at the very top, so it docked at once and hid the header.
+      const trigger = grid ?? (anchor.nextElementSibling as HTMLElement | null) ?? anchor;
       const triggerTop = trigger.getBoundingClientRect().top;
       // Measured from the docked bar's real bottom edge: on a phone the app page's tab row wraps and hangs
       // below the header, and results fitted under it sit lower than the header alone would allow. Docking
