@@ -254,8 +254,3 @@ export function formatCount(n: number): string {
   if (n >= 1_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}K`;
   return String(n);
 }
-
-/** A flow's name as a kind of flow: "Logging in" and "logging in " are the same kind (the Flows page's ?name=). */
-export function flowNameKey(name: string): string {
-  return name.trim().toLocaleLowerCase();
-}

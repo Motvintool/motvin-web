@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRef, useState, type DragEvent } from 'react';
 import { adminApi, safeFileName, type AdminState } from '@/lib/inspirations/admin';
-import { describeAddedScreens } from '@/lib/inspirations/admin-chatbot/ingestJobs';
+import { describeAddedScreens, tagNewFlows } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { dayLabel, localDateString } from '@/lib/inspirations/dates';
 import { INDUSTRY_LABEL, PLATFORM_LABEL, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
@@ -254,6 +254,9 @@ export function UploadPanel({
     setUploading(false);
     await onUploaded();
     setFinished({ appId: id, uploaded: added.length, failed });
+    // A flow this upload started (or added to) joins the search's Flows groups (its standard kind), and — when the
+    // details were typed in rather than left to the AI — a screen left with no UI elements or type gets them.
+    if (added.length) void tagNewFlows({ screens: fillBy !== 'ai' });
     // Then filled in like recorded screens — a name, states, UI elements, style, colours (and the type, when left as "other").
     if (added.length && fillBy === 'ai') {
       try {

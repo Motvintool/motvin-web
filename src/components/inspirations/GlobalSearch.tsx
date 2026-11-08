@@ -9,7 +9,8 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { OPEN_SEARCH_EVENT, type SearchSection } from '@/lib/inspirations/openSearch';
 import { suggestQueries, type SearchSuggestion } from '@/lib/inspirations/search';
-import { elementLabel, flowCategoryLabel, flowNameKey, INDUSTRY_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
+import { FLOW_KIND_GROUPS } from '@/lib/inspirations/flowKinds';
+import { elementLabel, INDUSTRY_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
 import type { App, Flow, Industry, Platform, Screen, ScreenType } from '@/lib/inspirations/types';
 import { isDesktopPlatform } from '@/lib/inspirations/types';
 import { IMAGE_SIZE, optimizedImage } from '@/lib/inspirations/optimizedImage';
@@ -244,11 +245,10 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   const [topApps, setTopApps] = useState<App[]>([]);
   // Unlike `topApps` (the Top Rated preview's own short row — the Apps
   // section lists `allApps` below instead, so capping this one is fine),
-  // these three back BOTH the Top Rated preview AND their own
-  // sidebar section (Screens/UI Elements/Flows) — the section needs the
-  // real, full list, so nothing here gets truncated at fetch time. The
-  // preview-sized slices for the Top Rated tab are derived below instead.
-  const [screens, setScreens] = useState<Screen[]>([]);
+  // these back BOTH the Top Rated preview AND their own sidebar section
+  // (UI Elements/Flows) — the section needs the real, full list, so nothing
+  // here gets truncated at fetch time. The preview-sized slices for the Top
+  // Rated tab are derived below instead.
   // The Screens tab: the screen types the picked platform has, each with how many screens it holds (one
   // row a type, as Categories lists categories — not single screens, whose names repeat across apps).
   // `key` says which platform the counts are for, so a pill change shows loading, not the last platform's.
@@ -286,10 +286,11 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // modal sticks until it is closed.
   const browsedPlatform = browsedPlatforms(params)[0];
   const browsedScope: ModalScope = isWebsPlatforms(browsedPlatforms(params)) ? 'webs' : 'ios';
-  useEffect(() => {
+  const [seenOpen, setSeenOpen] = useState(open);
+  if (open !== seenOpen) {
+    setSeenOpen(open);
     if (open) setModalScope(browsedScope);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when it opens
-  }, [open]);
+  }
 
   // Another part of the page (the Explore columns' titles) asks for the modal on a given
   // section: show that section, clear any query so the section list is what appears, open.
@@ -404,11 +405,10 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     let cancelled = false;
     Promise.all([
       inspirationsApi.listApps(undefined, 'rating'),
-      inspirationsApi.listScreens(EMPTY_FILTERS, 0, 'curated'),
       inspirationsApi.listFlows(),
       inspirationsApi.getMeta(),
       inspirationsApi.listApps(undefined, 'newest'),
-    ]).then(([apps, screensPage, flowsList, meta, newestApps]) => {
+    ]).then(([apps, flowsList, meta, newestApps]) => {
       if (cancelled) return;
       appsRef.current = apps;
       // The Top Rated tab's icon row leads with what's new: the latest added apps first (cut to the row's
@@ -418,7 +418,6 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
         const app = apps.find(({ name }) => name.toLocaleLowerCase() === search.query.toLocaleLowerCase());
         return app && !search.iconSrc ? { ...search, icon: 'app', iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined } : search;
       }));
-        setScreens(screensPage.items);
         setFlows(flowsList);
         setIndustries(meta.taxonomy.industries);
         setAllApps(apps);
@@ -573,7 +572,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
       label: INDUSTRY_LABEL[industry as Industry] ?? industry,
       count: allApps.filter((app) => app.industry === industry && (!modalScope || app.platforms.some(inScope))).length,
     }))
-    .filter((c) => c.count > 0)
+    .filter((c) => c.count > 0 && c.value !== 'unsorted')
     .sort((a, b) => b.count - a.count);
   const visibleTopApps = (modalScope ? topApps.filter((app) => app.platforms.some(inScope)) : topApps).slice(0, TOP_APPS_SHOWN);
   // The Apps tab: every app on the picked platform, best rated first (the order they're fetched in).
@@ -603,34 +602,22 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // Every list the modal links to opens in the section being searched (Webs is ?platform=web), as screen types do.
   const inSection = (href: string) => (modalScope === 'webs' ? `${href}${href.includes('?') ? '&' : '?'}platform=web` : href);
   const elementHref = (kind: string) => inSection(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(kind)}`);
-  // The Flows tab, grouped as Mobbin does: a heading for each flow category on this platform (busiest first),
-  // and under it every flow name there ("Logging in", "Home", a name only one app uses too), each with how many
-  // apps' flows it covers, the shared ones first, so every flow is listed.
+  // The Flows tab, as Mobbin has it: the standard kinds of flow (flowKinds.ts — Logging In, Browsing Home…)
+  // under their headings, each with how many flows on this platform are that kind, so "Logging in with email"
+  // and "Sign in" count once as Logging In. Only kinds this platform has; headings in the list's own order.
   // Real journeys only (more than one screen), as the Flows page counts them.
-  const flowGroups = (() => {
-    const byCategory = new Map<string, Map<string, { name: string; count: number }>>();
-    for (const flow of visibleFlows) {
-      if (flow.screenIds.length < 2 || !flow.category) continue;
-      const kinds = byCategory.get(flow.category) ?? new Map<string, { name: string; count: number }>();
-      const key = flowNameKey(flow.name);
-      const kind = kinds.get(key) ?? { name: flow.name.trim(), count: 0 };
-      kind.count += 1;
-      kinds.set(key, kind);
-      byCategory.set(flow.category, kinds);
-    }
-    return [...byCategory.entries()]
-      .map(([category, kinds]) => ({
-        category,
-        label: flowCategoryLabel(category),
-        total: [...kinds.values()].reduce((sum, k) => sum + k.count, 0),
-        kinds: [...kinds.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
-      }))
-      .sort((a, b) => b.total - a.total);
-  })();
-  // In keyboard order, each with where it opens: the Flows page, that category, that kind of flow.
-  const flowKindRows = flowGroups.flatMap((group) => [
-    ...group.kinds.map((kind) => ({ key: `${group.category}:${flowNameKey(kind.name)}`, category: group.category, name: kind.name, count: kind.count, href: inSection(`${INSPIRATIONS_ROUTES.flows}?category=${encodeURIComponent(group.category)}&name=${encodeURIComponent(flowNameKey(kind.name))}`) })),
-  ]);
+  const flowKindCounts = visibleFlows.reduce<Record<string, number>>((counts, flow) => {
+    if (flow.screenIds.length > 1 && flow.kind) counts[flow.kind] = (counts[flow.kind] ?? 0) + 1;
+    return counts;
+  }, {});
+  const flowGroups = FLOW_KIND_GROUPS.map((group) => ({
+    label: group.label,
+    kinds: group.kinds.filter((kind) => flowKindCounts[kind]).map((kind) => ({ kind, count: flowKindCounts[kind] })),
+  })).filter((group) => group.kinds.length > 0);
+  // In keyboard order, each with where it opens: the Flows page showing that kind.
+  const flowKindRows = flowGroups.flatMap((group) =>
+    group.kinds.map(({ kind, count }) => ({ key: kind, group: group.label, name: kind, count, href: inSection(`${INSPIRATIONS_ROUTES.flows}?kind=${encodeURIComponent(kind)}`) })),
+  );
   const previewElements = elements.slice(0, 7);
   const previewFlows = visibleFlows.slice(0, 12);
   const modalSections = [
@@ -665,7 +652,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
             ? flowKindRows.map((row) => ({ onActivate: () => { close(); pushTo(row.href); } }))
             : [];
 
-  handleKeyDownRef.current = (e: globalThis.KeyboardEvent | React.KeyboardEvent) => {
+  const handleKeyDown = (e: globalThis.KeyboardEvent | React.KeyboardEvent) => {
     if (!value.trim()) {
       // Browsing a section (no query typed) — up/down walks whichever
       // single-column list is showing, Enter opens what's highlighted. A
@@ -739,6 +726,10 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     // Escape is handled by the document-level listener above, uniformly for
     // the whole modal rather than only while one of these inputs has focus.
   };
+  // The document listener above (arrow keys pressed outside the inputs) calls the latest handler.
+  useEffect(() => {
+    handleKeyDownRef.current = handleKeyDown;
+  });
   return (
     <div className={`ins-search ${open ? 'is-open' : ''} ${className}`} ref={rootRef} role="search">
       <form onSubmit={submit} className="ins-search-form">
@@ -764,7 +755,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
             setValue(e.target.value);
             setOpen(true);
           }}
-          onKeyDown={handleKeyDownRef.current as any}
+          onKeyDown={handleKeyDown}
         />
         {value ? (
           <button
@@ -817,7 +808,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                 spellCheck={false}
                 aria-label="Search apps, flows and screens"
                 onChange={(e) => { setValue(e.target.value); setNavMenuOpen(false); }}
-                onKeyDown={handleKeyDownRef.current as any}
+                onKeyDown={handleKeyDown}
               />
             </div>
             <div className="ins-search-modal-platforms" role="group" aria-label="Filter by platform">
@@ -1099,9 +1090,9 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
               ) : !value.trim() && section === 'flows' ? (
                 <div className="ins-search-categories" aria-label="Flows">
                   {flowGroups.map((group) => (
-                    <div key={group.category} className="ins-search-flow-group" role="group" aria-label={group.label}>
+                    <div key={group.label} className="ins-search-flow-group" role="group" aria-label={group.label}>
                       <div className="ins-search-flow-group-title">{group.label}</div>
-                      {flowKindRows.map((row, index) => row.category !== group.category ? null : (
+                      {flowKindRows.map((row, index) => row.group !== group.label ? null : (
                           <button
                             key={row.key}
                             type="button"
@@ -1113,7 +1104,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                             onFocus={() => setBrowseActive(index)}
                             onClick={() => { close(); pushTo(row.href); }}
                           >
-                            <strong>{row.name.charAt(0).toUpperCase() + row.name.slice(1)}</strong>
+                            <strong>{row.name}</strong>
                             <span>{row.count}</span>
                           </button>
                       ))}

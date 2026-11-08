@@ -311,6 +311,20 @@ export async function describeAddedScreens(appId: string, platform: string, file
   void refreshIngestJobs();
 }
 
+/** After a manual upload, asks the server to give flows without one their standard kind and, with `screens`,
+ *  to fill screens left with no UI elements or type (/api/crawler/flow-kinds). Best effort. */
+export async function tagNewFlows(options: { screens?: boolean } = {}): Promise<void> {
+  try {
+    await fetch('/api/crawler/flow-kinds', {
+      method: 'POST',
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ screens: Boolean(options.screens) }),
+    });
+  } catch {
+    // The next upload asks again.
+  }
+}
+
 export function refreshIngestJobs(): Promise<void> {
   return fetchJobs().then(schedule);
 }

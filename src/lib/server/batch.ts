@@ -4,6 +4,8 @@ import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { activeJob, dismissJob, getJob, killTree, resumeJob, startJob, stopJob } from '@/lib/server/ingestJobs';
 import { clearReviewFolder, inspirationsDataDir, reviewFolder, reviewState } from '@/lib/server/reviews';
+import { tagUntaggedFlows } from '@/lib/server/flowKinds';
+import { fillScreenGaps } from '@/lib/server/screenGaps';
 
 /**
  * Adding many apps at once, with nobody watching.
@@ -695,6 +697,9 @@ function finishReview(batch: Batch, item: BatchItem): boolean {
   item.finishedAt = new Date().toISOString();
   if (item.result && item.appId) item.result = { ...item.result, ...countScreens(item.appId, platform, item.version) };
   if (batch.settings.notify === 'each') notify(item.result?.appName ?? item.title, `Reviewed — ${item.result?.screens ?? '?'} screens in ${item.result?.flows ?? '?'} flows`);
+  // Its new flows join the search's Flows groups (each gets its standard kind), and any screen left with no UI
+  // elements or no type gets them, in the background, so it shows in the Screens and UI Elements tabs too.
+  void tagUntaggedFlows().then(fillScreenGaps);
   return true;
 }
 

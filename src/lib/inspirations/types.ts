@@ -257,6 +257,8 @@ export type Flow = {
   summary?: string | null;
   /** Which capture this flow's screens belong to, when known. */
   version?: string | null;
+  /** Its standard kind (Logging In, Browsing Home… — flowKinds.ts), when tagged; the search groups flows by it. */
+  kind?: string | null;
 };
 
 export type FlowActionKind = 'tap' | 'type' | 'switch-tab' | 'scroll' | 'back' | 'dismiss' | 'wait' | 'open';
