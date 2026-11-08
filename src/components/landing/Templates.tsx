@@ -15,16 +15,15 @@ import { optimizedImage } from '@/lib/inspirations/optimizedImage';
 type TemplateCard = {
   title: string;
   img: string;
-  href: string;
 };
 
 const TEMPLATE_CARDS: TemplateCard[] = [
-  { title: 'Claude UI', img: '/ASSET/Images/motvin-template1.webp', href: '#' },
-  { title: 'Whatsapp UI', img: '/ASSET/Images/motvin-template2.webp', href: '#' },
-  { title: 'Smart Home App', img: '/ASSET/Images/motvin-template3.webp', href: '#' },
-  { title: 'Gemini UI', img: '/ASSET/Images/motvin-template4.webp', href: '#' },
-  { title: 'Medical App', img: '/ASSET/Images/motvin-template5.webp', href: '#' },
-  { title: 'LinkedIn App', img: '/ASSET/Images/motvin-template6.webp', href: '#' },
+  { title: 'Claude UI', img: '/ASSET/Images/motvin-template1.webp' },
+  { title: 'Whatsapp UI', img: '/ASSET/Images/motvin-template2.webp' },
+  { title: 'Smart Home App', img: '/ASSET/Images/motvin-template3.webp' },
+  { title: 'Gemini UI', img: '/ASSET/Images/motvin-template4.webp' },
+  { title: 'Medical App', img: '/ASSET/Images/motvin-template5.webp' },
+  { title: 'LinkedIn App', img: '/ASSET/Images/motvin-template6.webp' },
 ];
 
 // The tiles show the pictures about 304px wide (280px on phones); the
@@ -33,7 +32,8 @@ const TEMPLATE_CARDS: TemplateCard[] = [
 const TILE_IMAGE_WIDTH = 320;
 const TILE_IMAGES = new Map(TEMPLATE_CARDS.map((card) => [card.img, optimizedImage(card.img, TILE_IMAGE_WIDTH)]));
 
-const AUTHOR_URL = 'https://www.instagram.com/siren.uix';
+// The templates are siren.uix's work: the credit, every card and "Browse all" open their Instagram.
+const AUTHOR_URL = 'https://www.instagram.com/siren.uix/';
 
 // Clone groups on each side of the real cards.
 const CLONE_GROUPS = 2;
@@ -55,7 +55,9 @@ const chevron = (d: string) => (
 function Card({ card, clone }: { card: TemplateCard; clone?: boolean }) {
   return (
     <a
-      href={card.href}
+      href={AUTHOR_URL}
+      target="_blank"
+      rel="noopener noreferrer"
       className="lpi-template-card"
       aria-hidden={clone || undefined}
       tabIndex={clone ? -1 : undefined}
@@ -208,7 +210,7 @@ export function Templates() {
           </p>
         </div>
         <div className="lpi-templates-actions">
-          <a href="#" className="lpi-templates-all">
+          <a href={AUTHOR_URL} target="_blank" rel="noopener noreferrer" className="lpi-templates-all">
             Browse all templates
           </a>
           <button type="button" className="lpi-templates-nav" onClick={scrollPrev} aria-label="Previous templates">

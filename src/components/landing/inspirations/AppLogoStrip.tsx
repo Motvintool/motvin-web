@@ -6,6 +6,10 @@ import type { LandingApp } from './useLandingLibrary';
 
 const SLOTS = 5;
 const SWAP_MS = 2800;
+// Every slot is as wide as the longest name in the strip, so one long name
+// ("Google Arts & Culture") widens all five and pushes the last onto a
+// second line. Only apps with names up to this length take part.
+const MAX_NAME_LENGTH = 14;
 
 function StripApp({ app, className, style, hidden }: { app: LandingApp; className: string; style: CSSProperties; hidden?: boolean }) {
   return (
@@ -32,7 +36,7 @@ function StripApp({ app, className, style, hidden }: { app: LandingApp; classNam
  * all of them; with fewer, the same apps trade places.
  */
 export function AppLogoStrip({ apps }: { apps: LandingApp[] }) {
-  const withLogo = apps.filter((app) => app.logo);
+  const withLogo = apps.filter((app) => app.logo && app.name.length <= MAX_NAME_LENGTH);
   const slots = Math.min(SLOTS, withLogo.length);
   const rootRef = useRef<HTMLElement>(null);
   const [step, setStep] = useState(0);

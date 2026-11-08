@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { browsedPlatforms } from '@/lib/inspirations/filters';
-import { flowCategoryLabel } from '@/lib/inspirations/taxonomy';
+import { flowCategoryLabel, flowNameKey } from '@/lib/inspirations/taxonomy';
 import { type App, type Flow, type Screen } from '@/lib/inspirations/types';
 import { EmptyState } from '../EmptyState';
 import { FilterPill, NavPill, ToolbarRow } from '../FilterToolbar';
@@ -30,6 +30,8 @@ export function FlowsView() {
   const apps = useApps();
 
   const category = params.get('category') ?? undefined;
+  // One kind of flow across apps ("logging in"), from the search's Flows tab; cleared from its pill.
+  const kindName = params.get('name') ?? undefined;
   // No param means the iOS default; Webs is websites and web apps together —
   // the same platforms every feed and the header nav use.
   const platforms = browsedPlatforms(params);
@@ -41,7 +43,9 @@ export function FlowsView() {
   );
 
   // Real journeys only, as Mobbin lists them: a section heading with one screen of its own is not a flow.
-  const visible = (flows ?? []).filter((f) => platforms.includes(f.platform) && f.screenIds.length > 1);
+  const visible = (flows ?? []).filter(
+    (f) => platforms.includes(f.platform) && f.screenIds.length > 1 && (!kindName || flowNameKey(f.name) === kindName),
+  );
 
   // Flow cards need their screens; one request per flow, cached by the client.
   const { data: resolved } = useAsync<{ flow: Flow; screens: Screen[] }[]>(async () => {
@@ -82,6 +86,16 @@ export function FlowsView() {
           onClear={() => setParam('category')}
           multi={false}
         />
+        {kindName && (
+          <FilterPill
+            label="Flow"
+            options={[{ value: kindName, label: kindName.charAt(0).toUpperCase() + kindName.slice(1) }]}
+            selected={[kindName]}
+            onToggle={() => setParam('name')}
+            onClear={() => setParam('name')}
+            multi={false}
+          />
+        )}
       </ToolbarRow>
 
       {loading ? (
@@ -91,19 +105,19 @@ export function FlowsView() {
         // a category, or a platform explicitly in the URL. The iOS default
         // isn't a filter they can clear.
         <EmptyState
-          play={Boolean(category || params.get('platform'))}
+          play={Boolean(category || kindName || params.get('platform'))}
           icon={<FlowIcon size={22} />}
-          title={category || params.get('platform') ? 'No flows match this filter' : 'No flows here yet'}
+          title={category || kindName || params.get('platform') ? 'No flows match this filter' : 'No flows here yet'}
           description={
             category || params.get('platform')
               ? undefined
               : 'We add new flows regularly. Check back soon.'
           }
           action={
-            category || params.get('platform')
+            category || kindName || params.get('platform')
               ? {
                   label: 'Show all flows',
-                  onClick: () => setParams({ category: undefined, platform: undefined }),
+                  onClick: () => setParams({ category: undefined, name: undefined, platform: undefined }),
                 }
               : undefined
           }

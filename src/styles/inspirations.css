@@ -825,6 +825,10 @@ body {
 .ins-search-categories button:hover, .ins-search-categories button.is-active { background: #e9e9e9; }
 .ins-search-categories strong { flex: 1; font-weight: 600; }
 .ins-search-categories span { padding: 4px 10px; color: #4e4e4e; font-weight: 400; }
+/* The Flows tab's groups (as Mobbin's): each category's heading over the kinds of flow under it. */
+.ins-search-flow-group { display: flex; flex-direction: column; gap: 4px; }
+.ins-search-flow-group + .ins-search-flow-group { margin-top: 20px; }
+.ins-search-flow-group-title { padding: 0 20px 6px; color: #737373; font-size: 16px; }
 .ins-search-resource-list { display: flex; flex-direction: column; gap: 4px; }
 .ins-search-resource-list button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 48px; padding: 8px 8px 8px 20px; border-radius: 999px; color: #000; font-size: 16px; text-align: left; }
 .ins-search-resource-list button:hover, .ins-search-resource-list button.is-active { background: #e9e9e9; }
@@ -1023,7 +1027,8 @@ body {
   .ins-search-resource-list button { padding-left: 0; padding-right: 0; }
   .ins-search-categories span,
   .ins-search-resource-list span { padding-left: 0; padding-right: 0; }
-  .ins-search-modal-title { padding-left: 0; padding-right: 0; }
+  .ins-search-modal-title,
+  .ins-search-flow-group-title { padding-left: 0; padding-right: 0; }
   /* UI Elements / Flows chips: same compact size as the other phone chips. */
   .ins-search-top-elements { gap: 8px; }
   .ins-search-top-elements button { height: 40px; gap: 6px; padding: 0 14px 0 8px; font-size: 14px; }

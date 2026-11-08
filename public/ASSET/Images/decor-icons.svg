@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <path id="petal" d="M100 96C93 85 84 72 84 60a16 16 0 1 1 32 0c0 12-9 25-16 36Z"/>
+  </defs>
+  <polygon points="100,8 179.7,54 179.7,146 100,192 20.3,146 20.3,54" fill="#0b2370"/>
+  <polygon points="100,8 179.7,54 179.7,146 100,192 20.3,146 20.3,54" fill="none" stroke="#50d8b3" stroke-width="16" stroke-linejoin="miter"/>
+  <polygon points="100,8 179.7,54 179.7,146 100,192 20.3,146 20.3,54" fill="none" stroke="#1958f9" stroke-width="16" stroke-linejoin="miter" stroke-dasharray="36.8 18.4 18.4 18.4" stroke-dashoffset="18.4"/>
+  <g fill="#3f7bff">
+    <use href="#petal"/>
+    <use href="#petal" transform="rotate(60 100 100)"/>
+    <use href="#petal" transform="rotate(120 100 100)"/>
+    <use href="#petal" transform="rotate(180 100 100)"/>
+    <use href="#petal" transform="rotate(240 100 100)"/>
+    <use href="#petal" transform="rotate(300 100 100)"/>
+  </g>
+</svg>

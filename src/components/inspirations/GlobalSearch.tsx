@@ -9,7 +9,7 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { OPEN_SEARCH_EVENT, type SearchSection } from '@/lib/inspirations/openSearch';
 import { suggestQueries, type SearchSuggestion } from '@/lib/inspirations/search';
-import { elementLabel, INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
+import { elementLabel, flowCategoryLabel, flowNameKey, INDUSTRY_LABEL, screenTypeLabel } from '@/lib/inspirations/taxonomy';
 import type { App, Flow, Industry, Platform, Screen, ScreenType } from '@/lib/inspirations/types';
 import { isDesktopPlatform } from '@/lib/inspirations/types';
 import { IMAGE_SIZE, optimizedImage } from '@/lib/inspirations/optimizedImage';
@@ -17,9 +17,7 @@ import { AppLogo } from './AppLogo';
 import { RequestAppModal } from './RequestAppModal';
 import { FLOW_PARAM } from './FlowPreview';
 import { AppleIcon, ChevronDownIcon, CloseIcon, SearchIcon, WebIcon } from './Icons';
-import { SCREEN_PARAM } from './ScreenPreviewModal';
 import { SHEET_QUERY, useMediaQuery } from './useSheet';
-import { screenTitle } from '@/lib/inspirations/screenNaming';
 
 const FIGMA_APP_ART = '/ASSET/search-modal/figma-02.png';
 /** Lives under the shared Motvin icon set (`/ASSET/Icons/Motvin/`), not
@@ -206,14 +204,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   const pushTo = (href: string) => router.push(href, isOverlayMove(href, pathname, params) ? { scroll: false } : undefined);
   const params = useSearchParams();
   const pathname = usePathname();
-  /** Opens a screen in place via `?screen=<id>` (see SCREEN_PARAM in
-   * ScreenPreviewModal.tsx) rather than navigating to a standalone page, so
-   * picking a result doesn't leave whatever page the search was opened from. */
-  const screenPreviewHref = (screen: Pick<Screen, 'id'>) => {
-    const sp = new URLSearchParams(params.toString());
-    sp.set(SCREEN_PARAM, screen.id);
-    return `${pathname}?${sp.toString()}`;
-  };
+
   /** Same, for a flow (see FLOW_PARAM in FlowPreview.tsx) — flows no longer
    * have a standalone page, only this overlay. */
   const flowPreviewHref = (flow: Pick<Flow, 'id'>) => {
@@ -258,13 +249,10 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // real, full list, so nothing here gets truncated at fetch time. The
   // preview-sized slices for the Top Rated tab are derived below instead.
   const [screens, setScreens] = useState<Screen[]>([]);
-  // The Screens tab's own list: the selected platform's screens, loaded a page at a
-  // time as you scroll. (`screens` above is only the Top Rated showcase's sample.)
-  // `key` says which platform the items are for, so a pill change shows a loading
-  // state instead of the previous platform's list or a false "no screens yet".
-  const [screensTab, setScreensTab] = useState<{ key: string; items: Screen[]; next: number | null } | null>(null);
-  const [screensSentinel, setScreensSentinel] = useState<HTMLDivElement | null>(null);
-  const loadingMoreScreens = useRef(false);
+  // The Screens tab: the screen types the picked platform has, each with how many screens it holds (one
+  // row a type, as Categories lists categories — not single screens, whose names repeat across apps).
+  // `key` says which platform the counts are for, so a pill change shows loading, not the last platform's.
+  const [screenTypeCounts, setScreenTypeCounts] = useState<{ key: string; counts: Record<string, number> } | null>(null);
   const [elements, setElements] = useState<{ kind: string; count: number }[]>([]);
   const [flows, setFlows] = useState<Flow[]>([]);
   // Every category the library has, and every app — the counts shown are worked out
@@ -464,41 +452,17 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
     };
   }, [open, screensKey, typeShots?.key, modalScope]);
 
-  // First page of the Screens tab, fetched when the tab is opened or the platform changes.
+  // The Screens tab's types and counts, fetched when the tab is opened or the platform changes.
   useEffect(() => {
-    if (!open || section !== 'screens' || screensTab?.key === screensKey) return;
+    if (!open || section !== 'screens' || screenTypeCounts?.key === screensKey) return;
     let cancelled = false;
-    inspirationsApi.listScreens({ ...EMPTY_FILTERS, platforms: platformsOf(modalScope) }, 0, 'curated').then((page) => {
-      if (!cancelled) setScreensTab({ key: screensKey, items: page.items, next: page.nextOffset });
+    inspirationsApi.getMeta(modalScope ? platformsOf(modalScope) : undefined).then((meta) => {
+      if (!cancelled) setScreenTypeCounts({ key: screensKey, counts: meta.usage?.screenTypes ?? {} });
     });
     return () => {
       cancelled = true;
     };
-  }, [open, section, screensKey, screensTab?.key, modalScope]);
-
-  // Next page, when the end of the list scrolls into view.
-  const loadMoreScreens = useCallback(() => {
-    if (!screensTab || screensTab.next === null || loadingMoreScreens.current) return;
-    loadingMoreScreens.current = true;
-    const { key, next } = screensTab;
-    inspirationsApi
-      .listScreens({ ...EMPTY_FILTERS, platforms: platformsOf(modalScope) }, next, 'curated')
-      .then((page) => {
-        setScreensTab((prev) => (prev && prev.key === key ? { key, items: [...prev.items, ...page.items], next: page.nextOffset } : prev));
-      })
-      .finally(() => {
-        loadingMoreScreens.current = false;
-      });
-  }, [screensTab, modalScope]);
-
-  useEffect(() => {
-    if (!screensSentinel) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) loadMoreScreens();
-    });
-    observer.observe(screensSentinel);
-    return () => observer.disconnect();
-  }, [screensSentinel, loadMoreScreens]);
+  }, [open, section, screensKey, screenTypeCounts?.key, modalScope]);
 
   // UI elements are counted for the platform picked in the modal — iOS shows iOS's
   // numbers, not the whole library's — so they refetch when the pill changes.
@@ -619,9 +583,14 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // imagery, positionally paired with whichever screen happens to fill that
   // slot), the dedicated Screens tab lists real screens with real names —
   // each one does carry a genuine platform, so filtering it is honest too.
-  const screensLoaded = screensTab && screensTab.key === screensKey ? screensTab : null;
-  const screensReady = screensLoaded !== null;
-  const visibleScreens = screensLoaded?.items ?? [];
+  const screensReady = screenTypeCounts !== null && screenTypeCounts.key === screensKey;
+  // Busiest first; "other" (not a real type) and types with no screens here are left out.
+  const screenTypeRows = screensReady
+    ? Object.entries(screenTypeCounts.counts)
+        .filter(([type, count]) => type !== 'other' && count > 0)
+        .map(([type, count]) => ({ type: type as ScreenType, label: screenTypeLabel(type), count }))
+        .sort((a, b) => b.count - a.count)
+    : [];
   // Preview-sized slices for the Top Rated tab only — the sidebar's own
   // Screens/UI Elements/Flows sections use the full lists above instead, so
   // browsing there isn't artificially capped to whatever fits in this row.
@@ -634,6 +603,34 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
   // Every list the modal links to opens in the section being searched (Webs is ?platform=web), as screen types do.
   const inSection = (href: string) => (modalScope === 'webs' ? `${href}${href.includes('?') ? '&' : '?'}platform=web` : href);
   const elementHref = (kind: string) => inSection(`${INSPIRATIONS_ROUTES.uiElements}?kind=${encodeURIComponent(kind)}`);
+  // The Flows tab, grouped as Mobbin does: a heading for each flow category on this platform (busiest first),
+  // and under it every flow name there ("Logging in", "Home", a name only one app uses too), each with how many
+  // apps' flows it covers, the shared ones first, so every flow is listed.
+  // Real journeys only (more than one screen), as the Flows page counts them.
+  const flowGroups = (() => {
+    const byCategory = new Map<string, Map<string, { name: string; count: number }>>();
+    for (const flow of visibleFlows) {
+      if (flow.screenIds.length < 2 || !flow.category) continue;
+      const kinds = byCategory.get(flow.category) ?? new Map<string, { name: string; count: number }>();
+      const key = flowNameKey(flow.name);
+      const kind = kinds.get(key) ?? { name: flow.name.trim(), count: 0 };
+      kind.count += 1;
+      kinds.set(key, kind);
+      byCategory.set(flow.category, kinds);
+    }
+    return [...byCategory.entries()]
+      .map(([category, kinds]) => ({
+        category,
+        label: flowCategoryLabel(category),
+        total: [...kinds.values()].reduce((sum, k) => sum + k.count, 0),
+        kinds: [...kinds.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+      }))
+      .sort((a, b) => b.total - a.total);
+  })();
+  // In keyboard order, each with where it opens: the Flows page, that category, that kind of flow.
+  const flowKindRows = flowGroups.flatMap((group) => [
+    ...group.kinds.map((kind) => ({ key: `${group.category}:${flowNameKey(kind.name)}`, category: group.category, name: kind.name, count: kind.count, href: inSection(`${INSPIRATIONS_ROUTES.flows}?category=${encodeURIComponent(group.category)}&name=${encodeURIComponent(flowNameKey(kind.name))}`) })),
+  ]);
   const previewElements = elements.slice(0, 7);
   const previewFlows = visibleFlows.slice(0, 12);
   const modalSections = [
@@ -659,13 +656,13 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
       : section === 'apps'
       ? visibleApps.map((app) => ({ onActivate: () => { close(); pushTo(appHrefInScope(app)); } }))
       : section === 'categories'
-      ? categories.map((c) => ({ onActivate: () => { close(); pushTo(inSection(`${INSPIRATIONS_ROUTES.screens}?industry=${c.value}`)); } }))
+      ? categories.map((c) => ({ onActivate: () => { close(); pushTo(inSection(`${INSPIRATIONS_ROUTES.apps}?industry=${c.value}`)); } }))
       : section === 'screens'
-        ? visibleScreens.map((s) => ({ onActivate: () => { close(); pushTo(screenPreviewHref(s)); } }))
+        ? screenTypeRows.map((row) => ({ onActivate: () => { close(); pushTo(typeHref(row.type)); } }))
         : section === 'elements'
           ? elements.map((el) => ({ onActivate: () => { close(); pushTo(elementHref(el.kind)); } }))
           : section === 'flows'
-            ? visibleFlows.map((f) => ({ onActivate: () => { close(); pushTo(flowPreviewHref(f)); } }))
+            ? flowKindRows.map((row) => ({ onActivate: () => { close(); pushTo(row.href); } }))
             : [];
 
   handleKeyDownRef.current = (e: globalThis.KeyboardEvent | React.KeyboardEvent) => {
@@ -899,7 +896,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
               // Scrolled down, the top edge fades as the bottom does (see .is-scrolled); at the top it stays sharp.
               onScroll={(e) => e.currentTarget.classList.toggle('is-scrolled', e.currentTarget.scrollTop > 4)}
             >
-              {(!value.trim() && section !== 'top') && <div className="ins-search-modal-title">{modalSections.find((item) => item.key === section)?.label}</div>}
+              {(!value.trim() && section !== 'top' && section !== 'flows') && <div className="ins-search-modal-title">{modalSections.find((item) => item.key === section)?.label}</div>}
               {(() => {
                 let currentTopIndex = 0;
                 return !value.trim() && section === 'top' ? (
@@ -1050,7 +1047,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       onMouseEnter={() => setBrowseActive(index)}
                       onMouseLeave={() => setBrowseActive((current) => (current === index ? -1 : current))}
                       onFocus={() => setBrowseActive(index)}
-                      onClick={() => { close(); pushTo(inSection(`${INSPIRATIONS_ROUTES.screens}?industry=${value}`)); }}
+                      onClick={() => { close(); pushTo(inSection(`${INSPIRATIONS_ROUTES.apps}?industry=${value}`)); }}
                     >
                       <strong>{label}</strong>
                       <span>{count}</span>
@@ -1059,10 +1056,10 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                   {modalScope && categories.length === 0 && <p className="ins-muted">No {scopeLabel} categories yet.</p>}
                 </div>
               ) : !value.trim() && section === 'screens' ? (
-                <div className="ins-search-resource-list" aria-label="Screens">
-                  {visibleScreens.map((screen, index) => (
+                <div className="ins-search-categories" aria-label="Screens">
+                  {screenTypeRows.map(({ type, label, count }, index) => (
                     <button
-                      key={screen.id}
+                      key={type}
                       type="button"
                       role="option"
                       aria-selected={index === browseActive}
@@ -1070,21 +1067,14 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       onMouseEnter={() => setBrowseActive(index)}
                       onMouseLeave={() => setBrowseActive((current) => (current === index ? -1 : current))}
                       onFocus={() => setBrowseActive(index)}
-                      onClick={() => { close(); pushTo(screenPreviewHref(screen)); }}
+                      onClick={() => { close(); pushTo(typeHref(type)); }}
                     >
-                      <strong>{screenTitle(screen)}</strong>
-                      <span>{screen.elements.length}</span>
+                      <strong>{label}</strong>
+                      <span>{count}</span>
                     </button>
                   ))}
                   {!screensReady && <p className="ins-muted">Loading screens…</p>}
-                  {screensLoaded && screensLoaded.next !== null && (
-                    <div ref={setScreensSentinel} className="ins-muted" aria-hidden>
-                      Loading more…
-                    </div>
-                  )}
-                  {screensReady && modalScope && visibleScreens.length === 0 && (
-                    <p className="ins-muted">No {scopeLabel} screens yet.</p>
-                  )}
+                  {screensReady && screenTypeRows.length === 0 && <p className="ins-muted">No {scopeLabel} screens yet.</p>}
                 </div>
               ) : !value.trim() && section === 'elements' ? (
                 <div className="ins-search-resource-list" aria-label="UI Elements">
@@ -1107,26 +1097,30 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                   {modalScope && elements.length === 0 && <p className="ins-muted">No {scopeLabel} UI elements yet.</p>}
                 </div>
               ) : !value.trim() && section === 'flows' ? (
-                <div className="ins-search-resource-list" aria-label="Flows">
-                  {visibleFlows.map((flow, index) => (
-                    <button
-                      key={flow.id}
-                      type="button"
-                      role="option"
-                      aria-selected={index === browseActive}
-                      className={index === browseActive ? 'is-active' : ''}
-                      onMouseEnter={() => setBrowseActive(index)}
-                      onMouseLeave={() => setBrowseActive((current) => (current === index ? -1 : current))}
-                      onFocus={() => setBrowseActive(index)}
-                      onClick={() => { close(); pushTo(flowPreviewHref(flow)); }}
-                    >
-                      <strong>{flow.name}</strong>
-                      <span>{flow.screenIds.length}</span>
-                    </button>
+                <div className="ins-search-categories" aria-label="Flows">
+                  {flowGroups.map((group) => (
+                    <div key={group.category} className="ins-search-flow-group" role="group" aria-label={group.label}>
+                      <div className="ins-search-flow-group-title">{group.label}</div>
+                      {flowKindRows.map((row, index) => row.category !== group.category ? null : (
+                          <button
+                            key={row.key}
+                            type="button"
+                            role="option"
+                            aria-selected={index === browseActive}
+                            className={index === browseActive ? 'is-active' : ''}
+                            onMouseEnter={() => setBrowseActive(index)}
+                            onMouseLeave={() => setBrowseActive((current) => (current === index ? -1 : current))}
+                            onFocus={() => setBrowseActive(index)}
+                            onClick={() => { close(); pushTo(row.href); }}
+                          >
+                            <strong>{row.name.charAt(0).toUpperCase() + row.name.slice(1)}</strong>
+                            <span>{row.count}</span>
+                          </button>
+                      ))}
+                    </div>
                   ))}
-                  {modalScope && visibleFlows.length === 0 && (
-                    <p className="ins-muted">No {scopeLabel} flows yet.</p>
-                  )}
+                  {!libraryReady && <p className="ins-muted">Loading flows…</p>}
+                  {libraryReady && flowGroups.length === 0 && <p className="ins-muted">No {scopeLabel} flows yet.</p>}
                 </div>
               ) : (
                 <div className="ins-search-suggestions">

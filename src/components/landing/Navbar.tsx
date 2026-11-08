@@ -428,6 +428,9 @@ export function Navbar() {
     <div className="nav-social">
       <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="nav-social-link" aria-label="Motvin on Instagram">
         <img src="/ASSET/landing/nav-instagram-filled.svg" alt="" width={20} height={20} />
+        <span className="nav-social-tip" aria-hidden="true">
+          Instagram
+        </span>
       </a>
       {/* No X profile yet: not a link, just a "Coming soon" tip on hover. */}
       <span className="nav-social-link is-soon" tabIndex={0} aria-label="Motvin on X, coming soon">

@@ -7576,6 +7576,7 @@
 }
 
 .nav-social-link {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7595,10 +7596,9 @@
   height: 20px;
 }
 
-/* X has no profile yet: a "Coming soon" tip drops below it on hover. */
+/* Each icon drops a tip below it on hover: what it opens, or "Coming soon"
+   for X, which has no profile yet. */
 .nav-social-link.is-soon {
-  position: relative;
-  cursor: default;
   outline: none;
 }
 
@@ -7631,8 +7631,8 @@
   border-bottom-color: #111;
 }
 
-.nav-social-link.is-soon:hover .nav-social-tip,
-.nav-social-link.is-soon:focus-visible .nav-social-tip {
+.nav-social-link:hover .nav-social-tip,
+.nav-social-link:focus-visible .nav-social-tip {
   opacity: 1;
   transform: translate(-50%, 0);
 }

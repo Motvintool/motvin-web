@@ -38,6 +38,13 @@ body .lpi-footer a[href][target='_blank'] {
   cursor: var(--ins-cursor-external-light);
 }
 
+/* The navbar's small social icons take a plain hand: not the circle-arrow on
+   Instagram, and not the plain arrow on X, which only shows its "Coming soon" tip. */
+body a[href][target='_blank'].nav-social-link,
+body .nav-social-link.is-soon {
+  cursor: var(--ins-cursor-hand);
+}
+
 body :is(input:not([type='checkbox'], [type='radio'], [type='range'], [type='button'], [type='submit'], [type='file']), textarea, [contenteditable='true']) {
   cursor: var(--ins-cursor-text);
 }

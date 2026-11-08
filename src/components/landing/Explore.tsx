@@ -13,7 +13,7 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 const TOOLS = [
   // Not live yet: shown with a "Soon" tag and no link.
   { title: 'Explore Colors', text: 'Palettes and colour styles for your next design.', href: null, img: '/ASSET/Images/decor1.webp', tone: 'purple' },
-  { title: 'Icons Library', text: 'Icons ready to drop into your designs.', href: '/icons', img: '/ASSET/Images/decor2.webp', tone: 'green' },
+  { title: 'Icons Library', text: 'Icons ready to drop into your designs.', href: '/icons', img: '/ASSET/Images/decor-icons.svg', tone: 'blue' },
   { title: 'Logos Library', text: 'Brand logos from the apps and companies you know.', href: '/logos', img: '/ASSET/Images/decor3.webp', tone: 'orange' },
 ];
 

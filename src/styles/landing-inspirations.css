@@ -79,6 +79,21 @@
   visibility: hidden;
 }
 
+/* Five slots need about 1070px. Narrower, show only as many as fit on one
+   line, so a last slot never drops onto a line of its own (phones get a
+   2 x 2 grid, set further down). */
+@media (max-width: 1100px) {
+  .lpi-strip-slot:nth-child(n + 5) { display: none; }
+}
+
+@media (max-width: 900px) and (min-width: 601px) {
+  .lpi-strip-slot:nth-child(n + 4) { display: none; }
+}
+
+@media (max-width: 700px) and (min-width: 601px) {
+  .lpi-strip-slot:nth-child(n + 3) { display: none; }
+}
+
 /* Muted until hovered, then the app's own colours come back. */
 .lpi-strip-app {
   display: inline-flex;
@@ -2103,7 +2118,7 @@
 }
 
 .lpi-explore-card.is-purple .lpi-explore-icon { background: #f1eeff; }
-.lpi-explore-card.is-green .lpi-explore-icon { background: #e9f8ef; }
+.lpi-explore-card.is-blue .lpi-explore-icon { background: #ebf1ff; }
 .lpi-explore-card.is-orange .lpi-explore-icon { background: #fff1e8; }
 
 .lpi-explore-icon img {
@@ -2566,7 +2581,7 @@ html.lpi-at-footer body {
 @media (max-width: 600px) {
   .lpi-strip { padding: 40px 16px 44px; }
   .lpi-strip-label { margin-bottom: 20px; font-size: 14px; }
-  .lpi-strip-row { gap: 16px 24px; }
+  .lpi-strip-row { display: grid; grid-template-columns: repeat(2, auto); justify-content: center; gap: 16px; }
   .lpi-strip-app { font-size: 16px; gap: 8px; }
   .lpi-strip-app img { width: 26px; height: 26px; border-radius: 7px; }
   .lpi-story { padding: 80px 16px 0; }
