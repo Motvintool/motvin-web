@@ -10,6 +10,7 @@ import { AppLogo } from './AppLogo';
 import { Screenshot } from './Screenshot';
 import { useSiblingCycle } from './useSiblingCycle';
 import { useDeckSwipe } from './useDeckSwipe';
+import { useFrameOpen } from './useFrameOpen';
 import { CloseIcon } from './Icons';
 import { CardCorner } from './CardCorner';
 import { useLogoTint } from './useLogoTint';
@@ -45,6 +46,7 @@ export function WebCard({
   if (deck.index !== activeIndex) setDeck({ index: activeIndex, dir: dotCount > 1 && activeIndex === (deck.index + 1) % dotCount ? 'next' : 'prev', from: deck.index });
   // Where there's no hover but room for the stack, a drag deals the deck instead of sliding screens side by side.
   const { deck: deckSwipe, peeking, deckProps } = useDeckSwipe(swipe, swipeProps);
+  const openFromFrame = useFrameOpen(href);
 
   // "Latest" or "Updated", as on the app cards, from this web part's own uploads.
   const freshness = appFreshness(app, useLibrarySettings().freshness, undefined, ['webapp', 'web']);
@@ -61,7 +63,7 @@ export function WebCard({
       // The app's own colour, faint, behind its page, as on an app card (useLogoTint).
       style={tint ? ({ '--ins-card-tint': tint } as CSSProperties) : undefined}
     >
-      <div className="ins-web-card-shot">
+      <div className="ins-web-card-shot" onClick={openFromFrame}>
         <CardCorner app={app} platform={cardPlatform} freshness={freshness} playable={Boolean(activeScreen)} />
         {selectable && (
           <button

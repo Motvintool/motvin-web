@@ -11,6 +11,7 @@ import { AppLogo } from './AppLogo';
 import { Screenshot } from './Screenshot';
 import { useSiblingCycle } from './useSiblingCycle';
 import { useDeckSwipe } from './useDeckSwipe';
+import { useFrameOpen } from './useFrameOpen';
 import { useAsync } from './useAsync';
 import { useToast } from './Toast';
 import { useDownloadGate } from './useDownloadGate';
@@ -74,6 +75,7 @@ export function AppCard({
   if (deck.index !== activeIndex) setDeck({ index: activeIndex, dir: dotCount > 1 && activeIndex === (deck.index + 1) % dotCount ? 'next' : 'prev', from: deck.index });
   // Where there's no hover but room for the stack, a drag deals the deck instead of sliding screens side by side.
   const { deck: deckSwipe, peeking, deckProps } = useDeckSwipe(swipe, swipeProps);
+  const openFromFrame = useFrameOpen(href);
 
   const { show: showToast } = useToast();
   const { allow: allowDownload } = useDownloadGate();
@@ -286,7 +288,7 @@ export function AppCard({
       // The app's own colour, faint, behind its screen (useLogoTint); the plain grey until it is known.
       style={tint ? ({ '--ins-card-tint': tint } as CSSProperties) : undefined}
     >
-      <div className="ins-card-shot">
+      <div className="ins-card-shot" onClick={openFromFrame}>
         <CardCorner app={app} platform={cardPlatform} freshness={freshness} playable={Boolean(activeScreen)} />
         {selectable && (
           <button

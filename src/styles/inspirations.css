@@ -20405,7 +20405,7 @@ body:has(aside.ins-guide) .ins-assist-switch {
      edge (the frame keeps a fixed shape and clips it), rather than the whole phone floating small. */
   .ins-app-grid:not(.ins-shot-panel *) .ins-card-shot {
     aspect-ratio: 1 / 1.36;
-    padding: 18.5% 20% 0;
+    padding: 17.5% 20% 0;
     border-radius: 28px;
   }
   .ins-app-grid:not(.ins-shot-panel *) .ins-card-inset { flex: none; }
@@ -20492,19 +20492,20 @@ body:has(aside.ins-guide) .ins-assist-switch {
 }
 .ins-card-play-tip.is-floating::before { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: #111; }
 
-/* App cards, pressed: only the screen eases back a touch — the frame round it keeps its size and its hover colour. */
+/* App cards, pressed (the screen or the frame round it — both open the app, not the buttons on it): only the
+   screens ease back a touch — the frame keeps its size and its hover colour. */
 @media (hover: hover) {
-  .ins-app-grid:not(.ins-shot-panel *) .ins-card .ins-card-shot:has(.ins-card-link:active) {
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card .ins-card-shot:active:not(:has(button:active)) {
     scale: none;
     background: #f0f0f0;
   }
-  .ins-app-grid:not(.ins-shot-panel *) .ins-card:has(.ins-card-link:active) .ins-card-inset {
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card:has(.ins-card-shot:active):not(:has(.ins-card-shot button:active)) .ins-card-inset {
     scale: 0.96;
     transition-duration: 90ms;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ins-app-grid:not(.ins-shot-panel *) .ins-card:has(.ins-card-link:active) .ins-card-inset { scale: none; }
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card:has(.ins-card-shot:active):not(:has(.ins-card-shot button:active)) .ins-card-inset { scale: none; }
 }
 
 
@@ -20556,11 +20557,11 @@ body:has(aside.ins-guide) .ins-assist-switch {
   .ins-grid.ins-app-grid.ins-web-grid:not(.ins-shot-panel *) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (hover: hover) {
-  .ins-web-card-shot:has(.ins-web-card-link:active) { scale: none; }
-  .ins-web-card:has(.ins-web-card-link:active) .ins-web-card-inset { scale: 0.97; transition-duration: 90ms; }
+  .ins-web-card-shot:active { scale: none; }
+  .ins-web-card:has(.ins-web-card-shot:active):not(:has(.ins-web-card-shot button:active)) .ins-web-card-inset { scale: 0.97; transition-duration: 90ms; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ins-web-card:has(.ins-web-card-link:active) .ins-web-card-inset { scale: none; }
+  .ins-web-card:has(.ins-web-card-shot:active):not(:has(.ins-web-card-shot button:active)) .ins-web-card-inset { scale: none; }
 }
 
 /* Loading app / web cards: the frame itself is the placeholder — the cards' own light grey with the page-wide
@@ -20739,8 +20740,8 @@ body:has(aside.ins-guide) .ins-assist-switch {
   .ins-app-grid:not(.ins-shot-panel *) .ins-card-stack {
     display: block;
     position: absolute;
-    /* Where the screen sits: 20% in from each side, 18.5% of the width from the top (as % of the height). */
-    top: calc(18.5% / 1.36);
+    /* Where the screen sits: 20% in from each side, 17.5% of the width from the top (as % of the height). */
+    top: calc(17.5% / 1.36);
     left: 20%;
     width: 60%;
     pointer-events: none;
@@ -20885,7 +20886,7 @@ body:has(aside.ins-guide) .ins-assist-switch {
   .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot {
     display: flex;
     aspect-ratio: 1 / 1.36;
-    padding: 18.5% 20% 0;
+    padding: 17.5% 20% 0;
     border-radius: 24px;
   }
   /* At the phone's own shape, running on past the frame's bottom edge — not squeezed to fit the frame's height. */
@@ -20980,3 +20981,25 @@ body:has(aside.ins-guide) .ins-assist-switch {
   .ins-app-grid:not(.ins-shot-panel *) .ins-card--skeleton .ins-card-meta { padding: 18px 4px 0; gap: 12px; }
   .ins-app-grid:not(.ins-shot-panel *) .ins-card--skeleton .ins-skel--app-icon { width: 44px; height: 44px; border-radius: 11px; }
 }
+
+/* Pressed, the whole deck eases back as one — the screens behind with the front one, from the same centre (the
+   deck's box is the front screen's own shape, so both shrink round one point). */
+.ins-app-grid:not(.ins-shot-panel *) .ins-card-stack { aspect-ratio: 253 / 556; }
+.ins-grid.ins-web-grid .ins-web-card-stack { aspect-ratio: 420 / 260.19; }
+@media (prefers-reduced-motion: no-preference) {
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-stack,
+  .ins-grid.ins-web-grid .ins-web-card-stack {
+    transition: opacity 220ms ease, transform 420ms cubic-bezier(0.2, 0.9, 0.25, 1), scale 220ms var(--ins-ease);
+  }
+}
+@media (hover: hover) {
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card:has(.ins-card-shot:active):not(:has(.ins-card-shot button:active)) .ins-card-stack { scale: 0.96; transition-duration: 220ms, 420ms, 90ms; }
+  .ins-grid.ins-web-grid .ins-web-card:has(.ins-web-card-shot:active):not(:has(.ins-web-card-shot button:active)) .ins-web-card-stack { scale: 0.97; transition-duration: 220ms, 420ms, 90ms; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card:has(.ins-card-shot:active):not(:has(.ins-card-shot button:active)) .ins-card-stack,
+  .ins-grid.ins-web-grid .ins-web-card:has(.ins-web-card-shot:active):not(:has(.ins-web-card-shot button:active)) .ins-web-card-stack { scale: none; }
+}
+/* The frame opens the app too (useFrameOpen), so it shows the hand as the screen does. */
+.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot,
+.ins-web-card-shot { cursor: var(--ins-cursor-hand, pointer); }
