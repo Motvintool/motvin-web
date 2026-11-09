@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type CSSProperties } from 'react';
 import JSZip from 'jszip';
 import { createPortal } from 'react-dom';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
@@ -16,8 +16,10 @@ import { useToast } from './Toast';
 import { useDownloadGate } from './useDownloadGate';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { CloseIcon } from './Icons';
-import { APP_FRESHNESS_LABEL, appFreshness } from '@/lib/inspirations/appFreshness';
+import { appFreshness } from '@/lib/inspirations/appFreshness';
 import { useLibrarySettings } from './useMeta';
+import { useLogoTint } from './useLogoTint';
+import { CardCorner } from './CardCorner';
 
 const imgSaveRight = "/ASSET/Icons/Motvin/save-right.svg";
 const imgDownloadPng = "/ASSET/Icons/Motvin/download-png.svg";
@@ -266,15 +268,21 @@ export function AppCard({
   // "Latest" or "Updated", from its dated versions and how long the admin's Settings keep each tag.
   // Counted on the card's own platform (an app on iOS and the web isn't "Latest" in iOS for a web upload).
   const freshness = appFreshness(app, useLibrarySettings().freshness, undefined, cardPlatform ? [cardPlatform] : ['ios']);
+  const tint = useLogoTint(app);
 
   return (
-    <article ref={cardRef} className="ins-card" data-id={app.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
+    <article
+      ref={cardRef}
+      className="ins-card"
+      data-id={app.id}
+      role="listitem"
+      onMouseEnter={startHover}
+      onMouseLeave={endHover}
+      // The app's own colour, faint, behind its screen (useLogoTint); the plain grey until it is known.
+      style={tint ? ({ '--ins-card-tint': tint } as CSSProperties) : undefined}
+    >
       <div className="ins-card-shot">
-        {freshness && (
-          <span className={`ins-card-fresh-badge is-${freshness}`} aria-label={`${APP_FRESHNESS_LABEL[freshness]} app`}>
-            {APP_FRESHNESS_LABEL[freshness]}
-          </span>
-        )}
+        <CardCorner app={app} platform={cardPlatform} freshness={freshness} playable={Boolean(activeScreen)} />
         {selectable && (
           <button
             type="button"

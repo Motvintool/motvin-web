@@ -20485,3 +20485,352 @@ body:has(aside.ins-guide) .ins-assist-switch {
     padding-right: 72px;
   }
 }
+
+/* =========================================================
+   App cards, calmer (Explore, Apps, a category…): the screen sits smaller in its frame with air round it, as
+   an object on a surface — a hairline edge and a soft shadow under it — on a faint wash of the app's own
+   colour (--ins-card-tint, from its logo: useLogoTint), fading in once known; plain grey for a colourless
+   mark. Four across on a wide screen instead of five. The Latest / Updated tag keeps its look, in the frame's
+   corner, and the name row is quieter. Phones keep their own card.
+   ========================================================= */
+.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot {
+  --ins-card-frame: color-mix(in srgb, var(--ins-card-tint, #f4f4f4) 1.8%, #f8f8f8);
+  background: var(--ins-card-frame);
+  transition: background-color 0.5s ease;
+}
+/* The hover fade behind the arrows and dots runs into the frame's own colour, not a lighter white band. */
+.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot .ins-card-hover-controls::before {
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--ins-card-frame) 0%, transparent) 0%, var(--ins-card-frame) 75%, var(--ins-card-frame) 100%);
+}
+
+@media (min-width: 760px) {
+  .ins-app-grid:not(.ins-shot-panel *) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 44px 16px;
+  }
+  .ins-app-grid > .ins-card { --ins-app-card-w: calc((100cqw - 48px) / 4); contain-intrinsic-block-size: auto calc(var(--ins-app-card-w) * 1.36 + 90px); }
+  /* The phone rises from the card's bottom edge: its top part shows, bigger, and the rest runs on past the
+     edge (the frame keeps a fixed shape and clips it), rather than the whole phone floating small. */
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-shot {
+    aspect-ratio: 1 / 1.36;
+    padding: 17.5% 20% 0;
+    border-radius: 28px;
+  }
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-inset { flex: none; }
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-inset {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+  }
+  /* The select ring and remove button, in the other corner of the frame. */
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring,
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-remove-btn {
+    top: 14px;
+    left: 14px;
+  }
+  /* Unticked, just the ring: see-through inside, the frame showing through. */
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring:not(.is-selected) {
+    background: transparent;
+  }
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-meta { padding: 18px 4px 0; gap: 12px; }
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-logo {
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 11px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.07);
+  }
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-app { font-size: 18px; line-height: 1.35; }
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-tagline { font-weight: 500; color: #7a7a7e; }
+}
+@media (min-width: 760px) and (max-width: 1139px) {
+  .ins-app-grid:not(.ins-shot-panel *) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ins-app-grid > .ins-card { --ins-app-card-w: calc((100cqw - 32px) / 3); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-shot { transition: none; }
+}
+
+/* The card's top-right corner: its Latest / Updated tag and, beside it, the play button (the whole app as a
+   prototype, in the flow player). The tag keeps its own look; the corner holds the place it used to take. */
+.ins-card-corner {
+  position: absolute;
+  top: clamp(10px, 4.75%, 32px);
+  right: clamp(10px, 9.25%, 32px);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ins-card-corner > .ins-card-fresh-badge { position: static; }
+.ins-card-play {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(110, 110, 110, 0.6);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: background var(--ins-fast) var(--ins-ease), scale 160ms var(--ins-ease);
+}
+/* The triangle's own drawing sits right of its box: brought back, leaving the slight lean a play mark needs to look centred. */
+.ins-card-play svg { translate: -0.8px 0.4px; }
+.ins-card-play:hover { background: rgba(70, 70, 70, 0.75); }
+.ins-card-play:active { scale: 0.92; }
+.ins-card-play:focus-visible { outline: 2px solid #141414; outline-offset: 2px; }
+@media (min-width: 760px) {
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-corner { top: 16px; right: 16px; }
+}
+@media (max-width: 759px) {
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-corner { top: 15px; right: 14px; }
+}
+/* "Prototype" on hover: the site's dark tip, centred under the button. Drawn over the page (fixed, from a portal)
+   rather than inside the card, whose edges would cut a centred tip off at the corner. */
+.ins-card-play-tip.is-floating {
+  position: fixed;
+  bottom: auto;
+  opacity: 1;
+  transform: translateX(-50%);
+  z-index: 60;
+}
+.ins-card-play-tip.is-floating::before { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: #111; }
+
+/* App cards, pressed: only the screen eases back a touch — the frame round it keeps its size and its hover colour. */
+@media (hover: hover) {
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card .ins-card-shot:has(.ins-card-link:active) {
+    scale: none;
+    background: #f0f0f0;
+  }
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card:has(.ins-card-link:active) .ins-card-inset {
+    scale: 0.96;
+    transition-duration: 90ms;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card:has(.ins-card-link:active) .ins-card-inset { scale: none; }
+}
+
+
+/* =========================================================
+   Web cards (Webs), in the app cards' style: three across, each page on a faint wash of its app's colour in a
+   28px-round frame, set in with air at the top and running on past the frame's bottom edge; the Latest tag
+   and play button in the top-right corner (CardCorner), the select circle across from them, and the same
+   quieter name row. Pressed, only the page eases back. Phones keep their own card.
+   ========================================================= */
+.ins-web-card-shot {
+  --ins-card-frame: color-mix(in srgb, var(--ins-card-tint, #f4f4f4) 1.8%, #f8f8f8);
+  background: var(--ins-card-frame);
+}
+.ins-web-card-controls { background: linear-gradient(to bottom, transparent, var(--ins-card-frame)); }
+
+@media (min-width: 760px) {
+  .ins-grid.ins-app-grid.ins-web-grid:not(.ins-shot-panel *) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 44px 16px;
+  }
+  .ins-web-card-shot {
+    aspect-ratio: 1 / 0.6;
+    padding: 12% 8% 0;
+    border-radius: 28px;
+  }
+  .ins-web-card-inset {
+    border: 0;
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+  }
+  .ins-web-card-shot > .ins-card-corner { top: 16px; right: 16px; }
+  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-select-ring,
+  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-remove-btn {
+    top: 14px;
+    left: 14px;
+  }
+  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-select-ring:not(.is-selected) { background: transparent; }
+  .ins-web-card-meta { padding: 18px 4px 0; gap: 12px; }
+  .ins-web-card-logo {
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 11px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.07);
+  }
+  .ins-web-card-app { font-size: 18px; line-height: 1.35; }
+  .ins-web-card-tagline { font-weight: 500; color: #7a7a7e; }
+}
+@media (min-width: 760px) and (max-width: 1139px) {
+  .ins-grid.ins-app-grid.ins-web-grid:not(.ins-shot-panel *) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (hover: hover) {
+  .ins-web-card-shot:has(.ins-web-card-link:active) { scale: none; }
+  .ins-web-card:has(.ins-web-card-link:active) .ins-web-card-inset { scale: 0.97; transition-duration: 90ms; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-web-card:has(.ins-web-card-link:active) .ins-web-card-inset { scale: none; }
+}
+
+/* Loading app / web cards: the frame itself is the placeholder — the cards' own light grey with the page-wide
+   shimmer sweeping over it — and no darker screen shape inside (that one stays, invisible, to hold the height). */
+.ins-app-grid .ins-card--skeleton .ins-card-shot,
+.ins-web-card--skeleton .ins-web-card-shot {
+  background: #f3f3f3;
+}
+.ins-app-grid .ins-card--skeleton .ins-card-shot > .ins-skel--shot,
+.ins-web-card--skeleton .ins-web-card-inset,
+.ins-web-card--skeleton .ins-web-card-skel-fill {
+  visibility: hidden;
+}
+.ins-app-grid .ins-card--skeleton .ins-card-shot::after,
+.ins-web-card--skeleton .ins-web-card-shot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 41%,
+    rgba(255, 255, 255, 0.5) 47%,
+    rgba(255, 255, 255, 0.85) 50%,
+    rgba(255, 255, 255, 0.5) 53%,
+    transparent 59%,
+    transparent 100%
+  );
+  background-size: 200vw 100%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  animation: insShimmer 2s ease-in-out infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-app-grid .ins-card--skeleton .ins-card-shot::after,
+  .ins-web-card--skeleton .ins-web-card-shot::after { animation: none; background-image: none; }
+}
+
+/* Colour filter (Explore, before Filters): its dot and a chevron, like the Curated pill, opening a small card: a colour field (its square and hex — type
+   any hex) over a grid of round swatches, six to a row; picked ones ringed with a tick. */
+.ins-colorf-filter { position: relative; }
+.ins-colorf-pill { display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; }
+.ins-colorf-mark {
+  flex: none;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.ins-colorf-pop {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 60;
+  width: 288px;
+  animation: insColorfIn 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: top right;
+}
+@keyframes insColorfIn { from { opacity: 0; translate: 0 -6px; scale: 0.96; } }
+.ins-colorf-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 18px 18px;
+  border: 7px solid #f0f0f0;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 12px 80px rgba(0, 0, 0, 0.08);
+}
+.ins-colorf-clear {
+  flex: none;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: #f0f0f0;
+  color: #111;
+  font: 600 12px/1 var(--font-manrope), Inter, sans-serif;
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: background var(--ins-fast) var(--ins-ease);
+}
+.ins-colorf-clear:hover { background: #e6e6e6; }
+.ins-colorf-card { align-items: stretch; }
+/* The field: the colour's square and its hex, an input-like box. */
+.ins-colorf-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  margin: 0 0 14px;
+  padding: 0 8px;
+  border: 1px solid #e6e6e9;
+  border-radius: 14px;
+  background: #fff;
+  cursor: text;
+  transition: border-color var(--ins-fast) var(--ins-ease), box-shadow var(--ins-fast) var(--ins-ease);
+}
+.ins-colorf-field:focus-within { border-color: #141414; box-shadow: inset 0 0 0 1px #141414; }
+.ins-colorf-field-swatch {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.ins-colorf-field-swatch { position: relative; overflow: hidden; cursor: var(--ins-cursor-hand, pointer); }
+/* The browser's colour input, invisible over the square: a click on the square opens its picker. */
+.ins-colorf-native {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: var(--ins-cursor-hand, pointer);
+}
+.ins-colorf-field-swatch.is-empty {
+  background: repeating-conic-gradient(#ececee 0% 25%, #fff 0% 50%) 50% / 12px 12px;
+}
+.ins-colorf-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: #141414;
+  font: 500 17px/1 var(--font-manrope), Inter, sans-serif;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.ins-colorf-field input::placeholder { color: #a1a1a6; }
+/* Focused, only the field's own outer stroke darkens — no second (blue) ring round the text box inside it. */
+.ins-colorf-field input:focus,
+.ins-colorf-field input:focus-visible { outline: none !important; box-shadow: none !important; border: 0 !important; }
+/* The swatches: round, six to a row. */
+.ins-colorf-grid { display: grid; grid-template-columns: repeat(6, 36px); justify-content: space-between; row-gap: 12px; }
+.ins-colorf-dot {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  /* The orbs' look: a soft sheen top-left over the hue, a faint shadow in its own colour. */
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.45), transparent 55%),
+    var(--hue, #111216);
+  color: #fff;
+  box-shadow: 0 6px 14px -6px color-mix(in srgb, var(--hue, #111216) 70%, transparent);
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: scale 240ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 180ms ease, opacity 180ms ease;
+}
+.ins-colorf-dot.is-light { color: #141414; }
+.ins-colorf-dot:hover { scale: 1.12; }
+.ins-colorf-dot.is-picked {
+  scale: 1.06;
+  box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--hue, #141414), 0 8px 18px -6px color-mix(in srgb, var(--hue, #111216) 70%, transparent);
+}
+.ins-colorf-grid:has(.is-picked) .ins-colorf-dot:not(.is-picked):not(:hover) { opacity: 0.45; }
+.ins-colorf-dot:focus-visible { outline: 2px solid #141414; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  .ins-colorf-pop { animation: none; }
+  .ins-colorf-dot { transition: none; }
+  .ins-colorf-dot:hover { scale: none; }
+}

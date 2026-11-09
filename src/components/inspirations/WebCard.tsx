@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import type { App, Screen } from '@/lib/inspirations/types';
-import { APP_FRESHNESS_LABEL, appFreshness } from '@/lib/inspirations/appFreshness';
+import type { CSSProperties } from 'react';
+import { appFreshness } from '@/lib/inspirations/appFreshness';
 import { useLibrarySettings } from './useMeta';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { AppLogo } from './AppLogo';
@@ -10,6 +11,8 @@ import { CardShots } from './CardShots';
 import { Screenshot } from './Screenshot';
 import { useSiblingCycle } from './useSiblingCycle';
 import { CloseIcon } from './Icons';
+import { CardCorner } from './CardCorner';
+import { useLogoTint } from './useLogoTint';
 
 /** Desktop-web app card matching Figma's Web Screen Preview component. */
 export function WebCard({
@@ -31,7 +34,8 @@ export function WebCard({
   onRemove?: () => void;
 }) {
   // On the platform the card shows (its preview's): an app on iOS and the web opens as the web one here.
-  const href = INSPIRATIONS_ROUTES.app(app, (preview ?? presetScreens?.[0])?.platform);
+  const cardPlatform = (preview ?? presetScreens?.[0])?.platform;
+  const href = INSPIRATIONS_ROUTES.app(app, cardPlatform);
   const { activeScreen, previewScreens, dotCount, activeIndex, startHover, endHover, step, cardRef, swipe, trackRef, swipeProps } = useSiblingCycle(
     preview ?? presetScreens?.[0] ?? null,
     { preset: presetScreens, preferredIds: app.cardScreens },
@@ -39,15 +43,21 @@ export function WebCard({
 
   // "Latest" or "Updated", as on the app cards, from this web part's own uploads.
   const freshness = appFreshness(app, useLibrarySettings().freshness, undefined, ['webapp', 'web']);
+  const tint = useLogoTint(app);
 
   return (
-    <article ref={cardRef} className="ins-web-card" data-id={app.id} role="listitem" onMouseEnter={startHover} onMouseLeave={endHover}>
+    <article
+      ref={cardRef}
+      className="ins-web-card"
+      data-id={app.id}
+      role="listitem"
+      onMouseEnter={startHover}
+      onMouseLeave={endHover}
+      // The app's own colour, faint, behind its page, as on an app card (useLogoTint).
+      style={tint ? ({ '--ins-card-tint': tint } as CSSProperties) : undefined}
+    >
       <div className="ins-web-card-shot">
-        {freshness && (
-          <span className={`ins-card-fresh-badge is-${freshness}`} aria-label={`${APP_FRESHNESS_LABEL[freshness]} app`}>
-            {APP_FRESHNESS_LABEL[freshness]}
-          </span>
-        )}
+        <CardCorner app={app} platform={cardPlatform} freshness={freshness} playable={Boolean(activeScreen)} />
         {selectable && (
           <button
             type="button"

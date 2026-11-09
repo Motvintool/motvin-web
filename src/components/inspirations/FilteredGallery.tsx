@@ -16,6 +16,9 @@ import { ScreenGrid } from './ScreenGrid';
 import { ScreenshotTextSearch } from './ScreenshotTextSearch';
 import { APPLIED_PILLS_MAX, AppliedFilterPills, FiltersPill } from './FiltersPanel';
 import { useAppFilters } from './useAppFilters';
+import { PALETTE_PARAM, PaletteFilter, readPaletteParam } from './PaletteFilter';
+import { useLogoTints } from './useLogoTint';
+import { hueOf, type PaletteHue } from '@/lib/inspirations/hues';
 import { useAsync } from './useAsync';
 import { useFitResults } from './useFitResults';
 import { useExploreFilters } from './useExploreFilters';
@@ -240,9 +243,26 @@ export function FilteredGallery({
   const freshness = useLibrarySettings().freshness;
   const matchingApps = (allApps ?? shownApps)?.filter((a) => appMatchesFilters(a, withDefaultPlatform(filters))) ?? [];
   const appFilters = useAppFilters(matchingApps);
+  // Palette: only the apps whose brand colour (their logo's) is one of the picked ones.
+  const palette = readPaletteParam(searchParams.get(PALETTE_PARAM));
+  const tints = useLogoTints(appFilters.filtered);
+  const paletteApps = palette.length ? appFilters.filtered.filter((app) => palette.includes(hueOf(tints.get(app.id)))) : appFilters.filtered;
+  const paletteCounts = appFilters.filtered.reduce<Partial<Record<PaletteHue, number>>>((counts, app) => {
+    if (tints.get(app.id) === undefined) return counts;
+    const hue = hueOf(tints.get(app.id));
+    counts[hue] = (counts[hue] ?? 0) + 1;
+    return counts;
+  }, {});
+  const setPalette = (next: PaletteHue[]) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next.length) params.set(PALETTE_PARAM, next.join(','));
+    else params.delete(PALETTE_PARAM);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
   // "+N more" beside the applied filters opens the Filters panel.
   const [openFilters, setOpenFilters] = useState(0);
-  const apps = sort === 'curated' ? freshFirst(appFilters.filtered, freshness, undefined, withDefaultPlatform(filters).platforms) : appFilters.filtered;
+  const apps = sort === 'curated' ? freshFirst(paletteApps, freshness, undefined, withDefaultPlatform(filters).platforms) : paletteApps;
   const appsLibraryEmpty = meta.counts.apps === 0;
 
   // The only ScreenFilters dimensions an app feed can't honor.
@@ -257,7 +277,12 @@ export function FilteredGallery({
           <ToolbarRow
             total={null}
             unit="app"
-            right={<FiltersPill sections={appFilters.sections} onClearAll={appFilters.clear} total={apps.length} unit="app" atEnd onOpenChange={appFilters.onPanelOpen} openSignal={openFilters} />}
+            right={
+              <>
+                <PaletteFilter selected={palette} onChange={setPalette} counts={paletteCounts} />
+                <FiltersPill sections={appFilters.sections} onClearAll={appFilters.clear} total={apps.length} unit="app" atEnd onOpenChange={appFilters.onPanelOpen} openSignal={openFilters} />
+              </>
+            }
           >
             <NavPill counts={counts} />
             <FilterPill
@@ -287,7 +312,7 @@ export function FilteredGallery({
                 ? 'We add new apps regularly. Check back soon.'
                 : 'Try removing a filter, or search for something broader.'
             }
-            emptyAction={appFilters.active ? { label: 'Clear filters', onClick: appFilters.clear } : undefined}
+            emptyAction={appFilters.active || palette.length ? { label: 'Clear filters', onClick: () => { appFilters.clear(); setPalette([]); } } : undefined}
           />
         </>
       ) : (
