@@ -8,6 +8,7 @@ import { screenItemId } from '@/lib/inspirations/savedItems';
 import { isDesktopPlatform, type Screen } from '@/lib/inspirations/types';
 import { EmptyState } from '../EmptyState';
 import { NavPill, ToolbarRow } from '../FilterToolbar';
+import { PaletteFilter } from '../PaletteFilter';
 import { GridIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
 import { ScreenGrid } from '../ScreenGrid';
@@ -15,6 +16,7 @@ import { ScreenshotTextSearch } from '../ScreenshotTextSearch';
 import { ScreenGridSkeleton } from '../Skeletons';
 import { useAsync } from '../useAsync';
 import { useMeta } from '../useMeta';
+import { usePaletteApps } from '../usePaletteApps';
 import { CheckboxFilterPill } from './AppDetailView';
 
 /** Screens shown at first; scrolling to the end shows the next batch. */
@@ -39,6 +41,8 @@ export function PatternsView() {
   const picked = (params.get('category') ?? '').split(',').filter(Boolean);
   const pickedPatterns = (params.get('pattern') ?? '').split(',').filter(Boolean);
   const [shown, setShown] = useState(PAGE);
+  // The colour filter: only screens of apps whose brand colour (their logo's) is one of the picked ones.
+  const colour = usePaletteApps(platforms);
 
   // Every pattern with the screens it was found on (one request per pattern).
   const { data, loading } = useAsync(async () => {
@@ -110,7 +114,7 @@ export function PatternsView() {
     `patterns-text:${textQuery}`,
   );
   const textIds = textQuery && textHits ? new Set(textHits.screens.map((s) => s.id)) : null;
-  const gridScreens = textIds ? screens.filter((s) => textIds.has(s.id)) : screens;
+  const gridScreens = screens.filter((s) => (!textIds || textIds.has(s.id)) && (!colour.appIds || colour.appIds.has(s.appId)));
   const setText = (text: string | undefined) => {
     setShown(PAGE);
     const sp = new URLSearchParams(params.toString());
@@ -138,7 +142,17 @@ export function PatternsView() {
       <PageHeading title="Patterns" />
 
       <ToolbarRow total={null} unit="screen" right={<ScreenshotTextSearch applied={textQuery} onApply={setText} />}>
-        <NavPill counts={meta.counts} activeCount={loading || (textQuery && !textHits) ? null : gridScreens.length} />
+        <NavPill counts={meta.counts} activeCount={loading || !colour.ready || (textQuery && !textHits) ? null : gridScreens.length} />
+        {/* The colour filter just after the page switch, where Screens has it. */}
+        <PaletteFilter
+          selected={colour.palette}
+          onChange={(next) => {
+            setShown(PAGE);
+            colour.setPalette(next);
+          }}
+          counts={colour.counts}
+          align="start"
+        />
         {categoryOptions.length > 0 && (
           <CheckboxFilterPill
             label="Category"
@@ -160,7 +174,7 @@ export function PatternsView() {
       </ToolbarRow>
 
       <section className="ins-shot-panel">
-        {loading || (textQuery && textLoading) ? (
+        {loading || !colour.ready || (textQuery && textLoading) ? (
           <ScreenGridSkeleton count={10} meta={false} web={webGrid} />
         ) : (
           <ScreenGrid
@@ -174,7 +188,7 @@ export function PatternsView() {
             onLoadMore={() => setShown((n) => n + PAGE)}
             empty={
               <EmptyState
-                play={Boolean(textQuery || picked.length || pickedPatterns.length)}
+                play={Boolean(textQuery || picked.length || pickedPatterns.length || colour.palette.length)}
                 icon={<GridIcon size={22} />}
                 title={
                   textQuery
@@ -183,10 +197,12 @@ export function PatternsView() {
                       ? 'No screens for this pattern on this platform yet'
                       : picked.length
                       ? 'No pattern screens in these categories yet'
-                      : 'No patterns matched yet'
+                      : colour.palette.length
+                        ? 'No pattern screens from apps of these colours'
+                        : 'No patterns matched yet'
                 }
                 description={
-                  textQuery || picked.length || pickedPatterns.length
+                  textQuery || picked.length || pickedPatterns.length || colour.palette.length
                     ? undefined
                     : 'Patterns are matched against stored screens when the manifest is built. Add screens and they fill in on their own.'
                 }
@@ -195,7 +211,9 @@ export function PatternsView() {
                     ? { label: 'Clear text search', onClick: () => setText(undefined) }
                     : picked.length || pickedPatterns.length
                       ? { label: 'Show all patterns', onClick: () => setCategories([]) }
-                      : undefined
+                      : colour.palette.length
+                        ? { label: 'Clear colours', onClick: () => colour.setPalette([]) }
+                        : undefined
                 }
               />
             }

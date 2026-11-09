@@ -8,9 +8,9 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import type { App, Screen } from '@/lib/inspirations/types';
 import { addWatermarkToBlob } from '@/lib/inspirations/watermark';
 import { AppLogo } from './AppLogo';
-import { CardShots } from './CardShots';
 import { Screenshot } from './Screenshot';
 import { useSiblingCycle } from './useSiblingCycle';
+import { useDeckSwipe } from './useDeckSwipe';
 import { useAsync } from './useAsync';
 import { useToast } from './Toast';
 import { useDownloadGate } from './useDownloadGate';
@@ -69,6 +69,11 @@ export function AppCard({
     preview ?? presetScreens?.[0] ?? null,
     { preset: presetScreens, preferredIds: app.cardScreens },
   );
+  // Which way the deck last moved (the arrows): forward deals the next screen to the front, back returns the last.
+  const [deck, setDeck] = useState<{ index: number; dir: 'next' | 'prev' | null; from: number }>({ index: activeIndex, dir: null, from: activeIndex });
+  if (deck.index !== activeIndex) setDeck({ index: activeIndex, dir: dotCount > 1 && activeIndex === (deck.index + 1) % dotCount ? 'next' : 'prev', from: deck.index });
+  // Where there's no hover but room for the stack, a drag deals the deck instead of sliding screens side by side.
+  const { deck: deckSwipe, peeking, deckProps } = useDeckSwipe(swipe, swipeProps);
 
   const { show: showToast } = useToast();
   const { allow: allowDownload } = useDownloadGate();
@@ -273,7 +278,7 @@ export function AppCard({
   return (
     <article
       ref={cardRef}
-      className="ins-card"
+      className={`ins-card ${deckSwipe ? 'is-deck-swipe' : ''} ${peeking ? 'is-peeking' : ''}`}
       data-id={app.id}
       role="listitem"
       onMouseEnter={startHover}
@@ -312,12 +317,32 @@ export function AppCard({
             <CloseIcon size={14} />
           </button>
         )}
-        <div className="ins-card-inset" onContextMenu={handleContextMenu} {...swipeProps}>
+        {/* The deck: the app's next screens peeking out above this one, stacked behind it, smaller as they go. */}
+        {previewScreens && dotCount > 1 && (
+          <div className="ins-card-stack" aria-hidden>
+            {[2, 1].filter((step) => step < dotCount).map((step) => (
+              <div key={`${activeIndex}-${step}`} className={`ins-card-stack-layer is-${step} ${deck.dir ? `deal-${deck.dir}` : ''}`}>
+                <Screenshot screen={previewScreens[(activeIndex + step) % dotCount]} />
+              </div>
+            ))}
+            {/* Going forward, the screen that was in front drops away over the new one. */}
+            {deck.dir === 'next' && (
+              <div key={`out-${activeIndex}`} className="ins-card-stack-out">
+                <Screenshot screen={previewScreens[deck.from % dotCount]} />
+              </div>
+            )}
+          </div>
+        )}
+        <div
+          // A new screen in front comes with its own entrance (from behind going forward, from the front going back).
+          key={`inset-${activeIndex}`}
+          ref={deckSwipe ? trackRef : undefined}
+          className={`ins-card-inset ${deck.dir ? `deal-${deck.dir}` : ''}`}
+          onContextMenu={handleContextMenu}
+          {...deckProps}
+        >
           <Link href={href} className="ins-card-link" aria-label={app.name}>
-            {/* On a phone the screens are swiped, side by side; elsewhere the arrows step one at a time. */}
-            {swipe && previewScreens && dotCount > 1 ? (
-              <CardShots screens={previewScreens} activeIndex={activeIndex} trackRef={trackRef} />
-            ) : activeScreen ? (
+            {activeScreen ? (
               <Screenshot screen={activeScreen} />
             ) : (
               <AppLogo app={app} size={96} />

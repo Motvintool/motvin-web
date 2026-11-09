@@ -19,11 +19,14 @@ export function PaletteFilter({
   selected,
   onChange,
   counts,
+  align = 'end',
 }: {
   selected: PaletteHue[];
   onChange: (next: PaletteHue[]) => void;
   /** How many of the listed apps have each colour, once their logos are read. */
   counts?: Partial<Record<PaletteHue, number>>;
+  /** Which edge of the pill the menu lines up with: its right edge (a pill at the bar's right end) or its left. */
+  align?: 'start' | 'end';
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -81,7 +84,7 @@ export function PaletteFilter({
         <span className="ins-fpill-chev" aria-hidden />
       </button>
       {open && (
-        <div className="ins-colorf-pop">
+        <div className={`ins-colorf-pop ${align === 'start' ? 'is-start' : ''}`}>
           <section className="ins-colorf-card" role="group" aria-label="Filter apps by colour">
             {/* The field: the colour's square and its hex — type any hex to find the apps nearest that colour. */}
             <div className="ins-colorf-field">

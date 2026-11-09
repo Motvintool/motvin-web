@@ -18,6 +18,7 @@ import { APPLIED_PILLS_MAX, AppliedFilterPills, FiltersPill } from './FiltersPan
 import { useAppFilters } from './useAppFilters';
 import { PALETTE_PARAM, PaletteFilter, readPaletteParam } from './PaletteFilter';
 import { useLogoTints } from './useLogoTint';
+import { usePaletteApps } from './usePaletteApps';
 import { hueOf, type PaletteHue } from '@/lib/inspirations/hues';
 import { useAsync } from './useAsync';
 import { useFitResults } from './useFitResults';
@@ -143,6 +144,7 @@ export function FilteredGallery({
     params.delete('element');
     params.delete('kind');
     params.delete('text');
+    params.delete(PALETTE_PARAM);
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
@@ -152,24 +154,35 @@ export function FilteredGallery({
     const params = serializeFilters({ ...EMPTY_FILTERS, platforms: filters.platforms, query: filters.query }, new URLSearchParams(searchParams.toString()));
     params.delete('element');
     params.delete('kind');
+    params.delete(PALETTE_PARAM);
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
 
-  const key = `${appId ?? ''}|${serializeFilters(filters).toString()}|${element ?? ''}|${screenSort}`;
+  // The colour filter, on the Screens and UI Elements feeds (an app's own page is one app, one colour): the
+  // screens of the apps of the picked colours, asked of the server as that list of apps.
+  const colour = usePaletteApps(withDefaultPlatform(filters).platforms);
+  const colourOn = !exploreMode && !appId;
+  const colourApps = colourOn && colour.appIds ? [...colour.appIds].sort().join(',') || '-' : '';
+  const colourWaiting = colourOn && !colour.ready;
+
+  const key = `${appId ?? ''}|${serializeFilters(filters).toString()}|${element ?? ''}|${screenSort}|${colourApps}`;
 
   const [pages, setPages] = useState<Pages>({ key: ' ', items: [], total: 0, next: null });
   const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
-    if (exploreMode) return; // Explore renders AppsGrid, not this screens feed.
+    if (exploreMode || colourWaiting) return; // Explore renders AppsGrid; the colours wait for every app's logo.
     let cancelled = false;
-    const [, query, keyElement, keySort] = key.split('|');
-    inspirationsApi
-      .listScreens(withDefaultPlatform(parseFilters(new URLSearchParams(query))), 0, (keySort as ScreenSort) || 'curated', {
-        app: appId,
-        element: keyElement || undefined,
-      })
+    const [, query, keyElement, keySort, keyApps] = key.split('|');
+    // No app has the picked colours: nothing to ask for.
+    const none = keyApps === '-';
+    (none
+      ? Promise.resolve<Page<Screen>>({ items: [], total: 0, limit: 0, offset: 0, nextOffset: null })
+      : inspirationsApi.listScreens(withDefaultPlatform(parseFilters(new URLSearchParams(query))), 0, (keySort as ScreenSort) || 'curated', {
+          app: appId ?? (keyApps || undefined),
+          element: keyElement || undefined,
+        }))
       .then((page: Page<Screen>) => {
         if (cancelled) return;
         setPages({ key, items: page.items, total: page.total, next: page.nextOffset });
@@ -180,17 +193,17 @@ export function FilteredGallery({
     return () => {
       cancelled = true;
     };
-  }, [key, appId, exploreMode]);
+  }, [key, appId, exploreMode, colourWaiting]);
 
   const ready = pages.key === key;
 
   const loadMore = useCallback(() => {
     if (!ready || pages.next === null || loadingMore) return;
     setLoadingMore(true);
-    const [, query, keyElement, keySort] = key.split('|');
+    const [, query, keyElement, keySort, keyApps] = key.split('|');
     inspirationsApi
       .listScreens(withDefaultPlatform(parseFilters(new URLSearchParams(query))), pages.next, (keySort as ScreenSort) || 'curated', {
-        app: appId,
+        app: appId ?? (keyApps || undefined),
         element: keyElement || undefined,
       })
       .then((page) => {
@@ -212,7 +225,11 @@ export function FilteredGallery({
   );
   const textScreens = textHits
     ? textHits.screens.filter(
-        (s) => matchesFilters(s, withDefaultPlatform(filters)) && (!element || s.elements.includes(element)) && (!appId || s.appId === appId),
+        (s) =>
+          matchesFilters(s, withDefaultPlatform(filters)) &&
+          (!element || s.elements.includes(element)) &&
+          (!appId || s.appId === appId) &&
+          (!colourOn || !colour.appIds || colour.appIds.has(s.appId)),
       )
     : [];
   const textOn = Boolean(textQuery) && !exploreMode;
@@ -329,6 +346,7 @@ export function FilteredGallery({
             counts={counts}
             onClearAll={clearDimensions}
             beforeSort={<ScreenshotTextSearch applied={textQuery} onApply={setText} />}
+            beforeFilters={colourOn ? <PaletteFilter selected={colour.palette} onChange={colour.setPalette} counts={colour.counts} align="start" /> : undefined}
           />
           {/* .ins-shot-panel applies the app-page gallery treatment: frameless, hairline-bordered shots —
               five phones per row, or three web pages in Webs, the same cards as Patterns. */}

@@ -68,7 +68,7 @@ export type SiblingCycleOptions = {
  * sibling screens without leaving the grid. The most recently chosen screen
  * remains visible after mouse leave. On a phone or a touch screen there's no
  * hover: the screens are swiped instead (`swipe`, `swipeProps` on the
- * screenshot's frame, `trackRef` on CardShots). `screen` may be null (an app with no
+ * screenshot's frame, `trackRef` on the screen that follows the drag — useDeckSwipe). `screen` may be null (an app with no
  * screens to preview), in which case this is inert — no fetch, no controls,
  * `activeScreen` stays null.
  */
@@ -127,9 +127,8 @@ export function useSiblingCycle(screen: Screen | null, options: SiblingCycleOpti
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadSiblings is rebuilt each render; screenId stands for screen
   }, [onScreen, screenId, hasPreview, preferredKey]);
 
-  // The swipe. The screens sit side by side in a track that follows the
-  // finger (or a mouse, in a narrow window) by hand, inline, with no
-  // re-render; let go past a fifth of the card (or flicked) and it turns to
+  // The swipe. The front screen (trackRef) follows the finger (or a mouse,
+  // in a narrow window) by hand, inline, with no re-render; let go past a fifth of the card (or flicked) and it turns to
   // the next or previous screen, otherwise it settles back. It doesn't loop:
   // past the first or last it resists. Up-and-down is left to the page's
   // scroll, and the click that ends a swipe doesn't open the screen.
@@ -137,6 +136,8 @@ export function useSiblingCycle(screen: Screen | null, options: SiblingCycleOpti
     const track = trackRef.current;
     if (!track) return;
     track.style.setProperty('--drag', `${px}px`);
+    // The same as a plain number, for a deck card's tilt as it's dragged.
+    track.style.setProperty('--drag-n', String(px));
     track.classList.toggle('is-dragging', live);
   };
   const onPointerDown = (e: PointerEvent<HTMLElement>) => {

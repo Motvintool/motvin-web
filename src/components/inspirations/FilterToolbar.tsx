@@ -612,6 +612,7 @@ export function FilterToolbar<S extends string>({
   end,
   onClearAll,
   beforeSort,
+  beforeFilters,
 }: {
   filters: ScreenFilters;
   onChange: (patch: Partial<ScreenFilters>) => void;
@@ -631,6 +632,8 @@ export function FilterToolbar<S extends string>({
   onClearAll?: () => void;
   /** A control on the right, before the sort (the screenshot-text search). */
   beforeSort?: ReactNode;
+  /** A control just before the Filters pill (the colour filter). */
+  beforeFilters?: ReactNode;
 }) {
   const meta = useMeta();
   // "+N more" beside the applied filters opens the Filters panel.
@@ -706,6 +709,7 @@ export function FilterToolbar<S extends string>({
       }
     >
       {counts && <NavPill counts={counts} activeCount={total} />}
+      {beforeFilters}
       <FiltersPill sections={sections} onClearAll={clearAll} total={total} unit={unit} openSignal={openFilters} />
       <AppliedFilterPills sections={sections} max={APPLIED_PILLS_MAX} onMore={() => setOpenFilters((n) => n + 1)} />
       {filters.query && (

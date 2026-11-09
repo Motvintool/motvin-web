@@ -2787,19 +2787,20 @@ select.ins-input {
   contain-intrinsic-block-size: auto calc(min(380px, (100cqw - 96px) / 5) * 611 / 282);
 }
 
-/* App cards: five 1fr columns 20px apart, a 346 / 674 shot in a frame plus a 98px caption. */
+/* App cards: the grid's columns (four, three, two, one — see the app cards' block), 16px apart, each a
+   1 : 1.36 frame plus the name row under it. */
 .ins-app-grid > .ins-card {
-  --ins-app-card-w: calc((100cqw - 80px) / 5);
-  contain-intrinsic-block-size: auto calc(var(--ins-app-card-w) * 1.956 + 98px);
+  --ins-app-card-w: calc((100cqw - 48px) / 4);
+  contain-intrinsic-block-size: auto calc(var(--ins-app-card-w) * 1.36 + 62px);
 }
-@media (max-width: 1499px) {
-  .ins-app-grid > .ins-card { --ins-app-card-w: calc((100cqw - 60px) / 4); }
+@media (max-width: 1599px) {
+  .ins-app-grid > .ins-card { --ins-app-card-w: calc((100cqw - 32px) / 3); }
 }
-@media (max-width: 1139px) {
-  .ins-app-grid > .ins-card { --ins-app-card-w: calc((100cqw - 40px) / 3); }
+@media (max-width: 1099px) {
+  .ins-app-grid > .ins-card { --ins-app-card-w: calc((100cqw - 16px) / 2); }
 }
 @media (max-width: 759px) {
-  .ins-app-grid > .ins-card { --ins-app-card-w: calc((100cqw - 20px) / 2); }
+  .ins-app-grid > .ins-card { contain-intrinsic-block-size: auto calc(var(--ins-app-card-w) * 1.36 + 56px); }
   .ins-shot-panel .ins-grid > .ins-card {
     contain-intrinsic-block-size: auto calc((100cqw - 16px) / 2 * 611 / 282);
   }
@@ -2820,15 +2821,6 @@ select.ins-input {
   border-radius: 19.65% / 10.09%;
   overflow: hidden;
   background: #f5f5f5;
-}
-
-/* App cards: a 28px grey frame at any card width (it was 10.4% of the
-   width, ~31px). The screen keeps its own shape and the frame's height
-   follows from it, and the frame's corner is the screen's corner plus 28px. */
-.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot {
-  aspect-ratio: auto;
-  padding: 28px;
-  border-radius: 19.4% / 9.8%;
 }
 
 .ins-app-grid:not(.ins-shot-panel *) .ins-card-inset {
@@ -2953,27 +2945,6 @@ select.ins-input {
   overflow: hidden;
 }
 
-/* A card's screens side by side for swiping (CardShots): the track shows
-   the active one (--i) and slides to the next, following a drag (--drag,
-   set while a finger is on it, without easing). */
-.ins-card-track {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  transform: translateX(calc(var(--i, 0) * -100% + var(--drag, 0px)));
-  transition: transform 340ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.ins-card-track.is-dragging {
-  transition: none;
-}
-.ins-card-slide {
-  flex: 0 0 100%;
-  min-width: 0;
-  height: 100%;
-}
-@media (prefers-reduced-motion: reduce) {
-  .ins-card-track { transition: none; }
-}
 /* Where cards swipe: sideways drags are the card's, up and down the page's,
    and a dragged image isn't picked up to drop elsewhere. */
 @media (max-width: 759px), (hover: none) {
@@ -4054,21 +4025,6 @@ select.ins-input {
   font: 600 13px/1 var(--font-manrope), Inter, sans-serif;
   white-space: nowrap;
   pointer-events: none;
-}
-
-/* On the 28px app-card frame, the select ring (and the remove button in its
-   place) sits over the screen's top-left corner so it hides the corner's
-   curve — the spot Explore's cards always had, now on every app grid. */
-.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring,
-.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-remove-btn {
-  top: 25px;
-  left: 25px;
-}
-
-/* On the 28px app-card frame, the same few px over the screen's corner. */
-.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-fresh-badge {
-  top: 24px;
-  right: 25px;
 }
 
 .ins-card-proto-badge {
@@ -9346,71 +9302,12 @@ select.ins-input {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  /* The full-width card's corners: in proportion to the card (19.65% /
-     12.41%) they grew past 60px here and read as a pill; a phone's own
-     screen corner is nearer 24px, and the frame keeps a calmer 52px. */
-  .ins-grid.ins-app-grid .ins-card-shot {
-    border-radius: 52px;
-  }
-
-  /* As mobbin's: a full-width card doesn't blow the screenshot up to the
-     card's width (a card taller than the screen, its foot cut off). The
-     frame is a 4:5 mat and the whole screenshot stands centred in it, 40px
-     clear top and bottom, at a phone screen's own shape. */
-  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot {
-    display: flex;
-    justify-content: center;
-    aspect-ratio: 4 / 5;
-    padding: 40px 0;
-    border-radius: 32px;
-  }
-  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-inset {
-    flex: none;
-    width: auto;
-    height: 100%;
-    aspect-ratio: 390 / 844;
-  }
-  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-hover-controls {
-    bottom: 28px;
-  }
-  /* Its loading placeholder the same phone-shaped panel, centred, so
-     nothing changes shape when the card lands. */
-  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card--skeleton .ins-card-shot {
-    padding: 40px 0;
-  }
-  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card--skeleton .ins-skel--shot {
-    flex: none;
-    width: auto;
-    height: 100%;
-    aspect-ratio: 390 / 844;
-    border-radius: 24px;
-  }
-  /* The select ring (or remove button) tucks into the frame's corner. */
-  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring,
-  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-remove-btn {
-    top: 14px;
-    left: 14px;
-  }
-  /* Its "Latest" / "Updated" tag, level with it in the other corner. */
-  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-fresh-badge {
-    top: 15px;
-    right: 14px;
-  }
-  /* Always showing here (no hover), so it's quieter: smaller, a hairline
-     ring on frosted white, until it's ticked. Its press area stays 44px. */
-  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring {
-    width: 28px;
-  }
-  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring:not(.is-selected) {
-    border: 1.5px solid rgba(0, 0, 0, 0.18);
-    background: rgba(255, 255, 255, 0.85);
-  }
+  /* Its hit area a little past the 28px ring, for a thumb. */
   .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring::after {
     content: '';
     position: absolute;
     inset: -8px;
   }
-  .ins-grid.ins-app-grid .ins-card-inset,
   .ins-shot-panel .ins-grid.ins-app-grid .ins-card-shot,
   .ins-shot-panel .ins-grid.ins-app-grid .ins-card-shot::before {
     border-radius: 24px;
@@ -9418,10 +9315,6 @@ select.ins-input {
 
   /* The app row under a full-width card: the half-width card's small type
      (15 / 12px, a 38px logo) has room to grow here. */
-  .ins-grid.ins-app-grid .ins-card-meta {
-    padding: 14px 4px 18px;
-    gap: 12px;
-  }
   .ins-grid.ins-app-grid .ins-card-meta .ins-app-logo,
   .ins-grid.ins-app-grid .ins-card--skeleton .ins-skel--app-icon {
     width: 44px !important;
@@ -20508,12 +20401,11 @@ body:has(aside.ins-guide) .ins-assist-switch {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 44px 16px;
   }
-  .ins-app-grid > .ins-card { --ins-app-card-w: calc((100cqw - 48px) / 4); contain-intrinsic-block-size: auto calc(var(--ins-app-card-w) * 1.36 + 90px); }
   /* The phone rises from the card's bottom edge: its top part shows, bigger, and the rest runs on past the
      edge (the frame keeps a fixed shape and clips it), rather than the whole phone floating small. */
   .ins-app-grid:not(.ins-shot-panel *) .ins-card-shot {
     aspect-ratio: 1 / 1.36;
-    padding: 17.5% 20% 0;
+    padding: 18.5% 20% 0;
     border-radius: 28px;
   }
   .ins-app-grid:not(.ins-shot-panel *) .ins-card-inset { flex: none; }
@@ -20540,9 +20432,12 @@ body:has(aside.ins-guide) .ins-assist-switch {
   .ins-app-grid:not(.ins-shot-panel *) .ins-card-app { font-size: 18px; line-height: 1.35; }
   .ins-app-grid:not(.ins-shot-panel *) .ins-card-tagline { font-weight: 500; color: #7a7a7e; }
 }
-@media (min-width: 760px) and (max-width: 1139px) {
+/* Four across on a full-width window, three a step narrower, two on a half-width one — each card keeps room. */
+@media (min-width: 760px) and (max-width: 1599px) {
   .ins-app-grid:not(.ins-shot-panel *) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .ins-app-grid > .ins-card { --ins-app-card-w: calc((100cqw - 32px) / 3); }
+}
+@media (min-width: 760px) and (max-width: 1099px) {
+  .ins-app-grid:not(.ins-shot-panel *) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .ins-app-grid:not(.ins-shot-panel *) .ins-card-shot { transition: none; }
@@ -20657,7 +20552,7 @@ body:has(aside.ins-guide) .ins-assist-switch {
   .ins-web-card-app { font-size: 18px; line-height: 1.35; }
   .ins-web-card-tagline { font-weight: 500; color: #7a7a7e; }
 }
-@media (min-width: 760px) and (max-width: 1139px) {
+@media (min-width: 760px) and (max-width: 1599px) {
   .ins-grid.ins-app-grid.ins-web-grid:not(.ins-shot-panel *) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (hover: hover) {
@@ -20725,6 +20620,8 @@ body:has(aside.ins-guide) .ins-assist-switch {
   animation: insColorfIn 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
   transform-origin: top right;
 }
+/* A pill at the start of the bar (Screens, UI Elements, Flows, Patterns): the menu opens from its left edge. */
+.ins-colorf-pop.is-start { right: auto; left: 0; transform-origin: top left; }
 @keyframes insColorfIn { from { opacity: 0; translate: 0 -6px; scale: 0.96; } }
 .ins-colorf-card {
   display: flex;
@@ -20833,4 +20730,253 @@ body:has(aside.ins-guide) .ins-assist-switch {
   .ins-colorf-pop { animation: none; }
   .ins-colorf-dot { transition: none; }
   .ins-colorf-dot:hover { scale: none; }
+}
+
+/* App card's deck: up to two of the app's next screens behind its screen, peeking out above it on hover — each a
+   step smaller and higher, a little dimmer — so a hovered card reads as a stack of screens. */
+.ins-card-stack { display: none; }
+@media (min-width: 0px) {
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-stack {
+    display: block;
+    position: absolute;
+    /* Where the screen sits: 20% in from each side, 18.5% of the width from the top (as % of the height). */
+    top: calc(18.5% / 1.36);
+    left: 20%;
+    width: 60%;
+    pointer-events: none;
+    /* Hidden until the card is hovered: tucked down behind the screen, then risen into view. */
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 220ms ease, transform 420ms cubic-bezier(0.2, 0.9, 0.25, 1);
+  }
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card:hover .ins-card-stack,
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card:has(:focus-visible) .ins-card-stack { opacity: 1; transform: none; }
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-inset { position: relative; z-index: 1; }
+  .ins-card-stack-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    aspect-ratio: 253 / 556;
+    overflow: hidden;
+    border-radius: 12.41% / 5.65%;
+    background: #e5e5e5;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+    transform-origin: 50% 0;
+    transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .ins-card-stack-layer .ins-shot-img,
+  .ins-card-stack-layer .ins-shot-missing { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+  .ins-card-stack-layer::after { content: ''; position: absolute; inset: 0; background: rgba(255, 255, 255, 0.35); }
+  .ins-card-stack-layer.is-1 { transform: translateY(-11px) scale(0.92); }
+  .ins-card-stack-layer.is-2 { transform: translateY(-20px) scale(0.84); }
+  .ins-card-stack-layer.is-2::after { background: rgba(255, 255, 255, 0.55); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-card-stack-layer { transition: none; }
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-stack { transition: none; transform: none; }
+}
+
+/* The deck dealt by the arrows. Forward: the screen behind springs up into the front, the next ones follow it
+   up a place one after another, and the old front tips forward and drops away with a soft shadow. Back: the
+   previous screen comes back up along that same path, and the rest settle back a place, one after another. */
+@media (min-width: 0px) {
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-inset.deal-next { animation: insDealFrontNext 520ms cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card-inset.deal-prev { animation: insDealFrontPrev 520ms cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+  .ins-card-stack-layer.is-1.deal-next { animation: insDeal2to1 480ms cubic-bezier(0.2, 0.9, 0.25, 1) 40ms both; }
+  .ins-card-stack-layer.is-2.deal-next { animation: insDeal3to2 480ms cubic-bezier(0.2, 0.9, 0.25, 1) 90ms both; }
+  .ins-card-stack-layer.is-1.deal-prev { animation: insDeal0to1 480ms cubic-bezier(0.2, 0.9, 0.25, 1) 40ms both; }
+  .ins-card-stack-layer.is-2.deal-prev { animation: insDeal1to2 480ms cubic-bezier(0.2, 0.9, 0.25, 1) 90ms both; }
+  .ins-card-stack-out {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    width: 100%;
+    aspect-ratio: 253 / 556;
+    overflow: hidden;
+    border-radius: 12.41% / 5.65%;
+    pointer-events: none;
+    transform-origin: 30% 100%;
+    animation: insDealOut 440ms cubic-bezier(0.55, 0, 0.75, 0.4) both;
+  }
+  .ins-card-stack-out .ins-shot-img,
+  .ins-card-stack-out .ins-shot-missing { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+}
+@keyframes insDealFrontNext {
+  0% { transform: translateY(-11px) scale(0.92); filter: brightness(1.12); }
+  65% { transform: translateY(2px) scale(1.012); filter: brightness(1); }
+  100% { transform: none; }
+}
+@keyframes insDealFrontPrev {
+  0% { transform: translateY(34%) rotate(-4deg) scale(0.98); opacity: 0; }
+  60% { transform: translateY(-3px) rotate(0.4deg) scale(1.01); opacity: 1; }
+  100% { transform: none; }
+}
+@keyframes insDeal2to1 {
+  0% { transform: translateY(-20px) scale(0.84); }
+  70% { transform: translateY(-10px) scale(0.925); }
+  100% { transform: translateY(-11px) scale(0.92); }
+}
+@keyframes insDeal3to2 {
+  0% { transform: translateY(-29px) scale(0.76); opacity: 0; }
+  100% { transform: translateY(-20px) scale(0.84); opacity: 1; }
+}
+@keyframes insDeal0to1 {
+  0% { transform: translateY(0) scale(1); }
+  70% { transform: translateY(-12px) scale(0.915); }
+  100% { transform: translateY(-11px) scale(0.92); }
+}
+@keyframes insDeal1to2 {
+  0% { transform: translateY(-11px) scale(0.92); }
+  100% { transform: translateY(-20px) scale(0.84); }
+}
+@keyframes insDealOut {
+  0% { transform: none; opacity: 1; box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
+  100% { transform: translateY(38%) rotate(-5deg) scale(0.97); opacity: 0; box-shadow: 0 24px 40px -12px rgba(0, 0, 0, 0.3); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-card-inset.deal-next, .ins-card-inset.deal-prev, .ins-card-stack-layer, .ins-card-stack-out { animation: none !important; }
+  .ins-card-stack-out { display: none; }
+}
+
+/* Web cards' deck, as the app cards': on hover the site's next pages rise behind its page (same steps and
+   animations), sized and placed as the page itself — 8% in from each side, 12% of the width from the top, its
+   rounded top corners. */
+@media (min-width: 0px) {
+  .ins-grid.ins-web-grid .ins-web-card-stack {
+    display: block;
+    position: absolute;
+    top: calc(12% / 0.6);
+    left: 8%;
+    width: 84%;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 220ms ease, transform 420ms cubic-bezier(0.2, 0.9, 0.25, 1);
+  }
+  .ins-grid.ins-web-grid .ins-web-card:hover .ins-web-card-stack,
+  .ins-grid.ins-web-grid .ins-web-card:has(:focus-visible) .ins-web-card-stack { opacity: 1; transform: none; }
+  .ins-web-card-stack .ins-card-stack-layer,
+  .ins-web-card-stack .ins-card-stack-out {
+    aspect-ratio: 420 / 260.19;
+    border-radius: 12px 12px 0 0;
+  }
+  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-web-card-inset { position: relative; z-index: 1; }
+  .ins-grid.ins-web-grid .ins-web-card-inset.deal-next { animation: insDealFrontNext 520ms cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+  .ins-grid.ins-web-grid .ins-web-card-inset.deal-prev { animation: insDealFrontPrev 520ms cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-grid.ins-web-grid .ins-web-card-stack { transition: none; transform: none; }
+  .ins-web-card-inset.deal-next, .ins-web-card-inset.deal-prev { animation: none !important; }
+}
+
+/* A narrow window (a half-width browser) and a phone: the cards keep the new look — the screen
+   rising from the frame's bottom edge with air round it, the tag and select ring in the corners, the quieter
+   name row — rather than falling back to the phone's whole-screen card. Two across. */
+@media (min-width: 521px) and (max-width: 759px) {
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 36px 16px;
+  }
+}
+/* …and on a phone, one across, the same card (not the whole phone stood on a mat). */
+@media (max-width: 759px) {
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot {
+    display: flex;
+    aspect-ratio: 1 / 1.36;
+    padding: 18.5% 20% 0;
+    border-radius: 24px;
+  }
+  /* At the phone's own shape, running on past the frame's bottom edge — not squeezed to fit the frame's height. */
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-inset {
+    flex: none;
+    align-self: flex-start;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 253 / 556;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+  }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring,
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-remove-btn {
+    top: 12px;
+    left: 12px;
+  }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring { width: 28px; }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring:not(.is-selected),
+  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-select-ring:not(.is-selected) {
+    border: 1.5px solid rgba(0, 0, 0, 0.18);
+    background: transparent;
+  }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-corner { top: 13px; right: 12px; }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-meta,
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card--skeleton .ins-card-meta,
+  .ins-web-card-meta { padding: 14px 4px 0; gap: 12px; }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-meta .ins-app-logo,
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card--skeleton .ins-skel--app-icon,
+  .ins-web-card-logo {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 10px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.07);
+  }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-app,
+  .ins-web-card-app { font-size: 16px; line-height: 1.3; }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-tagline,
+  .ins-web-card-tagline { font-size: 13px; line-height: 1.4; font-weight: 500; color: #7a7a7e; }
+  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-select-ring,
+  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-remove-btn { top: 12px; left: 12px; width: 28px; }
+
+  .ins-web-card-shot {
+    aspect-ratio: 1 / 0.6;
+    padding: 12% 8% 0;
+    border-radius: 24px;
+  }
+  .ins-web-card-inset {
+    border: 0;
+    border-radius: 10px 10px 0 0;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+  }
+  .ins-web-card-shot > .ins-card-corner { top: 13px; right: 12px; }
+}
+
+/* Dragged as a deck (useDeckSwipe: no hover, but room for the stack): the front screen follows the finger,
+   tilting a little with it, and springs back if let go short; while a finger is on it, and a moment after,
+   the screens behind rise into view so the deal plays out over them. */
+.is-deck-swipe .ins-card-inset,
+.is-deck-swipe .ins-web-card-inset {
+  translate: var(--drag, 0px) 0;
+  rotate: calc(var(--drag-n, 0) * 0.035deg);
+  transition: translate 300ms cubic-bezier(0.2, 0.9, 0.25, 1), rotate 300ms cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+.is-deck-swipe .ins-card-inset.is-dragging,
+.is-deck-swipe .ins-web-card-inset.is-dragging { transition: none; }
+.ins-app-grid:not(.ins-shot-panel *) .ins-card.is-peeking .ins-card-stack,
+.ins-grid.ins-web-grid .ins-web-card.is-peeking .ins-web-card-stack {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .is-deck-swipe .ins-card-inset,
+  .is-deck-swipe .ins-web-card-inset { rotate: none; transition: none; }
+}
+/* One across (a phone): the row's type and logo a step bigger, and web pages one per row — two would be too small to read. */
+@media (max-width: 640px) {
+  .ins-grid.ins-app-grid.ins-web-grid:not(.ins-shot-panel *) { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .ins-web-card-logo { width: 44px !important; height: 44px !important; }
+  .ins-web-card-app { font-size: 17px; }
+  .ins-web-card-tagline { font-size: 14px; }
+}
+@media (max-width: 520px) {
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-meta .ins-app-logo,
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card--skeleton .ins-skel--app-icon { width: 44px !important; height: 44px !important; }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-app { font-size: 17px; }
+  .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-tagline { font-size: 14px; }
+}
+/* Loading app cards: the loaded card's own row (18px over a 44px logo), so nothing moves when it lands. */
+@media (min-width: 760px) {
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card--skeleton .ins-card-meta { padding: 18px 4px 0; gap: 12px; }
+  .ins-app-grid:not(.ins-shot-panel *) .ins-card--skeleton .ins-skel--app-icon { width: 44px; height: 44px; border-radius: 11px; }
 }

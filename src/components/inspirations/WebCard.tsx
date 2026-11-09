@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import type { App, Screen } from '@/lib/inspirations/types';
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { appFreshness } from '@/lib/inspirations/appFreshness';
 import { useLibrarySettings } from './useMeta';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { AppLogo } from './AppLogo';
-import { CardShots } from './CardShots';
 import { Screenshot } from './Screenshot';
 import { useSiblingCycle } from './useSiblingCycle';
+import { useDeckSwipe } from './useDeckSwipe';
 import { CloseIcon } from './Icons';
 import { CardCorner } from './CardCorner';
 import { useLogoTint } from './useLogoTint';
@@ -40,6 +40,11 @@ export function WebCard({
     preview ?? presetScreens?.[0] ?? null,
     { preset: presetScreens, preferredIds: app.cardScreens },
   );
+  // Which way the deck last moved (the arrows), as on an app card: forward deals the next page to the front.
+  const [deck, setDeck] = useState<{ index: number; dir: 'next' | 'prev' | null; from: number }>({ index: activeIndex, dir: null, from: activeIndex });
+  if (deck.index !== activeIndex) setDeck({ index: activeIndex, dir: dotCount > 1 && activeIndex === (deck.index + 1) % dotCount ? 'next' : 'prev', from: deck.index });
+  // Where there's no hover but room for the stack, a drag deals the deck instead of sliding screens side by side.
+  const { deck: deckSwipe, peeking, deckProps } = useDeckSwipe(swipe, swipeProps);
 
   // "Latest" or "Updated", as on the app cards, from this web part's own uploads.
   const freshness = appFreshness(app, useLibrarySettings().freshness, undefined, ['webapp', 'web']);
@@ -48,7 +53,7 @@ export function WebCard({
   return (
     <article
       ref={cardRef}
-      className="ins-web-card"
+      className={`ins-web-card ${deckSwipe ? 'is-deck-swipe' : ''} ${peeking ? 'is-peeking' : ''}`}
       data-id={app.id}
       role="listitem"
       onMouseEnter={startHover}
@@ -87,11 +92,29 @@ export function WebCard({
             <CloseIcon size={14} />
           </button>
         )}
-        <div className="ins-web-card-inset" {...swipeProps}>
+        {/* The deck, on hover: the site's next pages peeking out above this one, stacked behind it. */}
+        {previewScreens && dotCount > 1 && (
+          <div className="ins-card-stack ins-web-card-stack" aria-hidden>
+            {[2, 1].filter((n) => n < dotCount).map((n) => (
+              <div key={`${activeIndex}-${n}`} className={`ins-card-stack-layer is-${n} ${deck.dir ? `deal-${deck.dir}` : ''}`}>
+                <Screenshot screen={previewScreens[(activeIndex + n) % dotCount]} />
+              </div>
+            ))}
+            {deck.dir === 'next' && (
+              <div key={`out-${activeIndex}`} className="ins-card-stack-out">
+                <Screenshot screen={previewScreens[deck.from % dotCount]} />
+              </div>
+            )}
+          </div>
+        )}
+        <div
+          key={`inset-${activeIndex}`}
+          ref={deckSwipe ? trackRef : undefined}
+          className={`ins-web-card-inset ${deck.dir ? `deal-${deck.dir}` : ''}`}
+          {...deckProps}
+        >
           <Link href={href} className="ins-web-card-link" aria-label={app.name}>
-            {swipe && previewScreens && dotCount > 1 ? (
-              <CardShots screens={previewScreens} activeIndex={activeIndex} trackRef={trackRef} />
-            ) : activeScreen ? (
+            {activeScreen ? (
               <Screenshot screen={activeScreen} />
             ) : (
               <AppLogo app={app} size={96} />

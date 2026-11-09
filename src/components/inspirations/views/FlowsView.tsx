@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { browsedPlatforms } from '@/lib/inspirations/filters';
 import { FLOW_KINDS } from '@/lib/inspirations/flowKinds';
@@ -11,10 +12,15 @@ import { FilterPill, NavPill, ToolbarRow } from '../FilterToolbar';
 import { FlowList } from '../FlowList';
 import { FlowIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
+import { PaletteFilter } from '../PaletteFilter';
 import { FlowListSkeleton } from '../Skeletons';
 import { useApps } from '../useApps';
 import { useAsync } from '../useAsync';
 import { useMeta } from '../useMeta';
+import { usePaletteApps } from '../usePaletteApps';
+
+/** Flows shown at first; scrolling to the end of the list shows the next batch. */
+const PAGE = 24;
 
 /**
  * /inspirations/flows — stored multi-screen journeys.
@@ -40,24 +46,58 @@ export function FlowsView() {
   const platforms = browsedPlatforms(params);
   const platform = platforms.join(',');
 
-  const { data: flows, loading } = useAsync(
+  // The colour filter: only flows of apps whose brand colour (their logo's) is one of the picked ones.
+  const colour = usePaletteApps(platforms);
+
+  const { data: flows, loading: flowsLoading } = useAsync(
     () => inspirationsApi.listFlows(category),
     `flows:${category ?? 'all'}`,
   );
 
   // Real journeys only, as Mobbin lists them: a section heading with one screen of its own is not a flow.
   const visible = (flows ?? []).filter(
-    (f) => platforms.includes(f.platform) && f.screenIds.length > 1 && (!kind || f.kind === kind),
+    (f) => platforms.includes(f.platform) && f.screenIds.length > 1 && (!kind || f.kind === kind) && (!colour.appIds || colour.appIds.has(f.appId)),
   );
+  const loading = flowsLoading || !colour.ready;
+  const narrowed = Boolean(category || kind || colour.palette.length || params.get('platform'));
 
-  // Flow cards need their screens; one request per flow, cached by the client.
+  // A batch at a time: asking for every flow's screens at once (well over a thousand requests) kept the list
+  // blank until the last one came back. A new filter starts over at the first batch.
+  const listKey = `${category ?? ''}|${kind ?? ''}|${platform}|${colour.palette.join(',')}`;
+  const [shown, setShown] = useState({ key: listKey, count: PAGE });
+  if (shown.key !== listKey) setShown({ key: listKey, count: PAGE });
+  const page = visible.slice(0, shown.count);
+
+  // Flow cards need their screens; one request per flow, cached by the client, so a bigger batch only asks
+  // for the new ones. A flow that fails to load is left out rather than blanking the whole list.
   const { data: resolved } = useAsync<{ flow: Flow; screens: Screen[] }[]>(async () => {
-    if (!visible.length) return [];
-    const full = await Promise.all(visible.map((f) => inspirationsApi.getFlow(f.id)));
+    if (!page.length) return [];
+    const full = await Promise.all(page.map((f) => inspirationsApi.getFlow(f.id).catch(() => null)));
     return full
       .filter((entry): entry is { flow: Flow; screens: Screen[]; app: App | null } => Boolean(entry))
       .map(({ flow, screens }) => ({ flow, screens }));
-  }, `flow-screens:${category ?? 'all'}:${platform}:${visible.map((f) => f.id).join(',')}`);
+  }, `flow-screens:${page.map((f) => f.id).join(',')}`);
+  // While the next batch loads, the flows already listed stay up (same filters only).
+  const [kept, setKept] = useState<{ key: string; entries: { flow: Flow; screens: Screen[] }[] } | null>(null);
+  if (resolved && kept?.entries !== resolved) setKept({ key: listKey, entries: resolved });
+  const entries = resolved ?? (kept?.key === listKey ? kept.entries : null);
+  const hasMore = shown.count < visible.length;
+
+  // The end of the list: once it scrolls into view, the next batch.
+  const endRef = useRef<HTMLDivElement>(null);
+  const canLoadMore = hasMore && Boolean(resolved);
+  useEffect(() => {
+    const end = endRef.current;
+    if (!end || !canLoadMore) return;
+    const seen = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setShown((prev) => ({ ...prev, count: prev.count + PAGE }));
+      },
+      { rootMargin: '800px 0px' },
+    );
+    seen.observe(end);
+    return () => seen.disconnect();
+  }, [canLoadMore, shown.count]);
 
   // One URL write per call: two sequential setParam calls would each start
   // from this render's (stale) params, so the second would resurrect the key
@@ -81,6 +121,8 @@ export function FlowsView() {
           Platform only appears once the library actually spans more than one. */}
       <ToolbarRow total={loading ? null : visible.length} unit="flow">
         <NavPill counts={meta.counts} />
+        {/* The colour filter just after the page switch, where Screens has it. */}
+        <PaletteFilter selected={colour.palette} onChange={colour.setPalette} counts={colour.counts} align="start" />
         <FilterPill
           label="Category"
           options={meta.taxonomy.flowCategories.map((c) => ({ value: c, label: flowCategoryLabel(c) }))}
@@ -99,32 +141,35 @@ export function FlowsView() {
         />
       </ToolbarRow>
 
-      {loading ? (
+      {loading || (visible.length > 0 && !entries) ? (
         <FlowListSkeleton />
       ) : visible.length === 0 ? (
         // "Filtered" means the visitor chose something beyond the defaults —
         // a category, or a platform explicitly in the URL. The iOS default
         // isn't a filter they can clear.
         <EmptyState
-          play={Boolean(category || kind || params.get('platform'))}
+          play={narrowed}
           icon={<FlowIcon size={22} />}
-          title={category || kind || params.get('platform') ? 'No flows match this filter' : 'No flows here yet'}
+          title={narrowed ? 'No flows match this filter' : 'No flows here yet'}
           description={
             category || params.get('platform')
               ? undefined
               : 'We add new flows regularly. Check back soon.'
           }
           action={
-            category || kind || params.get('platform')
+            narrowed
               ? {
                   label: 'Show all flows',
-                  onClick: () => setParams({ category: undefined, kind: undefined, platform: undefined }),
+                  onClick: () => setParams({ category: undefined, kind: undefined, color: undefined, platform: undefined }),
                 }
               : undefined
           }
         />
       ) : (
-        <FlowList entries={resolved ?? []} apps={apps} />
+        <>
+          <FlowList entries={entries ?? []} apps={apps} />
+          {hasMore && <div ref={endRef} aria-hidden />}
+        </>
       )}
     </>
   );
