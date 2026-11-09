@@ -122,7 +122,7 @@ function ProductVisual({ visual, icon }: { visual: ProductVisual; icon: string }
   }
 }
 
-/** The founder's public profiles, the same ones the footer links to. */
+/** The founder's public profiles. The footer shares the LinkedIn and Behance ones; its Instagram is Motvin's own account. */
 const FOUNDER_LINKS = [
   { label: 'Instagram', handle: '@siren.uix', href: 'https://www.instagram.com/siren.uix', icon: '/ASSET/Icons/instagram-icon.svg', tone: 'instagram' },
   { label: 'LinkedIn', handle: 'sirenuix', href: 'https://www.linkedin.com/in/sirenuix/', icon: '/ASSET/Icons/linkedin-icon.svg', tone: 'linkedin' },

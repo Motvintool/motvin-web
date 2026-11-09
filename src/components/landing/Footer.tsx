@@ -248,7 +248,7 @@ export function Footer() {
 
           <div className="lpi-footer-end">
             <div className="lpi-footer-socials">
-              <a href="https://www.instagram.com/siren.uix" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+              <a href="https://www.instagram.com/motvintool/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
                 <img src="/ASSET/Icons/instagram-icon.svg" alt="" />
               </a>
               <a href="https://www.linkedin.com/in/sirenuix/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">

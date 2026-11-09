@@ -22,7 +22,7 @@ import { useGoToLogin } from './useGoToLogin';
  * footer with the legal links and Instagram.
  */
 const ICON = '/ASSET/Icons/Motvin';
-const INSTAGRAM_URL = 'https://www.instagram.com/siren.uix';
+const INSTAGRAM_URL = 'https://www.instagram.com/motvintool/';
 
 export function ProfileMenu() {
   const { user: liveUser, signOut } = useAuth();

@@ -131,7 +131,7 @@ export function PublicNav() {
             if ((e.target as HTMLElement).closest('a, button')) setOpen(false);
           }}
         >
-          <a href="https://www.instagram.com/siren.uix/" className="nav-link hide-mobile">
+          <a href="https://www.instagram.com/motvintool/" className="nav-link hide-mobile">
             Follow Me
           </a>
           <a

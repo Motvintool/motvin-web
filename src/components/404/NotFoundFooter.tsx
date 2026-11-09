@@ -49,7 +49,7 @@ const FOOTER_LINKS: Array<{ heading: string; items: Array<{ label: string; href:
 
 // The real accounts and icons the landing Footer uses.
 const SOCIALS: Array<{ label: string; href: string; icon: string }> = [
-  { label: 'Instagram', href: 'https://www.instagram.com/siren.uix', icon: '/ASSET/Icons/instagram-icon.svg' },
+  { label: 'Instagram', href: 'https://www.instagram.com/motvintool/', icon: '/ASSET/Icons/instagram-icon.svg' },
   { label: 'LinkedIn', href: 'https://www.linkedin.com/in/sirenuix/', icon: '/ASSET/Icons/linkedin-icon.svg' },
   { label: 'Behance', href: 'https://www.behance.net/surendarv', icon: '/ASSET/Icons/behance-icon.svg' },
 ];

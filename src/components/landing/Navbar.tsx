@@ -43,7 +43,7 @@ const COMPACT_MIDDLE = 59;
 // The menus open on hover (desktop, mouse); this grace period lets the
 // pointer travel from a label down into its menu without it closing.
 const HOVER_CLOSE_DELAY = 180;
-const INSTAGRAM_URL = 'https://www.instagram.com/siren.uix';
+const INSTAGRAM_URL = 'https://www.instagram.com/motvintool/';
 
 type Menu = 'products' | 'community' | 'company' | null;
 

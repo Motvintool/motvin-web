@@ -19996,6 +19996,13 @@ body:has(aside.ins-guide) .ins-assist-switch {
 .ins-protect-app input,
 .ins-protect-kind input { width: 16px; height: 16px; margin: 0; accent-color: #111; flex: none; }
 .ins-protect-kind input { margin-top: 2px; }
+.ins-protect-app { padding: 8px 12px 8px 10px; }
+/* The same tick box as the recordings picker; the real checkbox stays, out of sight, for the keyboard. */
+.ins-protect-app { position: relative; }
+.ins-protect-app .ins-protect-app-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.ins-protect-app.is-on .ins-rec-check { border-color: #141414; background: #141414; }
+.ins-protect-app:has(.ins-protect-app-input:focus-visible) .ins-rec-check { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #141414; }
+.ins-protect-app-logo { flex: none; border-radius: 9px; object-fit: cover; }
 .ins-protect-app-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .ins-protect-usage { margin: 10px 2px 0; font-size: 13px; }
 

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { inspirationsApi, invalidateInspirationsCache } from '@/lib/inspirations/api';
 import { authHeaders } from '@/lib/inspirations/admin-chatbot/ingestJobs';
 import { CheckIcon, CloseIcon, PlayIcon, SearchIcon, StopIcon } from '../Icons';
+import { AppLogo } from '../AppLogo';
+import { useApps } from '../useApps';
 import { ChoiceCards, Summary, Wizard } from './Wizard';
 
 /**
@@ -87,6 +89,7 @@ export function ProtectPanel() {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [step, setStep] = useState(0);
   const [apps, setApps] = useState<AppRow[] | null>(null);
+  const library = useApps();
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [search, setSearch] = useState('');
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -293,9 +296,13 @@ export function ProtectPanel() {
                     return (
                       <li key={app.appId}>
                         <label className={`ins-protect-app ${picked.has(app.appId) ? 'is-on' : ''}`}>
-                          <input type="checkbox" checked={picked.has(app.appId)} onChange={() => toggle(app.appId)} />
-                          <span className="ins-protect-app-name">{app.name}</span>
-                          <span className="ins-muted">{count ? `${count} screen${count === 1 ? '' : 's'}` : 'All checked'}</span>
+                          {library.get(app.appId) ? <AppLogo app={library.get(app.appId)!} size={32} className="ins-protect-app-logo" /> : <span className="ins-app-option-blank">{app.name.slice(0, 1)}</span>}
+                          <span className="ins-app-option-text">
+                            <span>{app.name}</span>
+                            <span className="ins-muted">{count ? `${count} screen${count === 1 ? '' : 's'}` : 'All checked'}</span>
+                          </span>
+                          <input type="checkbox" className="ins-protect-app-input" checked={picked.has(app.appId)} onChange={() => toggle(app.appId)} />
+                          <span className="ins-rec-check" aria-hidden>{picked.has(app.appId) && <CheckIcon size={12} />}</span>
                         </label>
                       </li>
                     );
