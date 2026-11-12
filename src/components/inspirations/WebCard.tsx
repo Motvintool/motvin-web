@@ -15,6 +15,9 @@ import { CloseIcon } from './Icons';
 import { CardCorner } from './CardCorner';
 import { useLogoTint } from './useLogoTint';
 
+/** How wide a card's screens are shown (about four-fifths of its card), so they load at that size. */
+const WEB_SHOT_SIZES = '(min-width: 1600px) 26vw, (min-width: 641px) 40vw, 80vw';
+
 /** Desktop-web app card matching Figma's Web Screen Preview component. */
 export function WebCard({
   app,
@@ -99,12 +102,12 @@ export function WebCard({
           <div className="ins-card-stack ins-web-card-stack" aria-hidden>
             {[2, 1].filter((n) => n < dotCount).map((n) => (
               <div key={`${activeIndex}-${n}`} className={`ins-card-stack-layer is-${n} ${deck.dir ? `deal-${deck.dir}` : ''}`}>
-                <Screenshot screen={previewScreens[(activeIndex + n) % dotCount]} />
+                <Screenshot sizes={WEB_SHOT_SIZES} screen={previewScreens[(activeIndex + n) % dotCount]} />
               </div>
             ))}
             {deck.dir === 'next' && (
               <div key={`out-${activeIndex}`} className="ins-card-stack-out">
-                <Screenshot screen={previewScreens[deck.from % dotCount]} />
+                <Screenshot sizes={WEB_SHOT_SIZES} screen={previewScreens[deck.from % dotCount]} />
               </div>
             )}
           </div>
@@ -117,7 +120,7 @@ export function WebCard({
         >
           <Link href={href} className="ins-web-card-link" aria-label={app.name}>
             {activeScreen ? (
-              <Screenshot screen={activeScreen} />
+              <Screenshot sizes={WEB_SHOT_SIZES} screen={activeScreen} />
             ) : (
               <AppLogo app={app} size={96} />
             )}

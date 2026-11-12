@@ -27,6 +27,9 @@ const imgDownloadPng = "/ASSET/Icons/Motvin/download-png.svg";
 const imgCopyLink = "/ASSET/Icons/Motvin/copy-link.svg";
 const imgFrame = "/ASSET/Icons/Motvin/right-arrow-small.svg";
 
+/** How wide a card's screens are shown (the phone sits 20% in from each side of its card), so they load at that size. */
+const APP_SHOT_SIZES = '(min-width: 1600px) 15vw, (min-width: 1100px) 20vw, (min-width: 521px) 30vw, 60vw';
+
 /**
  * App tile — the exact same card as a screen (.ins-card): one of the app's
  * own screenshots inset on the tinted mat, logo + name + tagline below.
@@ -324,13 +327,13 @@ export function AppCard({
           <div className="ins-card-stack" aria-hidden>
             {[2, 1].filter((step) => step < dotCount).map((step) => (
               <div key={`${activeIndex}-${step}`} className={`ins-card-stack-layer is-${step} ${deck.dir ? `deal-${deck.dir}` : ''}`}>
-                <Screenshot screen={previewScreens[(activeIndex + step) % dotCount]} />
+                <Screenshot sizes={APP_SHOT_SIZES} screen={previewScreens[(activeIndex + step) % dotCount]} />
               </div>
             ))}
             {/* Going forward, the screen that was in front drops away over the new one. */}
             {deck.dir === 'next' && (
               <div key={`out-${activeIndex}`} className="ins-card-stack-out">
-                <Screenshot screen={previewScreens[deck.from % dotCount]} />
+                <Screenshot sizes={APP_SHOT_SIZES} screen={previewScreens[deck.from % dotCount]} />
               </div>
             )}
           </div>
@@ -345,7 +348,7 @@ export function AppCard({
         >
           <Link href={href} className="ins-card-link" aria-label={app.name}>
             {activeScreen ? (
-              <Screenshot screen={activeScreen} />
+              <Screenshot sizes={APP_SHOT_SIZES} screen={activeScreen} />
             ) : (
               <AppLogo app={app} size={96} />
             )}

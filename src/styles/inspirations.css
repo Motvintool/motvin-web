@@ -4724,6 +4724,15 @@ select.ins-input {
   opacity: 1;
 }
 
+/* A card's screenshot that waits to load (Screenshot's `sizes`): the grey frame shows until it's in, then it
+   fades up rather than popping. */
+.ins-shot-img.is-deferred:not(.is-loaded) {
+  opacity: 0;
+}
+.ins-shot-img.is-deferred {
+  transition: opacity 240ms var(--ins-ease);
+}
+
 /* An empty box reads as broken; a tinted one reads as loading. Flow strips are
    the one place still using a flush, unpadded frame, so they keep their own
    background instead of inheriting .ins-card-shot's. */

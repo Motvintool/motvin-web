@@ -63,6 +63,9 @@ if (configuredApi) {
   });
 }
 
+/** The API URL points at this machine (.env.local's localhost:3000). Unset means the live API, never local. */
+const LOCAL_API = Boolean(configuredApi) && ['localhost', '127.0.0.1'].includes(new URL(configuredApi as string).hostname);
+
 /**
  * Security headers on every response. Kept to ones that can't break the
  * site: no Content-Security-Policy (Google sign-in, Firebase and the API's
@@ -93,9 +96,10 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: API_IMAGE_PATTERNS,
     // The local API runs on localhost, which Next blocks by default (to stop
-    // the optimizer reaching into private networks). Allowed in development
-    // only; in production the API is a public host.
-    dangerouslyAllowLocalIP: process.env.NODE_ENV !== 'production',
+    // the optimizer reaching into private networks). Allowed in development,
+    // and for a local build (`next start`) whose API URL is localhost. The live
+    // site's API is a public host, so this stays off there.
+    dangerouslyAllowLocalIP: process.env.NODE_ENV !== 'production' || LOCAL_API,
   },
   async redirects() {
     return [
