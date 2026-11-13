@@ -38,10 +38,8 @@ body .lpi-footer a[href][target='_blank'] {
   cursor: var(--ins-cursor-external-light);
 }
 
-/* The navbar's small social icons take a plain hand: not the circle-arrow on
-   Instagram, and not the plain arrow on X, which only shows its "Coming soon" tip. */
-body a[href][target='_blank'].nav-social-link,
-body .nav-social-link.is-soon {
+/* The navbar's small social icons are too small for the circle-arrow: plain hand. */
+body a[href][target='_blank'].nav-social-link {
   cursor: var(--ins-cursor-hand);
 }
 

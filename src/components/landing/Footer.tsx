@@ -251,7 +251,7 @@ export function Footer() {
               <a href="https://www.instagram.com/motvintool/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
                 <img src="/ASSET/Icons/instagram-icon.svg" alt="" />
               </a>
-              <a href="https://www.linkedin.com/in/sirenuix/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+              <a href="https://www.linkedin.com/company/motvin/home" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
                 <img src="/ASSET/Icons/linkedin-icon.svg" alt="" />
               </a>
               <a href="https://www.behance.net/surendarv" target="_blank" rel="noopener noreferrer" aria-label="Behance">

@@ -7596,12 +7596,7 @@
   height: 20px;
 }
 
-/* Each icon drops a tip below it on hover: what it opens, or "Coming soon"
-   for X, which has no profile yet. */
-.nav-social-link.is-soon {
-  outline: none;
-}
-
+/* Each icon drops a tip below it on hover, naming what it opens. */
 .nav-social-tip {
   position: absolute;
   top: calc(100% + 10px);

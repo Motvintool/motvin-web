@@ -44,6 +44,7 @@ const COMPACT_MIDDLE = 59;
 // pointer travel from a label down into its menu without it closing.
 const HOVER_CLOSE_DELAY = 180;
 const INSTAGRAM_URL = 'https://www.instagram.com/motvintool/';
+const LINKEDIN_URL = 'https://www.linkedin.com/company/motvin/home';
 
 type Menu = 'products' | 'community' | 'company' | null;
 
@@ -432,13 +433,12 @@ export function Navbar() {
           Instagram
         </span>
       </a>
-      {/* No X profile yet: not a link, just a "Coming soon" tip on hover. */}
-      <span className="nav-social-link is-soon" tabIndex={0} aria-label="Motvin on X, coming soon">
-        <img src="/ASSET/landing/nav-x.svg" alt="" width={20} height={20} />
+      <a href={LINKEDIN_URL} target="_blank" rel="noopener noreferrer" className="nav-social-link" aria-label="Motvin on LinkedIn">
+        <img src="/ASSET/landing/nav-linkedin.svg" alt="" width={20} height={20} />
         <span className="nav-social-tip" aria-hidden="true">
-          Coming soon
+          LinkedIn
         </span>
-      </span>
+      </a>
     </div>
   );
 
