@@ -821,7 +821,13 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                   aria-label={label}
                   onClick={() => setModalScope((current) => (current === value ? null : value))}
                 >
-                  <Icon size={20} />
+                  {/* The apple is narrower than the round globe, so it's drawn a little larger here to look the
+                      same size. Its body (not the leaf) is centred in the 20px box, like the globe; the leaf
+                      sits above and may poke just past the box's top. */}
+                  <Icon
+                    size={20}
+                    {...(value === 'ios' && { viewBox: '1.5 3.92 21 21', style: { overflow: 'visible' } })}
+                  />
                 </button>
               ))}
             </div>

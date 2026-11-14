@@ -1316,9 +1316,9 @@
 .demo-body {
   border: 1px solid #f1f1f1;
   border-radius: 24px;
-  /* The typescale recording's own shape (3456 × 2025), so it fills the window uncropped at any width. */
+  /* The typescale recording's own shape (2400 × 1360), so it fills the window uncropped at any width. */
   height: auto;
-  aspect-ratio: 3456 / 2025;
+  aspect-ratio: 2400 / 1360;
   position: relative;
   overflow: hidden;
 }
