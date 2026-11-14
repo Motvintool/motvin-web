@@ -1362,8 +1362,11 @@ html:has(.ins-explore-view) {
   line-height: normal;
   color: #000;
   white-space: nowrap;
-  word-break: break-word;
   text-align: center;
+  /* No wider than the logo: a long app name ends in "…" instead of stretching the card. */
+  max-width: 84px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @keyframes insPreviewPop {
