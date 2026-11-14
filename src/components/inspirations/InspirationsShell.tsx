@@ -91,8 +91,11 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
           <AdminDrawerOverlay />
         </Suspense>
         {/* The library owner's running video ingest, on whichever page they
-            are on. Renders nothing for everyone else. */}
-        <AdminChatbot />
+            are on. Renders nothing for everyone else. Reads search params,
+            so it sits inside a Suspense boundary like the overlays above. */}
+        <Suspense fallback={null}>
+          <AdminChatbot />
+        </Suspense>
         {/* The visitor's guide: navigation only, shown to everyone — beside the
             admin dock for the owner. */}
         <UserChatbot />

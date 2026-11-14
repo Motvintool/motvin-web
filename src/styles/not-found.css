@@ -365,25 +365,72 @@
 }
 
 /* Mobile Responsiveness */
+/* Tablet and phone: the same left-aligned layout as desktop, with the button
+   under the text instead of beside it. */
 @media (max-width: 900px) {
   .hero-404 {
     flex-direction: column;
-  }
-
-  .hero-text-404 {
-    align-items: center;
-    text-align: center;
+    align-items: flex-start;
+    gap: 32px;
   }
 
   .title-404 {
-    font-size: 40px;
+    font-size: 48px;
+    letter-spacing: -2px;
   }
 
   .container-404 {
-    padding: 0 30px;
+    padding: 0 32px;
+  }
+}
+
+/* Phone: the landing page's 20px side margins, and type sized to fit. */
+@media (max-width: 600px) {
+  .container-404 {
+    padding: 0 20px;
+    border: 0;
   }
 
-  .fallback-404 {
-    font-size: 250px;
+  .content-404 {
+    padding-top: 40px;
+    padding-bottom: 56px;
   }
+
+  .brand-text-404 {
+    font-size: 20px;
+  }
+
+  .logo-icon-404 {
+    width: 32px;
+    height: 32px;
+  }
+
+  .status-text {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .hero-404 {
+    margin-top: 48px;
+    gap: 28px;
+  }
+
+  .title-404 {
+    font-size: 36px;
+    letter-spacing: -1.4px;
+  }
+
+  .dots-404 {
+    letter-spacing: -4px;
+  }
+
+  .subtitle-404 {
+    font-size: 16px;
+  }
+}
+
+/* The page sits on the landing page's white sheet, over the site footer: clip the 404 box and its big
+   graphic to the sheet's rounded bottom corners, so the curve shows like on the other pages. */
+.landing-sheet:has(.page-404-wrapper) {
+  overflow: clip;
 }

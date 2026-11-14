@@ -1,10 +1,12 @@
 'use client';
 
 import { NotFoundChrome } from '@/components/404/NotFoundChrome';
-import { NotFoundFooter } from '@/components/404/NotFoundFooter';
 import { NotFoundGraphics } from '@/components/404/NotFoundGraphics';
 import { NotFoundHeader } from '@/components/404/NotFoundHeader';
 import { NotFoundHero } from '@/components/404/NotFoundHero';
+import { Footer } from '@/components/landing/Footer';
+import '@/styles/landing.css';
+import '@/styles/landing-inspirations.css';
 import '@/styles/not-found.css';
 
 /**
@@ -17,18 +19,21 @@ import '@/styles/not-found.css';
  */
 export default function NotFound() {
   return (
-    <>
+    <div className="landing-root">
       <NotFoundChrome />
-      <div className="page-404-wrapper">
-        <main className="container-404">
-          <div className="content-404">
-            <NotFoundHeader />
-            <NotFoundHero />
-          </div>
-          <NotFoundGraphics />
-        </main>
-        <NotFoundFooter />
+      {/* The site's own footer, revealed under the page like on the landing page. */}
+      <div className="landing-sheet">
+        <div className="page-404-wrapper">
+          <main className="container-404">
+            <div className="content-404">
+              <NotFoundHeader />
+              <NotFoundHero />
+            </div>
+            <NotFoundGraphics />
+          </main>
+        </div>
       </div>
-    </>
+      <Footer />
+    </div>
   );
 }

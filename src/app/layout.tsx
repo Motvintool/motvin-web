@@ -61,6 +61,8 @@ export const metadata: Metadata = {
   title: 'Motvin: The creative toolkit for websites, colors, icons, AI, and more.',
   icons: {
     icon: { url: '/ASSET/Images/motvin%20logo%20(full%20color).svg', type: 'image/svg+xml' },
+    // The logo on white, for an iPhone's home screen (iOS ignores the SVG).
+    apple: { url: '/apple-touch-icon.png', sizes: '180x180' },
   },
 };
 
