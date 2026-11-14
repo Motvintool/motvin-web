@@ -73,8 +73,8 @@ const CANONICAL = '.png';
 const SAMPLE_INTERVAL_SECONDS = 0.3;
 const DEFAULT_FPS = 1 / SAMPLE_INTERVAL_SECONDS;
 
-/** Above this many extracted frames, stop and tell the user to trim or slow the rate. */
-const MAX_FRAMES = 6000;
+/** Above this many extracted frames, stop and tell the user to trim or slow the rate. 9000 is about 45 minutes at the default rate. */
+const MAX_FRAMES = 9000;
 
 /**
  * A scrolled view whose recognised text overlaps this much with the screen it

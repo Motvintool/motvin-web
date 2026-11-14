@@ -23,25 +23,18 @@ const NOT_A_COVER = new Set(['splash', 'loading', 'modal', 'empty', 'error', 'pe
  */
 export function appCardScreens(app: Pick<App, 'cardScreens'>, screens: Screen[]): Screen[] {
   const byId = new Map(screens.map((s) => [s.id, s]));
-  const picked = (app.cardScreens ?? [])
+  // A screen picked twice shows once.
+  const picked = [...new Set(app.cardScreens ?? [])]
     .map((id) => byId.get(id))
     .filter((s): s is Screen => Boolean(s))
     .slice(0, MAX_CARD_SCREENS);
-  if (picked.length) {
-    // A light screen leads the card, so a grid of covers reads calm rather than a wall of dark: the admin's
-    // first light pick, else the app's best light main screen ahead of the picks (the last one giving way).
-    if (picked.some(isLight)) return [...picked.filter(isLight), ...picked.filter((s) => !isLight(s))];
-    const light = mainCover(screens.filter(isLight), MAIN_SCREENS);
-    return light ? [light, ...picked.filter((s) => s.id !== light.id)].slice(0, MAX_CARD_SCREENS) : picked;
-  }
+  // The admin's pick, exactly as ordered: their first is the cover, dark or light.
+  if (picked.length) return picked;
   const cover = coverScreen(screens);
   return cover ? [cover] : [];
 }
 
 const isLight = (screen: Screen) => (screen.style ?? []).includes('light');
-
-/** What may stand in front of the admin's picks: the app's own front door, never a detail or help page. */
-const MAIN_SCREENS = ['home', 'dashboard', 'feed', 'landing'];
 
 /** The best settled screen of these types (cover order) among these, or null when none is one. */
 function mainCover(screens: Screen[], types: string[] = COVER_ORDER): Screen | null {

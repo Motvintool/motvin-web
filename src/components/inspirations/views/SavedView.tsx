@@ -14,6 +14,7 @@ import { browsedPlatforms } from '@/lib/inspirations/filters';
 import { AppCard } from '../AppCard';
 import { CollectionCard } from '../CollectionCard';
 import { EmptyState } from '../EmptyState';
+import { PlatformSwitch } from '../FilterToolbar';
 import { WebCard } from '../WebCard';
 import { FlowList } from '../FlowList';
 import { FlowListSkeleton } from '../Skeletons';
@@ -100,6 +101,8 @@ export function SavedView() {
   const section = browsedPlatforms(params);
   // Webs (web apps and websites) are landscape: its saved screens and apps get the web grid and cards.
   const webSection = section.every(isDesktopPlatform);
+  // Where the header's Apps / Webs tabs are hidden (below 1140px), the same switch as the browse pages' filter row.
+  const platformSwitch = <PlatformSwitch platform={webSection ? 'web' : 'ios'} onPick={(value) => setParam('platform', value)} />;
   const inSectionHref = (href: string) => (webSection ? `${href}${href.includes('?') ? '&' : '?'}platform=web` : href);
   const appPlatforms = new Map([...apps.values()].map((app) => [app.id, app.platforms]));
   const items: CollectionItem[] = collection
@@ -244,10 +247,13 @@ export function SavedView() {
                 </button>
               </form>
             ) : (
-              <button type="button" className="ins-collections-new" onClick={() => setCreatingBoard(true)}>
+              <>
+                {platformSwitch}
+                <button type="button" className="ins-collections-new ins-collections-start" aria-label="New collection" onClick={() => setCreatingBoard(true)}>
                 <img src="/ASSET/Icons/Motvin/colletion-new.svg" alt="" width={16} height={16} />
-                New collection
-              </button>
+                <span className="ins-collections-start-label">New collection</span>
+                </button>
+              </>
             )
           }
         />
@@ -335,12 +341,15 @@ export function SavedView() {
             </h1>
           )}
         </div>
-        {/* Clicking the title renames it in place; the bin removes the
+        {/* Clicking the title renames it in place; the round bin removes the
             collection, after asking. */}
         <div className="ins-masthead-actions">
+          {platformSwitch}
           <button
             type="button"
-            className="ins-btn ins-btn--masthead-store ins-collection-remove"
+            className="ins-iconbtn ins-collection-remove"
+            aria-label="Remove collection"
+            title="Remove collection"
             onClick={() => {
               void askConfirm({
                 title: `Remove “${collection.name}”?`,
@@ -362,7 +371,6 @@ export function SavedView() {
                 fill="currentColor"
               />
             </svg>
-            Remove collection
           </button>
         </div>
       </header>

@@ -109,7 +109,7 @@ export function Hero() {
             </div>
             <span>New</span>
           </div>
-          <p>Motvin Icons: 350k+ editable icons</p>
+          <p>Motvin Icons: 350k+ <span className="hero-badge-more">editable </span>icons</p>
           <div className="badge-dot"></div>
           <a href="/icons" target="_blank" rel="noopener" className="badge-link">
             <span>Explore</span>

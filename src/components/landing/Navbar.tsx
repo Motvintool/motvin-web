@@ -8,6 +8,7 @@ import { getGuestUid } from '@/lib/firebase/auth';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { CommunityDropdown } from './CommunityDropdown';
 import { CompanyDropdown } from './CompanyDropdown';
+import { MobileMenu } from './MobileMenu';
 import { ProductsDropdown } from './ProductsDropdown';
 import { REQUEST_APP_EVENT } from './RequestAppLink';
 
@@ -80,7 +81,6 @@ export function Navbar() {
   const navRef = useRef<HTMLElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
-  const signupRef = useRef<HTMLAnchorElement>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const closePanel = useCallback(() => setPanelOpen(false), []);
@@ -389,38 +389,15 @@ export function Navbar() {
     </nav>
   );
 
-  const signinButton = (
-    <Link
-      href="/login"
-      className="btn-secondary"
-      id="auth-signin-btn"
-      style={{ display: user ? 'none' : undefined }}
-    >
-      <span>Sign in</span>
-      <img src="/ASSET/Icons/btn-arrow-black.svg" alt="" className="btn-secondary-arrow" />
-    </Link>
-  );
-
   const signupButton = (
-    <Link
-      href="/signup"
-      className="btn-primary"
-      id="auth-signup-btn"
-      ref={signupRef}
-      style={{ display: user ? 'none' : undefined }}
-    >
+    <Link href="/signup" className="btn-primary" id="auth-signup-btn" style={{ display: user ? 'none' : undefined }}>
       <span>Get started for free</span>
       <img src="/ASSET/Icons/btn-arrow.svg" alt="" className="btn-primary-arrow" />
     </Link>
   );
 
   const dashboardButton = (
-    <Link
-      href="/inspirations"
-      className="btn-secondary"
-      id="auth-dashboard-btn"
-      style={{ display: user ? undefined : 'none' }}
-    >
+    <Link href="/inspirations" className="btn-secondary" id="auth-dashboard-btn" style={{ display: user ? undefined : 'none' }}>
       <span>Go to Library</span>
     </Link>
   );
@@ -473,6 +450,7 @@ export function Navbar() {
             {isMobile && signupButton}
             {isMobile && dashboardButton}
           </div>
+
           {/* Mobile-only hamburger: opens a dropdown holding the relocated nav */}
           <button
             className={`mi-nav-hamburger${panelOpen ? ' is-open' : ''}`}
@@ -486,8 +464,8 @@ export function Navbar() {
               setPanelOpen((open) => !open);
             }}
           >
-            <img src="/ASSET/Icons/nav-open.svg" alt="" className="mi-nav-hamburger-icon-open" />
-            <img src="/ASSET/Icons/nav-close.svg" alt="" className="mi-nav-hamburger-icon-close" />
+            <img src="/ASSET/Icons/nav-open-bold.svg" alt="" className="mi-nav-hamburger-icon-open" />
+            <img src="/ASSET/Icons/nav-close-bold.svg" alt="" className="mi-nav-hamburger-icon-close" />
           </button>
         </div>
       </header>
@@ -546,43 +524,32 @@ export function Navbar() {
             <Link href="/" className="mi-nav-mobile-panel-logo" aria-label="Motvin home" onClick={closePanel}>
               <img src="/ASSET/Icons/motvin-logo.svg" alt="" />
             </Link>
-            <button
-              className="mi-nav-mobile-panel-close"
-              id="nav-mobile-panel-close"
-              aria-label="Close menu"
-              onClick={closePanel}
-            >
-              <img src="/ASSET/Icons/nav-close.svg" alt="" />
-            </button>
-          </div>
-          <div className="mi-nav-mobile-panel-content">
-            <div className="mi-nav-mobile-panel-list">
-              <div id="nav-mobile-links-slot">{isMobile && navLinks}</div>
-              <div id="nav-mobile-actions-slot">{isMobile && navSocial}</div>
+            <div className="mi-mm-head-actions">
+              {/* The page's main call to action rides in the menu's top row, as on mobbin.com. */}
+              <Link href={user ? '/inspirations' : '/signup'} className="mi-mm-cta" onClick={closePanel}>
+                {user ? 'Go to Library' : 'Get started'}
+              </Link>
+              <button
+                className="mi-nav-mobile-panel-close"
+                id="nav-mobile-panel-close"
+                aria-label="Close menu"
+                onClick={closePanel}
+              >
+                <img src="/ASSET/Icons/nav-close-bold.svg" alt="" />
+              </button>
             </div>
           </div>
+          <div className="mi-nav-mobile-panel-content">
+            <MobileMenu onNavigate={closePanel} onRequestApp={requestApp} instagramUrl={INSTAGRAM_URL} linkedinUrl={LINKEDIN_URL} />
+          </div>
         </div>
-        <div className="mi-nav-mobile-panel-actions">
-          {isMobile && signinButton}
-          {user ? (
-            <Link
-              href="/inspirations"
-              className="mi-nav-mobile-panel-signup mi-nav-mobile-panel-library"
-              onClick={closePanel}
-            >
-              Go to Library
+        {!user && (
+          <div className="mi-nav-mobile-panel-actions mi-mm-foot">
+            <Link href="/login" className="mi-mm-signin" onClick={closePanel}>
+              Sign in
             </Link>
-          ) : (
-            <button
-              className="mi-nav-mobile-panel-signup"
-              id="nav-mobile-panel-signup"
-              type="button"
-              onClick={() => signupRef.current?.click()}
-            >
-              Get started
-            </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

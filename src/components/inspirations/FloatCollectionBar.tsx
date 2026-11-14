@@ -291,7 +291,7 @@ export function FloatCollectionBar({
             <input
               type="text"
               className="ins-float-collection-input"
-              placeholder="Collection Name"
+              placeholder="Name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={48}

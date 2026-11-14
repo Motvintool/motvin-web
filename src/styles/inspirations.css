@@ -519,6 +519,24 @@ body {
   color: #000;
 }
 
+/* Hung at a fixed spot right of the search bar, the full button runs into the bookmark and headphones icons
+   below a 1460px window: from there down it's the green tile alone (its name stays as the link's label), and
+   below 1210px, where even the tile won't fit, it's left out, as in the compact header under 1140px. */
+@media (max-width: 1459px) {
+  .ins-header-try-icons .ins-try-icons-text,
+  .ins-header-try-icons .ins-try-icons-badge {
+    display: none;
+  }
+  .ins-header-try-icons {
+    padding: 6px;
+  }
+}
+@media (max-width: 1209px) {
+  .ins-header-try-icons {
+    display: none;
+  }
+}
+
 .ins-try-icons-badge {
   background: #e9e9e9;
   border-radius: 8px;
@@ -1021,14 +1039,17 @@ body {
      four slivers. */
   .ins-search-top-screens { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ins-search-top-apps { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 16px; }
-  /* List rows (Categories / Screens / UI Elements / Flows): no side padding,
-     so the text lines up with the page's own 16px gutter. */
+  /* List rows (Categories / Screens / UI Elements / Flows): the grey hover pill stays inside the page's
+     16px gutter, with 16px of its own on each side so the words and counts sit clear of its ends. */
   .ins-search-categories button,
-  .ins-search-resource-list button { padding-left: 0; padding-right: 0; }
+  .ins-search-resource-list button { padding-left: 16px; padding-right: 16px; }
   .ins-search-categories span,
   .ins-search-resource-list span { padding-left: 0; padding-right: 0; }
   .ins-search-modal-title,
   .ins-search-flow-group-title { padding-left: 0; padding-right: 0; }
+  /* A section's heading starts where its rows' words do (16px in). */
+  .ins-search-modal-title,
+  .ins-search-flow-group-title { padding-left: 16px; }
   /* UI Elements / Flows chips: same compact size as the other phone chips. */
   .ins-search-top-elements { gap: 8px; }
   .ins-search-top-elements button { height: 40px; gap: 6px; padding: 0 14px 0 8px; font-size: 14px; }
@@ -2782,9 +2803,16 @@ select.ins-input {
   container-type: inline-size;
 }
 
-/* Screen cards in the shot panel: five 380px-capped columns, 24px apart, shot aspect 282 / 611, no caption. */
+/* Screen cards in the shot panel: five, four or three 380px-capped columns (by window), 24px apart, shot
+   aspect 282 / 611, no caption. */
 .ins-shot-panel .ins-grid > .ins-card {
   contain-intrinsic-block-size: auto calc(min(380px, (100cqw - 96px) / 5) * 611 / 282);
+}
+@media (max-width: 1599px) {
+  .ins-shot-panel .ins-grid > .ins-card { contain-intrinsic-block-size: auto calc(min(380px, (100cqw - 72px) / 4) * 611 / 282); }
+}
+@media (max-width: 1099px) {
+  .ins-shot-panel .ins-grid > .ins-card { contain-intrinsic-block-size: auto calc(min(380px, (100cqw - 48px) / 3) * 611 / 282); }
 }
 
 /* App cards: the grid's columns (four, three, two, one — see the app cards' block), 16px apart, each a
@@ -2867,6 +2895,28 @@ select.ins-input {
 .ins-shot-panel .ins-grid.ins-web-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
+}
+
+/* Phone screens follow the window as the app cards do (4 / 3 / 2 across): five across from 1600px, four from
+   1100px, three on a tablet, so a screen never shrinks to a sliver in a narrow window. The 380px cap stays.
+   (A phone's two-up is set in its own block below.) */
+@media (min-width: 1600px) {
+  .ins-grid:not(.ins-web-grid):not(.ins-app-grid),
+  .ins-shot-panel .ins-grid:not(.ins-web-grid) {
+    grid-template-columns: repeat(5, minmax(0, 380px));
+  }
+}
+@media (min-width: 1100px) and (max-width: 1599px) {
+  .ins-grid:not(.ins-web-grid):not(.ins-app-grid),
+  .ins-shot-panel .ins-grid:not(.ins-web-grid) {
+    grid-template-columns: repeat(4, minmax(0, 380px));
+  }
+}
+@media (min-width: 760px) and (max-width: 1099px) {
+  .ins-grid:not(.ins-web-grid):not(.ins-app-grid),
+  .ins-shot-panel .ins-grid:not(.ins-web-grid) {
+    grid-template-columns: repeat(3, minmax(0, 380px));
+  }
 }
 
 @media (max-width: 1650px) {
@@ -5366,6 +5416,76 @@ select.ins-input {
   opacity: 0.9;
 }
 
+/* A tablet (where the switch shows): the Apps / Webs switch is as tall as the button beside it, the 57.2px
+   New collection pill on the list and the 49.2px bin in a collection. (Doubled classes: the switch's own
+   44px rules come later in the file.) */
+@media (min-width: 760px) {
+  .ins-pagehead--keep .ins-segmented.ins-segmented--toolbar {
+    height: 57.2px;
+  }
+  .ins-pagehead--keep .ins-segmented.ins-segmented--toolbar .ins-segmented-item {
+    height: 49.2px;
+    padding: 0 20px;
+  }
+  .ins-collection-detail-head .ins-segmented.ins-segmented--toolbar {
+    height: 49.2px;
+  }
+  .ins-collection-detail-head .ins-segmented.ins-segmented--toolbar .ins-segmented-item {
+    height: 41.2px;
+  }
+}
+
+/* A phone: New collection is a round + on the title's row (the name form, once open, still stacks below). */
+@media (max-width: 759px) {
+  .ins-pagehead--keep:has(.ins-collections-start) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* The title steps down with the screen so it and the buttons share the row on a usual phone; where even
+     that won't fit (a 320px phone), the buttons wrap below it rather than covering it. */
+  .ins-pagehead--keep:has(.ins-collections-start) .ins-pagehead-text {
+    min-width: auto;
+  }
+
+  .ins-pagehead--keep:has(.ins-collections-start) .ins-title {
+    font-size: min(36px, 8.4vw);
+  }
+
+  .ins-pagehead--keep:has(.ins-collections-start) .ins-pagehead-actions {
+    margin-left: auto;
+  }
+
+  .ins-collections-start {
+    width: 49.2px;
+    height: 49.2px;
+    padding: 0;
+  }
+
+  .ins-collections-start-label {
+    display: none;
+  }
+
+  /* The Apps / Webs switch beside it (and beside a collection's bin), as tall as those round buttons. */
+  .ins-pagehead--keep .ins-segmented.ins-segmented--toolbar,
+  .ins-collection-detail-head .ins-segmented.ins-segmented--toolbar {
+    height: 49.2px;
+  }
+
+  .ins-pagehead--keep .ins-segmented.ins-segmented--toolbar .ins-segmented-item,
+  .ins-collection-detail-head .ins-segmented.ins-segmented--toolbar .ins-segmented-item {
+    width: 36px;
+    height: 41.2px;
+  }
+
+  .ins-pagehead--keep .ins-segmented.ins-segmented--toolbar .ins-segmented-item.is-active,
+  .ins-collection-detail-head .ins-segmented.ins-segmented--toolbar .ins-segmented-item.is-active {
+    width: 46px;
+  }
+}
+
 .ins-collections-create {
   display: flex;
   align-items: center;
@@ -5439,25 +5559,47 @@ select.ins-input {
   min-width: 0;
 }
 
-/* A phone: the back arrow and title have the row (the name no longer
-   squeezed into a word per line by the button), Remove drops below it. */
+/* A phone: the back arrow and the buttons (Apps / Webs, the bin) share the top row, and the name has the
+   full width below them, so it isn't cut to a few letters. */
 @media (max-width: 759px) {
   .ins-collection-detail-head {
     flex-wrap: wrap;
-    row-gap: 12px;
+    row-gap: 16px;
   }
 
   .ins-collection-detail-title {
+    display: contents;
+  }
+
+  .ins-collection-detail-head .ins-collections-back {
+    order: 0;
+  }
+
+  .ins-collection-detail-head .ins-masthead-actions {
+    order: 1;
+    flex: none;
+    margin-top: 0;
+    margin-left: auto;
+  }
+
+  .ins-collection-detail-title > .ins-title,
+  .ins-collection-detail-title > .ins-collection-title-form {
+    order: 2;
     flex: 1 1 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  /* The name now starts at the page's edge, so the tabs under it do too (not indented past the arrow). */
+  .ins-tabbar.ins-collection-detail-tabs {
+    padding-left: 0;
   }
 }
 
 /* The title renames on click: a text cursor says it's editable. */
 .ins-collection-title-edit { cursor: text !important; border-radius: 8px; }
 .ins-collection-title-edit:focus-visible { outline: 2px solid #141414; outline-offset: 4px; }
-/* A white pill with the bin and its words, in the site's Manrope 600 (as
-   Explore flows); soft red on hover, for removing. */
-.ins-btn--masthead-store.ins-collection-remove { font-family: var(--font-manrope), Manrope, sans-serif !important; font-weight: 600 !important; transition: background-color 160ms, border-color 160ms, color 160ms; }
+/* A white circle with the bin, as the masthead's other round buttons; soft red on hover, for removing. */
+.ins-masthead-actions .ins-collection-remove { transition: background-color 160ms, border-color 160ms, color 160ms; }
 .ins-masthead-actions .ins-collection-remove:hover { background-color: #fdecec !important; border-color: transparent !important; color: #d93a3f !important; }
 .ins-collection-remove svg { flex: none; }
 .ins-collection-title-form { flex: 1; min-width: 0; margin: 0; }
@@ -6117,6 +6259,28 @@ select.ins-input {
   .ins-masthead-actions {
     margin-top: var(--ins-space-5);
     flex-wrap: wrap;
+  }
+}
+
+/* Up to 819px the app page's tabs and its filters don't fit one line either: the tabs were cut mid-word
+   ("Fl…") by the filters beside them. In the page, the tabs get their own line, as on a phone (below);
+   docked in the header, the row keeps its single scrolling line. */
+@media (min-width: 641px) and (max-width: 819px) {
+  .ins-tabbar-row:not(.is-docked) {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+  .ins-tabbar-row:not(.is-docked) .ins-tabbar--counted {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+  .ins-tabbar-row:not(.is-docked) .ins-ftoolbar-right {
+    flex: 1 1 120px;
+    min-width: 0;
+    justify-content: flex-end;
+  }
+  .ins-tabbar-row:not(.is-docked) > .ins-ftoolbar-divider {
+    display: none;
   }
 }
 
@@ -13653,10 +13817,9 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
    lies flat in it, no drop-down frame, the HEX / RGB switch kept clear of
    the close. */
 .ins-palette-sheet { display: flex; flex-direction: column; background: #fff; }
-/* No layer of its own (its drop-down z-index would still apply as a flex item, over the close). */
+/* No layer of its own (its drop-down z-index would still apply as a flex item). */
 .ins-palette-pop.is-sheet { position: static; z-index: auto; width: auto; visibility: visible; opacity: 1; translate: none; scale: none; pointer-events: auto; transition: none; }
 .ins-palette-pop.is-sheet .ins-palette-card { padding: 4px 16px calc(20px + env(safe-area-inset-bottom)); border: 0; border-radius: 0; box-shadow: none; }
-.ins-palette-pop.is-sheet .ins-palette-head { padding-right: 44px; }
 @media (prefers-reduced-motion: reduce) {
   .ins-palette-pop, .ins-palette-seg, .ins-palette-dots span { transition: none; }
   .ins-palette-dots.is-loading span, .ins-palette-band--loading { animation: none; }
@@ -18059,9 +18222,12 @@ html:has(aside.ins-dock:not(.ins-dock-user)) {
   scrollbar-gutter: stable;
 }
 
-/* A phone fits three of the search panel's app icons across. */
+/* A phone fits as many of the search panel's app icons across as its width allows: four on a usual phone,
+   more on a wider one. The logo steps down to 64px so four have room for their names. */
 @media (max-width: 759px) {
-  .ins-search-app-icons { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ins-search-app-icons { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+  .ins-search-app-icons .ins-app-logo { width: 64px !important; height: 64px !important; }
+  .ins-search-app-icons .ins-skel.ins-app-icon-skel-logo { width: 64px; height: 64px; }
 }
 
 /* The search panel between phone and desktop: the sidebar gives up some width, and the screen-type cards follow
@@ -19696,7 +19862,11 @@ div.ins-version { cursor: default; flex-wrap: wrap; }
 .ins-platform-peek-caption { display: flex; align-items: center; gap: 10px; padding-left: 2px; color: #fff; font-size: 17px; font-weight: 600; line-height: 1.2; white-space: nowrap; }
 .ins-platform-peek-on { color: rgba(255, 255, 255, 0.55); font-weight: 500; }
 /* That platform's counts, quiet, at the caption's far end. */
-.ins-platform-peek-counts { margin-left: auto; padding-left: 16px; color: rgba(255, 255, 255, 0.55); font-size: 14px; font-weight: 500; }
+.ins-platform-peek-counts { min-width: 0; margin-left: auto; padding-left: 16px; overflow: hidden; text-overflow: ellipsis; color: rgba(255, 255, 255, 0.55); font-size: 14px; font-weight: 500; }
+/* A touch screen never hovers, so the card never opens there: out of the layout, it can't widen a narrow page. */
+@media (hover: none) {
+  .ins-platform-peek { display: none; }
+}
 .ins-platform-peek-logo { border-radius: 8px; }
 @media (prefers-reduced-motion: reduce) {
   .ins-platform-peek { transition: opacity 0.12s ease, visibility 0s linear 0.12s; transform: none; }
@@ -20640,6 +20810,82 @@ body:has(aside.ins-guide) .ins-assist-switch {
 /* A pill at the start of the bar (Screens, UI Elements, Flows, Patterns): the menu opens from its left edge. */
 .ins-colorf-pop.is-start { right: auto; left: 0; transform-origin: top left; }
 @keyframes insColorfIn { from { opacity: 0; translate: 0 -6px; scale: 0.96; } }
+/* A tablet: the filter row's menus hang from their pills as on a desktop, but the screen is narrow enough
+   that a wide one (Filters, 360px) can run past the right edge from a pill in the middle. Tied to its pill
+   (as on a phone), each flips to the pill's other edge, or spans the screen, when it won't fit. */
+@media (min-width: 760px) and (max-width: 1139px) {
+  @supports (anchor-name: --a) {
+    .ins-popwrap {
+      anchor-name: --ins-pop;
+      anchor-scope: --ins-pop;
+    }
+    .ins-popwrap .ins-popover,
+    .ins-popwrap .ins-popover.ins-fmenu,
+    .ins-popwrap .ins-popover--left,
+    .ins-popwrap .ins-uielements-menu {
+      position: fixed;
+      position-anchor: --ins-pop;
+      inset: auto;
+      position-area: block-end span-inline-end;
+      max-width: calc(100vw - 24px);
+      max-height: min(calc(100% - 20px), 640px);
+      margin: 8px 0;
+      overflow-y: auto;
+      z-index: 210;
+      position-try-fallbacks: flip-inline, --ins-wide, flip-block, flip-block flip-inline;
+    }
+    .ins-popwrap .ins-popover--right,
+    .ins-popwrap .ins-popover.ins-popover--right {
+      position-area: block-end span-inline-start;
+    }
+    .ins-popwrap .ins-uielements-menu,
+    .ins-popwrap .ins-popover.ins-fpanel {
+      overflow: hidden;
+    }
+    .ins-popwrap .ins-uielements-menu .ins-uielements-options,
+    .ins-popwrap .ins-fpanel .ins-fpanel-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: none;
+    }
+  }
+}
+/* A phone: the colour pill sits in the filter row's scroll strip, which would clip a menu hanging off it.
+   As the other filter menus (.ins-popwrap), it's tied to its own button and laid over the page, fixed;
+   a browser without anchors opens it as a bottom sheet. */
+@media (max-width: 759px) {
+  @supports (anchor-name: --a) {
+    .ins-colorf-filter {
+      anchor-name: --ins-colorf;
+      anchor-scope: --ins-colorf;
+    }
+    .ins-colorf-pop,
+    .ins-colorf-pop.is-start {
+      position: fixed;
+      position-anchor: --ins-colorf;
+      inset: auto;
+      /* Below the pill, centred across the screen (its pill can be anywhere along the scrolled strip). */
+      position-area: block-end;
+      justify-self: center;
+      width: min(288px, calc(100vw - 24px));
+      margin: 12px 0;
+      z-index: 210;
+      position-try-fallbacks: flip-block;
+    }
+  }
+  @supports not (anchor-name: --a) {
+    .ins-colorf-pop,
+    .ins-colorf-pop.is-start {
+      position: fixed;
+      top: auto;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      width: auto;
+      z-index: 210;
+    }
+  }
+}
 .ins-colorf-card {
   display: flex;
   flex-direction: column;

@@ -133,10 +133,10 @@ export function ConsentBanners() {
         </span>
         <p className="lpi-promo-text">
           <b>Motvin Icons</b>
-          <span>350k+ editable icons for your next design</span>
+          <span>350k+ <span className="lpi-promo-more">editable </span>icons<span className="lpi-promo-more"> for your next design</span></span>
         </p>
         <Link href="/icons" className="lpi-promo-btn">
-          Explore icons
+          Explore<span className="lpi-promo-more"> icons</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M5 12h14" />
             <path d="m13 6 6 6-6 6" />
@@ -186,7 +186,7 @@ export function ConsentBanners() {
           >
             <p className="cookies-desc">
               Essential cookies keep Motvin secure and working. Optional analytics help us improve
-              your experience.
+              your experience.{' '}
               <a href="/privacy" target="_blank" rel="noopener" className="cookies-link">
                 Learn more about cookies
               </a>

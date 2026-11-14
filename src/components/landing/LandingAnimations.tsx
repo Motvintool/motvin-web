@@ -43,8 +43,8 @@ const HERO_CROP_ROOM = 16;
 
 // How much smaller a stacked feature card gets for each card piled on top of it.
 const STACK_SHRINK = 0.06;
-// The cards stack above this width; below it they are a plain list (landing-inspirations.css).
-const STACK_MIN_WIDTH = 601;
+// The cards stack at every width, phones included (landing-inspirations.css sizes them down there).
+const STACK_MIN_WIDTH = 0;
 
 // Scroll parallax runs above this width, where there is room for the layers
 // to drift without crowding the content.
@@ -146,7 +146,6 @@ export function LandingAnimations() {
     // it slide up over it, each card shrinks a little from its top edge,
     // more the deeper it ends up in the pile, so the tops peek out as a
     // tidy, narrowing stack. Tied to the scroll, so it plays both ways.
-    // Only where the cards stack: on phones they scroll as a plain list.
     mm.add(`(min-width: ${STACK_MIN_WIDTH}px) and (prefers-reduced-motion: no-preference)`, () => {
       const stackCards = gsap.utils.toArray<HTMLElement>('.lpi-stack-card');
       const lastCard = stackCards[stackCards.length - 1];

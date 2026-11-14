@@ -500,7 +500,7 @@ const SWITCH_OPTIONS: { value: string; label: string; param: string | null; Icon
   { value: 'web', label: 'Webs', param: 'web', Icon: WebIcon },
 ];
 
-function PlatformSwitch({ platform, onPick }: { platform: string; onPick: (param: string | null) => void }) {
+export function PlatformSwitch({ platform, onPick }: { platform: string; onPick: (param: string | null) => void }) {
   return (
     <div
       className="ins-segmented ins-segmented--toolbar ins-ftoolbar-context"

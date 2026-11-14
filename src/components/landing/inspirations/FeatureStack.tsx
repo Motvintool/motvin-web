@@ -108,6 +108,29 @@ function CountUp({ value }: { value: number | undefined }) {
 /** Jitter-style cards that stack on top of one another as you scroll, one per kind of content. */
 export function FeatureStack({ apps, counts }: { apps: LandingApp[]; counts: LibraryCounts | null }) {
   const covers = apps.filter((app) => app.cover && !app.wide);
+  const stackRef = useRef<HTMLDivElement>(null);
+
+  // A card taller than the room below its sticky top (a phone, a short window) would stick with its bottom,
+  // phones and all, below the screen's edge: it sticks higher instead, so all of it is seen before the next
+  // one slides over.
+  useEffect(() => {
+    const stack = stackRef.current;
+    if (!stack) return;
+    const fit = () => {
+      stack.querySelectorAll<HTMLElement>('.lpi-stack-card').forEach((card, i) => {
+        const base = STACK_TOP + i * STACK_STEP;
+        card.style.top = `${Math.min(base, window.innerHeight - card.offsetHeight - 16)}px`;
+      });
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(stack);
+    window.addEventListener('resize', fit);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', fit);
+    };
+  }, []);
 
   return (
     <section className="lpi-stack-section">
@@ -116,7 +139,7 @@ export function FeatureStack({ apps, counts }: { apps: LandingApp[]; counts: Lib
         <p className="lpi-lead">Four ways into the same library, so you always start from something that already works.</p>
       </div>
 
-      <div className="lpi-stack">
+      <div className="lpi-stack" ref={stackRef}>
         {CARDS.map((card, i) => {
           // Three different apps per card, fanned out like phones on a desk.
           const fan = covers.length ? [0, 1, 2].map((k) => covers[(i * 3 + k) % covers.length]) : [];

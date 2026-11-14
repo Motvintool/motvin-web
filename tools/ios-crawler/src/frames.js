@@ -69,6 +69,21 @@ export async function buildFrameExtractor() {
   return BINARY;
 }
 
+/** Why the frame reader failed, in words: a time-out says so rather than "exited null". */
+const readerFailure = (result, timeout) =>
+  result.timedOut
+    ? `the frame reader took longer than ${Math.round(timeout / 60_000)} minutes and was stopped`
+    : result.stderr.trim().split('\n')[0] || `frame reader exited ${result.code}`;
+
+/**
+ * Time for pass two: reading each chosen frame at full size costs seconds, so a long recording with
+ * hundreds of screens needs far more than a short one. 15 minutes, plus 6 seconds a frame.
+ */
+const fullSizeTimeout = (frames) => 900_000 + frames * 6_000;
+
+/** Time for pass one: an hour, so a long recording isn't cut off partway through its scan. */
+const SCAN_TIMEOUT = 3_600_000;
+
 /**
  * Pass one: a thumbnail for every sampled frame, and nothing else.
  *
@@ -88,10 +103,10 @@ export async function extractThumbs(videoPath, framesDir, fps, grid = THUMB) {
     const result = await run(
       'ffmpeg',
       ['-nostdin', '-loglevel', 'error', '-i', videoPath, '-vf', `fps=${fps},scale=${grid.width}:${grid.height}:flags=area,format=rgb24`, '-f', 'rawvideo', join(framesDir, 'thumbs.rgb')],
-      { timeout: 900_000 },
+      { timeout: SCAN_TIMEOUT },
     );
     if (result.failed) {
-      throw new Error(`ffmpeg could not read the video: ${result.stderr.trim().split('\n').slice(-2).join(' ') || `exit ${result.code}`}`);
+      throw new Error(`ffmpeg could not read the video: ${result.timedOut ? 'it took longer than an hour' : result.stderr.trim().split('\n').slice(-2).join(' ') || `exit ${result.code}`}`);
     }
     const all = readFileSync(join(framesDir, 'thumbs.rgb'));
     const count = Math.floor(all.length / size);
@@ -100,8 +115,8 @@ export async function extractThumbs(videoPath, framesDir, fps, grid = THUMB) {
   }
 
   const binary = await buildFrameExtractor();
-  const result = await run(binary, [videoPath, framesDir, String(fps), String(grid.width), String(grid.height), '--thumbs-only'], { timeout: 900_000 });
-  if (result.failed) throw new Error(result.stderr.trim().split('\n')[0] || `frame reader exited ${result.code}`);
+  const result = await run(binary, [videoPath, framesDir, String(fps), String(grid.width), String(grid.height), '--thumbs-only'], { timeout: SCAN_TIMEOUT });
+  if (result.failed) throw new Error(readerFailure(result, SCAN_TIMEOUT));
   const files = readdirSync(framesDir).filter((file) => /^frame-\d+\.rgb$/.test(file)).sort();
   if (!files.length) throw new Error('no frames came out of the video');
   // Indexes are the sampling grid; a frame the reader could not decode leaves
@@ -148,10 +163,11 @@ export async function extractFramesAt(videoPath, framesDir, fps, indexes) {
   }
 
   const binary = await buildFrameExtractor();
+  const timeout = fullSizeTimeout(wanted.length);
   const result = await run(binary, [videoPath, framesDir, String(fps), String(THUMB.width), String(THUMB.height), '--only', wanted.join(',')], {
-    timeout: 900_000,
+    timeout,
   });
-  if (result.failed) throw new Error(result.stderr.trim().split('\n')[0] || `frame reader exited ${result.code}`);
+  if (result.failed) throw new Error(readerFailure(result, timeout));
   for (const index of wanted) {
     const out = join(framesDir, `frame-${String(index + 1).padStart(5, '0')}.png`);
     if (existsSync(out)) paths.set(index, out);

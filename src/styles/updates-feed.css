@@ -266,6 +266,9 @@
   animation: upd-shimmer 1.4s ease-in-out infinite;
 }
 
+/* The placeholder's date and title bars, spaced like the real date and title. */
+.upd-entry-side { display: grid; gap: 12px; align-content: start; }
+
 .upd-skel.is-date { width: 120px; height: 14px; }
 .upd-skel.is-title { width: 220px; height: 28px; }
 .upd-skel.is-image { height: 360px; border-radius: 24px; }
@@ -312,4 +315,29 @@
   .upd-entry,
   .upd-skel { animation: none; }
   .upd-card-image img { transition: none; }
+}
+
+/* A phone: the same 20px from the screen's edges as the landing page (its top bar and footer are shared),
+   instead of 16px. */
+@media (max-width: 600px) {
+  .upd-hero,
+  .upd-feed {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+/* A phone: the title (or the admin's banner above it) starts about as far under the 80px top bar as the
+   landing and About pages' do (132px left a big empty band above it). */
+@media (max-width: 600px) {
+  .upd-hero { padding-top: 64px; }
+}
+
+/* The admin's banner: the full line where it fits; a phone's one-line pill says just "Admin access." with
+   the publisher button beside it (the full line wrapped to two lines and squeezed the button). */
+.upd-admin-banner-short { display: none; }
+.upd-admin-banner a { white-space: nowrap; }
+@media (max-width: 600px) {
+  .upd-admin-banner-more { display: none; }
+  .upd-admin-banner-short { display: inline; }
+  .upd-admin-banner { margin-bottom: 20px; }
 }

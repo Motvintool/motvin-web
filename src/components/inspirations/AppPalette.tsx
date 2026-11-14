@@ -13,7 +13,6 @@ import {
   type PaletteColor,
 } from '@/lib/inspirations/palette';
 import type { App, Screen } from '@/lib/inspirations/types';
-import { CloseIcon } from './Icons';
 import { useToast } from './Toast';
 import { SHEET_QUERY, useMediaQuery, useSheet } from './useSheet';
 
@@ -108,10 +107,8 @@ export function AppPaletteMenu({
         createPortal(
           <div className="ins-portal ins-search-overlay ins-sheet-overlay">
             <div ref={sheetRef} className={`ins-palette-sheet ${sheetClass}`} {...dragProps} role="dialog" aria-modal="true" aria-label={`${app.name} brand palette`}>
+              {/* No ×: the handle drags it down, and a tap outside closes it. */}
               {handle}
-              <button type="button" className="ins-request-close" aria-label="Close" onClick={close}>
-                <CloseIcon size={18} />
-              </button>
               <PalettePanel app={app} colors={colors} open screens={screens} flowCount={flowCount} patternCount={patternCount} sheet />
             </div>
           </div>,

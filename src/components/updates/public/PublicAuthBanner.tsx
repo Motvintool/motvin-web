@@ -14,7 +14,10 @@ export function PublicAuthBanner() {
   return (
     <div className="upd-admin-banner">
       <i aria-hidden="true" />
-      Signed in with updates admin access.
+      <span>
+        <span className="upd-admin-banner-more">Signed in with updates admin access.</span>
+        <span className="upd-admin-banner-short">Admin access.</span>
+      </span>
       <Link href="/updates/admin">Open publisher →</Link>
     </div>
   );

@@ -1237,3 +1237,21 @@ a.abt-product:hover .abt-vis-hero { scale: 1.08; }
   .abt-vis-blob,
   .abt-vis-hero { transition: none; }
 }
+
+/* A phone: the same 20px from the screen's edges as the landing page (its top bar and footer are shared),
+   instead of 16px. */
+@media (max-width: 600px) {
+  .abt-hero,
+  .abt-story,
+  .abt-founder,
+  .abt-products,
+  .abt-beliefs {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+/* A phone: the title starts about as far under the 80px top bar as the landing page's hero does (132px
+   left a big empty band above it). */
+@media (max-width: 600px) {
+  .abt-hero { padding-top: 64px; }
+}

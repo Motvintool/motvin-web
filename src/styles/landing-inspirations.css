@@ -2606,21 +2606,24 @@ html.lpi-at-footer body {
   .lpi-vis-request { margin: 0 0 0 10px; }
   .lpi-vis-request img,
   .lpi-vis-request-add { width: 42px; height: 42px; border-radius: 12px; }
-  /* A plain list here: no stacking, so no stepped margins or rest space. */
-  .lpi-stack-card { position: relative; top: auto !important; margin-bottom: 48px !important; border-radius: 28px; }
-  .lpi-stack::after { display: none; }
-  .lpi-stack-title { font-size: 30px; }
-  .lpi-stack-text { font-size: 16px; }
-  .lpi-stack-number { font-size: 56px; }
-  .lpi-stack-visual { min-height: 300px; }
-  .lpi-stack-phone { width: 180px; border-radius: 30px 30px 0 0; padding: 5px; }
-  .lpi-stack-phone img { height: 300px; border-radius: 25px 25px 0 0; }
+  /* The cards stack here too (their sticky tops come from FeatureStack.tsx, pulled up when a card is taller
+     than the screen so its bottom still shows); the copy and phones are sized down so a card fits a phone. */
+  .lpi-stack-card { border-radius: 28px; padding: 26px 22px 0; }
+  .lpi-stack-title { margin-top: 14px; font-size: 28px; }
+  .lpi-stack-text { margin-top: 10px; font-size: 15px; }
+  .lpi-stack-number { font-size: 38px; }
+  .lpi-stack-stat { margin-top: 12px; }
+  .lpi-stack-link { margin-top: 16px; }
+  .lpi-stack-visual { min-height: 170px; margin-top: 14px; }
+  .lpi-stack-phone { width: 112px; border-radius: 20px 20px 0 0; padding: 4px; }
+  .lpi-stack-phone img { height: 170px; border-radius: 16px 16px 0 0; }
+  .lpi-stack-phone.is-front { translate: -50% 20px; }
   .lpi-stack-phone.is-left img,
-  .lpi-stack-phone.is-right img { height: 260px; }
+  .lpi-stack-phone.is-right img { height: 148px; }
   .lpi-stack-phone.is-left,
-  .lpi-stack-phone.is-right { width: 150px; }
-  .lpi-stack-phone.is-left { translate: calc(-50% - 95px) 70px; }
-  .lpi-stack-phone.is-right { translate: calc(-50% + 95px) 70px; }
+  .lpi-stack-phone.is-right { width: 94px; }
+  .lpi-stack-phone.is-left { translate: calc(-50% - 72px) 44px; }
+  .lpi-stack-phone.is-right { translate: calc(-50% + 72px) 44px; }
   .lpi-closing { padding: 88px 16px 120px; }
   .lpi-closing-title { font-size: 40px; }
   .lpi-closing-text { font-size: 16px; }
@@ -3577,8 +3580,16 @@ html.lpi-at-footer body {
   .lpi-promo-icon img { width: 20px; height: 20px; }
   .lpi-promo { padding: 8px; border-radius: 24px; }
   .lpi-promo-text { flex-direction: column; gap: 0; font-size: 13px; white-space: normal; }
+  .lpi-promo-text b,
+  .lpi-promo-text span { white-space: nowrap; }
   .lpi-promo-text span { font-size: 12px; line-height: 1.35; }
+  /* A phone's line holds "350k+ icons" and no more beside the button: the rest wrapped it to four squeezed lines. */
+  .lpi-promo-more { display: none; }
   .lpi-promo-btn { height: 36px; padding: 0 12px 0 14px; font-size: 13px; }
+}
+/* Beside the button a phone keeps " icons" on it; a 320px one drops it so the name and count keep a line each. */
+@media (min-width: 360px) and (max-width: 600px) {
+  .lpi-promo-btn .lpi-promo-more { display: inline; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3587,3 +3598,297 @@ html.lpi-at-footer body {
   .lpi-promo-btn::after { transition: none; }
   .lpi-promo:hover .lpi-promo-icon img { rotate: none; }
 }
+
+/* A phone: every section keeps the same 20px from the screen's edges, so their edges line up down the page
+   (they had drifted to 16, 24 and 30px). Last in the file, so it settles what the rules above set. */
+@media (max-width: 600px) {
+  .navbar.navbar,
+  .hero-section.hero-section,
+  .lpi-strip,
+  .lpi-story,
+  .lpi-statement,
+  .lpi-stack-section,
+  .lpi-grid-section,
+  .lpi-buddy,
+  .lpi-templates-head,
+  .lpi-explore,
+  .lpi-faq,
+  .lpi-closing {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
+/* A 320px phone: the closing row's seven logos at 38px ran from edge to edge; at 32px they keep the 20px too. */
+@media (max-width: 359px) {
+  .lpi-closing-logos { --dock-base: 32px; }
+}
+
+/* A phone: the call-to-action buttons fill the width, one above the other, in the hero and the closing
+   section alike. The hero's rating sits centred under its button, the comma tucked against each word. */
+@media (max-width: 600px) {
+  .lpi-closing-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .lpi-closing-primary,
+  .lpi-closing-secondary {
+    justify-content: center;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .hero-section .hero-cta {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    width: 100%;
+  }
+  .hero-section .hero-cta .btn-primary-large {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+  }
+  /* One tidy line: the star and a bold score, a thin divider, then the count, all centred on one line. */
+  .hero-section .hero-rating {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+  .hero-section .rating-stars { gap: 6px; }
+  .hero-section .rating-stars img { width: 18px; height: 18px; }
+  .hero-section .rating-score { font-size: 15px; font-weight: 600; line-height: 1; }
+  .hero-section .rating-max { font-size: 13px; font-weight: 400; }
+  .hero-section .rating-users { display: flex; align-items: center; gap: 12px; font-size: 14px; line-height: 1; }
+  .hero-section .rating-users::before {
+    content: '';
+    width: 1px;
+    height: 14px;
+    background: #e2e3e7;
+  }
+  .hero-section .interactive-word-wrapper {
+    gap: 0;
+  }
+}
+
+/* A phone's 2 x 2 strip: a little more room between the two columns and rows; each app stays centred in
+   its slot, so the group sits in the middle of the screen whatever names are showing. */
+@media (max-width: 600px) {
+  .lpi-strip-row { column-gap: 24px; row-gap: 18px; }
+}
+
+/* A phone wraps the hero's "Screens, Flows, Patterns, UI" row onto two lines: its 8px gap is for between
+   words, so it no longer opens an extra space between those lines (the title's lines were unevenly spaced). */
+@media (max-width: 600px) {
+  .hero-section .hero-title-row { row-gap: 0; column-gap: 8px; }
+}
+
+/* A phone: after the stacked cards, 208px of blank ran before the next heading (the desktop's 120px bottom
+   padding on top of the last card's room); trimmed to the gap the other sections keep. */
+@media (max-width: 600px) {
+  .lpi-stack-section { padding-bottom: 24px; }
+}
+
+/* A tablet: the same 24px from the edges as every other section, for the compact top bar (16px under 1300px)
+   and the Buddy section (16px up to 700px), so the logo and the Buddy window line up with the content. */
+@media (min-width: 601px) and (max-width: 1300px) {
+  .navbar.navbar { padding-left: 24px; padding-right: 24px; }
+  .lpi-buddy { padding-left: 24px; padding-right: 24px; }
+}
+
+/* A phone's cookie banner: the 24px title wrapped to two lines beside its close button on a 320px phone
+   and only just cleared it at 390px; at 20px it keeps one line clear of the button. */
+@media (max-width: 600px) {
+  .cookies-title { font-size: 20px; line-height: 28px; }
+}
+
+/* A 320px phone: even at 20px the title ran into the close button; at 18px it clears it. */
+@media (max-width: 359px) {
+  .cookies-title { font-size: 18px; line-height: 26px; }
+}
+
+/* Every width: each comma in the hero's "Screens, Flows, Patterns, UI" sits against its word, as typed
+   (the word's 2px gap read as a space before it on tablets and desktops too). */
+.hero-section .interactive-word-wrapper { gap: 0; }
+
+/* The open phone menu's top row sits exactly where the top bar's does: the same side padding (20px on a
+   phone, 24px on a tablet), the same 70px height, and the logo and close at the menu button's spots. */
+@media (max-width: 1300px) {
+  .mi-nav-mobile-panel-header {
+    height: 70px;
+    flex-basis: 70px;
+    padding-top: 13px;
+    padding-bottom: 13px;
+    align-items: flex-start;
+  }
+  .mi-nav-mobile-panel-header .mi-nav-mobile-panel-logo { margin-top: 2px; }
+}
+@media (max-width: 600px) {
+  .mi-nav-mobile-panel { padding-left: 20px; padding-right: 20px; }
+}
+@media (min-width: 601px) and (max-width: 1300px) {
+  .mi-nav-mobile-panel { padding-left: 24px; padding-right: 24px; }
+}
+
+/* A phone: the footer packed to fit one screen (it was 1017px on a 747px one), so the page can slide up off
+   it as on a desktop (Footer.tsx turns the reveal on only while the whole footer fits). Same content:
+   Tools and Library share the left column beside Resources, the copy and gaps a little tighter. */
+@media (max-width: 600px) {
+  .lpi-footer-inner { padding-top: 32px; }
+  .lpi-footer-top { gap: 24px; }
+  .lpi-footer-brand p { margin-top: 10px; font-size: 14px; line-height: 20px; }
+  .lpi-footer-community { margin-top: 14px; height: 40px; padding: 0 18px; font-size: 14px; }
+  .lpi-footer-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas: 'tools resources' 'library resources';
+    gap: 20px 16px;
+  }
+  .lpi-footer-links > div:nth-child(1) { grid-area: tools; }
+  .lpi-footer-links > div:nth-child(2) { grid-area: resources; }
+  .lpi-footer-links > div:nth-child(3) { grid-area: library; }
+  .lpi-footer-links > div { gap: 8px; }
+  .lpi-footer-links h2 { margin-bottom: 4px; }
+  .lpi-footer-links a,
+  .lpi-footer-links span { font-size: 14px; }
+  .lpi-footer-bar { margin-top: 24px; gap: 14px; }
+}
+@media (max-width: 600px) {
+  .lpi-footer-top { gap: 20px; }
+  .lpi-footer-brand p { font-size: 13px; line-height: 19px; }
+  .lpi-footer-links > div { gap: 6px; }
+  .lpi-footer-legal { flex-wrap: nowrap; gap: 0 12px; font-size: 13px; white-space: nowrap; }
+  .lpi-footer-wordmark { padding-top: 4px; }
+}
+@media (max-width: 600px) {
+  .lpi-footer-legal { gap: 0 10px; font-size: 12px; }
+  .lpi-footer-legal a, .lpi-footer-legal button, .lpi-footer-legal span { font-size: 12px; }
+}
+/* Too narrow for the legal line on one row at 12px: it wraps (the footer is then too tall to reveal and
+   simply scrolls, as before). */
+@media (max-width: 374px) {
+  .lpi-footer-legal { flex-wrap: wrap; white-space: normal; row-gap: 6px; }
+}
+
+/* A phone or tablet (the compact top bar): once the footer is mostly in view, the bar slides up out of its way,
+   so the footer's top (logo and copy) isn't left under it; scrolling back up brings it down again. The open
+   menu keeps it. */
+@media (max-width: 1300px) {
+  .sticky-header { transition: translate 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+  html.lpi-at-footer body:not(.mi-nav-mobile-open) .sticky-header { translate: 0 -100%; }
+}
+@media (max-width: 600px) {
+  .lpi-footer-community { display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+}
+
+/* ---- The hamburger menu (<=1300px), after mobbin.com's: every link at once under small grey group labels,
+   in large type; the call to action in the top row, Sign in across the bottom. Motvin's black pills,
+   and Manrope. ---- */
+@media (max-width: 1300px) {
+  .mi-mm-head-actions { display: flex; align-items: center; gap: 10px; }
+  .mi-mm-cta {
+    display: inline-flex;
+    align-items: center;
+    height: 40px;
+    padding: 0 18px;
+    border-radius: 999px;
+    background: #0b0c0e;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .mi-mm-cta:active { scale: 0.97; }
+
+  .mi-mm { display: flex; flex-direction: column; gap: 28px; padding: 16px 0 28px; }
+  .mi-mm-title { margin: 0 0 8px; color: #8a8a8f; font-size: 13px; font-weight: 600; letter-spacing: 0; }
+  .mi-mm-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+  .mi-mm-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 0;
+    color: #0b0c0e;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    text-decoration: none;
+  }
+  .mi-mm-link:active { opacity: 0.6; }
+  .mi-mm-link.is-soon { color: #a1a1a6; }
+  .mi-mm-soon {
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #f1f1f3;
+    color: #8a8a8f;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+
+  /* Sign in rides along the bottom, with the list fading out behind it as it scrolls. */
+  .mi-nav-mobile-panel-actions.mi-mm-foot {
+    position: sticky;
+    bottom: 0;
+    display: block;
+    margin: 0;
+    padding: 28px 0 0;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff 45%);
+  }
+  .mi-mm-signin {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 52px;
+    border-radius: 999px;
+    background: #f2f2f4;
+    color: #0b0c0e;
+    font-size: 16px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .mi-mm-signin:active { background: #e8e8eb; }
+}
+
+/* The compact top bar (phone, tablet) and the open menu's top row: no line beneath, as on mobbin.com. */
+@media (max-width: 1300px) {
+  .navbar.navbar { border-bottom: 0; }
+  .mi-nav-mobile-panel { border-bottom: 0; }
+}
+/* Sign in sits on the panel's very bottom edge, its own white beneath it, so no list shows below it. */
+@media (max-width: 1300px) {
+  .mi-nav-mobile-panel:has(.mi-mm-foot) { padding-bottom: 0; }
+  .mi-nav-mobile-panel-actions.mi-mm-foot { padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+}
+
+/* The compact top bar a little taller (70px -> 80px): 18px above and below its 44px row, and the open menu's
+   top row the same, so the logo, button and close keep their spots when it opens. */
+@media (max-width: 1300px) {
+  .navbar.navbar { height: 80px; padding-top: 18px; padding-bottom: 18px; }
+  .mi-nav-mobile-panel-header { height: 80px; flex-basis: 80px; padding-top: 18px; padding-bottom: 18px; }
+}
+
+/* The top bar's button (and the open menu's) 44px tall in the taller bar, filling its row as before. */
+@media (max-width: 1300px) {
+  .mi-nav-mobile-cta-slot #auth-signup-btn,
+  .mi-nav-mobile-cta-slot #auth-dashboard-btn,
+  .mi-mm-cta { height: 44px; box-sizing: border-box; }
+  .mi-nav-mobile-cta-slot #auth-signup-btn,
+  .mi-nav-mobile-cta-slot #auth-dashboard-btn { display: inline-flex; align-items: center; padding-top: 0; padding-bottom: 0; }
+  .mi-nav-mobile-cta-slot [style*="display: none"] { display: none !important; }
+  .mi-nav-hamburger, .mi-nav-mobile-panel-close { align-self: center; }
+}
+/* Both rows centre their items on the 44px line, so the logo and close sit exactly where the bar's do. */
+@media (max-width: 1300px) {
+  .mi-nav-mobile-panel-header { align-items: center; }
+  .mi-nav-mobile-panel-header .mi-nav-mobile-panel-logo { margin-top: 0; }
+}
+
+/* The library's request form over a landing-style page: above the page's top bar (1000) and its cookie and
+   icons banners (900), so its scrim dims all of them and the cookie banner no longer covers the form's
+   fields and Continue button; the banner is still there once the form closes. */
+body:has(.landing-root) > .ins-portal.ins-search-overlay { z-index: 1100; }

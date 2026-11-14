@@ -3506,6 +3506,17 @@
   transform: none;
 }
 
+/* The library's logos come with their own rounded (squircle) corners, so they
+   aren't clipped to the slot's curve, which differs and cut their corners. A
+   faint edge traced round each logo's own shape lets a white logo show on the
+   white page; on the logo itself, so it fades, shrinks and spins with it. The
+   bundled placeholder (the first picture) is square and keeps the slot's curve. */
+.hero-float-app { overflow: visible; }
+.hero-logo + .hero-logo {
+  border-radius: 0;
+  filter: drop-shadow(0 0 0.6px rgba(15, 15, 20, 0.12));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero-logo,
   .hero-float-app {
@@ -7665,6 +7676,14 @@
   .badge-new span {
     font-size: 12px;
     white-space: nowrap;
+  }
+}
+
+/* A phone gets the short line, "Motvin Icons: 350k+ icons", so the pill stays compact (and a 320px phone
+   couldn't fit the full one at all). */
+@media (max-width: 600px) {
+  .hero-badge-more {
+    display: none;
   }
 }
 
