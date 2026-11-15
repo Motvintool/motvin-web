@@ -8,6 +8,9 @@ tsconfig.tsbuildinfo
 # Secrets stay out of the image: settings come in as build arguments / `docker run -e`.
 .env
 .env.*
+# …except the live settings: NEXT_PUBLIC_* (Firebase, the API address) are built into the site, so the build
+# must see them. Without this the live site says "Firebase is not configured".
+!.env.production
 
 # Not part of the site.
 .git
