@@ -25,6 +25,7 @@ import {
 } from 'firebase/firestore';
 import { ensureGuestSession, ensureReady } from './auth';
 import { firebaseConfig, isFirebaseConfigured } from './config';
+import { track } from '@/lib/analytics';
 import type { Platform } from '@/lib/inspirations/types';
 
 const COLLECTION = 'appRequests';
@@ -102,6 +103,7 @@ export async function submitAppRequest(input: RequestFields & { website?: string
       }
       throw new RequestLimitError();
     });
+    track('request_app', { platform: fields.platform });
   } catch (failure) {
     if (failure instanceof RequestLimitError) throw failure;
     throw new Error(explainFailure(failure, 'send'));

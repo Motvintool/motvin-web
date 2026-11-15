@@ -37,3 +37,12 @@ export function initializeGoogleAnalytics() {
   gtag('config', GA_MEASUREMENT_ID);
 }
 
+/**
+ * Records one thing a visitor did (signing up, saving a screen, …) as a Google
+ * Analytics event. Nothing is sent unless Analytics is loaded, which it only
+ * is for a visitor who allowed it.
+ */
+export function track(event: string, params?: Record<string, string | number>) {
+  if (typeof window === 'undefined' || !window.gtag) return;
+  window.gtag('event', event, params);
+}

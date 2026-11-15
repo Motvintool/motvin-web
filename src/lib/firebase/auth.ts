@@ -7,6 +7,7 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   createUserWithEmailAndPassword,
+  getAdditionalUserInfo,
   getAuth,
   getIdToken as firebaseGetIdToken,
   getRedirectResult,
@@ -27,6 +28,7 @@ import {
   type User,
   type UserCredential,
 } from 'firebase/auth';
+import { track } from '@/lib/analytics';
 import { firebaseConfig, isFirebaseConfigured } from './config';
 
 /**
@@ -403,11 +405,13 @@ export async function loginWithGoogle(
     if (guest) {
       const linked = await linkWithPopup(guest, googleProvider);
       await afterGuestLinked(linked.user);
+      track('sign_up', { method: 'google' });
       return toAuthUser(linked.user);
     }
     const result = await signInWithPopup(instance, googleProvider);
     const user = result?.user ?? instance.currentUser ?? null;
     emit(user);
+    track(getAdditionalUserInfo(result)?.isNewUser ? 'sign_up' : 'login', { method: 'google' });
     return toAuthUser(user);
   } catch (error) {
     // The Google account already has a Motvin account: sign in to that one
@@ -449,6 +453,7 @@ export async function loginWithEmail(
     const result = await signInWithEmailAndPassword(instance, email, password);
     const user = result?.user ?? instance.currentUser ?? null;
     emit(user);
+    track('login', { method: 'email' });
     return toAuthUser(user);
   } catch (error) {
     throw new Error(buildAuthErrorMessage(error));
@@ -470,11 +475,13 @@ export async function registerWithEmail(
     if (guest) {
       const linked = await linkWithCredential(guest, EmailAuthProvider.credential(email, password));
       await afterGuestLinked(linked.user);
+      track('sign_up', { method: 'email' });
       return toAuthUser(linked.user);
     }
     const result = await createUserWithEmailAndPassword(instance, email, password);
     const user = result?.user ?? instance.currentUser ?? null;
     emit(user);
+    track('sign_up', { method: 'email' });
     return toAuthUser(user);
   } catch (error) {
     throw new Error(buildAuthErrorMessage(error));
