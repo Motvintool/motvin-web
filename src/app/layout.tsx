@@ -5,9 +5,11 @@ import { AuthModalProvider } from '@/components/shared/AuthModal';
 import { AuthProvider } from '@/components/shared/AuthProvider';
 import { DevPerformanceGuard } from '@/components/shared/DevPerformanceGuard';
 import { InlineScript } from '@/components/shared/InlineScript';
+import { CookieBanner } from '@/components/shared/CookieBanner';
 import { BANNER_RESERVE_SCRIPT } from '@/components/library/ProductBanner';
 import { THEME_INIT_SCRIPT } from '@/lib/theme';
 import '@/styles/auth-modal.css';
+import '@/styles/cookie-banner.css';
 import '@/styles/global.css';
 import '@/styles/inspirations-cursor.css';
 
@@ -90,6 +92,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
         <AuthProvider>
           <AuthModalProvider>{children}</AuthModalProvider>
         </AuthProvider>
+        <CookieBanner />
       </body>
     </html>
   );

@@ -3698,17 +3698,6 @@ html.lpi-at-footer body {
   .lpi-buddy { padding-left: 24px; padding-right: 24px; }
 }
 
-/* A phone's cookie banner: the 24px title wrapped to two lines beside its close button on a 320px phone
-   and only just cleared it at 390px; at 20px it keeps one line clear of the button. */
-@media (max-width: 600px) {
-  .cookies-title { font-size: 20px; line-height: 28px; }
-}
-
-/* A 320px phone: even at 20px the title ran into the close button; at 18px it clears it. */
-@media (max-width: 359px) {
-  .cookies-title { font-size: 18px; line-height: 26px; }
-}
-
 /* Every width: each comma in the hero's "Screens, Flows, Patterns, UI" sits against its word, as typed
    (the word's 2px gap read as a space before it on tablets and desktops too). */
 .hero-section .interactive-word-wrapper { gap: 0; }
