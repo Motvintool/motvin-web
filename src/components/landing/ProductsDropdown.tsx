@@ -1,61 +1,16 @@
-import { optimizedImage } from '@/lib/inspirations/optimizedImage';
-
-// The feature cards show their pictures about 235px wide; the originals are
-// 1296px, so they are resized on the way.
-const CONVERT_IMAGE = optimizedImage('/ASSET/Images/convert-websites.webp', 240);
-const TOOLS_IMAGE = optimizedImage('/ASSET/Images/explore-creative-tools.webp', 240);
-
 /**
- * Products mega-menu. Markup ported verbatim from motvin-ui/index.html
- * (#products-dropdown); open/close state is owned by Navbar.
+ * Products mega-menu, ported from motvin-ui/index.html (#products-dropdown);
+ * open/close state is owned by Navbar. Its feature cards ("Convert websites",
+ * "Explore creative tools") went with the old site's tools, which are no
+ * longer online, so only the product list is left.
  */
 export function ProductsDropdown({ open }: { open: boolean }) {
   return (
     <div className={`products-dropdown${open ? ' active' : ''}`} id="products-dropdown">
       <div className="products-dropdown-container">
-        {/* Left Column: Big Feature Cards */}
-        <div className="products-dropdown-left">
-          <p className="dropdown-heading">What you can do in Motvin</p>
-          <div className="dropdown-features">
-            {/* Feature 1 */}
-            <a href="/motvin" target="_blank" className="feature-card">
-              <div className="feature-card-header">
-                <h3>Convert websites</h3>
-                <img
-                  src="/ASSET/Icons/arrow-redirect.svg"
-                  alt=""
-                  className="feature-card-arrow"
-                />
-              </div>
-              <div className="feature-card-body">
-                <div className="feature-card-img-wrapper">
-                  <img {...CONVERT_IMAGE} alt="Convert websites graphic" decoding="async" />
-                </div>
-                <p>Capture any website and turn it into editable design layers.</p>
-              </div>
-            </a>
-            {/* Feature 2 */}
-            <a href="/MOTVIN/styles" target="_blank" className="feature-card">
-              <div className="feature-card-header">
-                <h3>Explore creative tools</h3>
-                <img
-                  src="/ASSET/Icons/arrow-redirect.svg"
-                  alt=""
-                  className="feature-card-arrow"
-                />
-              </div>
-              <div className="feature-card-body">
-                <div className="feature-card-img-wrapper">
-                  <img {...TOOLS_IMAGE} alt="Explore creative tools graphic" decoding="async" />
-                </div>
-                <p>Colors, icons, templates, and resources all in one place.</p>
-              </div>
-            </a>
-          </div>
-        </div>
         {/* Right Column: Product Links */}
         <div className="products-dropdown-right">
-          <p className="dropdown-heading">More tools</p>
+          <p className="dropdown-heading">Motvin tools</p>
           {/* Tools that aren't live yet are plain rows with a "Soon" tag, not links. */}
           <div className="dropdown-products-grid">
             {/* Motvin Inspirations */}
