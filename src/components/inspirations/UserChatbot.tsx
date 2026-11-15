@@ -16,6 +16,7 @@ import { groupChats, newChatId, previewOf, readHistory, relativeTime, removeChat
 import { recordMiss } from '@/lib/inspirations/guide-chatbot/guideTelemetry';
 import { QUICK_PAGES, resolveNavigation, type GuideAction, type NavCard, type NavTarget, type ReplyKind } from '@/lib/inspirations/guide-chatbot/navAssistant';
 import type { App } from '@/lib/inspirations/types';
+import { track } from '@/lib/analytics';
 import { countsOn } from '@/lib/inspirations/appCounts';
 import { browsedPlatforms } from '@/lib/inspirations/filters';
 
@@ -590,6 +591,7 @@ export function UserChatbot() {
     }
     setQuestion('');
     setBusy(true);
+    track('buddy_message');
     if (!chatId.current) {
       chatId.current = newChatId();
     }

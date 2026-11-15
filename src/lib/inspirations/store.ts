@@ -1,3 +1,4 @@
+import { track } from '../analytics';
 import type { Collection, CollectionItem, SavedItem, SavedItemType } from './types';
 
 /**
@@ -252,6 +253,7 @@ export const libraryStore = {
       }),
     };
     emit();
+    if (added) track('save_item', { item_type: item.type });
     return added;
   },
 
@@ -271,7 +273,10 @@ export const libraryStore = {
         };
       }),
     };
-    if (added) emit();
+    if (added) {
+      emit();
+      track('save_item', { item_type: item.type });
+    }
     return added;
   },
 
