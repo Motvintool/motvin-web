@@ -1,0 +1,26 @@
+# Built inside the image.
+node_modules
+.next
+out
+coverage
+tsconfig.tsbuildinfo
+
+# Secrets stay out of the image: settings come in as build arguments / `docker run -e`.
+.env
+.env.*
+
+# Not part of the site.
+.git
+.gitignore
+ref
+tools
+Claude test.mp4
+*.log
+.DS_Store
+.vscode
+.idea
+Dockerfile
+.dockerignore
+README.md
+AGENTS.md
+CLAUDE.md

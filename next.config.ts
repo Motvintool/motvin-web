@@ -85,6 +85,8 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  // A self-contained server in .next/standalone (only the files it needs), which the Dockerfile runs.
+  output: 'standalone',
   // Off by default in production already; stated so it stays off — browser
   // source maps would publish the original source to every visitor.
   productionBrowserSourceMaps: false,
