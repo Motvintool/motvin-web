@@ -28,6 +28,7 @@ import { sameItem, useRemoveWithUndo } from '../useRemoveWithUndo';
 import { EmptyState } from '../EmptyState';
 import {
   MENU_ITEM_SELECTOR,
+  MenuLayer,
   onMenuKeyDown,
   SortPill,
   useDismiss,
@@ -141,6 +142,7 @@ export function CheckboxFilterPill({
         )}
       </button>
       {open && (
+        <MenuLayer anchor={ref}>
         <div className={`ins-uielements-menu ${q ? 'is-searching' : ''}`}>
           <div className="ins-uielements-search">
             <SearchIcon size={18} />
@@ -198,6 +200,7 @@ export function CheckboxFilterPill({
             )}
           </div>
         </div>
+        </MenuLayer>
       )}
     </div>
   );
@@ -353,6 +356,7 @@ function FlowTreePill({
         )}
       </button>
       {open && (
+        <MenuLayer anchor={ref}>
         <div className={`ins-uielements-menu ${q ? 'is-searching' : ''}`}>
           <div className="ins-uielements-search">
             <SearchIcon size={18} />
@@ -394,6 +398,7 @@ function FlowTreePill({
             </button>
           </div>
         </div>
+        </MenuLayer>
       )}
     </div>
   );

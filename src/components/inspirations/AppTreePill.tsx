@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { App } from '@/lib/inspirations/types';
-import { MENU_ITEM_SELECTOR, onMenuKeyDown, useDismiss } from './FilterToolbar';
+import { MENU_ITEM_SELECTOR, MenuLayer, onMenuKeyDown, useDismiss } from './FilterToolbar';
 import { AppLogo } from './AppLogo';
 import { CheckIcon, SearchIcon } from './Icons';
 
@@ -55,6 +55,7 @@ export function AppTreePill({ apps, selected, onApply }: { apps: App[]; selected
         {selected.length > 1 && <span className="ins-fpill-more">+{selected.length - 1}</span>}
       </button>
       {open && (
+        <MenuLayer anchor={ref}>
         <div className={`ins-uielements-menu ins-apptree-menu ${q ? 'is-searching' : ''}`}>
           <div className="ins-uielements-search">
             <SearchIcon size={18} />
@@ -121,6 +122,7 @@ export function AppTreePill({ apps, selected, onApply }: { apps: App[]; selected
             </button>
           </div>
         </div>
+        </MenuLayer>
       )}
     </div>
   );

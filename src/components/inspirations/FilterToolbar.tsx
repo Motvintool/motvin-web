@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { browsedPlatforms, isWebsPlatforms, type ScreenFilters } from '@/lib/inspirations/filters';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
@@ -39,7 +39,8 @@ export function useDismiss(open: boolean, close: () => void, ref: React.RefObjec
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) close();
+      // A phone's open menu sits in a MenuLayer, outside `ref`: a tap inside it isn't a tap outside.
+      if (!ref.current?.contains(e.target as Node) && !(e.target as Element).closest?.('[data-menu-layer]')) close();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
@@ -51,6 +52,69 @@ export function useDismiss(open: boolean, close: () => void, ref: React.RefObjec
       document.removeEventListener('keydown', onKey);
     };
   }, [open, close, ref]);
+}
+
+const PHONE_QUERY = '(max-width: 759px)';
+const subscribePhone = (onChange: () => void) => {
+  const media = window.matchMedia(PHONE_QUERY);
+  media.addEventListener('change', onChange);
+  return () => media.removeEventListener('change', onChange);
+};
+
+/**
+ * Where an open menu goes. On a desktop: right under its button, as it always was. On a phone the
+ * toolbar is a sideways scroll strip, and iPhone browsers (Safari and Chrome alike) clip a menu inside
+ * it out of sight — so there the menu is lifted out to the page (a portal, inside the library's root
+ * for its fonts and colours) and placed under its button by script: lined up with the button's left
+ * edge, kept 12px inside the screen, and above the button when there's more room there. It follows
+ * the button while the page or the strip scrolls.
+ */
+export function MenuLayer({ anchor, children }: { anchor: React.RefObject<HTMLElement | null>; children: ReactNode }) {
+  const phone = useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE_QUERY).matches, () => false);
+  const layerRef = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<React.CSSProperties>({ visibility: 'hidden' });
+
+  useLayoutEffect(() => {
+    if (!phone) return;
+    let frame = 0;
+    const measure = () => {
+      const button = anchor.current?.getBoundingClientRect();
+      const layer = layerRef.current;
+      if (!button || !layer) return;
+      const gap = 8;
+      const edge = 12;
+      const width = layer.offsetWidth;
+      const left = Math.max(edge, Math.min(button.left, window.innerWidth - width - edge));
+      const below = window.innerHeight - button.bottom - gap - edge;
+      const above = button.top - gap - edge;
+      const up = layer.scrollHeight > below && above > below;
+      setPlace(
+        up
+          ? { left, bottom: window.innerHeight - button.top + gap, maxHeight: Math.min(above, 420) }
+          : { left, top: button.bottom + gap, maxHeight: Math.min(below, 420) },
+      );
+    };
+    const onMove = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    };
+    measure();
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+    };
+  }, [phone, anchor]);
+
+  if (!phone) return children;
+  return createPortal(
+    <div className="ins-menu-layer" data-menu-layer ref={layerRef} style={place}>
+      {children}
+    </div>,
+    document.querySelector('.ins-root') ?? document.body,
+  );
 }
 
 /**
@@ -67,7 +131,7 @@ export function useAutoFocusMenu(open: boolean, ref: React.RefObject<HTMLDivElem
   // scrolls would nudge the page to clear the window's scroll padding under the docked bar.
   useEffect(() => {
     if (!open || !ref.current) return;
-    const container = ref.current;
+    const container = document.querySelector<HTMLElement>('[data-menu-layer]') ?? ref.current;
     const items = container.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR);
     const selected = container.querySelector<HTMLElement>('[aria-selected="true"], [aria-current="page"]');
     (selected ?? items[0])?.focus({ preventScroll: true });
@@ -180,6 +244,7 @@ export function FilterPill({
         )}
       </button>
       {open && (
+        <MenuLayer anchor={ref}>
         <div
           className="ins-popover ins-fmenu"
           role="listbox"
@@ -207,6 +272,7 @@ export function FilterPill({
             );
           })}
         </div>
+        </MenuLayer>
       )}
     </div>
   );
@@ -266,6 +332,7 @@ export function NavPill({ counts, activeCount = null }: { counts: LibraryCounts 
         <span className="ins-fpill-chev" aria-hidden />
       </button>
       {open && (
+        <MenuLayer anchor={ref}>
         <div className="ins-popover ins-fmenu" role="menu" aria-label="Content type" onKeyDown={onMenuKeyDown}>
           {items.map((item) => {
             const on = item.key === active?.key;
@@ -308,6 +375,7 @@ export function NavPill({ counts, activeCount = null }: { counts: LibraryCounts 
             );
           })}
         </div>
+        </MenuLayer>
       )}
     </div>
   );
@@ -347,6 +415,7 @@ export function SortPill<S extends string>({
         {asPill && <span className="ins-fpill-chev" aria-hidden />}
       </button>
       {open && (
+        <MenuLayer anchor={ref}>
         <div
           className={`ins-popover ${asPill ? '' : 'ins-popover--right'} ins-fmenu`}
           role="listbox"
@@ -370,6 +439,7 @@ export function SortPill<S extends string>({
             </button>
           ))}
         </div>
+        </MenuLayer>
       )}
     </div>
   );

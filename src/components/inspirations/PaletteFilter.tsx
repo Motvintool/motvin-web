@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { PALETTE_HUES, hueOf, type PaletteHue } from '@/lib/inspirations/hues';
+import { MenuLayer } from './FilterToolbar';
 
 /** The `?color=` param: the picked colours, comma-separated (red,blue). */
 export const PALETTE_PARAM = 'color';
@@ -34,7 +35,7 @@ export function PaletteFilter({
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(e.target as Node) && !(e.target as Element).closest?.('[data-menu-layer]')) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
@@ -84,6 +85,7 @@ export function PaletteFilter({
         <span className="ins-fpill-chev" aria-hidden />
       </button>
       {open && (
+        <MenuLayer anchor={rootRef}>
         <div className={`ins-colorf-pop ${align === 'start' ? 'is-start' : ''}`}>
           <section className="ins-colorf-card" role="group" aria-label="Filter apps by colour">
             {/* The field: the colour's square and its hex — type any hex to find the apps nearest that colour. */}
@@ -151,6 +153,7 @@ export function PaletteFilter({
             </div>
           </section>
         </div>
+        </MenuLayer>
       )}
     </div>
   );
