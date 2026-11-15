@@ -3881,3 +3881,17 @@ html.lpi-at-footer body {
    icons banners (900), so its scrim dims all of them and the cookie banner no longer covers the form's
    fields and Continue button; the banner is still there once the form closes. */
 body:has(.landing-root) > .ins-portal.ins-search-overlay { z-index: 1100; }
+
+/* A feature card for a tool that isn't online yet: no hover, and a "Soon" tag where its arrow was. */
+.landing-root .feature-card.is-soon { cursor: not-allowed; }
+.landing-root .feature-card.is-soon:hover .feature-card-img-wrapper img { scale: none; }
+.landing-root .feature-card-header .product-soon {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #ececef;
+  color: #6b6b70;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
