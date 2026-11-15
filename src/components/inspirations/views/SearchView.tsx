@@ -11,7 +11,7 @@ import { isDesktopPlatform, type App, type Industry, type Screen, type ScreenSta
 import { AppsGrid } from '../AppsGrid';
 import { AppTreePill } from '../AppTreePill';
 import { EmptyState } from '../EmptyState';
-import { onMenuKeyDown, onTriggerKeyDown, ToolbarRow, useAutoFocusMenu, useDismiss } from '../FilterToolbar';
+import { MenuLayer, onMenuKeyDown, onTriggerKeyDown, ToolbarRow, useAutoFocusMenu, useDismiss } from '../FilterToolbar';
 import { APPLIED_PILLS_MAX, AppliedFilterPills, FiltersPill, type FilterSection } from '../FiltersPanel';
 import { FlowList } from '../FlowList';
 import { ScreenshotTextSearch } from '../ScreenshotTextSearch';
@@ -496,6 +496,7 @@ function KindPill({
         <span className="ins-fpill-chev" aria-hidden />
       </button>
       {open && (
+        <MenuLayer anchor={ref}>
         <div className="ins-popover ins-fmenu" role="menu" aria-label="Result type" onKeyDown={onMenuKeyDown}>
           {counts.map((item) => (
             <button
@@ -514,6 +515,7 @@ function KindPill({
             </button>
           ))}
         </div>
+        </MenuLayer>
       )}
     </div>
   );
