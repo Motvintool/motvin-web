@@ -7373,7 +7373,7 @@ select.ins-input {
    panel, instead of on top of those buttons. The preview is 20px from the
    viewport's bottom and its button row 84px above its own bottom edge; the
    main panel is the viewport less the 320px details panel, its 10px gap and
-   the 20px margins, so its middle is 165px left of the window's. A flow's
+   the 20px margins, so its middle is 170px left of the window's (measured). A flow's
    player has no details panel: there they stay
    centred on the window. Below 901px the panels stack and the default spot
    is kept. */
@@ -7381,8 +7381,14 @@ select.ins-input {
   body:has(.ins-screen-preview-modal) .ins-toast-host {
     bottom: 116px;
   }
-  body:has(.ins-screen-preview-modal .ins-screen-preview-details) .ins-toast-host {
-    left: calc(50% - 165px);
+  /* Only while the details panel shows: hidden (the "i" toggle) or zoomed out to the grid, the screen is
+     centred on the window, so they are too. */
+  body:has(.ins-screen-preview-modal:not(.is-details-hidden):not(.is-zoomed-out) > .ins-screen-preview-details) .ins-toast-host {
+    left: calc(50% - 170px);
+  }
+  /* With the enlarged screen open over it, that screen is centred on the window, so they are too. */
+  body:has(.ins-screen-preview-modal:not(.is-details-hidden):not(.is-zoomed-out) > .ins-screen-preview-details):has(.ins-lightbox) .ins-toast-host {
+    left: 50%;
   }
 }
 

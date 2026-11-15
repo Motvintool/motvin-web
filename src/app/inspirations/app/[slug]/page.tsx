@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/config/share';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { AppDetailView } from '@/components/inspirations/views/AppDetailView';
@@ -16,12 +17,12 @@ export async function generateMetadata({ params }: PageProps<'/inspirations/app/
   const data = await inspirationsApi.getApp(slug).catch(() => null);
   if (!data) return {};
   const { app } = data;
-  return {
-    title: `${app.name} — ${INDUSTRY_LABEL[app.industry] ?? app.industry} screens & flows — Motvin Inspirations`,
-    description: app.tagline
+  return pageMetadata(
+    `${app.name} — ${INDUSTRY_LABEL[app.industry] ?? app.industry} screens & flows — Motvin Inspirations`,
+    app.tagline
       ? `${app.screenCount} screens and ${app.flowCount} flows from ${app.name}. ${app.tagline}`
       : `${app.screenCount} screens and ${app.flowCount} flows from ${app.name}.`,
-  };
+  );
 }
 
 export default async function AppDetailPage({ params }: PageProps<'/inspirations/app/[slug]'>) {

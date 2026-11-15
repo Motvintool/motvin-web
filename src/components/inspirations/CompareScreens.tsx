@@ -355,6 +355,12 @@ function CompareModal({
       className={`ins-search-overlay ins-sheet-overlay ${stacked ? 'ins-compare-overlay--stacked' : ''} ${leaving ? 'is-leaving' : ''}`}
       role="presentation"
       onClick={close}
+      // Right-click anywhere else in the view: the menu for the left screen, never the browser's "Save image as…".
+      onContextMenu={(e) => {
+        const s = ownScreens[left];
+        if (s) onShotMenu('left')(s, e);
+        else e.preventDefault();
+      }}
     >
       <div
         ref={sheetRef}
@@ -898,7 +904,10 @@ function ThumbStrip({
             onClick={() => onPick(i)}
             // No menu on a thumbnail (the large screen has it), nor the
             // browser's own "Save image as…".
-            onContextMenu={(e) => e.preventDefault()}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
           >
             <Screenshot screen={s} />
           </button>

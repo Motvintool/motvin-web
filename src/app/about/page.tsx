@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/config/share';
 import type { CSSProperties } from 'react';
 import { AboutAnimations } from '@/components/landing/AboutAnimations';
 import { AboutFeatured } from '@/components/landing/AboutFeatured';
@@ -15,11 +16,10 @@ import '@/styles/landing.css';
 import '@/styles/landing-inspirations.css';
 import '@/styles/about.css';
 
-export const metadata: Metadata = {
-  title: 'About us — Motvin',
-  description:
-    'Motvin is a set of tools for designers: real app screens to learn from, a website-to-design converter, and libraries of icons, logos and illustrations.',
-};
+export const metadata: Metadata = pageMetadata(
+  'About us — Motvin',
+  'Motvin is a set of tools for designers: real app screens to learn from, a website-to-design converter, and libraries of icons, logos and illustrations.',
+);
 
 /**
  * Motvin's other tools, with the same names and lines as the Products menu,

@@ -698,7 +698,9 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
 
   return createPortal(
     <>
-      <div className="ins-search-overlay ins-sheet-overlay" role="presentation" onClick={close}>
+      {/* Right-click anywhere in the preview, not only on a screenshot: the screenshot menu for the screen on
+          show, never the browser's "Save image as…" (a screenshot's own right-click still picks that screen). */}
+      <div className="ins-search-overlay ins-sheet-overlay" role="presentation" onClick={close} onContextMenu={onShotContextMenu(currentScreen)}>
         <div
           ref={sheetRef}
           // Zoomed out, the grid takes the whole width: the Details panel is about one screen, not the grid.
@@ -1092,7 +1094,14 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
           </div>
         </div>
       </div>
-      {zoomScreen && <ScreenLightbox screen={zoomScreen} onClose={() => setZoomScreen(null)} />}
+      {zoomScreen && (
+        <ScreenLightbox
+          screen={zoomScreen}
+          app={app}
+          link={() => `${window.location.origin}${pathname}?${SCREEN_PARAM}=${zoomScreen.id}`}
+          onClose={() => setZoomScreen(null)}
+        />
+      )}
       {shotMenu.menu}
     </>,
     document.body,

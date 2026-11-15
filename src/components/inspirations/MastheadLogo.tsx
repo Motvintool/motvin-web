@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
+import { logoPng } from '@/lib/inspirations/logoPng';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type App, type Industry, type Platform } from '@/lib/inspirations/types';
@@ -18,16 +19,6 @@ const ICON_COPY_PNG = '/ASSET/Icons/Motvin/copy-png.svg';
 const ICON_DOWNLOAD_PNG = '/ASSET/Icons/Motvin/download-png.svg';
 /** How many logos the dock shows; the rest are in the "All logos" grid. */
 const DOCK_SIZE = 8;
-
-/** The logo as a PNG at its stored size: the files are WebP, which most design tools won't paste. */
-async function logoPng(src: string): Promise<Blob> {
-  const bitmap = await createImageBitmap(await (await fetch(src)).blob());
-  const canvas = document.createElement('canvas');
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
-  canvas.getContext('2d')?.drawImage(bitmap, 0, 0);
-  return new Promise((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Encode failed'))), 'image/png'));
-}
 
 /**
  * The app page's logo. Clicking it opens the logo large in the screen

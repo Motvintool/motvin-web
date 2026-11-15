@@ -12,8 +12,8 @@ const ICON_COPY_PNG = '/ASSET/Icons/Motvin/copy-png.svg';
 const ICON_DOWNLOAD_PNG = '/ASSET/Icons/Motvin/download-png.svg';
 const ICON_COPY_LINK = '/ASSET/Icons/Motvin/copy-link.svg';
 
-/** Where a screenshot has the menu below (a card, a flow strip's shot, a preview or comparison). */
-const SCREENSHOT_SCOPE = '.ins-card-inset, .ins-flows-row-shot, .ins-screen-preview-modal, .ins-compare-modal';
+/** Where a screenshot has the menu below (a card, a flow strip's shot, a preview or comparison, the enlarged view). */
+const SCREENSHOT_SCOPE = '.ins-card-inset, .ins-flows-row-shot, .ins-screen-preview-modal, .ins-compare-modal, .ins-lightbox';
 /** How long a finger rests on a screenshot before its menu opens, and how far it may wander. */
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_SLOP = 10;

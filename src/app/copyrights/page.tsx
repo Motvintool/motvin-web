@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/config/share';
 import { CONTACT_EMAIL, LegalPage } from '@/components/legal/LegalPage';
 
-export const metadata: Metadata = {
-  title: 'Copyrights — Motvin',
-  description: 'Who owns what on Motvin, and how to ask for something to be changed or removed.',
-};
+export const metadata: Metadata = pageMetadata(
+  'Copyrights — Motvin',
+  'Who owns what on Motvin, and how to ask for something to be changed or removed.',
+);
 
 export default function CopyrightsPage() {
   return (

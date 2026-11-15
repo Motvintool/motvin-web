@@ -5,7 +5,11 @@ export const addWatermarkToBlob = async (blob: Blob, appName?: string | null, ap
     img.onload = async () => {
       try {
         const canvas = document.createElement('canvas');
-        const S = img.width / 245.91;
+        // One unit of the bar's layout, from the screenshot's width as if it were a phone screen: a wide web
+        // screenshot measures by its height, so its bar is the same small strip as a phone's (about 4.5% of
+        // the height), not one that grows with the width.
+        const PHONE_RATIO = 1170 / 2532;
+        const S = (Math.min(img.width, img.height * PHONE_RATIO) / 245.91) * 0.85;
         const barHeight = 28 * S;
         
         canvas.width = img.width;

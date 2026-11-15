@@ -658,7 +658,18 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
 
   return createPortal(
     <>
-      <div className="ins-search-overlay ins-sheet-overlay" role="presentation" onClick={close}>
+      {/* Right-click anywhere in the player, not only on a step: the screenshot menu for the step on show, never
+          the browser's "Save image as…" (a step's own right-click still picks that step). */}
+      <div
+        className="ins-search-overlay ins-sheet-overlay"
+        role="presentation"
+        onClick={close}
+        onContextMenu={(e) => {
+          const step = screens[activeIndex];
+          if (step) onShotContextMenu(step)(e);
+          else e.preventDefault();
+        }}
+      >
         <div
           ref={sheetRef}
           className={`ins-screen-preview-modal ins-sheet--tall ${sheetClass} ${expanded ? 'is-full' : ''}`}
@@ -866,7 +877,14 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
           </div>
         </div>
       </div>
-      {zoomScreen && <ScreenLightbox screen={zoomScreen} onClose={() => setZoomScreen(null)} />}
+      {zoomScreen && (
+        <ScreenLightbox
+          screen={zoomScreen}
+          app={app}
+          link={() => `${window.location.origin}${pathname}?${SCREEN_PARAM}=${zoomScreen.id}`}
+          onClose={() => setZoomScreen(null)}
+        />
+      )}
       {shotMenu.menu}
       {presenting && active && (
         <div

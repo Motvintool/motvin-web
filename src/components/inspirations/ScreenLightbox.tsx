@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { isDesktopPlatform, type Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type App, type Screen } from '@/lib/inspirations/types';
 import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { CloseIcon } from './Icons';
 import { Screenshot } from './Screenshot';
+import { useScreenContextMenu } from './useScreenContextMenu';
 import { screenTitle } from '@/lib/inspirations/screenNaming';
 
 /**
@@ -31,8 +32,22 @@ function subscribeNever() {
   return () => {};
 }
 
-export function ScreenLightbox({ screen, onClose }: { screen: Screen; onClose: () => void }) {
+export function ScreenLightbox({
+  screen,
+  app,
+  link,
+  onClose,
+}: {
+  screen: Screen;
+  app: App | null | undefined;
+  /** The screen's own link, for the menu's Copy link. */
+  link: () => string;
+  onClose: () => void;
+}) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  // Right-click in the enlarged view: the same menu as everywhere else (Copy PNG, Download PNG with the
+  // watermark, Copy link), in place of the browser's own "Save image as…", which would hand over the bare image.
+  const shotMenu = useScreenContextMenu(screen, app, link);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const [zoomed, setZoomed] = useState(false);
 
@@ -64,7 +79,8 @@ export function ScreenLightbox({ screen, onClose }: { screen: Screen; onClose: (
   if (!mounted) return null;
 
   return createPortal(
-    <div className="ins-portal ins-lightbox" role="presentation">
+    // Right-click anywhere in it (the screenshot or the dark space around): the menu below, never the browser's.
+    <div className="ins-portal ins-lightbox" role="presentation" onContextMenu={shotMenu.onContextMenu}>
       <div className="ins-lightbox-backdrop" onClick={onClose} />
       <div className="ins-lightbox-dialog" role="dialog" aria-modal="true" aria-label={`${screenTitle(screen)} — enlarged`}>
         <button ref={closeRef} type="button" className="ins-lightbox-close" aria-label="Close" onClick={onClose}>
@@ -79,6 +95,7 @@ export function ScreenLightbox({ screen, onClose }: { screen: Screen; onClose: (
           <Screenshot screen={screen} priority />
         </div>
       </div>
+      {shotMenu.menu}
     </div>,
     document.body,
   );

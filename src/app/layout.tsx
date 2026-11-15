@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMetadata, SITE_URL } from '@/lib/config/share';
 import { Inter, Outfit, Pacifico, Manrope, Sora, Plus_Jakarta_Sans } from 'next/font/google';
 import { AuthModalProvider } from '@/components/shared/AuthModal';
 import { AuthProvider } from '@/components/shared/AuthProvider';
@@ -58,7 +59,12 @@ const hero = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'Motvin: The creative toolkit for websites, colors, icons, AI, and more.',
+  // Turns the link preview's picture path into a full link (see lib/config/share).
+  metadataBase: new URL(SITE_URL),
+  ...pageMetadata(
+    'Motvin: The creative toolkit for websites, colors, icons, AI, and more.',
+    'Real UI screens, flows and patterns from top apps, plus tools for colors, type, icons and more.',
+  ),
   icons: {
     icon: { url: '/ASSET/Images/motvin%20logo%20(full%20color).svg', type: 'image/svg+xml' },
     // The logo on white, for an iPhone's home screen (iOS ignores the SVG).

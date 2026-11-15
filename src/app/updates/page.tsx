@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/config/share';
 import { Suspense } from 'react';
 import { ButtonEffects } from '@/components/landing/ButtonEffects';
 import { ConsentBanners } from '@/components/landing/ConsentBanners';
@@ -10,10 +11,10 @@ import '@/styles/landing.css';
 import '@/styles/landing-inspirations.css';
 import '@/styles/updates-feed.css';
 
-export const metadata: Metadata = {
-  title: 'Updates — Motvin',
-  description: 'New features, improvements and fixes in Motvin, release by release.',
-};
+export const metadata: Metadata = pageMetadata(
+  'Updates — Motvin',
+  'New features, improvements and fixes in Motvin, release by release.',
+);
 
 /**
  * Updates: Motvin's release notes, newest first, in the same chrome as the

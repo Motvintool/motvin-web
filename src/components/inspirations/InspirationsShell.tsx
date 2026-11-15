@@ -6,6 +6,7 @@ import { GuestRequestsNotice } from './GuestRequestsNotice';
 import { ConfirmHost } from './ConfirmDialog';
 import { GuestDownloadNotice } from './GuestDownloadNotice';
 import { GuestImageGuard } from './GuestImageGuard';
+import { LogoContextMenu } from './LogoContextMenu';
 import { Header } from './Header';
 import { ScreenPreviewOverlay } from './ScreenPreviewModal';
 import { ToastProvider } from './Toast';
@@ -68,6 +69,8 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
         {/* For a guest, also stops the browser's own save / copy / drag of a
             screenshot or logo (see GuestImageGuard). Renders nothing. */}
         <GuestImageGuard />
+        {/* Right-click on an app logo: our Copy / Download PNG and Copy link menu (see LogoContextMenu). */}
+        <LogoContextMenu />
         <main className={`ins-main ${wide ? 'ins-main--wide' : ''}`}>{children}</main>
         {/* The library changed while this page was open: offers a refresh. Renders nothing until then. */}
         <LibraryUpdateNotice />

@@ -72,6 +72,10 @@ export function Screenshot({
   sizes?: string;
 }) {
   const [failed, setFailed] = useState(false);
+  // A load that fails is tried again before the card gives up: first the original file straight from the
+  // library (skipping the resizer, which can drop a request while busy), then once more a moment later.
+  // A brief network or server hiccup then heals by itself instead of leaving "Image unavailable" for good.
+  const [attempt, setAttempt] = useState(0);
   // The card already reserves its geometry. Track decode only for callers that
   // need the loaded state; keeping the image visible avoids a blank handoff
   // when a page skeleton gives way to its real preview cards.
@@ -85,7 +89,7 @@ export function Screenshot({
     if (near || !el) return;
     return whenNear(el, () => setNear(true));
   }, [near]);
-  const resized = src && sizes
+  const resized = src && sizes && attempt === 0
     ? getImageProps({ src, alt: '', width: screen.width || 1200, height: screen.height || 900, sizes, quality: 75 }).props
     : null;
   const ratio = screen.width && screen.height ? `${screen.width} / ${screen.height}` : '4 / 3';
@@ -98,9 +102,12 @@ export function Screenshot({
     );
   }
 
+  const direct = src && attempt === 2 ? `${src}${src.includes('?') ? '&' : '?'}retry=1` : src;
+
   return (
     <img
-      src={near ? (resized?.src ?? src) : undefined}
+      key={attempt}
+      src={near ? (resized?.src ?? direct ?? undefined) : undefined}
       srcSet={near ? resized?.srcSet : undefined}
       sizes={near && resized ? sizes : undefined}
       alt={`${screenTitle(screen)} screen`}
@@ -121,7 +128,11 @@ export function Screenshot({
         imgRef.current = node;
         if (node?.complete && node.currentSrc) setLoaded(true);
       }}
-      onError={() => setFailed(true)}
+      onError={() => {
+        if (attempt === 0) setAttempt(1);
+        else if (attempt === 1) setTimeout(() => setAttempt(2), 1500);
+        else setFailed(true);
+      }}
     />
   );
 }
