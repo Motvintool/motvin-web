@@ -12479,6 +12479,11 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-guide-nudge.is-beside-
   transition: background 140ms var(--ins-ease), border-color 140ms var(--ins-ease);
 }
 
+/* A phone's header has no room for "New Chat" on one line: it reads "New" (the icon says the rest). */
+@media (max-width: 480px) {
+  .ins-guide-newchat-word { display: none; }
+}
+
 .ins-guide-newchat img {
   display: block;
   flex: none;

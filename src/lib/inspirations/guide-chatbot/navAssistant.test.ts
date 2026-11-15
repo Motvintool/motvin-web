@@ -102,7 +102,7 @@ describe('an app plus a section or a question', () => {
   });
 
   it('searches an app’s screens of one type', async () => {
-    expect((await ask('show me swiggy splash screen')).go?.href).toBe('/inspirations/search?q=Swiggy%20splash');
+    expect((await ask('show me swiggy splash screen')).go?.href).toBe('/inspirations/search?q=Swiggy%20splash&platform=ios');
   });
 
   it('compares two apps without navigating', async () => {
@@ -233,7 +233,7 @@ describe('forgiving matching', () => {
   });
 
   it('reads a misspelt screen type', async () => {
-    expect((await ask('swiggy onbording screens')).go?.href).toBe('/inspirations/search?q=Swiggy%20onboarding');
+    expect((await ask('swiggy onbording screens')).go?.href).toBe('/inspirations/search?q=Swiggy%20onboarding&platform=ios');
   });
 
   it('leaves an ordinary sentence alone', async () => {
@@ -259,7 +259,7 @@ describe('everyday wording', () => {
   });
 
   it('works inside a question about one app', async () => {
-    expect((await ask('register screens for swiggy')).go?.href).toBe('/inspirations/search?q=Swiggy%20sign%20up');
+    expect((await ask('register screens for swiggy')).go?.href).toBe('/inspirations/search?q=Swiggy%20sign%20up&platform=ios');
   });
 });
 
@@ -285,7 +285,7 @@ describe('apps by industry', () => {
 
   it('says so when there are none', async () => {
     const reply = await ask('healthcare apps');
-    expect(reply.text).toBe('There are no Healthcare apps in the library yet.');
+    expect(reply.text).toBe('There are no Healthcare apps in the library yet. If you’d like one added, choose Request apps in the profile menu.');
     expect(reply.go).toBeUndefined();
   });
 });
@@ -408,7 +408,7 @@ describe('where an app runs', () => {
 
   it('says so when no app runs there', async () => {
     const reply = await ask('ios healthcare apps');
-    expect(reply.text).toBe('There are no Healthcare iOS apps in the library yet.');
+    expect(reply.text).toBe('There are no Healthcare iOS apps in the library yet. If you’d like one added, choose Request apps in the profile menu.');
     expect(reply.go).toBeUndefined();
   });
 });
@@ -636,7 +636,7 @@ describe('the third conversation from the screenshot: follow-ups with no pronoun
   it('a screen-type request follows the app too, with a way to see all of them', async () => {
     const swiggy = (await ask('open swiggy')).app ?? null;
     const reply = await ask('login screens', { app: swiggy });
-    expect(reply.go?.href).toBe('/inspirations/search?q=Swiggy%20login');
+    expect(reply.go?.href).toBe('/inspirations/search?q=Swiggy%20login&platform=ios');
     expect(reply.targets[0]).toMatchObject({ label: 'All login screens', href: '/inspirations/screens?type=login' });
   });
 
@@ -687,7 +687,7 @@ describe('screens by state and style', () => {
 
   it('scopes to one app, as a page or a yes/no', async () => {
     const show = await ask('swiggy empty states');
-    expect(show.go?.href).toBe('/inspirations/search?q=Swiggy%20empty');
+    expect(show.go?.href).toBe('/inspirations/search?q=Swiggy%20empty&platform=ios');
     expect(show.text).toBe('Swiggy has 7 empty screens. Showing them.');
     const yes = await ask('does swiggy have error states?');
     expect(yes.text).toBe('Yes — Swiggy has 7 error screens.');
@@ -1103,9 +1103,9 @@ describe('what a sentence is about', () => {
   it('a word it cannot place becomes a search inside the app, not a dropped word', async () => {
     // "Paywall" is read as pricing screens.
     const paywall = await ask('zomato paywall');
-    expect(paywall.go?.href).toBe('/inspirations/search?q=Zomato%20pricing');
+    expect(paywall.go?.href).toBe('/inspirations/search?q=Zomato%20pricing&platform=ios');
     expect(paywall.text).toBe('Showing Zomato’s pricing screens.');
-    expect((await ask('swiggy restaurants')).go?.href).toBe('/inspirations/search?q=Swiggy%20restaurants');
+    expect((await ask('swiggy restaurants')).go?.href).toBe('/inspirations/search?q=Swiggy%20restaurants&platform=ios');
   });
 
   it('but filler never becomes a search', async () => {
@@ -1200,7 +1200,7 @@ describe('found against the real library', () => {
 describe('a platform in front of "screens" widens to the whole library', () => {
   it('even while one app is being discussed', async () => {
     expect((await ask('ios login screens', ctx(SWIGGY))).go?.href).toBe('/inspirations/screens?type=login&platform=ios');
-    expect((await ask('login screens', ctx(SWIGGY))).go?.href).toBe('/inspirations/search?q=Swiggy%20login');
+    expect((await ask('login screens', ctx(SWIGGY))).go?.href).toBe('/inspirations/search?q=Swiggy%20login&platform=ios');
     expect((await ask('is it on ios', ctx(SWIGGY))).text).toBe('Yes — Swiggy is on iOS and Web Apps.');
   });
 });

@@ -100,7 +100,9 @@ export function findPlatform(text: string): Platform | null {
 }
 
 /** "sorry, i mean web apps" → "web apps". The lead-ins people add when they correct themselves. */
-export function stripChatter(text: string): string {
+export function stripChatter(raw: string): string {
+  // A pasted web address is the site's name: "https://www.airbnb.com/rooms/1" reads as "airbnb".
+  const text = raw.replace(/\b(?:https?:\/\/)?(?:www\.)?([a-z0-9][a-z0-9-]*)\.(?:com|co|in|io|ai|app|org|net|me|tv|so|dev)\b\S*/gi, '$1');
   const stripped = text.replace(/^(?:(?:sorry|oops|my bad|nope|no|actually|well|um+|uh+|hmm+|okay|ok|wait|i mean|i meant|what i mean(?:t)? is|i was saying)\b[\s,.:;!-]*)+/i, '').trim();
   return stripped || text;
 }

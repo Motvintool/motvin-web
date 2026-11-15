@@ -21,7 +21,7 @@ vi.mock('../api', () => {
         offset: 0,
         nextOffset: null,
       })),
-      getMeta: vi.fn(async () => ({ taxonomy: { screenTypes: ['login'], industries: [], flowCategories: ['onboarding'] } })),
+      getMeta: vi.fn(async () => ({ taxonomy: { screenTypes: ['login', 'settings'], industries: [], flowCategories: ['onboarding'] } })),
       listPatterns: vi.fn(async () => []),
       listElements: vi.fn(async (platforms?: string[]) => [{ kind: 'toast', count: platforms?.length ? 4 : 400 }]),
       mediaUrl: vi.fn(() => null),
@@ -71,7 +71,7 @@ describe('Motvin Buddy keeps to the section', () => {
 describe('an app from the other section', () => {
   it('opens MakeMyTrip from Webs and says it is on iOS only', async () => {
     const reply = await resolveNavigation('open makemytrip', onWebs);
-    expect(reply.text).toBe('MakeMyTrip is only on iOS. Opening it there.');
+    expect(reply.text).toBe('MakeMyTrip is only in Apps (iOS). Opening it there.');
     expect(reply.go?.href).toBe('/inspirations/app/makemytrip');
   });
 });
@@ -88,8 +88,29 @@ describe('new questions', () => {
     expect((await resolveNavigation('how do collections work', onIos)).action).toBeUndefined();
   });
 
+  it('reads plain "settings" as settings screens, of the app being talked about', async () => {
+    const claude = (await import('../api')).inspirationsApi.listApps;
+    const app = (await claude()).find((a: { id: string }) => a.id === 'claude');
+    const aboutClaudeOnWebs = { ...onWebs, app };
+    const reply = await resolveNavigation('show me setting page', aboutClaudeOnWebs as never);
+    expect(reply.text).toBe('Showing Claude’s settings screens.');
+    expect(reply.go?.href).toBe('/inspirations/search?q=Claude%20settings&platform=web');
+    const plain = await resolveNavigation('show me settings', aboutClaudeOnWebs as never);
+    expect(plain.text).toBe('Showing Claude’s settings screens.');
+    expect((await resolveNavigation('settings', onIos)).go?.href).not.toBe('/inspirations/settings');
+    // An iOS-only app asked about from Webs stays on iOS.
+    const mmt = (await claude()).find((a: { id: string }) => a.id === 'makemytrip');
+    expect((await resolveNavigation('show me setting page', { ...onWebs, app: mmt } as never)).go?.href).toBe('/inspirations/search?q=MakeMyTrip%20settings&platform=ios');
+  });
+
+  it('counts the library’s patterns even while an app is being talked about', async () => {
+    const app = (await (await import('../api')).inspirationsApi.listApps()).find((a: { id: string }) => a.id === 'claude');
+    expect((await resolveNavigation('how many patterns', { ...onIos, app } as never)).text).toMatch(/^The library has \d+ patterns?\.$/);
+  });
+
   it('opens Settings and Search', async () => {
-    expect((await resolveNavigation('open settings', onIos)).go?.href).toBe('/inspirations/settings');
+    expect((await resolveNavigation('open my settings', onIos)).go?.href).toBe('/inspirations/settings');
+    expect((await resolveNavigation('account settings', onIos)).go?.href).toBe('/inspirations/settings');
     expect((await resolveNavigation('search page', onIos)).go?.href).toBe('/inspirations/search');
   });
 

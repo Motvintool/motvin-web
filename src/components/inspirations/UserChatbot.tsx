@@ -912,7 +912,7 @@ export function UserChatbot() {
             {(inHistory || !welcome) && (
               <button type="button" className="ins-guide-newchat" onClick={clear} disabled={busy} title="Start a new conversation">
                 <img src="/ASSET/Icons/Motvin/new-chat.svg" alt="" width={15} height={15} />
-                New Chat
+                New<span className="ins-guide-newchat-word"> Chat</span>
               </button>
             )}
             {!inHistory && (
