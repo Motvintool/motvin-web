@@ -36,6 +36,30 @@ const LEGACY_PATHS = [
   'product-detail',
 ];
 
+/**
+ * The old static site's addresses, which Google and old shares still link to.
+ * Without LEGACY_ORIGIN that site isn't served, so each one goes (permanently,
+ * so search results update) to the closest page here: its own page where there
+ * is one ("about-me.html" → /about), else home — its tools are no longer
+ * online. With LEGACY_ORIGIN set, the rewrites below serve them instead.
+ */
+const OLD_SITE_REDIRECTS = LEGACY_ORIGIN
+  ? []
+  : [
+      { source: '/index.html', destination: '/', permanent: true },
+      { source: '/about-me', destination: '/about', permanent: true },
+      { source: '/about-me.html', destination: '/about', permanent: true },
+      { source: '/:page(about|privacy|terms|copyrights|updates|login|signup|icons|logos|illustrations).html', destination: '/:page', permanent: true },
+      { source: '/:page(icon|iconstore|iconstores).html', destination: '/icons', permanent: true },
+      ...LEGACY_PATHS.flatMap((path) => [
+        { source: `/${path}`, destination: '/', permanent: true },
+        { source: `/${path}.html`, destination: '/', permanent: true },
+        { source: `/${path}/:rest*`, destination: '/', permanent: true },
+      ]),
+      { source: '/:dir(MOTVIN|motvin|Motvin)', destination: '/', permanent: true },
+      { source: '/:dir(MOTVIN|motvin|Motvin)/:rest*', destination: '/', permanent: true },
+    ];
+
 /** Short URL ↔ folder path pairs — one place to add a new category. */
 const LIBRARY_REWRITES = [
   { short: '/icons', folder: '/motvin-library/icons' },
@@ -133,6 +157,7 @@ const nextConfig: NextConfig = {
       // Patterns page. A surviving link or bookmark opens that one pattern there.
       { source: '/inspirations/pattern/:slug', destination: '/inspirations/patterns?pattern=:slug', permanent: true },
       { source: '/inspirations/pattern/:slug*', destination: '/inspirations/patterns', permanent: true },
+      ...OLD_SITE_REDIRECTS,
     ];
   },
 
