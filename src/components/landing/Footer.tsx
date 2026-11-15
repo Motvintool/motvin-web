@@ -239,7 +239,7 @@ export function Footer() {
               type="button"
               className="lpi-footer-cookies"
               id="footer-cookie-settings"
-              // ConsentBanners owns the banner; ask it to open on the settings tab.
+              // CookieBanner owns the banner; ask it to open on the settings tab.
               onClick={() => document.dispatchEvent(new CustomEvent('motvin:open-cookie-settings'))}
             >
               Cookie settings
