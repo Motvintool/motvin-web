@@ -1,0 +1,36 @@
+import { fail, verifyAdmin } from '@/lib/server/adminAuth';
+import { activeJob, startJob } from '@/lib/server/ingestJobs';
+
+/**
+ * POST /api/crawler/research — `{ appId, name?, platform?, restructure? }`:
+ * have the AI rewrite an app's flow and screen names from its stored screens
+ * (with restructure, rebuild its flows first, the way a new recording's are). Runs as a job like a
+ * video ingest, so the dock shows it and it survives a page change.
+ */
+export async function POST(request: Request) {
+  const admin = await verifyAdmin(request);
+  if (!admin) return fail('This account may not administer the library.', 403);
+  const running = activeJob();
+  if (running) return fail(`A run is already in progress (${running.title}).`, 409);
+  let body: { appId?: string; name?: string; platform?: string; restructure?: boolean; version?: string };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return fail('The request could not be read.', 400);
+  }
+  const appId = String(body.appId ?? '').trim();
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(appId)) return fail('appId must be a slug.', 400);
+  const platform = String(body.platform ?? 'ios').trim();
+  if (!['ios', 'webapp', 'web'].includes(platform)) return fail('platform must be ios, webapp or web.', 400);
+  const version = String(body.version ?? '').trim();
+  if (version && !/^\d{4}-\d{2}-\d{2}$/.test(version)) return fail('version must be a date, YYYY-MM-DD.', 400);
+  const job = startJob({
+    title: body.restructure ? `Fixing ${body.name?.trim() || appId}’s flows` : `Rewriting ${body.name?.trim() || appId}’s names`,
+    sizeBytes: null,
+    startedBy: admin.email,
+    workDir: null,
+    args: ['research', '--app-id', appId, '--platform', platform, ...(body.restructure ? ['--restructure'] : []), ...(version ? ['--version', version] : [])],
+    mode: 'research',
+  });
+  return Response.json({ success: true, jobId: job.id, job }, { headers: { 'Cache-Control': 'no-store' } });
+}

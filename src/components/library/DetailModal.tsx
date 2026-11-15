@@ -14,6 +14,7 @@ import {
   editorFromGlobals,
   formatCode,
   renderEditorSvg,
+  resolveInlineSvg,
   toDataUrl,
   toPngDataUrl,
   type CopyFormat,
@@ -21,6 +22,7 @@ import {
 } from '@/lib/render/editor';
 import { isColorStyle } from '@/lib/render/svg';
 import { ModalPortal } from './ModalPortal';
+import { useRequireLogin } from './useRequireLogin';
 
 /**
  * Item detail view with the full editor — port of openDetail() in
@@ -391,6 +393,7 @@ export function DetailModal({
   onCategoryClick,
   onTagClick,
 }: Props) {
+  const requireLogin = useRequireLogin();
   const [editor, setEditor] = useState<EditorState>(DEFAULT_EDITOR);
   // Reference defaults the grid overlay ON when the modal opens; G toggles it.
   const [showGrid, setShowGrid] = useState(true);
@@ -536,9 +539,26 @@ export function DetailModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only respond to item change
   }, [item?.id]);
 
+  // Illustrations from remote-URL-only collections ship without inline SVG.
+  // Fetch and cache the markup on the item so the preview, code block, copy,
+  // and download paths all get real SVG instead of the <img> fallback.
+  // Port of illustrations.js:2038 (exportSvgFor).
+  const [inlineReady, setInlineReady] = useState(0);
+  useEffect(() => {
+    if (!item || item.svg || !item.imageUrl) return;
+    let cancelled = false;
+    resolveInlineSvg(item).then(() => {
+      if (!cancelled && item.svg) setInlineReady((n) => n + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [item]);
+
   const svgSource = useMemo(
     () => (item ? currentSvgString(item, editor, config.slug) : ''),
-    [item, editor, config.slug],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- inlineReady bumps after fetch
+    [item, editor, config.slug, inlineReady],
   );
 
   /**
@@ -634,6 +654,8 @@ export function DetailModal({
 
   const copy = useCallback(
     async (text: string, what: string) => {
+      // Mirrors motvin-icons.js:1677 / :3268 — SVG/code copy requires sign-in.
+      if (!requireLogin()) return;
       try {
         await navigator.clipboard.writeText(text);
         onToast(`${what} copied`);
@@ -641,7 +663,7 @@ export function DetailModal({
         onToast('Copy failed — clipboard unavailable');
       }
     },
-    [onToast],
+    [onToast, requireLogin],
   );
 
   /**
@@ -649,6 +671,8 @@ export function DetailModal({
    * to a toast rather than surprising the user with SVG text on the clipboard.
    */
   const copyPng = useCallback(async () => {
+    // Mirrors motvin-icons.js:2653 — PNG copy requires sign-in.
+    if (!requireLogin()) return;
     if (!svgSource) return;
     try {
       const dataUrl = await toPngDataUrl(svgSource, pngSize);
@@ -662,7 +686,7 @@ export function DetailModal({
     } catch {
       onToast('Copy PNG failed — try Download PNG');
     }
-  }, [svgSource, pngSize, onToast]);
+  }, [svgSource, pngSize, onToast, requireLogin]);
 
   /** Web Share where available, clipboard-link fallback everywhere else. */
   const share = useCallback(async () => {
@@ -696,20 +720,36 @@ export function DetailModal({
     setPromoHidden(true);
   }, []);
 
-  const download = useCallback((href: string, filename: string) => {
-    const link = document.createElement('a');
-    link.href = href;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  }, []);
+  const download = useCallback(
+    (href: string, filename: string) => {
+      // Mirrors motvin-icons.js:2612/2653 — download requires sign-in.
+      if (!requireLogin()) return;
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // Reference (motvin-icons.js:2619/2660) fires a stack toast on success.
+      // Defer a beat so the browser's own download indicator paints before
+      // the toast animates in — otherwise the toast appears to fire before
+      // the download starts.
+      const isPng = /\.png$/i.test(filename);
+      const message = isPng ? 'PNG downloaded' : 'SVG downloaded';
+      window.setTimeout(() => onToast(message), 150);
+    },
+    [requireLogin, onToast],
+  );
 
   if (!item) return null;
 
   const terms = licenceTerms(item.license);
-  // The colour and stroke controls do nothing for multi-colour artwork, which
-  // keeps its native palette through the render pipeline.
+  // Reference gating (motvin-icons.js:2090-2113):
+  //   - Stroke slider + Fill mode + STROKE advanced section only show for
+  //     Outline artwork — that's the one style with a stroke to adjust.
+  //   - Colour swatch hides only for isColorStyle (`3d` / `color` /
+  //     `multi-color`) which keep their native palette.
+  const strokeEditable = item.style === 'outline';
   const recolourable = !isColorStyle(item.style);
 
   return (
@@ -1011,7 +1051,7 @@ export function DetailModal({
                       onChange={(size) => patch({ size })}
                     />
 
-                    {recolourable && (
+                    {strokeEditable && (
                       <EditorSlider
                         id="stroke"
                         label="Stroke"
@@ -1034,7 +1074,7 @@ export function DetailModal({
                       />
                     )}
 
-                    {recolourable && (
+                    {strokeEditable && (
                       <div className="mi-new-ctrl" id="grp-fill-mode">
                         <div className="mi-new-ctrl-top">
                           <span>Fill</span>
@@ -1054,7 +1094,7 @@ export function DetailModal({
                       </div>
                     )}
 
-                    {recolourable && editor.fillMode === 'solid' && (
+                    {strokeEditable && editor.fillMode === 'solid' && (
                       <ColorControl
                         id="fill-color"
                         label="Fill color"
@@ -1111,7 +1151,7 @@ export function DetailModal({
                   </div>
                 </details>
 
-                {recolourable && item.style === 'outline' && (
+                {strokeEditable && (
                   <>
                     <div className="mi-new-divider" id="grp-stroke-divider" />
 
@@ -1416,14 +1456,53 @@ export function DetailModal({
                     />
                   );
                 })()}
-                <div
-                  className="mi-new-canvas-inner"
-                  id="canvas-inner"
-                  dangerouslySetInnerHTML={{
-                    // Scaled up for the preview; exports use editor.size.
-                    __html: renderEditorSvg(item, editor, Math.max(editor.size, 160), config.slug),
-                  }}
-                />
+                {(() => {
+                  // Preview scale mirrors motvin-icons.js:2228 — editor.size
+                  // drives the visual preview through an 8× multiplier
+                  // clamped between 96 and 280, so small size values are
+                  // still visible on the canvas. Exports use editor.size
+                  // unchanged (see the copy/download handlers).
+                  const visualSize = Math.max(96, Math.min(editor.size * 8, 280));
+                  // Bioicons and other imageUrl-only illustrations ship a full
+                  // standalone SVG document with its own <svg>, <defs>,
+                  // gradients, and style-attribute fills. Feeding it through
+                  // renderSvg double-nests the document and breaks the viewBox
+                  // mapping — the reference shows it as an <img> in the
+                  // canvas instead (motvin-ui/JS/illustrations.js:1897).
+                  // Copy/download still go through the fetch-and-inline path
+                  // in the export handlers.
+                  if (item.imageUrl) {
+                    return (
+                      <div
+                        className="mi-new-canvas-inner"
+                        id="canvas-inner"
+                        style={{ padding: `${editor.padding}px` }}
+                      >
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          style={{
+                            display: 'block',
+                            width: `${visualSize}px`,
+                            height: `${visualSize}px`,
+                            maxWidth: '100%',
+                            objectFit: 'contain',
+                          }}
+                        />
+                      </div>
+                    );
+                  }
+                  return (
+                    <div
+                      className="mi-new-canvas-inner"
+                      id="canvas-inner"
+                      style={{ padding: `${editor.padding}px` }}
+                      dangerouslySetInnerHTML={{
+                        __html: renderEditorSvg(item, editor, visualSize, config.slug),
+                      }}
+                    />
+                  );
+                })()}
                 {/* Reference ships this button hidden — the grid is toggled
                     only via the keyboard G shortcut (wired in the effect
                     above). Kept in DOM so anything selecting `#btn-toggle-grid`

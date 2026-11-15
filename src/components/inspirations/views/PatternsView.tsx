@@ -1,0 +1,225 @@
+'use client';
+
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { inspirationsApi } from '@/lib/inspirations/api';
+import { browsedPlatforms } from '@/lib/inspirations/filters';
+import { screenItemId } from '@/lib/inspirations/savedItems';
+import { isDesktopPlatform, type Screen } from '@/lib/inspirations/types';
+import { EmptyState } from '../EmptyState';
+import { NavPill, ToolbarRow } from '../FilterToolbar';
+import { PaletteFilter } from '../PaletteFilter';
+import { GridIcon } from '../Icons';
+import { PageHeading } from '../PageHeading';
+import { ScreenGrid } from '../ScreenGrid';
+import { ScreenshotTextSearch } from '../ScreenshotTextSearch';
+import { ScreenGridSkeleton } from '../Skeletons';
+import { useAsync } from '../useAsync';
+import { useMeta } from '../useMeta';
+import { usePaletteApps } from '../usePaletteApps';
+import { CheckboxFilterPill } from './AppDetailView';
+
+/** Screens shown at first; scrolling to the end shows the next batch. */
+const PAGE = 60;
+
+/**
+ * /inspirations/patterns — the pattern library, shown the way search shows pattern results: the screens the
+ * patterns were found on, in the frameless app-page grid, with a Category pill to narrow by category
+ * (?category=Forms,Modals) and a Pattern pill to narrow to single patterns (?pattern=dialogs) — what a
+ * screen's pattern chip opens. Follows the platform switch like every other browse page.
+ *
+ * A pattern only appears once real screens match it, so this page grows as the store does.
+ */
+export function PatternsView() {
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const meta = useMeta();
+  const platforms = browsedPlatforms(params);
+  // Webs (websites and web apps) are landscape screenshots: the web grid, as an app page shows them.
+  const webGrid = platforms.every(isDesktopPlatform);
+  const picked = (params.get('category') ?? '').split(',').filter(Boolean);
+  const pickedPatterns = (params.get('pattern') ?? '').split(',').filter(Boolean);
+  const [shown, setShown] = useState(PAGE);
+  // The colour filter: only screens of apps whose brand colour (their logo's) is one of the picked ones.
+  const colour = usePaletteApps(platforms);
+
+  // Every pattern with the screens it was found on (one request per pattern).
+  const { data, loading } = useAsync(async () => {
+    const patterns = await inspirationsApi.listPatterns();
+    const full = await Promise.all(patterns.map((p) => inspirationsApi.getPattern(p.slug)));
+    return patterns.map((pattern, i) => ({ pattern, screens: full[i]?.screens ?? [] }));
+  }, 'patterns-with-screens');
+
+  // Screens on the platform being browsed, per pattern.
+  const entries = (data ?? []).map(({ pattern, screens }) => ({
+    pattern,
+    screens: screens.filter((s) => platforms.includes(s.platform)),
+  }));
+
+  // The category pill: each category with how many distinct screens it holds on this platform.
+  const categoryOptions = (() => {
+    const byCategory = new Map<string, Set<string>>();
+    for (const { pattern, screens } of entries) {
+      const ids = byCategory.get(pattern.category) ?? new Set<string>();
+      screens.forEach((s) => ids.add(s.id));
+      byCategory.set(pattern.category, ids);
+    }
+    return Array.from(byCategory.entries())
+      .filter(([, ids]) => ids.size > 0)
+      .map(([category, ids]) => ({ value: category, label: category, count: ids.size }))
+      .sort((a, b) => b.count - a.count);
+  })();
+
+  // The pattern pill: each pattern of the picked categories (all when none is picked) that has screens here.
+  const patternOptions = entries
+    .filter(({ pattern, screens }) => screens.length > 0 && (!picked.length || picked.includes(pattern.category)))
+    .map(({ pattern, screens }) => ({ value: pattern.slug, label: pattern.name, count: screens.length }))
+    .sort((a, b) => b.count - a.count);
+
+  // Picked patterns win over picked categories; otherwise the picked categories, or everything.
+  const included = (pattern: { slug: string; category: string }) =>
+    pickedPatterns.length ? pickedPatterns.includes(pattern.slug) : !picked.length || picked.includes(pattern.category);
+
+  // The grid: every screen of the included patterns, each once.
+  const screens = (() => {
+    const seen = new Set<string>();
+    const out: Screen[] = [];
+    for (const { pattern, screens: list } of entries) {
+      if (!included(pattern)) continue;
+      for (const s of list) {
+        if (seen.has(s.id)) continue;
+        seen.add(s.id);
+        out.push(s);
+      }
+    }
+    return out;
+  })();
+
+  // Each screen's pattern category (the first picked one it's in), so a
+  // selection saves as patterns.
+  const categoryOf = (() => {
+    const map = new Map<string, string>();
+    for (const { pattern, screens: list } of entries) {
+      if (!included(pattern)) continue;
+      for (const s of list) if (!map.has(s.id)) map.set(s.id, pattern.category);
+    }
+    return map;
+  })();
+
+  // "Search text in screenshot": keeps the pattern screens whose text matches, with the words highlighted.
+  const textQuery = params.get('text')?.trim() ?? '';
+  const { data: textHits, loading: textLoading } = useAsync(
+    () => (textQuery ? inspirationsApi.search(textQuery, 'text', undefined, { limit: 200 }) : Promise.resolve(null)),
+    `patterns-text:${textQuery}`,
+  );
+  const textIds = textQuery && textHits ? new Set(textHits.screens.map((s) => s.id)) : null;
+  const gridScreens = screens.filter((s) => (!textIds || textIds.has(s.id)) && (!colour.appIds || colour.appIds.has(s.appId)));
+  const setText = (text: string | undefined) => {
+    setShown(PAGE);
+    const sp = new URLSearchParams(params.toString());
+    if (text) sp.set('text', text);
+    else sp.delete('text');
+    const qs = sp.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  const setList = (key: 'category' | 'pattern', next: string[]) => {
+    setShown(PAGE);
+    const sp = new URLSearchParams(params.toString());
+    if (next.length) sp.set(key, next.join(','));
+    else sp.delete(key);
+    // A new category choice starts the pattern choice over.
+    if (key === 'category') sp.delete('pattern');
+    const qs = sp.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+  const setCategories = (next: string[]) => setList('category', next);
+  const setPatterns = (next: string[]) => setList('pattern', next);
+
+  return (
+    <>
+      <PageHeading title="Patterns" />
+
+      <ToolbarRow total={null} unit="screen" right={<ScreenshotTextSearch applied={textQuery} onApply={setText} />}>
+        <NavPill counts={meta.counts} activeCount={loading || !colour.ready || (textQuery && !textHits) ? null : gridScreens.length} />
+        {/* The colour filter just after the page switch, where Screens has it. */}
+        <PaletteFilter
+          selected={colour.palette}
+          onChange={(next) => {
+            setShown(PAGE);
+            colour.setPalette(next);
+          }}
+          counts={colour.counts}
+          align="start"
+        />
+        {categoryOptions.length > 0 && (
+          <CheckboxFilterPill
+            label="Category"
+            options={categoryOptions}
+            selected={picked}
+            onToggle={(v) => setCategories(picked.includes(v) ? picked.filter((c) => c !== v) : [...picked, v])}
+            onClear={() => setCategories([])}
+          />
+        )}
+        {patternOptions.length > 0 && (
+          <CheckboxFilterPill
+            label="Pattern"
+            options={patternOptions}
+            selected={pickedPatterns}
+            onToggle={(v) => setPatterns(pickedPatterns.includes(v) ? pickedPatterns.filter((p) => p !== v) : [...pickedPatterns, v])}
+            onClear={() => setPatterns([])}
+          />
+        )}
+      </ToolbarRow>
+
+      <section className="ins-shot-panel">
+        {loading || !colour.ready || (textQuery && textLoading) ? (
+          <ScreenGridSkeleton count={10} meta={false} web={webGrid} />
+        ) : (
+          <ScreenGrid
+            screens={gridScreens.slice(0, shown)}
+            webGrid={webGrid}
+            showMeta={false}
+            selectable
+            saveItem={(s) => ({ type: 'pattern', id: screenItemId(s.id, categoryOf.get(s.id) ?? '') })}
+            textHighlights={textIds ? textHits?.textHighlights : undefined}
+            hasMore={shown < gridScreens.length}
+            onLoadMore={() => setShown((n) => n + PAGE)}
+            empty={
+              <EmptyState
+                play={Boolean(textQuery || picked.length || pickedPatterns.length || colour.palette.length)}
+                icon={<GridIcon size={22} />}
+                title={
+                  textQuery
+                    ? `No pattern screens contain “${textQuery}”`
+                    : pickedPatterns.length
+                      ? 'No screens for this pattern on this platform yet'
+                      : picked.length
+                      ? 'No pattern screens in these categories yet'
+                      : colour.palette.length
+                        ? 'No pattern screens from apps of these colours'
+                        : 'No patterns matched yet'
+                }
+                description={
+                  textQuery || picked.length || pickedPatterns.length || colour.palette.length
+                    ? undefined
+                    : 'Patterns are matched against stored screens when the manifest is built. Add screens and they fill in on their own.'
+                }
+                action={
+                  textQuery
+                    ? { label: 'Clear text search', onClick: () => setText(undefined) }
+                    : picked.length || pickedPatterns.length
+                      ? { label: 'Show all patterns', onClick: () => setCategories([]) }
+                      : colour.palette.length
+                        ? { label: 'Clear colours', onClick: () => colour.setPalette([]) }
+                        : undefined
+                }
+              />
+            }
+          />
+        )}
+      </section>
+    </>
+  );
+}

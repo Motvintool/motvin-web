@@ -1,0 +1,167 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { isWebsPlatforms } from '@/lib/inspirations/filters';
+import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
+import { AppTabs } from './AppTabs';
+import { GlobalSearch } from './GlobalSearch';
+import { useApps } from './useApps';
+import { CloseIcon } from './Icons';
+import { ProfileMenu } from './ProfileMenu';
+import { AudioMenu } from './AudioMenu';
+
+/**
+ * Compact sticky header: wordmark · Apps / Webs tabs · search · Save ·
+ * Collections · profile · menu. On mobile it collapses to wordmark and the
+ * menu; the tabs, search and text links move into the drawer.
+ */
+export function Header() {
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Tells a dockable toolbar the header is hydrated, so it can portal into it
+  // without React finding content it did not render (see useDockingRow).
+  useEffect(() => {
+    document.documentElement.dataset.insHeader = 'ready';
+    window.dispatchEvent(new Event('ins-header-ready'));
+    return () => {
+      delete document.documentElement.dataset.insHeader;
+    };
+  }, []);
+
+  const activePlatforms = (params.get('platform') ?? '').split(',').filter(Boolean);
+  // iOS highlighted with no param is the truth, not a visual default: every
+  // feed applies DEFAULT_PLATFORM (iOS) when the URL names no platform, so
+  // this nav, the toolbar's Platform pill and the docked Apps/Web switcher
+  // always describe the same single-platform view.
+  //
+  // An app's own page has no `?platform=` — but a Web-only product is not an
+  // iOS page, so there the nav shows the platform the app lives on instead of
+  // the default (an app on iOS keeps iOS, as it always did).
+  const routeSlug = pathname.match(/^\/inspirations\/app\/([^/]+)/)?.[1];
+  const apps = useApps();
+  const routeApp = routeSlug ? apps.get(routeSlug) : undefined;
+  const routePlatform =
+    routeApp && activePlatforms.length === 0 && !routeApp.platforms.includes('ios') ? routeApp.platforms[0] : undefined;
+  const visuallyActivePlatform =
+    activePlatforms.length === 1
+      ? activePlatforms[0]
+      : activePlatforms.length === 0
+        ? (routePlatform ?? 'ios')
+        : null;
+
+  // Close the drawer whenever the route changes. Adjusting state during
+  // render (rather than in an effect) avoids an extra paint with the menu
+  // still open.
+  const routeKey = `${pathname}?${params.toString()}`;
+  const [seenRoute, setSeenRoute] = useState(routeKey);
+  if (seenRoute !== routeKey) {
+    setSeenRoute(routeKey);
+    setMenuOpen(false);
+  }
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [menuOpen]);
+
+  // Switching platform keeps the visitor where they are: same browse page,
+  // same filters, only the platform param changes. From a detail page (a
+  // screen, app or flow) there is no "same view on another platform" to keep,
+  // so those fall back to Explore.
+  const BROWSE_PATHS: string[] = [
+    INSPIRATIONS_ROUTES.explore,
+    INSPIRATIONS_ROUTES.apps,
+    INSPIRATIONS_ROUTES.screens,
+    INSPIRATIONS_ROUTES.uiElements,
+    INSPIRATIONS_ROUTES.flows,
+    INSPIRATIONS_ROUTES.patterns,
+    INSPIRATIONS_ROUTES.search,
+    // A collection too: Apps shows its iOS items, Webs its web ones.
+    INSPIRATIONS_ROUTES.collections,
+  ];
+  // "Apps" is iOS; "Webs" is websites and web apps together (isWebsPlatforms).
+  // Switching keeps the visitor on the same browse page with the same filters, only the platform changes.
+  const appsOn = !(visuallyActivePlatform ? isWebsPlatforms([visuallyActivePlatform]) : isWebsPlatforms(activePlatforms));
+  const tabHref = (target: 'apps' | 'web') => {
+    const staying = BROWSE_PATHS.includes(pathname);
+    const base = staying ? pathname : INSPIRATIONS_ROUTES.explore;
+    const sp = staying ? new URLSearchParams(params.toString()) : new URLSearchParams();
+    if (target === 'web') sp.set('platform', 'web');
+    else sp.delete('platform');
+    const qs = sp.toString();
+    return qs ? `${base}?${qs}` : base;
+  };
+
+  const onSettings = pathname.startsWith(INSPIRATIONS_ROUTES.settings);
+
+  // The settings page is a quiet, personal page: the top bar shows the logo and nothing else.
+  if (onSettings) {
+    return (
+      <header className="ins-header">
+        <div className="ins-header-inner">
+          <div className="ins-header-content">
+            <div className="ins-header-left">
+              <Link href={INSPIRATIONS_ROUTES.explore} className="ins-brand-logo" aria-label="Motvin Inspirations home">
+                <img src="/ASSET/svg/nav-motvin-logo.svg" alt="" className="ins-brand-logo-img" width={48} height={48} />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
+  return (
+    <header className="ins-header">
+      <div className="ins-header-inner">
+        <div className="ins-header-content">
+        <div className="ins-header-left">
+          <Link href={INSPIRATIONS_ROUTES.explore} className="ins-brand-logo" aria-label="Motvin Inspirations home">
+            <img src="/ASSET/svg/nav-motvin-logo.svg" alt="" className="ins-brand-logo-img" width={48} height={48} />
+          </Link>
+          <AppTabs appsOn={appsOn} appsHref={tabHref('apps')} webHref={tabHref('web')} />
+        </div>
+
+        <div className="ins-header-center">
+          <GlobalSearch />
+          <Link href="/icons" className="ins-header-try-icons" aria-label="Try Icons">
+            <div className="ins-try-icons-img">
+               <img src="/ASSET/Images/Motvin/try-icon.png" alt="" />
+            </div>
+            <span className="ins-try-icons-text">Try Icons</span>
+            <span className="ins-try-icons-badge">New</span>
+          </Link>
+        </div>
+
+        <div className="ins-header-right">
+          <div className="ins-header-action-links">
+            <Link
+              href={INSPIRATIONS_ROUTES.collections}
+              className="ins-header-action-link"
+              aria-label="Collections"
+              aria-current={pathname === INSPIRATIONS_ROUTES.collections ? 'page' : undefined}
+            >
+              <img src="/ASSET/Icons/Motvin/save.svg" alt="" width={20} height={20} />
+            </Link>
+            <AudioMenu />
+          </div>
+          <div className="ins-header-profile">
+            <ProfileMenu />
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+  );
+}

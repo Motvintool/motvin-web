@@ -1,0 +1,1104 @@
+import { readFileSync } from 'node:fs';
+import { join as joinPath, resolve as resolvePath } from 'node:path';
+import { readSettings } from '@/lib/server/ai';
+import type { AiStatus, IngestJob } from '@/lib/inspirations/admin-chatbot/ingestJobs';
+import type { AdminOp, AssistantAction, Expect } from '@/lib/inspirations/admin-chatbot/assistantActions';
+import { localDateString } from '@/lib/inspirations/dates';
+import { splitScreenFile } from '@/lib/inspirations/screenPaths';
+import type { AssistantAnswer, HistoryLine, LibraryState, ParsedOp, TokenSink } from '@/lib/server/assistant';
+import { screenTitle } from '@/lib/inspirations/screenNaming';
+
+/**
+ * The admin assistant as an agent: a model that can look things up and
+ * propose a change, rather than a single guess at a JSON operation gated by
+ * keyword checks.
+ *
+ * Each turn the model gets the conversation plus two kinds of tools. Read
+ * tools (list the apps, one app's versions and screens, the flows, the runs,
+ * the AI) run here at once and their results go straight back to it, so it
+ * can check what exists before deciding — a follow-up like "sorry, version"
+ * is understood from the conversation, not from a phrase list. Write tools
+ * are never run: the arguments go through the same validation the admin
+ * page's actions do (does the app exist, which version, did the admin
+ * actually write that value) and, when they hold up, become the one Confirm
+ * button the dock shows. Nothing changes until it is pressed.
+ *
+ * Needs a model that can call tools. The best installed one is picked
+ * (largest, tool-capable, general over code); with none, the caller falls
+ * back to the older reader pipeline in assistant.ts.
+ */
+
+export type AgentInput = {
+  question: string;
+  history: HistoryLine[];
+  pending: string | null;
+  heldImage: string | null;
+  lastOp: AdminOp | null;
+  /** The value the assistant asked the admin to type, if it did. */
+  expecting: Expect | null;
+};
+
+export type AgentDeps = {
+  state: LibraryState | null;
+  ai: AiStatus | null;
+  jobs: IngestJob[];
+  /** Whether this message asked the assistant to make a value up ("suggest a tagline"). */
+  askedToInvent: boolean;
+  /** Whether this message agrees to what the assistant just said or suggested ("proceed", "yes, use that"). */
+  accepting?: boolean;
+  /** assistant.ts's validateOp, bound to the library and this turn's grounding. */
+  validate: (op: ParsedOp) => { action?: AssistantAction; note?: string; settled?: boolean; missingApp?: boolean };
+  describeJob: (job: IngestJob, now?: number) => string;
+  describeAi: (ai: AiStatus | null) => string;
+  /** Turns "I've deleted X" into "I can delete X" — the model may only ever offer. */
+  unclaim: (text: string) => string;
+  /** Where the model's words go as it writes them, and where its working steps are reported. */
+  onToken?: TokenSink;
+  /** Fires when the admin stops the reply — every model call in flight is dropped. */
+  signal?: AbortSignal;
+};
+
+// ─── The model ───────────────────────────────────────────────────────────────
+
+type AgentConfig = { url: string; key: string; provider: 'ollama' | 'openai-compatible'; configuredChat: string; configuredModel: string };
+
+function agentConfig(): AgentConfig {
+  const saved = readSettings();
+  const url = (process.env.MOTVIN_AI_URL || saved.url || 'http://localhost:11434/v1').replace(/\/+$/, '');
+  return {
+    url,
+    key: process.env.MOTVIN_AI_KEY || saved.key || '',
+    provider: /11434/.test(url) ? 'ollama' : 'openai-compatible',
+    configuredChat: process.env.MOTVIN_AI_CHAT_MODEL || saved.chatModel || '',
+    configuredModel: process.env.MOTVIN_AI_MODEL || saved.model || '',
+  };
+}
+
+function headers(config: AgentConfig): Record<string, string> {
+  const out: Record<string, string> = { 'content-type': 'application/json' };
+  if (config.key) out.authorization = `Bearer ${config.key}`;
+  return out;
+}
+
+type ModelPick = { at: number; url: string; model: string | null };
+const pickCache: ModelPick = ((globalThis as unknown as { __motvinAgentModel?: ModelPick }).__motvinAgentModel ??= { at: 0, url: '', model: null });
+
+/** Parameter count in billions, read off Ollama's "14.8B" or the model name's "14b". */
+function sizeOf(name: string, parameterSize?: string): number {
+  const fromDetails = parameterSize?.match(/([\d.]+)\s*B/i)?.[1];
+  const fromName = name.match(/(\d+(?:\.\d+)?)b\b/i)?.[1];
+  return Number(fromDetails ?? fromName ?? 0);
+}
+
+/**
+ * The model that answers the chat. On Ollama, every installed model is
+ * asked for its capabilities and the largest that can call tools wins —
+ * general models over code models, a tool-tuned build over a plain one.
+ * Elsewhere the configured chat (or main) model is trusted to call tools.
+ */
+async function pickAgentModel(config: AgentConfig): Promise<string | null> {
+  if (pickCache.model !== null && pickCache.url === config.url && Date.now() - pickCache.at < 60_000) return pickCache.model || null;
+  let chosen: string | null = null;
+  if (config.provider !== 'ollama') {
+    chosen = config.configuredChat || config.configuredModel || null;
+  } else {
+    const base = config.url.replace(/\/v1\/?$/, '');
+    try {
+      const tags = (await (await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(4000) })).json()) as { models?: { name: string; details?: { parameter_size?: string } }[] };
+      const installed = tags.models ?? [];
+      const capable: { name: string; score: number }[] = [];
+      for (const entry of installed) {
+        if (/embed|whisper|nomic/i.test(entry.name)) continue;
+        try {
+          const shown = (await (await fetch(`${base}/api/show`, { method: 'POST', body: JSON.stringify({ model: entry.name }), signal: AbortSignal.timeout(4000) })).json()) as { capabilities?: string[] };
+          if (!shown.capabilities?.includes('tools')) continue;
+        } catch {
+          continue;
+        }
+        const size = sizeOf(entry.name, entry.details?.parameter_size);
+        const coder = /coder|code/i.test(entry.name);
+        const tuned = /tools/i.test(entry.name);
+        // Size first; a general model beats a code model of the same size,
+        // and a tool-tuned build beats a plain one.
+        capable.push({ name: entry.name, score: size * 10 + (coder ? 0 : 5) + (tuned ? 2 : 0) });
+      }
+      const configured = capable.find((entry) => entry.name === config.configuredChat);
+      chosen = configured?.name ?? capable.sort((a, b) => b.score - a.score)[0]?.name ?? null;
+    } catch {
+      chosen = null;
+    }
+  }
+  pickCache.at = Date.now();
+  pickCache.url = config.url;
+  pickCache.model = chosen ?? '';
+  return chosen;
+}
+
+/** Forgets the picked model — after the AI settings change. */
+export function forgetAgentModel() {
+  pickCache.at = 0;
+  pickCache.model = null;
+}
+
+type ToolDef = { name: string; description: string; parameters: Record<string, unknown> };
+type ToolCall = { id: string; name: string; args: Record<string, unknown> };
+type Turn =
+  | { role: 'system' | 'user' | 'assistant'; content: string }
+  | { role: 'assistant'; content: string; tool_calls: unknown[] }
+  | { role: 'tool'; content: string; tool_call_id?: string; tool_name?: string };
+
+/**
+ * Words are streamed to the admin only once it is clear they are words. A
+ * model's reply may be prose, a tool call written as JSON, or both; the
+ * first characters decide. Prose goes out as it arrives, except a bracketed
+ * note or a JSON object part-way through, which is held back until it
+ * closes and then dropped — those are for the machinery, not the admin.
+ */
+export class ProseGate {
+  private held = '';
+  private mode: 'undecided' | 'prose' | 'tool' = 'undecided';
+  /** Something was just dropped: the punctuation and space that trailed it go too. */
+  private trimming = false;
+  private readonly emit: (piece: string) => void;
+  constructor(emit: (piece: string) => void) {
+    this.emit = emit;
+  }
+  push(piece: string) {
+    if (this.mode === 'tool' || !piece) return;
+    this.held += piece;
+    if (this.mode === 'undecided') {
+      const lead = this.held.replace(/^\s+/, '');
+      if (!lead) return;
+      if (/^[{<`]/.test(lead)) {
+        this.mode = 'tool';
+        return;
+      }
+      // Enough to be sure it is not a fence or a tag about to open.
+      if (lead.length < 4) return;
+      this.mode = 'prose';
+      this.held = lead;
+    }
+    // Words go out up to the first thing that is not for the admin — a
+    // bracketed note, a JSON object, a code fence, a tag; each is held until
+    // it closes and then dropped, with any stray punctuation after it.
+    for (;;) {
+      if (this.trimming) {
+        const trimmed = this.held.replace(/^[ \t]*[.,]?[ \t]*/, '');
+        if (!trimmed && this.held) return; // only space or a dot so far; wait for a word
+        if (trimmed) this.trimming = false;
+        this.held = trimmed;
+      }
+      const open = this.held.search(/\[|\{|```|<\/?(?:tools?|tool_calls?)\b/i);
+      if (open === -1) {
+        this.emit(this.held);
+        this.held = '';
+        return;
+      }
+      if (open > 0) {
+        this.emit(this.held.slice(0, open));
+        this.held = this.held.slice(open);
+      }
+      const close = this.closeOf(this.held);
+      if (close === -1) return;
+      this.held = this.held.slice(close);
+      this.trimming = true;
+    }
+  }
+  /** Where the held-back thing at the start of `text` ends, or -1 while it is still open. */
+  private closeOf(text: string): number {
+    if (text.startsWith('```')) {
+      const end = text.indexOf('```', 3);
+      return end === -1 ? -1 : end + 3;
+    }
+    if (text.startsWith('[')) {
+      const end = text.indexOf(']');
+      return end === -1 ? -1 : end + 1;
+    }
+    if (text.startsWith('<')) {
+      const end = text.indexOf('>');
+      return end === -1 ? -1 : end + 1;
+    }
+    let depth = 0;
+    let inString = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (inString) {
+        if (ch === '\\') i++;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') inString = true;
+      else if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) return i + 1;
+      }
+    }
+    return -1;
+  }
+}
+
+/** The lines of a streamed body, as they complete. */
+async function* lines(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let index = buffer.indexOf('\n');
+    while (index !== -1) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 1);
+      if (line) yield line;
+      index = buffer.indexOf('\n');
+    }
+  }
+  if (buffer.trim()) yield buffer.trim();
+}
+
+type ChatOptions = { onToken?: (piece: string) => void; signal?: AbortSignal };
+
+function callSignal(signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(180_000);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
+/**
+ * One round with the model. Streamed when there is somewhere for the words
+ * to go: the reply's text and any tool calls are gathered as they arrive,
+ * and the text is passed on through the gate above.
+ */
+async function chat(config: AgentConfig, model: string, messages: Turn[], tools: ToolDef[], options: ChatOptions = {}): Promise<{ content: string; toolCalls: ToolCall[]; raw: unknown }> {
+  const toolSpecs = tools.map((tool) => ({ type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.parameters } }));
+  const gate = options.onToken ? new ProseGate(options.onToken) : null;
+  const streaming = Boolean(gate);
+  let content = '';
+  let toolCalls: ToolCall[] = [];
+  if (config.provider === 'ollama') {
+    const base = config.url.replace(/\/v1\/?$/, '');
+    const response = await fetch(`${base}/api/chat`, {
+      method: 'POST',
+      headers: headers(config),
+      body: JSON.stringify({ model, stream: streaming, messages, tools: toolSpecs, think: false, keep_alive: '30m', options: { temperature: 0.1, num_ctx: 16384, num_predict: 1000 } }),
+      signal: callSignal(options.signal),
+    });
+    if (!response.ok) throw new Error(`ollama ${response.status}: ${(await response.text()).slice(0, 300)}`);
+    type OllamaMessage = { content?: string; tool_calls?: { function?: { name?: string; arguments?: unknown } }[] };
+    const take = (message: OllamaMessage) => {
+      const piece = String(message.content ?? '');
+      if (piece) {
+        content += piece;
+        gate?.push(piece);
+      }
+      for (const call of message.tool_calls ?? []) {
+        const name = String(call.function?.name ?? '');
+        if (name) toolCalls.push({ id: `call_${toolCalls.length}`, name, args: parseArgs(call.function?.arguments) });
+      }
+    };
+    if (streaming && response.body) {
+      for await (const line of lines(response.body)) {
+        try {
+          const chunk = JSON.parse(line) as { message?: OllamaMessage; error?: string };
+          if (chunk.error) throw new Error(chunk.error);
+          if (chunk.message) take(chunk.message);
+        } catch (error) {
+          if (error instanceof SyntaxError) continue;
+          throw error;
+        }
+      }
+    } else {
+      const payload = (await response.json()) as { message?: OllamaMessage };
+      take(payload.message ?? {});
+    }
+    if (toolCalls.length) return { content, toolCalls, raw: { role: 'assistant', content, tool_calls: toolCalls.map((call) => ({ function: { name: call.name, arguments: call.args } })) } };
+    const fromText = toolCallsFromText(content, tools);
+    return { content: fromText.rest, toolCalls: fromText.calls, raw: fromText.calls.length ? { role: 'assistant', content: '', tool_calls: fromText.calls.map((call) => ({ function: { name: call.name, arguments: call.args } })) } : { role: 'assistant', content } };
+  }
+  const response = await fetch(`${config.url}/chat/completions`, {
+    method: 'POST',
+    headers: headers(config),
+    body: JSON.stringify({ model, messages, tools: toolSpecs, temperature: 0.1, max_tokens: 500, stream: streaming }),
+    signal: callSignal(options.signal),
+  });
+  if (!response.ok) throw new Error(`${config.provider} ${response.status}: ${(await response.text()).slice(0, 300)}`);
+  type OpenAiCall = { index?: number; id?: string; function?: { name?: string; arguments?: unknown } };
+  if (streaming && response.body) {
+    // Server-sent events; a tool call's arguments arrive in pieces, by index.
+    const partial = new Map<number, { id: string; name: string; args: string }>();
+    for await (const line of lines(response.body)) {
+      if (!line.startsWith('data:')) continue;
+      const data = line.slice(5).trim();
+      if (data === '[DONE]') break;
+      let chunk: { choices?: { delta?: { content?: string | null; tool_calls?: OpenAiCall[] } }[] };
+      try {
+        chunk = JSON.parse(data) as typeof chunk;
+      } catch {
+        continue;
+      }
+      const delta = chunk.choices?.[0]?.delta ?? {};
+      if (delta.content) {
+        content += delta.content;
+        gate?.push(delta.content);
+      }
+      for (const call of delta.tool_calls ?? []) {
+        const index = call.index ?? 0;
+        const entry = partial.get(index) ?? { id: call.id ?? `call_${index}`, name: '', args: '' };
+        if (call.function?.name) entry.name += call.function.name;
+        if (typeof call.function?.arguments === 'string') entry.args += call.function.arguments;
+        partial.set(index, entry);
+      }
+    }
+    toolCalls = [...partial.values()].filter((entry) => entry.name).map((entry) => ({ id: entry.id, name: entry.name, args: parseArgs(entry.args) }));
+  } else {
+    const payload = (await response.json()) as { choices?: { message?: { content?: string | null; tool_calls?: OpenAiCall[] } }[] };
+    const message = payload.choices?.[0]?.message ?? {};
+    content = String(message.content ?? '');
+    toolCalls = (message.tool_calls ?? []).map((call, index) => ({ id: String(call.id ?? `call_${index}`), name: String(call.function?.name ?? ''), args: parseArgs(call.function?.arguments) })).filter((call) => call.name);
+  }
+  const asOpenAi = (calls: ToolCall[]) => ({ role: 'assistant', content: '', tool_calls: calls.map((call) => ({ id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.args) } })) });
+  if (toolCalls.length) return { content, toolCalls, raw: { ...asOpenAi(toolCalls), content } };
+  const fromText = toolCallsFromText(content, tools);
+  return { content: fromText.rest, toolCalls: fromText.calls, raw: fromText.calls.length ? asOpenAi(fromText.calls) : { role: 'assistant', content } };
+}
+
+/**
+ * Tool calls a model wrote out as text. Some tool-tuned models — the
+ * Qwen 2.5 coder builds on Ollama among them — answer with the call as JSON
+ * in the message body, bare or inside <tools>/<tool_call> tags or a code
+ * fence, rather than in the structured field. Each JSON object naming a
+ * known tool is taken as one call; what is left over is the model's words.
+ */
+function toolCallsFromText(content: string, tools: ToolDef[]): { calls: ToolCall[]; rest: string } {
+  const known = new Set(tools.map((tool) => tool.name));
+  const calls: ToolCall[] = [];
+  let rest = content;
+  if (!known.size || !/\{/.test(content)) return { calls, rest };
+  // Every balanced {...} in the text, outermost first.
+  const spans: [number, number][] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  for (let i = 0; i < content.length; i++) {
+    const ch = content[i];
+    if (inString) {
+      if (ch === '\\') i++;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      if (depth > 0) depth--;
+      if (depth === 0 && start >= 0) {
+        spans.push([start, i + 1]);
+        start = -1;
+      }
+    }
+  }
+  const remove: [number, number][] = [];
+  for (const [from, to] of spans) {
+    try {
+      const parsed = JSON.parse(content.slice(from, to)) as { name?: unknown; function?: { name?: unknown; arguments?: unknown }; arguments?: unknown; parameters?: unknown; tool?: unknown };
+      const name = String(parsed.function?.name ?? parsed.name ?? parsed.tool ?? '');
+      if (!known.has(name)) continue;
+      calls.push({ id: `call_${calls.length}`, name, args: parseArgs(parsed.function?.arguments ?? parsed.arguments ?? parsed.parameters) });
+      remove.push([from, to]);
+    } catch {
+      /* not JSON */
+    }
+  }
+  if (!calls.length) return { calls, rest };
+  for (const [from, to] of [...remove].reverse()) rest = rest.slice(0, from) + rest.slice(to);
+  rest = rest.replace(/<\/?(?:tools?|tool_calls?|function_calls?)>/gi, '').replace(/```(?:json)?/gi, '').replace(/\s{2,}/g, ' ').trim();
+  return { calls, rest };
+}
+
+const DEBUG = process.env.MOTVIN_AGENT_DEBUG === '1';
+function debug(label: string, value: unknown) {
+  if (DEBUG) console.error(`[agent] ${label}:`, typeof value === 'string' ? value : JSON.stringify(value));
+}
+
+function parseArgs(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object') return value as Record<string, unknown>;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+// ─── The tools ───────────────────────────────────────────────────────────────
+
+const str = (description: string) => ({ type: 'string', description });
+const strList = (description: string) => ({ type: 'array', items: { type: 'string' }, description });
+const obj = (properties: Record<string, unknown>, required: string[] = []) => ({ type: 'object', properties, required });
+
+const APP = str('The app, by name, exactly as the library has it.');
+const SCREEN = str('The screen, by name.');
+const VERSION_OF_SCREEN = str("The version the screen is in — a date like '29 Sep 2026' or 'latest' — when the admin named one; omit otherwise.");
+const FLOW = str('The flow, by name.');
+
+/** Read tools: answered here, at once, and fed back to the model. */
+const READ_TOOLS: ToolDef[] = [
+  { name: 'list_apps', description: 'Every app in the library with its screen and flow counts and its versions (dated captures), newest first.', parameters: obj({}) },
+  { name: 'get_app', description: "One app in full: name, tagline, industry, website, logo, source status, versions, flows with their steps, and screen names grouped by version.", parameters: obj({ app: APP }, ['app']) },
+  { name: 'list_screens', description: "An app's screens by name, with type and version — all versions, or one.", parameters: obj({ app: APP, version: str("A version — date or 'latest' — to limit to; omit for all.") }, ['app']) },
+  { name: 'list_flows', description: "An app's flows, each with its steps in order.", parameters: obj({ app: APP }, ['app']) },
+  { name: 'ask_claude_review', description: "Give the admin the \"Ask agent to review\" button for one version of an app already in the library, so the review checks every screen's name, type and elements and the flows, and fixes them. Use when they ask to review, check, audit or correct an app's screens or names with Claude, or ask how to get an app reviewed.", parameters: obj({ app: APP, version: str("The version — a date or 'latest'; omit for the latest.") }, ['app']) },
+  { name: 'reorder_screens', description: "Lay out one version of an app's screens so the admin can drag them into a new order and save it. Use it when they want to reorder, rearrange or change the order or position of screens.", parameters: obj({ app: APP, version: str("The version — a date or 'latest'; omit for the latest.") }, ['app']) },
+  { name: 'show_screens', description: "Show the admin an app's screens as thumbnails they can look at and tap to pick — all versions, or one. Use it whenever they need to choose screens (to delete, rename, reorder) or ask to see them. This is how they see images.", parameters: obj({ app: APP, version: str("A version — a date or 'latest' — to show only that one; omit for all."), kind: str("Only screens of one kind, when the admin asks for some — a screen type, state, element or part of the name, like 'bottom sheet', 'login', 'paywall', 'settings'. Omit for all.") }, ['app']) },
+  { name: 'list_unreviewed', description: "The uploads (an app's dated version on one platform) have not been reviewed yet. Use when the admin asks what needs review, what is not reviewed, or which apps still need checking.", parameters: obj({}) },
+  { name: 'get_runs', description: 'The video ingest runs — what is running now and how far, and recent finished ones.', parameters: obj({}) },
+  { name: 'get_ai', description: 'Which AI models are connected and what each does.', parameters: obj({}) },
+];
+
+/** Write tools: never run here — validated, then offered to the admin as one Confirm button. */
+/** Drops the change waiting for the admin's Confirm, when they back out of it in any words. */
+const CANCEL_TOOL: ToolDef = { name: 'cancel_offer', description: "Withdraw the change you proposed that is waiting for the admin's Confirm, when they back out of it ('no', 'cancel', 'leave it', 'not that'). Nothing changes.", parameters: obj({}, []) };
+
+const WRITE_TOOLS: (ToolDef & { kind: string })[] = [
+  { kind: 'remove-app', name: 'remove_app', description: 'Remove an entire app: all its screens, flows and versions. For "delete X" with no version, screen or flow named.', parameters: obj({ app: APP }, ['app']) },
+  { kind: 'delete-app-version', name: 'delete_version', description: "Delete one dated version (capture) of an app and its screens. Only when a version is meant — 'the Sep 29 version', 'the latest capture'.", parameters: obj({ app: APP, version: str("Which version — a date like '29 Sep 2026', '2026-09-29', or 'latest'.") }, ['app', 'version']) },
+  { kind: 'rename-app-version', name: 'change_version_date', description: "Change the date of one of an app's versions. The newest date is the one shown as 'Latest'.", parameters: obj({ app: APP, version: str("The version to change — a date or 'latest'."), to: str('The new date the admin wrote, e.g. 2026-10-05 or 5 Oct 2026.') }, ['app', 'version', 'to']) },
+  { kind: 'delete-screen', name: 'delete_screen', description: 'Delete one screen of an app for good.', parameters: obj({ app: APP, screen: SCREEN, version: VERSION_OF_SCREEN }, ['app', 'screen']) },
+  { kind: 'delete-screens', name: 'delete_screens', description: 'Delete several screens of an app at once, by name or by pasted link.', parameters: obj({ app: APP, screens: strList('The screens — names, or links the admin pasted.'), version: VERSION_OF_SCREEN }, ['app', 'screens']) },
+  { kind: 'rename-screen', name: 'rename_screen', description: 'Rename a screen.', parameters: obj({ app: APP, screen: SCREEN, to: str('The new name, in the admin’s words.'), version: VERSION_OF_SCREEN }, ['app', 'screen', 'to']) },
+  { kind: 'set-screen-type', name: 'set_screen_type', description: 'Set a screen’s type (splash, onboarding, login, home, checkout, …).', parameters: obj({ app: APP, screen: SCREEN, to: str('The screen type.'), version: VERSION_OF_SCREEN }, ['app', 'screen', 'to']) },
+  { kind: 'set-screen-tags', name: 'set_screen_tags', description: 'Add tags to a screen, or replace its tags.', parameters: obj({ app: APP, screen: SCREEN, tags: strList('The tags.'), mode: { type: 'string', enum: ['add', 'replace'], description: 'add keeps existing tags; replace drops them.' }, version: VERSION_OF_SCREEN }, ['app', 'screen', 'tags']) },
+  { kind: 'set-screen-description', name: 'set_screen_description', description: 'Set the one- or two-sentence description of a screen.', parameters: obj({ app: APP, screen: SCREEN, to: str('The description, in the admin’s words.'), version: VERSION_OF_SCREEN }, ['app', 'screen', 'to']) },
+  { kind: 'set-screen-details', name: 'set_screen_details', description: 'Set a screen’s captured date, its list of components (elements), or its style tags.', parameters: obj({ app: APP, screen: SCREEN, capturedAt: str('The capture date the admin wrote, if any.'), elements: strList('Component names, if given.'), style: strList('Style tags from the allowed list, if given.'), version: VERSION_OF_SCREEN }, ['app', 'screen']) },
+  { kind: 'update-app', name: 'update_app', description: "Change an app's name, tagline, industry or website (the App Store / site link). Only values the admin wrote, or asked you to suggest.", parameters: obj({ app: APP, fields: obj({ name: str('New name.'), tagline: str('New tagline.'), industry: str('Industry from the allowed list.'), website: str('The link, exactly as the admin gave it.') }) }, ['app', 'fields']) },
+  { kind: 'update-app', name: 'rename_app', description: "Rename an app — change the app's own name (not a screen or flow).", parameters: obj({ app: APP, to: str('The new name, in the admin’s words.') }, ['app', 'to']) },
+  { kind: 'create-app', name: 'create_app', description: 'Create an app record with no screens yet, by name. Only when the admin gives a name and no recording — otherwise use upload_recording.', parameters: obj({ to: str('The new app’s name.'), industry: str('Industry from the allowed list. Use the one the admin said; otherwise, if you genuinely recognise the app from its name (Airbnb → travel, Spotify → entertainment), give that; if you do not recognise it, leave this out — never guess.') }, ['to']) },
+  { kind: 'set-logo', name: 'set_logo', description: "Set an app's logo from the image the admin dropped (or will pick on confirm).", parameters: obj({ app: APP }, ['app']) },
+  { kind: 'add-screen', name: 'add_screen', description: 'Add the dropped image to an app as a new screen.', parameters: obj({ app: APP, version: str("The version to add it to — a date or 'latest'; omit for the newest.") }, ['app']) },
+  { kind: 'create-flow', name: 'create_flow', description: 'Create a flow (an ordered journey of screens) in an app.', parameters: obj({ app: APP, to: str('The flow’s name.'), category: str('A flow category, if said.'), screens: strList('Screen names in order, if given.') }, ['app', 'to']) },
+  { kind: 'rename-flow', name: 'rename_flow', description: 'Rename one flow or section. When the admin asks for a better or meaningful name without giving one, read the flow\'s steps first (list_flows) and choose a short name for what the person does there — never run fix_flows for one name.', parameters: obj({ app: str('The app, if known.'), flow: FLOW, to: str('The new name.') }, ['flow', 'to']) },
+  { kind: 'delete-flow', name: 'delete_flow', description: 'Delete a flow; its screens stay.', parameters: obj({ app: str('The app, if known.'), flow: FLOW }, ['flow']) },
+  { kind: 'set-flow-category', name: 'set_flow_category', description: 'File a flow under a category.', parameters: obj({ app: str('The app, if known.'), flow: FLOW, to: str('The category.') }, ['flow', 'to']) },
+  { kind: 'set-flow-parent', name: 'set_flow_parent', description: 'Nest a flow under another, or make it top-level.', parameters: obj({ app: str('The app, if known.'), flow: FLOW, parent: str('The parent flow’s name, or "none" for top level.') }, ['flow']) },
+  { kind: 'add-to-flow', name: 'add_to_flow', description: 'Add screens to a flow.', parameters: obj({ app: APP, flow: FLOW, screens: strList('Screen names.') }, ['app', 'flow', 'screens']) },
+  { kind: 'remove-from-flow', name: 'remove_from_flow', description: 'Take screens out of a flow; they stay in the library.', parameters: obj({ app: APP, flow: FLOW, screens: strList('Screen names.') }, ['app', 'flow', 'screens']) },
+  { kind: 'reorder-flow', name: 'reorder_flow', description: 'Reorder the steps of a flow: move one step (to a position, or before/after another step), or give the full new order.', parameters: obj({ app: str('The app, if known.'), flow: FLOW, screen: str('The one step to move, if moving one.'), position: str("1-based position, or 'first'/'last'."), before: str('The step it should go before.'), after: str('The step it should go after.'), screens: strList('Every step in the new order, if giving the whole order.') }, ['flow']) },
+  { kind: 'set-source-status', name: 'set_source_status', description: "Mark an app's source record pending, review, approved or rejected. Approved apps are published.", parameters: obj({ app: APP, to: { type: 'string', enum: ['pending', 'review', 'approved', 'rejected'] }, permission: { type: 'string', enum: ['owner-granted', 'open-source', 'public-domain', 'own-work', 'fair-use-reference'], description: "Approving needs the basis on which the app may be shown, when its record has none — ask the admin which; never guess." } }, ['app', 'to']) },
+  { kind: 'rebuild', name: 'rebuild_index', description: 'Rebuild the library index from what is stored. Rarely needed — every change already does it.', parameters: obj({}) },
+  { kind: 'stop-run', name: 'stop_run', description: 'Stop the video ingest run that is going.', parameters: obj({}) },
+  { kind: 'research-app', name: 'rewrite_names', description: "Have the AI rewrite an app's screen and flow names from its stored screens. Names only — the flows stay as they are.", parameters: obj({ app: APP }, ['app']) },
+  { kind: 'research-app', name: 'fix_flows', description: "Rebuild an app's flows from the screens already in the library, the way a new recording's flows are made today: every flow checked to be one task (mixed ones split), the same task walked twice merged, categories set from what each flow does, then the flow and screen names rewritten. Use only when the admin asks to fix, rebuild or redo an app's whole flow structure — the screens they already added, no new upload. It reworks every flow of the app and takes several minutes; renaming one flow is rename_flow, never this.", parameters: obj({ app: APP }, ['app']) },
+  { kind: 'set-ai', name: 'set_ai', description: 'Switch the chat AI model, or turn the AI off/on.', parameters: obj({ model: str('A model name the server lists.'), enabled: { type: 'boolean', description: 'false to turn the AI off, true to turn it on.' } }) },
+  { kind: 'upload', name: 'upload_recording', description: 'Open the file picker for screenshots or a screen recording. This is how a new app — or new screens for an existing one — gets added; use it for "add an app", "new app", "add screens to X", "upload". Pass app when they named one, so the files go straight to it.', parameters: obj({ app: str('The app the new screens are for, when they named one; omit for a new app.') }) },
+  { kind: 'open', name: 'open_page', description: 'Give the admin a button to a page of the library or to an app.', parameters: obj({ page: str('explore, apps, screens, ui elements, flows, patterns, collections or admin.'), app: str('An app, to open its page.') }) },
+];
+
+const SYSTEM = `You are the Motvin assistant — the helper inside Motvin Inspirations, a design-reference library of real app screens and flows — talking with the library's admin. Talk the way a thoughtful, capable colleague does in chat: warm, natural, clear and helpful, like ChatGPT. Plain text only: no markdown headings, tables or code, and never write a URL or a file path (links come as buttons).
+
+You are talking to the admin directly: call them "you", never "the admin". A greeting gets a friendly greeting back; bring up earlier work only when it matters to what they just said.
+
+Understand people the way a person would:
+- Read the whole conversation, not just the last message. Short replies ("yes", "the second one", "that", "no, the other", "same for Notion", "again") answer or continue what was just said; work out what they refer to from your last message and act on that.
+- Read through typos, missing spaces and casual wording: "yourwish", "ur wish", "u decide", "up to u", "whatever", "anything", "surprise me" all mean "you choose — do it for me". "tagline txt", "chnge", "delte", "screnshots" are tagline, change, delete, screenshots.
+- When the admin leaves the wording to you, write it yourself — a good one that fits the app — and say it is your suggestion. When a value is needed and they gave none, offer a suggestion and ask if it works, or ask naturally what they would like ("Got a line in mind, or shall I suggest one?"). Never demand they "type it exactly".
+- When a message could mean two different changes, ask one short question offering both. Otherwise just do the most likely thing.
+- A general question ("what is a bottom sheet?", "how should onboarding work?") is answered in words, from what you know — don't show screens or propose a change unless they ask for it.
+- Answer any question helpfully, not only questions about the library: design and UX advice, how an app works, what a pattern is called, how to use this tool, or simple chat. Use what you know; for facts about the library, look them up with the read tools first.
+- Match the length to the message: a sentence or two for an action or a quick answer, a short paragraph or a few lines when they ask for an explanation, ideas or advice.
+
+You act on the library through tools, and only through tools.
+- Read tools (list_apps, get_app, list_screens, list_flows, get_runs, get_ai) tell you what exists. Call them whenever you are not certain of a name, a version, a count or a run — never guess or invent an app, screen, flow, date or number.
+- Write tools propose ONE change. You never perform it: the admin sees your proposal with a Confirm button, and nothing happens until they press it. So never say a change is done, saved or removed — say what will happen once they confirm.
+- If a write tool comes back with a problem (not found, ambiguous, a value missing), do not retry the same call: look it up with a read tool, or ask the admin one short question.
+- "delete Swiggy" / "remove the app" is remove_app. "Sorry, version" or "I mean the version" right after that is delete_version for the same app — carry the subject over from your last proposal. A screen, flow, tagline or logo named makes it about that part, not the app.
+- "Add an app", "add a new app", "new app", "another app", "upload" is upload_recording, at once — the app, its name and its screens all come from the screen recording, so never ask for a name or industry first. Only "create an app called X" (a name given, no recording) is create_app.
+- Names and links must be the admin's own words. A tagline or description may be yours when they ask for one or leave it to you — then say it is a suggestion.
+- A bare "yes" or "ok" with nothing proposed means nothing; the Confirm button is how things go ahead.
+- Never announce that you will look something up or do something — call the tool in this same turn instead. Words without a tool call change nothing.
+- To see screens, the admin needs show_screens — it puts thumbnails in the chat that they can tap to select and delete. Call it when they ask to see, list or pick screens, or when they want to delete or rename screens without saying which. Never say you cannot show images.
+- A screen link the admin pastes (…/api/inspirations/screens/…) names that screen exactly; pass it unchanged as the screen.
+
+If you proposed a change, say plainly what will happen when they confirm. If you looked something up, answer from what it returned. If nothing needs changing, just answer, or ask.`;
+
+// ─── The turn ────────────────────────────────────────────────────────────────
+
+const norm = (text: string) => text.toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, ' ').trim();
+
+function findApp(state: LibraryState | null, wanted: unknown) {
+  const needle = norm(String(wanted ?? ''));
+  if (!needle) return null;
+  const apps = state?.apps ?? [];
+  return apps.find((app) => norm(app.name) === needle || app.id === needle.replace(/\s+/g, '-')) ?? apps.find((app) => norm(app.name).startsWith(needle) || needle.startsWith(norm(app.name))) ?? apps.find((app) => needle.includes(norm(app.name))) ?? null;
+}
+
+function screenNameOf(file: { file: string; sidecar?: { name?: string } | null }): string {
+  // Without a saved name, the file's own name — not its version folder ("versions/2026-10-23/home.webp" is "home").
+  return file.sidecar?.name || file.file.replace(/^versions\/[^/]+\//, '').replace(/\.[^.]+$/, '').replace(/[-_/]+/g, ' ');
+}
+
+/**
+ * What became of a proposal that is no longer waiting, read off the library
+ * itself rather than guessed: a change to an app's details shows in its
+ * record once it was confirmed.
+ */
+function outcomeOf(op: AdminOp, state: LibraryState | null): string {
+  if (op.kind === 'update-app') {
+    const app = (state?.apps ?? []).find((entry) => entry.id === op.appId);
+    const record = (app ?? {}) as unknown as Record<string, unknown>;
+    const applied = Object.entries(op.fields).every(([key, value]) => norm(String(record[key] ?? '')) === norm(String(value ?? '')));
+    const now = Object.keys(op.fields).map((key) => `${key} “${String(record[key] ?? '')}”`).join(', ');
+    return applied ? `it was confirmed — the library shows it` : `it was NOT applied (the admin cancelled it or never confirmed) — the library still shows ${app?.name ?? 'the app'}'s ${now}`;
+  }
+  return 'whether it was confirmed or cancelled shows only in the conversation — do not guess';
+}
+
+/** What a read tool says, as text for the model. */
+function answerRead(name: string, args: Record<string, unknown>, deps: AgentDeps): string {
+  const state = deps.state;
+  const apps = state?.apps ?? [];
+  const files = state?.files ?? [];
+  const flows = state?.flows ?? [];
+  const versionsOf = (app: { versions?: { id: string; label: string; isLatest: boolean }[] }) => (app.versions ?? []).map((v) => (v.isLatest ? `Latest (${v.label}, id ${v.id})` : `${v.label} (id ${v.id})`)).join(', ') || 'none';
+  const flowLine = (flow: { name: string; screenIds?: string[]; parentId?: string | null }) => `${flow.name}${flow.parentId ? ` (under ${flows.find((entry) => entry.id === flow.parentId)?.name ?? '?'})` : ''}: ${(flow.screenIds ?? []).map((id) => screenNameOf(files.find((file) => file.id === id) ?? { file: id })).join(' → ') || 'no steps'}`;
+  switch (name) {
+    case 'list_apps':
+      return apps.length
+        ? apps.map((app) => `${app.name} (id ${app.id}): ${files.filter((file) => file.appId === app.id).length} screens, ${flows.filter((flow) => flow.appId === app.id).length} flows. Versions: ${versionsOf(app)}.`).join('\n')
+        : 'The library has no apps yet.';
+    case 'get_app':
+    case 'list_screens':
+    case 'list_flows': {
+      const app = findApp(state, args.app);
+      if (!app) return `No app called “${String(args.app ?? '')}”. The apps are: ${apps.map((entry) => entry.name).join(', ') || 'none'}.`;
+      const own = files.filter((file) => file.appId === app.id);
+      const ownFlows = flows.filter((flow) => flow.appId === app.id);
+      if (name === 'list_flows') return ownFlows.length ? ownFlows.map(flowLine).join('\n') : `${app.name} has no flows.`;
+      const wantedVersion = typeof args.version === 'string' && args.version.trim() ? args.version.trim() : '';
+      const versions = app.versions ?? [];
+      const byVersion = (versionId: string) => own.filter((file) => file.version === versionId).map((file) => `${screenNameOf(file)}${file.sidecar && 'screenType' in file.sidecar && file.sidecar.screenType ? ` [${String(file.sidecar.screenType)}]` : ''}`);
+      const grouped = versions
+        .filter((v) => !wantedVersion || v.id === wantedVersion || norm(v.label) === norm(wantedVersion) || (/^latest$/i.test(wantedVersion) && v.isLatest) || norm(v.label).includes(norm(wantedVersion)))
+        .map((v) => {
+          const names = byVersion(v.id);
+          return `${v.isLatest ? `Latest (${v.label})` : v.label} — ${names.length} screen${names.length === 1 ? '' : 's'}: ${names.join(', ') || 'none'}`;
+        });
+      if (!versions.length && own.length) grouped.push(`Undated — ${own.length} screen${own.length === 1 ? '' : 's'}: ${own.map(screenNameOf).join(', ')}`);
+      if (name === 'list_screens') return grouped.length ? `${app.name} has ${own.length} screen${own.length === 1 ? '' : 's'} in all.\n${grouped.join('\n')}` : `${app.name} has no version like “${wantedVersion}”. Its versions: ${versionsOf(app)}.`;
+      return [
+        `${app.name} (id ${app.id}): tagline “${app.tagline ?? ''}”, industry ${app.industry ?? '?'}, website ${app.website ?? 'none'}, logo ${app.logo ? 'set' : 'none'}, source status ${state?.sources?.[app.id]?.status ?? 'unknown'}.`,
+        `Versions, newest first: ${versionsOf(app)}.`,
+        `${own.length} screen${own.length === 1 ? '' : 's'} in all, by version:\n${grouped.join('\n') || 'none'}`,
+        `Flows:\n${ownFlows.map(flowLine).join('\n') || 'none'}`,
+      ].join('\n');
+    }
+    case 'get_runs': {
+      const now = Date.now();
+      return deps.jobs.length ? deps.jobs.slice(0, 5).map((job) => `- ${deps.describeJob(job, now)}`).join('\n') : 'No runs since the server started.';
+    }
+    case 'list_unreviewed': {
+      // Every app version that has screens, less the ones in the library's reviewed list.
+      const reviewed = new Set(readReviewedMarks());
+      const uploads = new Map<string, { app: string; platform: string; version: string }>();
+      for (const file of files) {
+        if (!file.version) continue;
+        const app = apps.find((entry) => entry.id === file.appId);
+        uploads.set(`${file.appId}-${file.platform}-${file.version}`, { app: app?.name ?? file.appId, platform: file.platform, version: file.version });
+      }
+      const waiting = [...uploads.entries()].filter(([key]) => !reviewed.has(key)).map(([, upload]) => upload);
+      return waiting.length
+        ? `Not reviewed yet:\n${waiting.map((upload) => `- ${upload.app} — ${upload.platform}, version ${upload.version}`).join('\n')}\nUse ask_claude_review to give the admin the review button for one.`
+        : 'Every upload in the library has been reviewed.';
+    }
+    case 'get_ai':
+      return deps.describeAi(deps.ai);
+    default:
+      return `Unknown tool ${name}.`;
+  }
+}
+
+/** One line of the thinking thread for a tool call, in plain words. */
+function stepText(call: ToolCall, state: LibraryState | null): string {
+  const app = findApp(state, call.args.app)?.name ?? (typeof call.args.app === 'string' ? call.args.app : '');
+  const version = typeof call.args.version === 'string' && call.args.version.trim() ? ` (${call.args.version.trim()})` : '';
+  const screen = typeof call.args.screen === 'string' ? ` “${call.args.screen}”` : Array.isArray(call.args.screens) ? ` ${call.args.screens.length} screens` : '';
+  const flow = typeof call.args.flow === 'string' ? ` “${call.args.flow}”` : '';
+  switch (call.name) {
+    case 'list_apps':
+      return 'Looked at the app list';
+    case 'get_app':
+      return `Read ${app || 'the app'} in full`;
+    case 'list_screens':
+      return `Listed ${app || 'the app'}’s screens${version}`;
+    case 'list_flows':
+      return `Listed ${app || 'the app'}’s flows`;
+    case 'get_runs':
+      return 'Checked the runs';
+    case 'list_unreviewed':
+      return 'Checked which uploads still need a review';
+    case 'get_ai':
+      return 'Checked the AI';
+    case 'show_screens':
+      return `Gathered ${app || 'the app'}’s screens${version} to show`;
+    case 'upload_recording':
+      return 'Reached for the recording picker';
+    case 'open_page':
+      return 'Picked a page to open';
+    default: {
+      const tool = WRITE_TOOLS.find((entry) => entry.name === call.name);
+      const verb = tool ? tool.name.replace(/_/g, ' ') : call.name;
+      return `Proposed: ${verb}${app ? ` — ${app}` : ''}${screen}${flow}${version}`;
+    }
+  }
+}
+
+/**
+ * The thumbnails for show_screens: an app's screens, in one version or all,
+ * as the dock renders them — image path, name, and what a delete of each
+ * would need.
+ */
+function screensToShow(state: LibraryState | null, args: Record<string, unknown>): { action?: AssistantAction; note?: string } {
+  const app = findApp(state, args.app);
+  const apps = state?.apps ?? [];
+  if (!app) return { note: `No app called “${String(args.app ?? '')}”. The apps are: ${apps.map((entry) => entry.name).join(', ') || 'none'}.` };
+  const own = (state?.files ?? []).filter((file) => file.appId === app.id);
+  const wanted = typeof args.version === 'string' ? args.version.trim() : '';
+  const versions = app.versions ?? [];
+  const version = wanted ? versions.find((v) => v.id === wanted || norm(v.label) === norm(wanted) || (/^(latest|newest|new|current)$/i.test(wanted) && v.isLatest) || norm(v.label).includes(norm(wanted))) ?? null : null;
+  if (wanted && !version) return { note: `${app.name} has no version like “${wanted}”. Its versions: ${versions.map((v) => (v.isLatest ? `Latest (${v.label})` : v.label)).join(', ') || 'none'}.` };
+  const inVersion = version ? own.filter((file) => file.version === version.id) : own;
+  // Only screens of one kind, when asked for ("bottom sheets", "login",
+  // "paywalls"): matched on the screen's type, states, elements, name and flow.
+  const kind = typeof args.kind === 'string' ? norm(args.kind).replace(/[_-]+/g, ' ').replace(/s$/, '') : '';
+  const words = kind.split(' ').filter((word) => word.length >= 3);
+  const about = (file: (typeof own)[number]) => {
+    const sidecar = (file.sidecar ?? {}) as Record<string, unknown>;
+    const bits = [sidecar.screenType, sidecar.fineType, ...(Array.isArray(sidecar.states) ? sidecar.states : []), ...(Array.isArray(sidecar.elements) ? sidecar.elements : []), ...(Array.isArray(sidecar.tags) ? sidecar.tags : []), screenNameOf(file), splitScreenFile(file.file, file.version ?? '').flow ?? '']
+      .map((bit) => norm(String(bit ?? '')).replace(/[_-]+/g, ' '))
+      .join(' | ');
+    return bits;
+  };
+  const pool = words.length ? inVersion.filter((file) => words.every((word) => about(file).includes(word))) : inVersion;
+  if (!pool.length) return { note: `${app.name} has no ${kind ? `${kind} screens` : 'screens'}${version ? ` in its ${version.label} version` : ''}.` };
+  const platform = pool[0].platform;
+  const screens = pool
+    .filter((file) => file.platform === platform)
+    .slice(0, 60)
+    .map((file) => {
+      const part = splitScreenFile(file.file, file.version ?? '');
+      const type = (file.sidecar as { screenType?: string } | null | undefined)?.screenType;
+      return { id: file.id ?? file.file, name: screenTitle({ name: screenNameOf(file), screenType: type }), path: `/api/inspirations/screens/${file.platform}/${file.appId}/${file.file}`, file: part.name, version: part.version, flow: part.flow };
+    });
+  const label = `${version ? (version.isLatest ? `Latest (${version.label})` : version.label) : 'all versions'}${kind ? `, ${kind} screens only` : ''}`;
+  return {
+    action: { type: 'screens', appId: app.id, appName: app.name, platform, versionId: version?.id, versionLabel: version?.label, screens },
+    note: `${screens.length} screen${screens.length === 1 ? '' : 's'} of ${app.name}, ${label}.`,
+  };
+}
+
+/**
+ * A name the admin put in quotes is the one they mean: when their message
+ * quotes a flow or screen that exists ("rename the “Ch” flow to “Getting
+ * started”") and the model aimed the change at a different one — misled by
+ * an earlier turn — the quoted one is put back. The value being set (a new
+ * name in quotes) is never taken for the target.
+ */
+function pinQuotedTarget(op: ParsedOp, question: string, state: LibraryState | null): ParsedOp {
+  // An upload goes to an app only when this message names it: "show me" or
+  // "add an app" after a talk about Claude is not "add screens to Claude" —
+  // with no app named, the picker opens for a new app and asks.
+  if (op.kind === 'upload' && op.app) {
+    const app = findApp(state, op.app);
+    const names = [String(op.app), app?.name, app?.id].filter(Boolean).map((name) => String(name).toLowerCase());
+    if (!names.some((name) => question.toLowerCase().includes(name))) return { ...op, app: null };
+  }
+  const quoted = [...question.matchAll(/[“"‘']([^”"’']{2,80})[”"’']/g)].map((match) => match[1].trim());
+  if (!quoted.length) return op;
+  const same = (a: unknown, b: unknown) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+  const value = typeof op.to === 'string' ? op.to : typeof (op.fields as { name?: unknown } | undefined)?.name === 'string' ? (op.fields as { name: string }).name : null;
+  const candidates = quoted.filter((text) => !same(text, value));
+  if (op.flow !== undefined && op.flow !== null) {
+    const flows = state?.flows ?? [];
+    const named = candidates.find((text) => flows.some((flow) => same(flow.name, text)));
+    if (named && !candidates.some((text) => same(text, op.flow))) return { ...op, flow: named };
+  }
+  if (op.screen !== undefined && op.screen !== null) {
+    const files = state?.files ?? [];
+    const named = candidates.find((text) => files.some((file) => same((file.sidecar as { name?: string } | null | undefined)?.name, text)));
+    if (named && !candidates.some((text) => same(text, op.screen))) return { ...op, screen: named };
+  }
+  return op;
+}
+
+/** The write tool's arguments, as the operation assistant.ts validates. */
+function toParsedOp(tool: (typeof WRITE_TOOLS)[number], args: Record<string, unknown>): ParsedOp {
+  const text = (key: string) => (typeof args[key] === 'string' ? (args[key] as string) : typeof args[key] === 'number' ? String(args[key]) : undefined);
+  const op: ParsedOp = { kind: tool.kind, app: text('app') ?? null };
+  if (tool.name === 'fix_flows') return { ...op, mode: 'restructure' };
+  if (tool.name === 'rename_app') return { ...op, fields: { name: text('to') ?? '' } };
+  if (tool.kind === 'delete-app-version') op.to = text('version');
+  else {
+    if (args.version !== undefined) op.version = text('version') ?? null;
+    if (args.to !== undefined) op.to = text('to');
+  }
+  if (args.screen !== undefined) op.screen = text('screen');
+  if (args.flow !== undefined) op.flow = text('flow');
+  if (args.tags !== undefined) op.tags = args.tags;
+  if (args.mode !== undefined) op.mode = text('mode');
+  if (args.screens !== undefined) op.screens = args.screens;
+  if (args.category !== undefined) op.category = text('category') ?? null;
+  if (args.parent !== undefined) op.parent = text('parent') ?? null;
+  if (args.page !== undefined) op.page = text('page') ?? null;
+  if (args.model !== undefined) op.model = text('model') ?? null;
+  if (typeof args.enabled === 'boolean') op.enabled = args.enabled;
+  if (args.fields && typeof args.fields === 'object') op.fields = args.fields as Record<string, unknown>;
+  if (args.position !== undefined) op.position = typeof args.position === 'number' ? args.position : text('position') ?? null;
+  if (args.before !== undefined) op.before = text('before') ?? null;
+  if (args.after !== undefined) op.after = text('after') ?? null;
+  if (args.capturedAt !== undefined) op.capturedAt = text('capturedAt') ?? null;
+  if (args.elements !== undefined) op.elements = args.elements;
+  if (args.style !== undefined) op.style = args.style;
+  if (args.industry !== undefined) op.industry = text('industry') ?? null;
+  if (typeof args.permission === 'string') op.permission = args.permission;
+  return op;
+}
+
+/**
+ * The conversation so far, as turns. The dock keeps only words, but the
+ * model learns from what it sees: an assistant line that reads as a
+ * proposal with no call behind it teaches it to answer in words alone. So
+ * the most recent proposal is shown as the tool call it was, with its
+ * result, before the line that described it.
+ */
+const INTERPRET = `You read one message in a chat between an app-library admin and their assistant, and say in one plain sentence what the admin means and wants — reading it against the conversation before it, the way a thoughtful person would.
+
+Resolve what the message refers to ("the second one", "that", "same for Notion"), what question of the assistant's it answers, typos and texting shorthand ("u" is you, "ur" is your, "yourwish" or "ur wish" or "up to u" means "you choose it for me"), and agreement or refusal ("proceed", "go ahead", "nah"). If they leave a choice to the assistant, say so plainly: "They want you to write the tagline yourself." If the message is a greeting or a general question, say that. Write only the sentence.`;
+
+const PROMISE_CHECK = `You check one reply an assistant wrote to an app-library admin. The assistant can only change the library by proposing the change with a tool (which shows a Confirm button). Answer "yes" if the reply says it will make, is making or has made a specific change to the library — set, update, rename, delete, add, move a particular thing — or that it will cancel or drop a waiting change, or asks the admin to confirm one, or that it will open or show something for them (the file picker or an upload, a page, screens to look at or put in order). Answer "no" if it only answers, explains, suggests ideas, or asks a question. Answer with one word: yes or no.`;
+
+/** Whether a reply in words promises a library change (one that must have a proposal behind it). */
+async function promisedWithoutActing(config: AgentConfig, model: string, meaning: string, reply: string, signal?: AbortSignal): Promise<boolean> {
+  const verdict = await chat(
+    config,
+    model,
+    [
+      { role: 'system', content: PROMISE_CHECK },
+      { role: 'user', content: `${meaning ? `What the admin wanted: ${meaning}\n\n` : ''}The reply: ${reply.slice(0, 800)}` },
+    ],
+    [],
+    { signal },
+  );
+  return /^\s*yes\b/i.test(verdict.content);
+}
+
+/** One short call: the admin's message restated as what they mean, against the conversation. */
+async function interpret(config: AgentConfig, model: string, history: HistoryLine[], question: string, signal?: AbortSignal): Promise<string> {
+  const convo = history.map((line) => `${line.role === 'user' ? 'Admin' : 'Assistant'}: ${line.text.slice(0, 400)}`).join('\n');
+  const reply = await chat(
+    config,
+    model,
+    [
+      { role: 'system', content: INTERPRET },
+      { role: 'user', content: `${convo ? `The conversation so far:\n${convo}\n\n` : ''}The admin's new message: ${question}` },
+    ],
+    [],
+    { signal },
+  );
+  return reply.content.trim().replace(/\s+/g, ' ').slice(0, 300);
+}
+
+function historyTurns(history: HistoryLine[], lastOp: AdminOp | null): Turn[] {
+  const turns: Turn[] = [];
+  const lastAssistant = [...history].reverse().find((line) => line.role === 'assistant');
+  const tool = lastOp ? WRITE_TOOLS.find((entry) => entry.kind === lastOp.kind && (lastOp.kind !== 'research-app' || (entry.name === 'fix_flows') === ((lastOp as { restructure?: boolean }).restructure === true))) : null;
+  for (const line of history) {
+    if (line.role === 'user') {
+      turns.push({ role: 'user', content: line.text });
+      continue;
+    }
+    if (line === lastAssistant && tool && lastOp) {
+      const record = lastOp as unknown as Record<string, unknown>;
+      const args: Record<string, unknown> = {};
+      if (typeof record.name === 'string' && 'appId' in record && !('flowId' in record) && !('file' in record)) args.app = record.name;
+      else if (typeof record.appId === 'string') args.app = record.appId;
+      if (typeof record.file === 'string') args.screen = record.name;
+      if (typeof record.flowId === 'string') args.flow = record.name;
+      if (typeof record.versionLabel === 'string') args.version = record.versionLabel;
+      if (record.fields && typeof record.fields === 'object') args.fields = record.fields;
+      turns.push({ role: 'assistant', content: '', tool_calls: [{ function: { name: tool.name, arguments: args } }] });
+      turns.push({ role: 'tool', tool_name: tool.name, content: 'Proposed to the admin, waiting for their Confirm. Nothing has happened yet.' });
+    }
+    turns.push({ role: 'assistant', content: line.text });
+  }
+  return turns;
+}
+
+/**
+ * One turn. Null when no tool-capable model is available, so the caller can
+ * fall back to the older pipeline.
+ */
+export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<AssistantAnswer | null> {
+  const config = agentConfig();
+  const model = await pickAgentModel(config);
+  if (!model) return null;
+
+  const apps = deps.state?.apps ?? [];
+  // What rarely changes goes in the system prompt, so the server's prompt
+  // cache covers it turn after turn; what changes every turn rides with the
+  // question. (A system message anywhere in the list is folded into the
+  // prefix by the chat template, so a changing one would throw the whole
+  // cache away — twenty seconds a turn on a 14B model.)
+  const standing = [
+    `Today: ${localDateString()}.`,
+    `Apps in the library: ${apps.map((app) => `${app.name} (versions: ${(app.versions ?? []).map((v) => (v.isLatest ? `Latest = ${v.label}` : v.label)).join(', ') || 'none'})`).join('; ') || 'none yet'}.`,
+    `Screen types: ${(deps.state?.vocabulary?.screenTypes ?? []).map((entry) => entry.replace(/_/g, ' ')).join(', ')}. Flow categories: ${(deps.state?.vocabulary?.flowCategories ?? []).join(', ')}. Industries: ${(deps.state?.vocabulary?.industries ?? []).join(', ')}. Styles: ${(deps.state?.vocabulary?.styles ?? []).join(', ')}.`,
+  ].join('\n');
+  const rightNow = [
+    input.pending ? `an earlier proposal is still waiting for the admin's Confirm: “${input.pending}” — it has not happened` : 'nothing is waiting for confirmation',
+    input.lastOp && input.pending ? `that waiting proposal is ${JSON.stringify(input.lastOp)}, and a short correction refers to it` : null,
+    input.heldImage ? `the admin has dropped an image named “${input.heldImage}” — “this” or “this image” means it (set_logo or add_screen)` : null,
+    input.expecting ? `you asked the admin to type the ${input.expecting.field} for ${input.expecting.app}; unless this message is clearly something else, it is that ${input.expecting.field}, word for word — call update_app with it` : null,
+    deps.jobs.some((job) => job.status === 'running' || job.status === 'uploading') ? 'a run is in progress' : 'no run is in progress',
+    deps.describeAi(deps.ai),
+  ]
+    .filter(Boolean)
+    .join('; ');
+
+  // First, what they mean. A person reads a message against what came
+  // before it — "yourwish" after "what tagline?", "the second one", "proceed"
+  // after a suggestion — and so does the model, in one short call of its own,
+  // before it decides what to do. Its reading goes along with their words.
+  const meaning = await interpret(config, model, input.history.slice(-8), input.question, deps.signal).catch(() => '');
+  const messages: Turn[] = [
+    {
+      role: 'system',
+      content: `${SYSTEM}\n\nStanding facts:\n${standing}${
+        input.lastOp && !input.pending
+          ? `\n\nBackground — use only if they ask about it or refer back to it ("that tagline", "the one before"): your last proposal was ${JSON.stringify(input.lastOp)}; ${outcomeOf(input.lastOp, deps.state)}. Don't bring it up otherwise.`
+          : ''
+      }`,
+    },
+    ...historyTurns(input.history.slice(-20), input.lastOp),
+    {
+      role: 'user',
+      content: `${input.question}\n\n[Note, not from the admin — ${meaning ? `what they mean, read against the conversation: ${meaning} — ` : ''}right now: ${rightNow}.]`,
+    },
+  ];
+  const tools = [...READ_TOOLS, ...WRITE_TOOLS, CANCEL_TOOL];
+
+  let action: AssistantAction | undefined;
+  // Reminders to act on words — one more after a failed attempt (a wrong
+  // name, corrected from the tool's answer) is allowed.
+  let reminders = 0;
+  let retriedEmpty = false;
+  let note: string | undefined;
+  let lastContent = '';
+  let lastNote: string | undefined;
+  // Each round streams its words as they come. Words written on the way to
+  // a tool call, or before a reminder, were the model working rather than
+  // answering: they are folded into the reply's thinking thread, where each
+  // lookup and each checked change is shown as a step — so the admin can
+  // watch, and afterwards open, what happened between question and answer.
+  let streamedRounds = 0;
+  let spokeThisRound = false;
+  const sink: ChatOptions = {
+    signal: deps.signal,
+    onToken: deps.onToken
+      ? (piece) => {
+          if (!spokeThisRound) {
+            spokeThisRound = true;
+            streamedRounds++;
+          }
+          deps.onToken?.(piece);
+        }
+      : undefined,
+  };
+  const fold = () => {
+    if (spokeThisRound) deps.onToken?.('', { kind: 'fold' });
+    spokeThisRound = false;
+  };
+  const step = (text: string, detail?: string) => deps.onToken?.('', { kind: 'step', text, detail });
+  for (let round = 0; round < 5; round++) {
+    if (deps.signal?.aborted) throw new Error('Stopped.');
+    spokeThisRound = false;
+    const reply = await chat(config, model, messages, tools, sink);
+    debug(`round ${round} reply`, reply.raw);
+    lastContent = reply.content.trim() || lastContent;
+    // Nothing at all on the first round — a model that spent its budget
+    // thinking, or one that does not really follow tools — is the caller's
+    // cue to use the older pipeline instead.
+    if (round === 0 && !reply.toolCalls.length && !lastContent) {
+      // An empty first reply now and then is the model, not the question:
+      // asked once more before the older pipeline takes the turn.
+      if (!retriedEmpty) {
+        retriedEmpty = true;
+        round--;
+        continue;
+      }
+      return null;
+    }
+    // No tool called: the model answered in words. Unless those words promise
+    // a change it never proposed ("I'll update the tagline to …" with no
+    // Confirm behind it) — judged by the model itself, not by keywords — they
+    // are the reply. A promise gets one reminder to make the proposal.
+    if (!reply.toolCalls.length) {
+      if (reminders < 2 && !action && lastContent && (await promisedWithoutActing(config, model, meaning, lastContent, deps.signal).catch(() => false))) {
+        reminders++;
+        messages.push({ role: 'assistant', content: reply.content });
+        messages.push({ role: 'user', content: '[Note, not from the admin: you said you would do something, but you called no tool, so nothing happened. Call the tool that does exactly what you said — cancel_offer if you said you would cancel or drop the waiting change, upload_recording if you said you would open the file picker, the tool that opens or shows what you said you would show, otherwise the write tool for the change, with exactly the value you described — without any words.]' });
+        fold();
+        step('Reminded myself to act on what I said');
+        lastContent = '';
+        continue;
+      }
+      break;
+    }
+    // Words alongside a tool call were the model thinking aloud.
+    fold();
+    // The assistant turn goes back as the model produced it, then one tool
+    // result per call, so the transcript stays well-formed for the next round.
+    messages.push({ role: 'assistant', content: reply.content, tool_calls: (reply.raw as { tool_calls?: unknown[] })?.tool_calls ?? [] });
+    let stop = false;
+    for (const call of reply.toolCalls) {
+      step(stepText(call, deps.state));
+      if (call.name === 'ask_claude_review') {
+        const shown = screensToShow(deps.state, { app: call.args.app, version: call.args.version ?? 'latest' });
+        const grid = shown.action?.type === 'screens' ? shown.action : null;
+        if (grid && grid.versionId) {
+          action = { type: 'review', appId: grid.appId, appName: grid.appName, platform: grid.platform, versionId: grid.versionId, versionLabel: grid.versionLabel ?? grid.versionId };
+          note = `The review button for ${grid.appName}, ${grid.versionLabel ?? grid.versionId}.`;
+          stop = true;
+          messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `${note} It copies a one-line request they paste into their AI chat, which checks every screen and the flows and applies the fixes itself — you do nothing after. Call it the agent's review; never name another product or AI. Nothing changes until then.` });
+          break;
+        }
+        messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: shown.note ?? 'That app has no screens in a version to review.' });
+        continue;
+      }
+      if (call.name === 'reorder_screens') {
+        const shown = screensToShow(deps.state, { app: call.args.app, version: call.args.version ?? 'latest' });
+        const grid = shown.action?.type === 'screens' ? shown.action : null;
+        if (grid && grid.versionId) {
+          action = { type: 'reorder', appId: grid.appId, appName: grid.appName, platform: grid.platform, versionId: grid.versionId, versionLabel: grid.versionLabel ?? grid.versionId, screens: grid.screens };
+          note = `${grid.screens.length} screens of ${grid.appName}, ${grid.versionLabel ?? grid.versionId}, laid out to reorder.`;
+          stop = true;
+          messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `Shown to the admin to drag into order: ${note} Nothing changes until they press Save order.` });
+          break;
+        }
+        messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: shown.note ?? 'That app has no screens in a version to reorder.' });
+        continue;
+      }
+      if (call.name === 'show_screens') {
+        const shown = screensToShow(deps.state, call.args);
+        if (shown.action) {
+          action = shown.action;
+          note = shown.note;
+          stop = true;
+          messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `${shown.note} They are on screen now as thumbnails the admin can tap to select and delete; tell them so in one short sentence and stop.` });
+          break;
+        }
+        messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: shown.note ?? 'Nothing to show.' });
+        continue;
+      }
+      if (call.name === 'cancel_offer') {
+        action = { type: 'cancel' };
+        messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: input.pending ? `Withdrawn: “${input.pending}” will not happen.` : 'Nothing was waiting for a Confirm.' });
+        continue;
+      }
+      const read = READ_TOOLS.find((tool) => tool.name === call.name);
+      if (read) {
+        messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: answerRead(call.name, call.args, deps) });
+        continue;
+      }
+      const write = WRITE_TOOLS.find((tool) => tool.name === call.name);
+      if (!write) {
+        step(`Tried a tool that does not exist (${call.name})`);
+        messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `There is no tool called ${call.name}. The tools are: ${tools.map((tool) => tool.name).join(', ')}.` });
+        continue;
+      }
+      const checked = deps.validate(pinQuotedTarget(toParsedOp(write, call.args), input.question, deps.state));
+      step(checked.action ? 'Checked — ready to confirm' : checked.settled ? 'Checked — nothing to change' : 'Checked — not possible as asked', checked.note);
+      if (checked.action) {
+        action = checked.action;
+        note = checked.note;
+        stop = true;
+        // The model is told the proposal stands, so its closing words (if it
+        // writes any) describe it as pending rather than done.
+        messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `Proposed to the admin, waiting for their Confirm: ${checked.note ?? checked.action.type}. Nothing has happened yet.` });
+        break;
+      }
+      if (checked.settled) {
+        note = checked.note;
+        messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `Nothing to change: ${checked.note}` });
+        continue;
+      }
+      lastNote = checked.note ?? lastNote;
+      messages.push({ role: 'tool', tool_call_id: call.id, tool_name: call.name, content: `Could not propose that: ${checked.note ?? 'a value is missing — ask the admin for it, in one short question.'}` });
+    }
+    if (stop) {
+      // One short closing round for the wording. Whatever the model wrote
+      // alongside the call was written before it knew the proposal stood,
+      // so it is not used.
+      messages.push({
+        role: 'user',
+        content:
+          action?.type === 'review'
+            ? `[Note, not from the admin: a button that copies the review request is now under your reply — they paste it into their AI chat, which checks every screen and applies the fixes itself; you do nothing afterwards. Call it the agent's review; never name another product or AI. Reply to them naturally, in one or two sentences — no tool calls.]`
+            : action?.type === 'reorder'
+            ? `[Note, not from the admin: the screens are now laid out for them to drag into a new order; it is saved when they press Save order. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`
+            : action?.type === 'screens'
+            ? `[Note, not from the admin: the screens you asked for are now shown to them as thumbnails they can tap. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`
+            : action?.type === 'open'
+              ? `[Note, not from the admin: a button that opens “${action.label}” is now under your reply — no Confirm is involved. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`
+              : action?.type === 'upload'
+                ? `[Note, not from the admin: their file picker is opening so they can choose a screen recording. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`
+                : `[Note, not from the admin: your proposal is now in front of them with a Confirm button; nothing has happened yet. Reply to them naturally, in your own words, as you would in a chat — no tool calls.]`,
+      });
+      try {
+        spokeThisRound = false;
+        const closing = await chat(config, model, messages, tools, sink);
+        debug('closing', closing.raw);
+        lastContent = closing.content.trim();
+      } catch {
+        lastContent = '';
+      }
+      break;
+    }
+  }
+  debug('tool results', messages.filter((turn) => turn.role === 'tool').map((turn) => turn.content));
+
+  // Words about the machinery — a tool's name, "the function", "let me
+  // check" with no check behind it — are not for the admin; the
+  // validation's own sentence, or a plain question, is.
+  if (/`|\bfunction\b|\btool\b|\b[a-z]+_(?:app|screen|flow|version|recording|page|index|run|names|ai|status|date|type|tags|description|details|category|parent|logo)\b/i.test(lastContent)) lastContent = '';
+  let text = deps.unclaim(lastContent).replace(/\s*(?:—|-|:|at|here)?\s*\[[^\]]{2,60}\]\s*[.,]?/g, '').replace(/\s*(?:—|-|:|at)?\s*https?:\/\/\S+/gi, '').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  // No words yet (the model only called tools): it is asked once to reply,
+  // in its own words, to what the conversation now holds.
+  if (!text) {
+    messages.push({ role: 'user', content: `[Note, not from the admin: reply to them now, naturally and in your own words, from what you found${note || lastNote ? ` (${note ?? lastNote})` : ''}. No tool calls.]` });
+    try {
+      spokeThisRound = false;
+      const words = await chat(config, model, messages, [], sink);
+      text = deps.unclaim(words.content.trim());
+    } catch {
+      text = note ?? lastNote ?? '';
+    }
+  }
+  const actions: AssistantAction[] = action ? [action] : [];
+  // The words that streamed are the model's as written; the text here is
+  // the same words tidied, which the dock swaps in when the reply settles.
+  return { text, source: 'ai', actions, model, streamed: streamedRounds > 0 };
+}
+
+/** Keys ("app-platform-version") of the uploads Claude has reviewed, from the library's own list. */
+function readReviewedMarks(): string[] {
+  const dataDir = process.env.INSPIRATIONS_DATA_DIR ? resolvePath(process.env.INSPIRATIONS_DATA_DIR) : resolvePath(process.cwd(), '..', 'motvin-backend', 'data', 'inspirations');
+  try {
+    return Object.keys(JSON.parse(readFileSync(joinPath(dataDir, 'reviewed.json'), 'utf-8')) as Record<string, unknown>);
+  } catch {
+    return [];
+  }
+}

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { isOwnerAdmin, OWNER_ADMIN_EMAILS, type AdminRecord } from '@/lib/firebase/updates';
+import { useAuth } from '@/components/shared/AuthProvider';
+import { normaliseEmail, type AdminRecord } from '@/lib/firebase/updates';
 
 /**
  * Owner-only "Allowed admins" panel — invite or revoke publisher access.
@@ -25,10 +26,12 @@ function formatDate(date: Date | null | undefined): string {
 
 type Row = { email: string; kind: 'owner' | 'admin'; addedAt?: Date | null };
 
-const OWNER_ROWS: Row[] = OWNER_ADMIN_EMAILS.map((email) => ({ email, kind: 'owner' }));
-
 export function AdminAccessPanel({ admins, onAdd, onRemove }: Props) {
   const [email, setEmail] = useState('');
+  // Only the owner ever sees this panel, so the owner is whoever is signed in
+  // (no owner email list shipped to the browser).
+  const { user } = useAuth();
+  const ownerEmail = normaliseEmail(user?.email);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -38,9 +41,9 @@ export function AdminAccessPanel({ admins, onAdd, onRemove }: Props) {
   };
 
   const rows: Row[] = [
-    ...OWNER_ROWS,
+    ...(ownerEmail ? [{ email: ownerEmail, kind: 'owner' as const }] : []),
     ...admins
-      .filter((a) => !isOwnerAdmin(a.email))
+      .filter((a) => normaliseEmail(a.email) !== ownerEmail)
       .map<Row>((a) => ({ email: a.email, kind: 'admin', addedAt: a.addedAt })),
   ];
 

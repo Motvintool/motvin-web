@@ -1,0 +1,396 @@
+/**
+ * Data model for the Inspirations platform.
+ *
+ * These types mirror `motvin-backend/data/inspirations/manifest.json` exactly.
+ * Every record the UI renders comes from that store over the API — nothing is
+ * generated in the browser, so an empty store renders empty states rather than
+ * filler.
+ */
+
+/**
+ * The three places the library covers: iOS apps, online web applications ("Web Apps", `webapp`) and
+ * websites ("Webs", `web`). Android is not part of the library.
+ */
+export const PLATFORMS = ['ios', 'webapp', 'web'] as const;
+export type Platform = (typeof PLATFORMS)[number];
+
+/** Web Apps and Webs are both seen in a browser, so their screens are wide and laid out alike. */
+export function isDesktopPlatform(platform: string | null | undefined): boolean {
+  return platform === 'web' || platform === 'webapp';
+}
+
+export const SCREEN_TYPES = [
+  'landing',
+  'splash',
+  'onboarding',
+  'permission',
+  'login',
+  'signup',
+  'home',
+  'dashboard',
+  'feed',
+  'search',
+  'detail',
+  'product',
+  'cart',
+  'checkout',
+  'pricing',
+  'profile',
+  'settings',
+  'notifications',
+  'messages',
+  'map',
+  'calendar',
+  'player',
+  'form',
+  'modal',
+  'success',
+  'error',
+  'empty',
+  'loading',
+  'other',
+] as const;
+export type ScreenType = (typeof SCREEN_TYPES)[number];
+
+/**
+ * The condition a screen is in, independent of what it is. A checkout can be
+ * loading, a feed can be empty, a settings page can have a sheet over it.
+ */
+export const SCREEN_STATES = [
+  'loading',
+  'empty',
+  'error',
+  'success',
+  'modal',
+  'bottom-sheet',
+  'toast',
+  'coach-mark',
+  'permission',
+  'scrolled',
+  'keyboard',
+] as const;
+export type ScreenState = (typeof SCREEN_STATES)[number];
+
+export const INDUSTRIES = [
+  'saas',
+  'fintech',
+  'healthcare',
+  'ecommerce',
+  'education',
+  'travel',
+  'productivity',
+  'ai',
+  'social',
+  'finance',
+  'food',
+  'entertainment',
+  'lifestyle',
+  // "Needs category": an app whose category could not be worked out. Stored so it
+  // can still be published and flagged in the admin; never offered as a choice.
+  'unsorted',
+] as const;
+export type Industry = (typeof INDUSTRIES)[number];
+
+/** The categories a person can actually pick — everything but `unsorted`. */
+export const PICKABLE_INDUSTRIES = INDUSTRIES.filter((industry) => industry !== 'unsorted');
+
+export const STYLES = [
+  'minimal',
+  'editorial',
+  'bold',
+  'dark',
+  'light',
+  'playful',
+  'corporate',
+  'experimental',
+] as const;
+export type Style = (typeof STYLES)[number];
+
+/**
+ * Component kinds. Not a closed set in the data: the UI element pages read the
+ * kinds that are actually present from the manifest's taxonomy, so a new kind
+ * in a sidecar file appears without a code change.
+ */
+export type ElementKind = string;
+
+/** How a capture was obtained and what may be done with it. */
+export type ScreenSource = {
+  url: string | null;
+  license: string | null;
+  licenseUrl: string | null;
+  attribution: string | null;
+  permission: string | null;
+};
+
+/** One dated capture of an app's screens, e.g. "Sep 2026". */
+export type AppVersion = {
+  id: string;
+  label: string;
+  capturedAt: string;
+  /** Whether this is the newest version by date — the version pill calls it "Latest". */
+  isLatest: boolean;
+  /** The platforms this upload has screens on (older manifests leave it out). */
+  platforms?: Platform[];
+};
+
+export type App = {
+  id: string;
+  name: string;
+  slug: string;
+  industry: Industry;
+  platforms: Platform[];
+  website: string | null;
+  tagline: string | null;
+  /** API URL of the stored mark, or null when none has been added. */
+  logo: string | null;
+  screenCount: number;
+  flowCount: number;
+  /** Screens and flows per platform it is on: an app on several is counted by the section it is seen in. */
+  platformCounts?: Partial<Record<Platform, { screens: number; flows: number }>>;
+  license: string | null;
+  attribution: string;
+  /**
+   * Average score out of 5 and how many ratings it came from. Both null until
+   * someone records them — the UI hides the rating entirely rather than
+   * showing a zero, because "0.0 (0)" reads as a bad app rather than an
+   * unrated one.
+   */
+  rating: number | null;
+  ratingCount: number | null;
+  /** Every dated capture stored for this app, newest first. */
+  versions: AppVersion[];
+  /** Which version the app page opens on by default — always the newest. */
+  currentVersion: string | null;
+  /**
+   * Screen ids the library admin picked for this app's card carousel, in
+   * order, at most four. Empty when nobody has picked — the card then
+   * chooses for itself (see coverScreen).
+   */
+  cardScreens: string[];
+};
+
+export type ScreenCapture = {
+  atSeconds: number | null;
+  holdSeconds: number | null;
+  brief: boolean;
+  visits: number | null;
+  overlayOf: string | null;
+  loadingOf: string | null;
+  scrolledFrom: string | null;
+};
+
+export type Screen = {
+  id: string;
+  appId: string;
+  name: string;
+  /** Path within the store, e.g. `ios/acme/dashboard.webp`. */
+  file: string;
+  /** API URL of the image bytes. */
+  url: string;
+  /** Real pixel dimensions, read from the file at build time. */
+  width: number;
+  height: number;
+  bytes: number;
+  platform: Platform;
+  screenType: ScreenType;
+  /** Every type the screen is, the main one (screenType) first — up to five. Absent from older manifests. */
+  screenTypes?: ScreenType[];
+  /** The capture pipeline's finer type (`coach_mark`, `otp`, …); equals screenType when unknown. */
+  fineType: string;
+  /** Conditions the screen is in. Empty for a plain, settled screen. */
+  states: ScreenState[];
+  /** One or two measured sentences about the screen. Empty when nothing was recorded. */
+  description: string;
+  /** What the screen is for, when a researcher wrote it. */
+  purpose?: string | null;
+  /** The one thing a person mostly does here, as an imperative ("Add to cart"). */
+  primaryAction?: string | null;
+  /** Facts about the moment of capture, when it came from a recording. */
+  capture: ScreenCapture | null;
+  industry: Industry;
+  tags: string[];
+  elements: ElementKind[];
+  style: Style[];
+  capturedAt: string | null;
+  /** Which dated capture this screen belongs to, e.g. "2026-09". */
+  version: string;
+  /** Whether an analyzer has produced real findings for this screen. */
+  hasAnalysis: boolean;
+  /** Whether the recorded licence permits handing the file to a visitor. */
+  downloadable: boolean;
+  source: ScreenSource;
+};
+
+/** The suggested categories. Free text is allowed, so this is not a closed set. */
+export const FLOW_CATEGORY_PRESETS = [
+  'onboarding',
+  'checkout',
+  'authentication',
+  'search',
+  'settings',
+  'creation',
+  'discovery',
+] as const;
+
+export type FlowCategory = string;
+
+export type Flow = {
+  id: string;
+  appId: string;
+  name: string;
+  category: FlowCategory;
+  platform: Platform;
+  screenIds: string[];
+  /**
+   * The flow this one branches from and returns to — a detour from a section
+   * — or null at the top level. The app page draws the flows as a tree from
+   * this.
+   */
+  parentId?: string | null;
+  /**
+   * The recorded move that led to each step from the one before — what was
+   * tapped or typed, a tab switch, a scroll, a back, a dismissed sheet, a
+   * wait. Null on the first step and on flows built by hand.
+   */
+  steps?: FlowStep[];
+  /** One sentence on what the person does across the journey, when written. */
+  summary?: string | null;
+  /** Which capture this flow's screens belong to, when known. */
+  version?: string | null;
+  /** Its standard kind (Logging In, Browsing Home… — flowKinds.ts), when tagged; the search groups flows by it. */
+  kind?: string | null;
+};
+
+export type FlowActionKind = 'tap' | 'type' | 'switch-tab' | 'scroll' | 'back' | 'dismiss' | 'wait' | 'open';
+
+export type FlowAction = { kind: FlowActionKind; label: string | null };
+
+export type FlowStep = { screenId: string; action: FlowAction | null };
+
+/** A short phrase for a step's action, as the strip connectors read it. */
+export function flowActionPhrase(action: FlowAction | null | undefined): string {
+  if (!action) return '';
+  switch (action.kind) {
+    case 'tap':
+      return action.label ? `Tap “${action.label}”` : 'Tap';
+    case 'type':
+      return action.label ? `Type “${action.label}”` : 'Type';
+    case 'switch-tab':
+      return action.label ? `Switch to ${action.label}` : 'Switch tab';
+    case 'scroll':
+      return 'Scroll';
+    case 'back':
+      return 'Back';
+    case 'dismiss':
+      return 'Dismiss';
+    case 'wait':
+      return action.label ? `Wait ${action.label}` : 'Wait';
+    default:
+      return action.label ? `Open ${action.label}` : 'Open';
+  }
+}
+
+export type PatternCategory =
+  | 'Navigation'
+  | 'Search'
+  | 'Filters'
+  | 'Cards'
+  | 'Tables'
+  | 'Charts'
+  | 'Forms'
+  | 'Modals'
+  | 'Tabs'
+  | 'Bottom Navigation'
+  | 'Date Pickers'
+  | 'Empty States'
+  | 'Notifications'
+  | 'Checkout'
+  | 'Onboarding';
+
+export type Pattern = {
+  id: string;
+  slug: string;
+  name: string;
+  category: PatternCategory;
+  description: string;
+  tags: string[];
+  screenIds: string[];
+};
+
+export type SavedItemType = 'screen' | 'app' | 'flow' | 'pattern' | 'component' | 'icon';
+
+export type CollectionItem = {
+  type: SavedItemType;
+  id: string;
+  addedAt: string;
+};
+
+export type Collection = {
+  id: string;
+  userId: string;
+  name: string;
+  items: CollectionItem[];
+  createdAt: string;
+};
+
+export type SavedItem = CollectionItem & { viewedAt?: string };
+
+export type ContentKind = 'apps' | 'screens' | 'ui-elements' | 'flows' | 'patterns';
+
+export type LibraryCounts = Record<ContentKind, number>;
+
+/** Counts plus the taxonomy actually present in the store. */
+export type LibraryMeta = {
+  counts: LibraryCounts;
+  taxonomy: {
+    platforms: Platform[];
+    screenTypes: ScreenType[];
+    states: ScreenState[];
+    industries: Industry[];
+    styles: Style[];
+    elements: ElementKind[];
+    flowCategories: string[];
+  };
+  /**
+   * How many screens (or flows) each taxonomy value holds, for the platforms asked
+   * about. Lets a list lead with what the library has most of. Absent from an
+   * older backend, so callers fall back to the taxonomy's own order.
+   */
+  usage?: {
+    screenTypes: Record<string, number>;
+    elements: Record<string, number>;
+    industries: Record<string, number>;
+    flowCategories: Record<string, number>;
+  };
+  /** The library's general settings, set in the admin's Settings tab. Absent from an older backend. */
+  settings?: LibrarySettings;
+  generatedAt: string;
+};
+
+/** General settings for the whole library. */
+export type LibrarySettings = {
+  /** How many days an app card shows "Latest" after its first version, and "Updated" after a newer one. */
+  freshness: { newDays: number; updatedDays: number };
+};
+
+/** Real analysis output, when an analyzer has stored some for a screen. */
+export type AnalysisSection = { title: string; points: string[] };
+
+export type UiAnalysis = {
+  screenId: string;
+  analyzer?: string;
+  analyzedAt?: string;
+  sections: AnalysisSection[];
+  palette?: { hex: string; role: string }[];
+  components?: DetectedComponent[];
+  typography?: { role: string; spec: string }[];
+};
+
+export type DetectedComponent = {
+  kind: ElementKind;
+  label: string;
+  count: number;
+  /** Normalised 0–1 bounding box, when the analyzer located the component. */
+  box?: { x: number; y: number; w: number; h: number };
+  iconQueries?: string[];
+};

@@ -43,7 +43,64 @@ const LIBRARY_REWRITES = [
   { short: '/illustrations', folder: '/motvin-library/illustrations' },
 ];
 
+/**
+ * Library pictures (screenshots, app logos) come from the Inspirations API.
+ * Next's image optimizer resizes them to the size they're shown at, so the
+ * landing page doesn't download full-resolution screenshots.
+ */
+const API_IMAGE_PATTERNS: NonNullable<NonNullable<NextConfig['images']>['remotePatterns']> = [
+  { protocol: 'https', hostname: 'api.motvin.com', pathname: '/api/inspirations/**' },
+  { protocol: 'http', hostname: 'localhost', port: '3000', pathname: '/api/inspirations/**' },
+];
+const configuredApi = process.env.NEXT_PUBLIC_API_BASE_URL;
+if (configuredApi) {
+  const url = new URL(configuredApi);
+  API_IMAGE_PATTERNS.push({
+    protocol: url.protocol.replace(':', '') as 'http' | 'https',
+    hostname: url.hostname,
+    port: url.port,
+    pathname: '/api/inspirations/**',
+  });
+}
+
+/** The API URL points at this machine (.env.local's localhost:3000). Unset means the live API, never local. */
+const LOCAL_API = Boolean(configuredApi) && ['localhost', '127.0.0.1'].includes(new URL(configuredApi as string).hostname);
+
+/**
+ * Security headers on every response. Kept to ones that can't break the
+ * site: no Content-Security-Policy (Google sign-in, Firebase and the API's
+ * images would each need allow-listing first) and no Cross-Origin-Opener-
+ * Policy (it would cut off the Google sign-in popup from this page).
+ */
+const SECURITY_HEADERS = [
+  // No other site may show these pages in a frame (clickjacking); the site
+  // itself never frames its own pages either.
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  // Files are only ever treated as the type the server says they are.
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  // Other sites see where a visitor came from (the origin), not the full URL.
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  // No Permissions-Policy: camera, microphone and location are left to the
+  // browser's own per-site prompts, for features that will use them.
+];
+
 const nextConfig: NextConfig = {
+  // Off by default in production already; stated so it stays off — browser
+  // source maps would publish the original source to every visitor.
+  productionBrowserSourceMaps: false,
+  // Don't announce the framework in an X-Powered-By header.
+  poweredByHeader: false,
+  async headers() {
+    return [{ source: '/:path*', headers: SECURITY_HEADERS }];
+  },
+  images: {
+    remotePatterns: API_IMAGE_PATTERNS,
+    // The local API runs on localhost, which Next blocks by default (to stop
+    // the optimizer reaching into private networks). Allowed in development,
+    // and for a local build (`next start`) whose API URL is localhost. The live
+    // site's API is a public host, so this stays off there.
+    dangerouslyAllowLocalIP: process.env.NODE_ENV !== 'production' || LOCAL_API,
+  },
   async redirects() {
     return [
       // Canonicalise every folder-path URL back to the short form so the
@@ -63,6 +120,17 @@ const nextConfig: NextConfig = {
       // links by 308-redirecting to the new canonical /updates URL.
       { source: '/release-notes', destination: '/updates', permanent: true },
       { source: '/release-notes/:rest*', destination: '/updates/:rest*', permanent: true },
+      // /inspirations/saved (the flat "everything bookmarked" list) and
+      // /inspirations/collections (organized boards) used to be two separate
+      // routes for one feature — confusing as two competing destinations.
+      // They're merged into /inspirations/collections (?type=all for the
+      // flat list); any surviving link to the old URL lands there, with its
+      // query string (e.g. ?collection=id) carried over automatically.
+      { source: '/inspirations/saved', destination: '/inspirations/collections', permanent: true },
+      // The old one-pattern page is gone: patterns are browsed on the
+      // Patterns page. A surviving link or bookmark opens that one pattern there.
+      { source: '/inspirations/pattern/:slug', destination: '/inspirations/patterns?pattern=:slug', permanent: true },
+      { source: '/inspirations/pattern/:slug*', destination: '/inspirations/patterns', permanent: true },
     ];
   },
 

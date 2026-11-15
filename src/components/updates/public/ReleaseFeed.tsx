@@ -24,7 +24,7 @@ export function ReleaseFeed() {
   const targetRelease = searchParams.get(RELEASE_QUERY_KEY) || '';
 
   const [state, setState] = useState<LoadState>({ status: 'loading' });
-  const feedRef = useRef<HTMLDivElement>(null);
+  const feedRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,26 +77,35 @@ export function ReleaseFeed() {
       `[data-release-id="${CSS.escape(targetRelease)}"]`,
     );
     if (!target) return;
-    target.classList.add('update-target');
+    target.classList.add('is-target');
     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [state, targetRelease]);
 
   return (
-    <main className="feed">
-      <div className="container updates-shell" id="updatesFeed" ref={feedRef}>
-        {state.status === 'loading' && (
-          <div className="loading-state" id="loadingState">
-            <div className="loading-spinner" />
-            Loading updates...
-          </div>
-        )}
-        {state.status === 'empty' && <div className="empty-state">{state.message}</div>}
-        {state.status === 'error' && <div className="error-state">{state.message}</div>}
-        {state.status === 'ready' &&
-          state.notes.map((note, index) => (
-            <ReleaseCard key={note.id} note={note} index={index} />
+    <section className="upd-feed" id="updatesFeed" ref={feedRef} aria-label="Release notes" aria-busy={state.status === 'loading'}>
+      {state.status === 'loading' && (
+        // Two placeholder releases in the feed's own shape while it loads.
+        <>
+          {[0, 1].map((n) => (
+            <div className="upd-entry is-skeleton" key={n} aria-hidden="true">
+              <div className="upd-entry-side">
+                <span className="upd-skel is-date" />
+                <span className="upd-skel is-title" />
+              </div>
+              <div className="upd-card">
+                <span className="upd-skel is-image" />
+                <span className="upd-skel is-line" />
+                <span className="upd-skel is-line is-short" />
+              </div>
+            </div>
           ))}
-      </div>
-    </main>
+        </>
+      )}
+      {(state.status === 'empty' || state.status === 'error') && (
+        <p className={`upd-state${state.status === 'error' ? ' is-error' : ''}`}>{state.message}</p>
+      )}
+      {state.status === 'ready' &&
+        state.notes.map((note, index) => <ReleaseCard key={note.id} note={note} index={index} />)}
+    </section>
   );
 }

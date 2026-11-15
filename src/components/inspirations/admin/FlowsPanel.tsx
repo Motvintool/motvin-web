@@ -1,0 +1,468 @@
+'use client';
+
+import { useEffect, useId, useRef, useState } from 'react';
+import { adminApi, type AdminFlowRecord, type AdminState } from '@/lib/inspirations/admin';
+import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
+import type { Platform } from '@/lib/inspirations/types';
+import { CloseIcon, PlusIcon, SearchIcon, TrashIcon } from '../Icons';
+import { screenLabel, thumbUrl } from './screenFiles';
+
+/** Flows listed at a time; Show more adds as many again. */
+const PAGE = 40;
+
+/**
+ * Flow builder.
+ *
+ * A flow is an ordered walk through one app on one platform, so the picker is
+ * scoped that way. Two things follow from that and both used to bite:
+ *
+ *   - The platform starts on whichever one this app actually has screens for,
+ *     instead of defaulting to web and showing an empty picker.
+ *   - Screens the builder could not publish are still listed, greyed out
+ *     with the reason, rather than silently missing. "Where did my screens go"
+ *     is a worse failure than "here they are, and here is why you cannot use
+ *     them yet".
+ *
+ * Steps are picked from thumbnails and reordered in place, so the strip you
+ * build reads like the flow a visitor will step through.
+ */
+
+function slugify(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
+}
+
+export function FlowsPanel({
+  state,
+  busy,
+  run,
+  appOnly,
+  platformOnly,
+}: {
+  state: AdminState;
+  busy: boolean;
+  run: (action: () => Promise<unknown>, onDone?: () => void) => Promise<boolean>;
+  /** On an app's page: only this app's flows, and new flows are built for it — no app picker. */
+  appOnly?: string;
+  /** With `appOnly`, on one platform's page of the app: only that platform's flows, and new ones are built on it. */
+  platformOnly?: Platform;
+}) {
+  const [appId, setAppId] = useState(appOnly ?? state.apps[0]?.id ?? '');
+  const [platformChoice, setPlatformChoice] = useState<Platform | null>(null);
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('onboarding');
+  const [steps, setSteps] = useState<string[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  // The builder opens for a new flow (＋ Build a flow) or one being edited; the list leads otherwise.
+  const [building, setBuilding] = useState(false);
+  const [query, setQuery] = useState('');
+  const [appFilter, setAppFilter] = useState(appOnly ?? '');
+  const [shown, setShown] = useState(PAGE);
+  const formRef = useRef<HTMLFormElement>(null);
+  const formOpen = building || Boolean(editingId);
+  useEffect(() => {
+    if (editingId) formRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [editingId]);
+  const categoryListId = useId();
+
+  const appFiles = state.files.filter((f) => f.appId === appId);
+
+  // Counts per platform, so the picker shows what is there and defaults to the
+  // platform this app has the most screens for, rather than always to web.
+  const byPlatform = state.vocabulary.platforms.map((p) => {
+    const files = appFiles.filter((f) => f.platform === p);
+    return { platform: p, total: files.length, usable: files.filter((f) => f.published).length };
+  });
+  const busiest = [...byPlatform].sort((a, b) => b.usable - a.usable || b.total - a.total)[0];
+  const platform: Platform =
+    platformOnly ??
+    platformChoice ?? (busiest && busiest.total > 0 ? busiest.platform : state.vocabulary.platforms[0] ?? 'web');
+
+  const candidates = appFiles.filter((f) => f.platform === platform);
+  const usable = candidates.filter((f) => f.published);
+  const held = candidates.filter((f) => !f.published);
+  const byId = new Map(state.files.map((f) => [f.id, f]));
+  const needle = query.trim().toLowerCase();
+  const appName = (id: string) => state.apps.find((a) => a.id === id)?.name ?? id;
+  const listed = state.flows.filter((flow) => (!appFilter || flow.appId === appFilter) && (!platformOnly || flow.platform === platformOnly) && (!needle || flow.name.toLowerCase().includes(needle) || appName(flow.appId).toLowerCase().includes(needle)));
+
+  const reset = () => {
+    setName('');
+    setSteps([]);
+    setEditingId(null);
+    setBuilding(false);
+  };
+
+  const pickApp = (id: string) => {
+    setAppId(id);
+    setPlatformChoice(null);
+    setSteps([]);
+  };
+
+  const pickPlatform = (p: Platform) => {
+    setPlatformChoice(p);
+    setSteps([]);
+  };
+
+  const toggleStep = (id: string) => {
+    setSteps((s) => (s.includes(id) ? s.filter((v) => v !== id) : [...s, id]));
+  };
+
+  const move = (index: number, delta: number) => {
+    setSteps((s) => {
+      const next = [...s];
+      const target = index + delta;
+      if (target < 0 || target >= next.length) return s;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const edit = (flow: AdminFlowRecord) => {
+    setEditingId(flow.id);
+    setAppId(flow.appId);
+    setPlatformChoice(flow.platform);
+    setName(flow.name);
+    setCategory(flow.category);
+    setSteps(flow.screenIds);
+  };
+
+  const save = () => {
+    const id = editingId ?? slugify(`${appId}-${platform}-${name}`);
+    void run(
+      () =>
+        adminApi.saveFlow({
+          id,
+          appId,
+          name: name.trim(),
+          category: category.trim(),
+          platform,
+          screenIds: steps,
+        }),
+      reset,
+    );
+  };
+
+  const remove = (flow: AdminFlowRecord) => {
+    if (!window.confirm(`Delete the flow "${flow.name}"? The screens themselves are untouched.`)) return;
+    void run(() => adminApi.deleteFlow(flow.id));
+  };
+
+  const valid = appId && name.trim().length > 0 && category.trim().length > 0 && steps.length >= 2;
+
+  if (state.apps.length === 0) {
+    return <p className="ins-muted ins-admin-status">Add an app and publish some screens first.</p>;
+  }
+
+  // One flow's row; inside a group it drops its own outline, and an area says how many flows sit under it.
+  const renderRow = (flow: (typeof state.flows)[number], inGroup = false, inside = 0) => (
+    <div key={flow.id} className={`ins-admin-item ${inGroup ? 'ins-flow-group-row' : ''}`}>
+      <div className="ins-admin-item-head">
+        <div className="ins-flowbuild-mini" aria-hidden>
+          {flow.screenIds.slice(0, 5).map((id) => {
+            const file = byId.get(id);
+            const url = file ? thumbUrl(file) : null;
+            return (
+              <span className="ins-flowbuild-mini-shot" key={id}>
+                {url ? <img src={url} alt="" loading="lazy" /> : <span className="ins-flowbuild-noshot" />}
+              </span>
+            );
+          })}
+        </div>
+        <div className="ins-admin-item-text">
+          <p className="ins-admin-item-title">
+            {flow.name}
+            <span className="ins-admin-item-id">{flow.id}</span>
+          </p>
+          <p className="ins-admin-item-sub">
+            {state.apps.find((a) => a.id === flow.appId)?.name ?? flow.appId} ·{' '}
+            {PLATFORM_LABEL[flow.platform] ?? flow.platform} · {flow.category} · {flow.screenIds.length} {flow.screenIds.length === 1 ? 'step' : 'steps'}
+              {inside > 0 && <> · {inside} {inside === 1 ? 'flow' : 'flows'} inside</>}
+          </p>
+          {(() => {
+            // A version that was deleted (or renamed away from) leaves
+            // this flow's screenIds pointing nowhere — the blank tiles
+            // above are a symptom, not the cause, so it's named here
+            // rather than left for the admin to puzzle out from empty
+            // thumbnails alone.
+            const missing = flow.screenIds.filter((id) => !byId.has(id)).length;
+            return missing > 0 ? (
+              <p className="ins-admin-warn">
+                {missing} of {flow.screenIds.length} screens no longer exist — probably from a deleted or renamed version.
+              </p>
+            ) : null;
+          })()}
+        </div>
+        <div className="ins-admin-item-actions">
+          <button type="button" className="ins-btn ins-btn--sm" onClick={() => edit(flow)} disabled={busy}>
+            Edit
+          </button>
+          <button
+            type="button"
+            className="ins-iconbtn ins-iconbtn--plain"
+            aria-label={`Delete ${flow.name}`}
+            onClick={() => remove(flow)}
+            disabled={busy}
+          >
+            <TrashIcon size={14} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // One app's flows: grouped by area — each area a heading, its flows indented under it.
+  const groups = appFilter
+    ? (() => {
+        const ids = new Set(listed.map((flow) => flow.id));
+        return listed
+          .filter((flow) => !flow.parentId || !ids.has(flow.parentId))
+          .map((root) => ({ root, children: listed.filter((flow) => flow.parentId === root.id) }));
+      })()
+    : null;
+
+  return (
+    <div className="ins-admin-panel">
+      <div className="ins-admin-toolbar">
+        <label className="ins-toolbar-search">
+          <SearchIcon size={14} />
+          <input value={query} onChange={(e) => { setQuery(e.target.value); setShown(PAGE); }} placeholder={`Search ${appOnly ? state.flows.filter((f) => f.appId === appOnly && (!platformOnly || f.platform === platformOnly)).length : state.flows.length} flows`} aria-label="Search flows" />
+        </label>
+        {!appOnly && (
+        <select className="ins-input ins-toolbar-select" value={appFilter} onChange={(e) => { setAppFilter(e.target.value); setShown(PAGE); }} aria-label="App">
+          <option value="">All apps</option>
+          {[...state.apps].sort((a, b) => a.name.localeCompare(b.name)).map((app) => (
+            <option key={app.id} value={app.id}>
+              {app.name}
+            </option>
+          ))}
+        </select>
+        )}
+        {!formOpen && (
+          <button type="button" className="ins-btn ins-btn--primary ins-btn--sm" onClick={() => setBuilding(true)}>
+            <PlusIcon size={14} /> Build a flow
+          </button>
+        )}
+      </div>
+
+      {formOpen && (
+      <form
+        ref={formRef}
+        className="ins-admin-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valid) save();
+        }}
+      >
+        <div className="ins-admin-form-head">
+          <p className="ins-admin-form-title">{editingId ? `Edit ${name || editingId}` : 'Build a flow'}</p>
+          <button type="button" className="ins-iconbtn ins-iconbtn--plain" aria-label="Close" onClick={reset} disabled={busy}>
+            <CloseIcon size={14} />
+          </button>
+        </div>
+
+        <div className="ins-admin-row">
+          {!appOnly && (
+          <label className="ins-field">
+            <span className="ins-field-label">App</span>
+            <select className="ins-input" value={appId} onChange={(e) => pickApp(e.target.value)} disabled={Boolean(editingId)}>
+              {state.apps.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          )}
+
+          <label className="ins-field ins-field--wide">
+            <span className="ins-field-label">Flow name</span>
+            <input
+              className="ins-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Sign up and first session"
+              maxLength={80}
+            />
+            <span className="ins-field-hint">Anything you like. This is the title visitors see.</span>
+          </label>
+
+          <label className="ins-field">
+            <span className="ins-field-label">Category</span>
+            <input
+              className="ins-input"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              list={categoryListId}
+              placeholder="onboarding"
+              maxLength={40}
+            />
+            <datalist id={categoryListId}>
+              {state.vocabulary.flowCategories.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+            <span className="ins-field-hint">Pick a suggestion or type your own.</span>
+          </label>
+        </div>
+
+        {!platformOnly && (
+        <fieldset className="ins-field">
+          <legend className="ins-field-label">Platform</legend>
+          <div className="ins-filter-options">
+            {byPlatform.map((p) => (
+              <button
+                key={p.platform}
+                type="button"
+                className={`ins-chip ins-chip--sm ${platform === p.platform ? 'is-active' : ''}`}
+                aria-pressed={platform === p.platform}
+                onClick={() => pickPlatform(p.platform)}
+                disabled={Boolean(editingId)}
+              >
+                {PLATFORM_LABEL[p.platform]}
+                <span className="ins-chip-count">{p.total}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        )}
+
+        <div className="ins-field">
+          <span className="ins-field-label">
+            Steps, in order {steps.length > 0 && <span className="ins-field-hint">({steps.length} selected)</span>}
+          </span>
+
+          {candidates.length === 0 ? (
+            <p className="ins-muted">
+              No screens stored for {state.apps.find((a) => a.id === appId)?.name} on{' '}
+              {PLATFORM_LABEL[platform]}. Upload some on the Upload tab.
+            </p>
+          ) : (
+            <>
+              {steps.length > 0 && (
+                <ol className="ins-flowbuild-strip">
+                  {steps.map((id, i) => {
+                    const file = byId.get(id);
+                    const url = file ? thumbUrl(file) : null;
+                    return (
+                      <li key={id} className="ins-flowbuild-step">
+                        <span className="ins-flowbuild-num">{String(i + 1).padStart(2, '0')}</span>
+                        <span className="ins-flowbuild-shot">
+                          {url ? <img src={url} alt="" loading="lazy" /> : <span className="ins-flowbuild-noshot" />}
+                        </span>
+                        <span className="ins-flowbuild-name">{file ? screenLabel(file) : id}</span>
+                        <span className="ins-flowbuild-controls">
+                          <button
+                            type="button"
+                            className="ins-iconbtn ins-iconbtn--plain"
+                            aria-label={`Move ${file ? screenLabel(file) : id} earlier`}
+                            disabled={i === 0}
+                            onClick={() => move(i, -1)}
+                          >
+                            ←
+                          </button>
+                          <button
+                            type="button"
+                            className="ins-iconbtn ins-iconbtn--plain"
+                            aria-label={`Move ${file ? screenLabel(file) : id} later`}
+                            disabled={i === steps.length - 1}
+                            onClick={() => move(i, 1)}
+                          >
+                            →
+                          </button>
+                          <button
+                            type="button"
+                            className="ins-iconbtn ins-iconbtn--plain"
+                            aria-label={`Remove ${file ? screenLabel(file) : id}`}
+                            onClick={() => toggleStep(id)}
+                          >
+                            <CloseIcon size={13} />
+                          </button>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+
+              <p className="ins-field-hint">
+                {usable.length} screen{usable.length === 1 ? '' : 's'} available. Click to add or remove.
+              </p>
+
+              <div className="ins-flowbuild-pool">
+                {usable.map((file) => {
+                  const order = steps.indexOf(file.id) + 1;
+                  const url = thumbUrl(file);
+                  return (
+                    <button
+                      key={file.id}
+                      type="button"
+                      className={`ins-flowbuild-tile ${order > 0 ? 'is-selected' : ''}`}
+                      aria-pressed={order > 0}
+                      onClick={() => toggleStep(file.id)}
+                      title={file.file}
+                    >
+                      <span className="ins-flowbuild-tile-shot">
+                        {url ? <img src={url} alt="" loading="lazy" /> : <span className="ins-flowbuild-noshot" />}
+                        {order > 0 && <span className="ins-flowbuild-badge">{order}</span>}
+                      </span>
+                      <span className="ins-flowbuild-tile-name">{screenLabel(file)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Held-back screens are shown rather than hidden: the reason they
+                  cannot be used is the useful part. */}
+              {held.length > 0 && (
+                <div className="ins-flowbuild-held">
+                  <p className="ins-admin-warn">
+                    {held.length} more screen{held.length === 1 ? '' : 's'} on {PLATFORM_LABEL[platform]} cannot be
+                    used in a flow yet:
+                  </p>
+                  <ul className="ins-flowbuild-heldlist">
+                    {held.map((file) => (
+                      <li key={file.id}>
+                        <span className="ins-flowbuild-heldname">{screenLabel(file)}</span>
+                        <span className="ins-muted">{file.blockedReason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+
+          <span className="ins-field-hint">A flow needs at least two screens.</span>
+        </div>
+
+        <div className="ins-admin-actions">
+          <button type="submit" className="ins-btn ins-btn--primary" disabled={!valid || busy}>
+            <PlusIcon size={15} /> {editingId ? 'Save flow' : 'Create flow'}
+          </button>
+          <button type="button" className="ins-btn ins-btn--ghost" onClick={reset} disabled={busy}>
+            Cancel
+          </button>
+        </div>
+      </form>
+      )}
+
+      <div className="ins-admin-list">
+        {state.flows.length === 0 && <p className="ins-muted">No flows yet.</p>}
+        {listed.length === 0 && state.flows.length > 0 && <p className="ins-muted">No flow matches.</p>}
+        {groups
+          ? groups.map(({ root, children }) => (
+              <section key={root.id} className="ins-flow-group" aria-label={root.name}>
+                {renderRow(root, true, children.length)}
+                {children.length > 0 && <div className="ins-flow-group-children">{children.map((child) => renderRow(child, true))}</div>}
+              </section>
+            ))
+          : listed.slice(0, shown).map((flow) => renderRow(flow))}
+        {!groups && listed.length > shown && (
+          <button type="button" className="ins-btn ins-show-more" onClick={() => setShown((n) => n + PAGE)}>
+            Show more · {listed.length - shown} left
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

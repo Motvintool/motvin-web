@@ -1,0 +1,46 @@
+import type { App, Pattern, Platform } from './types';
+
+/** Every Inspirations URL in one place so links never drift. */
+export const INSPIRATIONS_ROUTES = {
+  explore: '/inspirations',
+  apps: '/inspirations/apps',
+  screens: '/inspirations/screens',
+  uiElements: '/inspirations/ui-elements',
+  flows: '/inspirations/flows',
+  patterns: '/inspirations/patterns',
+  search: '/inspirations/search',
+  /**
+   * The visitor's boards — bare, the boards grid; `?collection=<id>` opens
+   * one. `/inspirations/saved` used to be a second, overlapping entry point
+   * into this same feature (a flat, separately-tabbed item list); it's now a
+   * redirect here (next.config.ts) rather than a route of its own, so
+   * there's exactly one place this ever points to.
+   */
+  collections: '/inspirations/collections',
+  admin: '/inspirations/admin',
+  settings: '/inspirations/settings',
+  settingsRequests: '/inspirations/settings?section=requests',
+  /**
+   * An app's page. Given a platform, an app on more than one opens on that one (`?platform=`):
+   * Claude's card in Web Apps opens Claude as a web app, not its iOS screens.
+   */
+  app: (app: Pick<App, 'slug'> & { platforms?: Platform[] }, platform?: Platform, query?: Record<string, string>) => {
+    const sp = new URLSearchParams();
+    if (platform && (app.platforms?.length ?? 0) > 1) sp.set('platform', platform);
+    for (const [key, value] of Object.entries(query ?? {})) sp.set(key, value);
+    const qs = sp.toString();
+    return `/inspirations/app/${app.slug}${qs ? `?${qs}` : ''}`;
+  },
+  /**
+   * A pattern: the Patterns page narrowed to that one pattern's screens. (The
+   * old one-pattern page is gone; next.config.ts sends its addresses here.)
+   */
+  pattern: (pattern: Pick<Pattern, 'slug'>) => `/inspirations/patterns?pattern=${encodeURIComponent(pattern.slug)}`,
+  /** A pattern category: the Patterns page narrowed to every pattern in it. */
+  patternCategory: (category: string) => `/inspirations/patterns?category=${encodeURIComponent(category)}`,
+  searchFor: (query: string, mode?: 'text') => `/inspirations/search?q=${encodeURIComponent(query)}${mode === 'text' ? '&mode=text' : ''}`,
+  /** Opens Inspirations with Motvin Buddy already answering `question`. */
+  askBuddy: (question: string) => `/inspirations?buddy=${encodeURIComponent(question)}`,
+  /** Hand-off into the existing Motvin icon library. */
+  iconLibrary: (query: string) => `/icons?q=${encodeURIComponent(query)}`,
+} as const;

@@ -1,0 +1,392 @@
+'use client';
+
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { inspirationsApi, type Page, type ScreenSort } from '@/lib/inspirations/api';
+import { freshFirst } from '@/lib/inspirations/appFreshness';
+import { EMPTY_FILTERS, matchesFilters, parseFilters, serializeFilters, toggleValue, withDefaultPlatform, type ScreenFilters } from '@/lib/inspirations/filters';
+import { screenItemId } from '@/lib/inspirations/savedItems';
+import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
+import { isDesktopPlatform, type App, type ContentKind, type Industry, type LibraryCounts, type Screen } from '@/lib/inspirations/types';
+import { AppsGrid } from './AppsGrid';
+import { EmptyState } from './EmptyState';
+import { FilterPill, FilterToolbar, NavPill, SortPill, ToolbarRow, type SortOption } from './FilterToolbar';
+import { ImageIcon } from './Icons';
+import { ScreenGrid } from './ScreenGrid';
+import { ScreenshotTextSearch } from './ScreenshotTextSearch';
+import { APPLIED_PILLS_MAX, AppliedFilterPills, FiltersPill } from './FiltersPanel';
+import { useAppFilters } from './useAppFilters';
+import { PALETTE_PARAM, PaletteFilter, readPaletteParam } from './PaletteFilter';
+import { useLogoTints } from './useLogoTint';
+import { usePaletteApps } from './usePaletteApps';
+import { hueOf, type PaletteHue } from '@/lib/inspirations/hues';
+import { useAsync } from './useAsync';
+import { useFitResults } from './useFitResults';
+import { useExploreFilters } from './useExploreFilters';
+import { useLibrarySettings, useMeta } from './useMeta';
+
+/**
+ * Explore browses apps, not raw screens, as an app feed. These
+ * are the ways to order that app feed; "curated" sends no `sort` param at
+ * all, which is the manifest's own build-time order (most screens first).
+ * Apps do carry a real `rating`/`ratingCount` (see App in types.ts), unlike
+ * Screen, so "Top Rated" has real data to sort by even though every demo app
+ * is unrated right now — it's a fine order, just not a distinguishing one yet.
+ */
+type ExploreAppSort = 'curated' | 'newest' | 'oldest' | 'rating';
+const EXPLORE_SORTS: SortOption<ExploreAppSort>[] = [
+  { value: 'curated', label: 'Curated' },
+  { value: 'newest', label: 'Newest' },
+  { value: 'oldest', label: 'Oldest' },
+  { value: 'rating', label: 'Top rated' },
+];
+
+/**
+ * Screens-feed orders, for the toolbar's sort dropdown. "Most popular" is the
+ * store's curated order — the manifest's own build-time ranking — which is
+ * the closest thing the library has to popularity until real usage data
+ * exists to rank by.
+ */
+const SCREEN_SORTS: SortOption<ScreenSort>[] = [
+  { value: 'curated', label: 'Most popular' },
+  { value: 'newest', label: 'Newest' },
+  { value: 'oldest', label: 'Oldest' },
+  { value: 'app', label: 'By app' },
+];
+
+/**
+ * Apps have no screenType/style of their own, so those two ScreenFilters
+ * dimensions can't narrow the app feed — industry, platform and the search
+ * query all map onto real App fields and are applied below.
+ */
+function appMatchesFilters(app: App, filters: ScreenFilters): boolean {
+  if (filters.industries.length && !filters.industries.includes(app.industry)) return false;
+  if (filters.platforms.length && !filters.platforms.some((p) => app.platforms.includes(p))) return false;
+  const q = filters.query.trim().toLowerCase();
+  if (q && !app.name.toLowerCase().includes(q) && !(app.tagline ?? '').toLowerCase().includes(q)) return false;
+  return true;
+}
+
+/**
+ * The filter toolbar and the gallery beneath it, all bound to the URL.
+ *
+ * Explore (`active` unset) browses apps: its toolbar offers only the
+ * dimensions an app feed can honor (Categories, Platform) plus the app-sort
+ * dropdown. Screens/UI Elements (`active` set) browse the screens feed with
+ * the full dimension set.
+ *
+ * Screens pages are keyed by the serialised filter string, so a response only
+ * renders when it belongs to the current filters — a late reply for a
+ * previous filter set is ignored.
+ */
+
+type Pages = { key: string; items: Screen[]; total: number; next: number | null };
+
+export function FilteredGallery({
+  appId,
+  counts,
+  active,
+}: {
+  appId?: string;
+  counts: LibraryCounts | null;
+  active?: ContentKind;
+}) {
+  const { filters, update } = useExploreFilters();
+  const meta = useMeta();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Explore has no ContentKind of its own (there's no "Explore" tab to mark
+  // active), so `active` unset is exactly "this is Explore, browse apps" —
+  // the Screens page is the only other caller and always passes `active`.
+  const exploreMode = !active;
+
+  // Sort lives in its own query param rather than on ScreenFilters — every
+  // other page that uses that type (Screens, Apps, UI Elements, ...) has no
+  // use for a sort toggle, so it stays local to the one view that does.
+  const setUrlParam = (name: string, value: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) params.set(name, value);
+    else params.delete(name);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  const rawSort = searchParams.get('sort');
+  const sort: ExploreAppSort = EXPLORE_SORTS.some((s) => s.value === rawSort) ? (rawSort as ExploreAppSort) : 'curated';
+  const setSort = (next: ExploreAppSort) => setUrlParam('sort', next === 'curated' ? null : next);
+
+  // The screens feed's own sort and its single-select UI-element dimension,
+  // both living in the URL like every other filter. Unknown values fall back
+  // to the defaults instead of breaking the fetch.
+  const screenSort: ScreenSort = SCREEN_SORTS.some((s) => s.value === rawSort) ? (rawSort as ScreenSort) : 'curated';
+  // `kind` is the param several pages still link with (?kind=list from
+  // Explore, saved items, app detail) — accepted as an alias here and
+  // normalised to `element` on the next write.
+  const rawElement = searchParams.get('element') ?? searchParams.get('kind');
+  const element = rawElement && meta.taxonomy.elements.includes(rawElement) ? rawElement : null;
+
+  const setElement = (next: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('kind');
+    if (next) params.set('element', next);
+    else params.delete('element');
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  // Clears every screens-feed dimension — including `element`, which lives
+  // outside ScreenFilters — in one URL write; two writes in a row would each
+  // start from the same stale params and undo each other.
+  const clearScreens = () => {
+    const params = serializeFilters({ ...EMPTY_FILTERS, query: filters.query }, new URLSearchParams(searchParams.toString()));
+    params.delete('element');
+    params.delete('kind');
+    params.delete('text');
+    params.delete(PALETTE_PARAM);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  // The Filters panel's "Clear all": the same single write, but the platform stays — it's the switch, not a filter.
+  const clearDimensions = () => {
+    const params = serializeFilters({ ...EMPTY_FILTERS, platforms: filters.platforms, query: filters.query }, new URLSearchParams(searchParams.toString()));
+    params.delete('element');
+    params.delete('kind');
+    params.delete(PALETTE_PARAM);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  // The colour filter, on the Screens and UI Elements feeds (an app's own page is one app, one colour): the
+  // screens of the apps of the picked colours, asked of the server as that list of apps.
+  const colour = usePaletteApps(withDefaultPlatform(filters).platforms);
+  const colourOn = !exploreMode && !appId;
+  const colourApps = colourOn && colour.appIds ? [...colour.appIds].sort().join(',') || '-' : '';
+  const colourWaiting = colourOn && !colour.ready;
+
+  const key = `${appId ?? ''}|${serializeFilters(filters).toString()}|${element ?? ''}|${screenSort}|${colourApps}`;
+
+  const [pages, setPages] = useState<Pages>({ key: ' ', items: [], total: 0, next: null });
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    if (exploreMode || colourWaiting) return; // Explore renders AppsGrid; the colours wait for every app's logo.
+    let cancelled = false;
+    const [, query, keyElement, keySort, keyApps] = key.split('|');
+    // No app has the picked colours: nothing to ask for.
+    const none = keyApps === '-';
+    (none
+      ? Promise.resolve<Page<Screen>>({ items: [], total: 0, limit: 0, offset: 0, nextOffset: null })
+      : inspirationsApi.listScreens(withDefaultPlatform(parseFilters(new URLSearchParams(query))), 0, (keySort as ScreenSort) || 'curated', {
+          app: appId ?? (keyApps || undefined),
+          element: keyElement || undefined,
+        }))
+      .then((page: Page<Screen>) => {
+        if (cancelled) return;
+        setPages({ key, items: page.items, total: page.total, next: page.nextOffset });
+      })
+      .catch(() => {
+        if (!cancelled) setPages({ key, items: [], total: 0, next: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [key, appId, exploreMode, colourWaiting]);
+
+  const ready = pages.key === key;
+
+  const loadMore = useCallback(() => {
+    if (!ready || pages.next === null || loadingMore) return;
+    setLoadingMore(true);
+    const [, query, keyElement, keySort, keyApps] = key.split('|');
+    inspirationsApi
+      .listScreens(withDefaultPlatform(parseFilters(new URLSearchParams(query))), pages.next, (keySort as ScreenSort) || 'curated', {
+        app: appId ?? (keyApps || undefined),
+        element: keyElement || undefined,
+      })
+      .then((page) => {
+        setPages((prev) =>
+          prev.key !== key
+            ? prev
+            : { key, items: [...prev.items, ...page.items], total: page.total, next: page.nextOffset },
+        );
+      })
+      .finally(() => setLoadingMore(false));
+  }, [ready, pages.next, loadingMore, key, appId]);
+
+  // "Search text in screenshot": the screens whose text matches (up to the 200 the server returns), narrowed by
+  // the same filters as the feed, with the matching words highlighted. It replaces the paged feed while on.
+  const textQuery = searchParams.get('text')?.trim() ?? '';
+  const { data: textHits, loading: textLoading } = useAsync(
+    () => (textQuery && !exploreMode ? inspirationsApi.search(textQuery, 'text', appId, { limit: 200 }) : Promise.resolve(null)),
+    `gallery-text:${textQuery}:${appId ?? ''}`,
+  );
+  const textScreens = textHits
+    ? textHits.screens.filter(
+        (s) =>
+          matchesFilters(s, withDefaultPlatform(filters)) &&
+          (!element || s.elements.includes(element)) &&
+          (!appId || s.appId === appId) &&
+          (!colourOn || !colour.appIds || colour.appIds.has(s.appId)),
+      )
+    : [];
+  const textOn = Boolean(textQuery) && !exploreMode;
+  const setText = (text: string | undefined) => setUrlParam('text', text ?? null);
+
+  // While the next page of results loads, the ones it replaces stay up and the new ones take their place on
+  // arrival: an empty grid meanwhile made the page shorter than the window, which pulled a scrolled visitor
+  // back to the top before the results came.
+  const [shownItems, setShownItems] = useState<Screen[]>([]);
+  if (ready && pages.items !== shownItems) setShownItems(pages.items);
+  const items = textOn ? textScreens : ready ? pages.items : shownItems;
+  // A filter, sort, element or text search changed while scrolled into the results: once they're in, bring
+  // them to the fitted view under the docked bar. Explore runs its own fit (ExploreView), so none here.
+  const gridWrapRef = useRef<HTMLDivElement>(null);
+  useFitResults(exploreMode ? '' : `${key}|${textQuery}`, () => gridWrapRef.current, '.ins-grid');
+  const libraryEmpty = meta.counts.screens === 0;
+
+  const { data: allApps, loading: appsLoading } = useAsync<App[]>(
+    () => (exploreMode ? inspirationsApi.listApps(undefined, sort === 'curated' ? undefined : sort) : Promise.resolve([])),
+    `filtered-gallery-apps:${exploreMode}:${sort}`,
+  );
+  // While another order loads, the list it replaces stays up and the new one takes its place on arrival:
+  // swapping to a one-row placeholder meanwhile made the page shorter than the window, which pulled a
+  // scrolled visitor back to the top before the results came.
+  const [shownApps, setShownApps] = useState<App[] | null>(null);
+  if (allApps && allApps !== shownApps) setShownApps(allApps);
+  // In the default order, newly added apps lead, then updated ones; a sort the visitor picks is kept as is.
+  const freshness = useLibrarySettings().freshness;
+  const matchingApps = (allApps ?? shownApps)?.filter((a) => appMatchesFilters(a, withDefaultPlatform(filters))) ?? [];
+  const appFilters = useAppFilters(matchingApps);
+  // Palette: only the apps whose brand colour (their logo's) is one of the picked ones.
+  const palette = readPaletteParam(searchParams.get(PALETTE_PARAM));
+  const tints = useLogoTints(appFilters.filtered);
+  const paletteApps = palette.length ? appFilters.filtered.filter((app) => palette.includes(hueOf(tints.get(app.id)))) : appFilters.filtered;
+  const paletteCounts = appFilters.filtered.reduce<Partial<Record<PaletteHue, number>>>((counts, app) => {
+    if (tints.get(app.id) === undefined) return counts;
+    const hue = hueOf(tints.get(app.id));
+    counts[hue] = (counts[hue] ?? 0) + 1;
+    return counts;
+  }, {});
+  const setPalette = (next: PaletteHue[]) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next.length) params.set(PALETTE_PARAM, next.join(','));
+    else params.delete(PALETTE_PARAM);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+  // "+N more" beside the applied filters opens the Filters panel.
+  const [openFilters, setOpenFilters] = useState(0);
+  const apps = sort === 'curated' ? freshFirst(paletteApps, freshness, undefined, withDefaultPlatform(filters).platforms) : paletteApps;
+  const appsLibraryEmpty = meta.counts.apps === 0;
+
+  // The only ScreenFilters dimensions an app feed can't honor.
+  const droppedFilterCount = filters.screenTypes.length + filters.styles.length;
+
+  return (
+    <>
+      {exploreMode ? (
+        <>
+          {/* No running count on the app list. The row docks into the header once the gallery reaches it,
+              as on every other page: one bar, not a header with a second bar pinned beneath it. */}
+          <ToolbarRow
+            total={null}
+            unit="app"
+            right={
+              <>
+                <PaletteFilter selected={palette} onChange={setPalette} counts={paletteCounts} />
+                <FiltersPill sections={appFilters.sections} onClearAll={appFilters.clear} total={apps.length} unit="app" atEnd onOpenChange={appFilters.onPanelOpen} openSignal={openFilters} />
+              </>
+            }
+          >
+            <NavPill counts={counts} />
+            <FilterPill
+              label="Categories"
+              options={meta.taxonomy.industries.map((v) => ({ value: v, label: INDUSTRY_LABEL[v as Industry] ?? v }))}
+              selected={filters.industries}
+              onToggle={(v) => update({ industries: toggleValue(filters.industries, v as Industry) })}
+              onClear={() => update({ industries: [] })}
+            />
+            <SortPill value={sort} options={EXPLORE_SORTS} onChange={setSort} asPill />
+            <AppliedFilterPills sections={appFilters.sections} max={APPLIED_PILLS_MAX} onMore={() => setOpenFilters((n) => n + 1)} />
+          </ToolbarRow>
+          {droppedFilterCount > 0 && (
+            <p className="ins-muted ins-explore-hint">
+              Screen type and style filters don&apos;t apply to apps — clear them to narrow further.
+            </p>
+          )}
+          <AppsGrid
+            apps={apps}
+            loading={appsLoading && !shownApps}
+            webLayout={filters.platforms.length > 0 && filters.platforms.every(isDesktopPlatform)}
+            platforms={withDefaultPlatform(filters).platforms}
+            emptyTitle={appsLibraryEmpty ? 'No apps here yet' : 'No apps match these filters'}
+            emptyPlay={!appsLibraryEmpty}
+            emptyDescription={
+              appsLibraryEmpty
+                ? 'We add new apps regularly. Check back soon.'
+                : 'Try removing a filter, or search for something broader.'
+            }
+            emptyAction={appFilters.active || palette.length ? { label: 'Clear filters', onClick: () => { appFilters.clear(); setPalette([]); } } : undefined}
+          />
+        </>
+      ) : (
+        <>
+          <FilterToolbar
+            filters={filters}
+            onChange={update}
+            element={element}
+            onElement={setElement}
+            total={textOn ? (textHits ? textScreens.length : null) : ready ? pages.total : null}
+            sort={screenSort}
+            sortOptions={SCREEN_SORTS}
+            onSort={(next) => setUrlParam('sort', next === 'curated' ? null : next)}
+            counts={counts}
+            onClearAll={clearDimensions}
+            beforeSort={<ScreenshotTextSearch applied={textQuery} onApply={setText} />}
+            beforeFilters={colourOn ? <PaletteFilter selected={colour.palette} onChange={colour.setPalette} counts={colour.counts} align="start" /> : undefined}
+          />
+          {/* .ins-shot-panel applies the app-page gallery treatment: frameless, hairline-bordered shots —
+              five phones per row, or three web pages in Webs, the same cards as Patterns. */}
+          <div ref={gridWrapRef} className="ins-shot-panel">
+            <ScreenGrid
+              screens={items}
+              webGrid={filters.platforms.length > 0 && filters.platforms.every(isDesktopPlatform)}
+              showMeta={false}
+              selectable
+              loading={textOn ? textLoading || !textHits : (!ready && shownItems.length === 0) || loadingMore}
+              hasMore={!textOn && ready && pages.next !== null}
+              onLoadMore={loadMore}
+              textHighlights={textOn ? textHits?.textHighlights : undefined}
+              // On UI Elements, a selection saves as UI elements: the one
+              // being browsed, else the screen's first.
+              saveItem={
+                active === 'ui-elements'
+                  ? (s) => ({ type: 'component', id: screenItemId(s.id, element ?? s.elements[0] ?? '') })
+                  : undefined
+              }
+              empty={
+                libraryEmpty ? (
+                  <EmptyState
+                    icon={<ImageIcon size={22} />}
+                    title="No screens here yet"
+                    description="We add new screens regularly. Check back soon."
+                  />
+                ) : (
+                  <EmptyState
+                    play
+                    title="No screens match these filters"
+                    description="Try removing a filter, or search for something broader."
+                    action={{ label: 'Clear filters', onClick: clearScreens }}
+                  />
+                )
+              }
+            />
+          </div>
+        </>
+      )}
+    </>
+  );
+}

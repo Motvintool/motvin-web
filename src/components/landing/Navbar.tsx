@@ -1,11 +1,22 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAuthModal } from '@/components/shared/AuthModal';
 import { useAuth } from '@/components/shared/AuthProvider';
+import { getGuestUid } from '@/lib/firebase/auth';
+import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { CommunityDropdown } from './CommunityDropdown';
+import { CompanyDropdown } from './CompanyDropdown';
+import { MobileMenu } from './MobileMenu';
 import { ProductsDropdown } from './ProductsDropdown';
+import { REQUEST_APP_EVENT } from './RequestAppLink';
+
+// The library's request form, loaded (with its styles) only when it opens.
+const LandingRequestModal = dynamic(() => import('./LandingRequestModal'), { ssr: false });
+
+/** `?request=app` on a landing-style page opens the request form on arrival (the Requests page sends signed-out visitors here). */
+const REQUEST_PARAM = 'request';
 
 /**
  * Sticky header — port of the navbar in motvin-ui/index.html plus the nav half
@@ -20,14 +31,45 @@ import { ProductsDropdown } from './ProductsDropdown';
  */
 
 const NAV_MOBILE_BREAKPOINT = 1300;
+// Past this scroll depth (desktop) the pill tucks away for the compact buttons.
+const COMPACT_AFTER = 160;
+// Once reopened from the compact menu button, the pill stays until the page
+// has scrolled this much further down.
+const REOPEN_SCROLL_SLACK = 120;
+// How far the page has to move before it counts as scrolling up or down.
+const SCROLL_DIRECTION_THRESHOLD = 6;
+// Vertical middle of the compact buttons (desktop), for telling when the
+// dark footer has slid under them.
+const COMPACT_MIDDLE = 59;
+// The menus open on hover (desktop, mouse); this grace period lets the
+// pointer travel from a label down into its menu without it closing.
+const HOVER_CLOSE_DELAY = 180;
+const INSTAGRAM_URL = 'https://www.instagram.com/motvintool/';
+const LINKEDIN_URL = 'https://www.linkedin.com/company/motvin/home';
 
-type Menu = 'products' | 'community' | null;
+type Menu = 'products' | 'community' | 'company' | null;
+
+// Each desktop menu panel, by id. They render outside the nav, so they get
+// their own hover listeners.
+const MENU_PANELS: [id: string, menu: Exclude<Menu, null>][] = [
+  ['products-dropdown', 'products'],
+  ['company-dropdown', 'company'],
+  ['community-dropdown', 'community'],
+];
+
+/** Which menu a trigger opens, from its data-menu attribute. */
+const menuOf = (el: EventTarget | null) =>
+  (el instanceof HTMLElement ? el.dataset.menu : undefined) as Exclude<Menu, null> | undefined;
 
 export function Navbar() {
-  const { open: openAuthModal } = useAuthModal();
   const { user } = useAuth();
   // Desktop mega-menu (>1300px) — only one open at a time.
   const [openMenu, setOpenMenu] = useState<Menu>(null);
+  const [requestOpen, setRequestOpen] = useState(false);
+
+  // "Request apps" in the Resources menu goes through the same handler as
+  // every other "Request an app" link (below).
+  const requestApp = () => window.dispatchEvent(new Event(REQUEST_APP_EVENT));
   // Accordion inside the hamburger panel (<=1300px) — same triggers, different affordance.
   const [openAccordion, setOpenAccordion] = useState<Menu>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -39,9 +81,62 @@ export function Navbar() {
   const navRef = useRef<HTMLElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
-  const signupRef = useRef<HTMLAnchorElement>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const closePanel = useCallback(() => setPanelOpen(false), []);
+
+  // Desktop only: scrolling down past the hero swaps the full pill for the
+  // compact buttons; scrolling up anywhere brings the full pill straight
+  // back. The round menu button also brings it back, until the next scroll
+  // down of some length.
+  const [scrolled, setScrolled] = useState(false);
+  // True while the dark footer is behind the compact buttons, so they can
+  // switch to their light version and stay visible.
+  const [overDark, setOverDark] = useState(false);
+  const [pillReopened, setPillReopened] = useState(false);
+  const reopenedAtRef = useRef(0);
+  const lastYRef = useRef(0);
+
+  useEffect(() => {
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const y = window.scrollY;
+        const dy = y - lastYRef.current;
+        if (y <= COMPACT_AFTER) {
+          setScrolled(false);
+          lastYRef.current = y;
+        } else if (Math.abs(dy) > SCROLL_DIRECTION_THRESHOLD) {
+          // Small jitters don't count as a change of direction.
+          setScrolled(dy > 0);
+          lastYRef.current = y;
+        }
+        if (y - reopenedAtRef.current > REOPEN_SCROLL_SLACK) setPillReopened(false);
+        // With the curtain footer, the footer always sits behind the page; it
+        // only shows once the white sheet's bottom edge has passed above.
+        const footer = document.querySelector('.lpi-footer');
+        const sheet = document.querySelector('.landing-sheet');
+        const footerEdge = footer
+          ? footer.classList.contains('is-reveal') && sheet
+            ? sheet.getBoundingClientRect().bottom
+            : footer.getBoundingClientRect().top
+          : Infinity;
+        setOverDark(footerEdge < COMPACT_MIDDLE);
+      });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, []);
+
+  const reopenPill = () => {
+    reopenedAtRef.current = window.scrollY;
+    setPillReopened(true);
+  };
 
   useEffect(() => {
     const sync = () => {
@@ -57,6 +152,37 @@ export function Navbar() {
     sync();
     window.addEventListener('resize', sync);
     return () => window.removeEventListener('resize', sync);
+  }, []);
+
+  // Every "Request an app" link (RequestAppLink, the Resources menu): someone
+  // who already has requests (an account, or a guest session from an earlier
+  // request) goes to the Requests page to see and add to them; a first-time
+  // visitor gets the request form right here, over the page.
+  useEffect(() => {
+    const onRequest = async () => {
+      if (user || (await getGuestUid().catch(() => null))) {
+        window.location.assign(INSPIRATIONS_ROUTES.settingsRequests);
+        return;
+      }
+      setRequestOpen(true);
+    };
+    window.addEventListener(REQUEST_APP_EVENT, onRequest);
+    return () => window.removeEventListener(REQUEST_APP_EVENT, onRequest);
+  }, [user]);
+
+  // Arriving with ?request=app opens the request form, and the parameter is
+  // taken off the address so a refresh doesn't open it again.
+  useEffect(() => {
+    if (new URL(window.location.href).searchParams.get(REQUEST_PARAM) !== 'app') return;
+    // Taken off only when the form actually opens, so a re-run of this effect
+    // (React's dev double-invoke) still finds it.
+    const timer = setTimeout(() => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete(REQUEST_PARAM);
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+      setRequestOpen(true);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   // Body class drives the scroll lock while the hamburger panel is open.
@@ -77,7 +203,7 @@ export function Navbar() {
       const insideNav =
         navRef.current?.contains(target) ||
         (target instanceof Element &&
-          target.closest('.products-dropdown, .community-dropdown'));
+          target.closest('.products-dropdown, .community-dropdown, .company-dropdown'));
       if (!insideNav) {
         setOpenMenu(null);
       }
@@ -103,19 +229,76 @@ export function Navbar() {
     };
   }, [panelOpen]);
 
-  const toggleMenu = (menu: Exclude<Menu, null>) => (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (isMobile) {
-      setOpenAccordion((prev) => (prev === menu ? null : menu));
-    } else {
-      setOpenMenu((prev) => (prev === menu ? null : menu));
-    }
+  // On desktop the menus open on hover: entering a label (or its menu)
+  // opens it, moving to another label swaps straight over, and leaving
+  // closes it after a short grace period. A click only opens, so a click
+  // right after hovering doesn't shut it. On mobile they're accordions.
+  const openOnHover = (menu: Exclude<Menu, null>) => {
+    clearTimeout(hoverTimer.current);
+    setOpenMenu(menu);
   };
+  const closeAfterHover = (menu: Exclude<Menu, null>) => {
+    clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => setOpenMenu((open) => (open === menu ? null : open)), HOVER_CLOSE_DELAY);
+  };
+
+  const onMenuClick = (e: React.MouseEvent<HTMLElement>) => {
+    e.preventDefault();
+    const menu = menuOf(e.currentTarget);
+    if (!menu) return;
+    if (isMobile) setOpenAccordion((prev) => (prev === menu ? null : menu));
+    else openOnHover(menu);
+  };
+  const onMenuEnter = (e: React.PointerEvent<HTMLElement>) => {
+    const menu = menuOf(e.currentTarget);
+    if (!isMobile && e.pointerType === 'mouse' && menu) openOnHover(menu);
+  };
+  const onMenuLeave = (e: React.PointerEvent<HTMLElement>) => {
+    const menu = menuOf(e.currentTarget);
+    if (!isMobile && e.pointerType === 'mouse' && menu) closeAfterHover(menu);
+  };
+
+  // The menu panels render outside the nav, so they get their own listeners:
+  // staying over an open menu keeps it open, leaving it closes it.
+  useEffect(() => {
+    if (isMobile) return;
+    const cleanups = MENU_PANELS.map(([id, menu]) => {
+      const panel = document.getElementById(id);
+      if (!panel) return () => {};
+      const onEnter = (e: PointerEvent) => {
+        if (e.pointerType === 'mouse') openOnHover(menu);
+      };
+      const onLeave = (e: PointerEvent) => {
+        if (e.pointerType === 'mouse') closeAfterHover(menu);
+      };
+      panel.addEventListener('pointerenter', onEnter);
+      panel.addEventListener('pointerleave', onLeave);
+      return () => {
+        panel.removeEventListener('pointerenter', onEnter);
+        panel.removeEventListener('pointerleave', onLeave);
+      };
+    });
+    return () => {
+      clearTimeout(hoverTimer.current);
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, [isMobile]);
+
+  // Never collapse while a mega-menu is open.
+  const collapsed = !isMobile && scrolled && !pillReopened && !openMenu;
 
   const productsOpen = openMenu === 'products';
   const communityOpen = openMenu === 'community';
   const productsAccordionOpen = openAccordion === 'products';
   const communityAccordionOpen = openAccordion === 'community';
+  const companyOpen = openMenu === 'company';
+  const companyAccordionOpen = openAccordion === 'company';
+  // Picking a Resources link closes the menu, and the hamburger panel on mobile.
+  const closeMenus = () => {
+    setOpenMenu(null);
+    setOpenAccordion(null);
+    setPanelOpen(false);
+  };
 
   const navLinks = (
     <nav className="nav-links">
@@ -123,9 +306,12 @@ export function Navbar() {
         href="#"
         className={`nav-item${productsOpen ? ' active' : ''}${productsAccordionOpen ? ' is-accordion-open' : ''}`}
         id="products-dropdown-trigger"
-        onClick={toggleMenu('products')}
+        data-menu="products"
+        onClick={onMenuClick}
+        onPointerEnter={onMenuEnter}
+        onPointerLeave={onMenuLeave}
       >
-        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Products</span>
+        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Explore tools</span>
         <img
           src="/ASSET/Icons/desktop-arrow.svg"
           alt=""
@@ -139,26 +325,6 @@ export function Navbar() {
           style={{ width: '14px', height: '14px', opacity: '0.5' }}
         />
       </a>
-      <a
-        href="#"
-        className={`nav-item${communityOpen ? ' active' : ''}${communityAccordionOpen ? ' is-accordion-open' : ''}`}
-        id="community-dropdown-trigger"
-        onClick={toggleMenu('community')}
-      >
-        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Community</span>
-        <img
-          src="/ASSET/Icons/desktop-arrow.svg"
-          alt=""
-          className="community-desktop-arrow"
-          style={{ width: '18px', height: '18px' }}
-        />
-        <img
-          src="/ASSET/Icons/nav-drop-arrow.svg"
-          alt=""
-          className="community-mobile-arrow"
-          style={{ width: '14px', height: '14px', opacity: '0.5' }}
-        />
-      </a>
       {/* On mobile the dropdowns render inside these accordions instead of as
           fixed-position mega-menus. */}
       <div
@@ -167,96 +333,115 @@ export function Navbar() {
       >
         {isMobile && <ProductsDropdown open={productsAccordionOpen} />}
       </div>
-      <a href="#demo-section" className="nav-item" onClick={closePanel}>
-        <span>Features</span>
-      </a>
       <div
         className={`mi-nav-community-accordion${communityAccordionOpen ? ' is-open' : ''}`}
         id="mi-nav-community-accordion"
       >
         {isMobile && <CommunityDropdown open={communityAccordionOpen} />}
       </div>
-      <a href="/updates/" target="_blank" className="nav-item" onClick={closePanel}>
-        <span>Release Notes</span>
+      {/* Resources: Updates, About us, Request apps and Copyrights. */}
+      <a
+        href="#"
+        className={`nav-item${companyOpen ? ' active' : ''}${companyAccordionOpen ? ' is-accordion-open' : ''}`}
+        id="company-dropdown-trigger"
+        data-menu="company"
+        onClick={onMenuClick}
+        onPointerEnter={onMenuEnter}
+        onPointerLeave={onMenuLeave}
+      >
+        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Resources</span>
+        <img
+          src="/ASSET/Icons/desktop-arrow.svg"
+          alt=""
+          className="company-desktop-arrow"
+          style={{ width: '18px', height: '18px' }}
+        />
+        <img
+          src="/ASSET/Icons/nav-drop-arrow.svg"
+          alt=""
+          className="company-mobile-arrow"
+          style={{ width: '14px', height: '14px', opacity: '0.5' }}
+        />
       </a>
-      <a href="#faq-section" className="nav-item" onClick={closePanel}>
-        <span>F&amp;Q</span>
+      <a
+        href="#"
+        className={`nav-item${communityOpen ? ' active' : ''}${communityAccordionOpen ? ' is-accordion-open' : ''}`}
+        id="community-dropdown-trigger"
+        data-menu="community"
+        onClick={onMenuClick}
+        onPointerEnter={onMenuEnter}
+        onPointerLeave={onMenuLeave}
+      >
+        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Join us</span>
+        <img
+          src="/ASSET/Icons/nav-drop-arrow.svg"
+          alt=""
+          className="community-mobile-arrow"
+          style={{ width: '14px', height: '14px', opacity: '0.5' }}
+        />
       </a>
+      <div
+        className={`mi-nav-company-accordion${companyAccordionOpen ? ' is-open' : ''}`}
+        id="mi-nav-company-accordion"
+      >
+        {isMobile && <CompanyDropdown open={companyAccordionOpen} onNavigate={closeMenus} onRequestApp={requestApp} />}
+      </div>
     </nav>
   );
 
-  const signinButton = (
-    <a
-      href="#"
-      className="btn-secondary"
-      id="auth-signin-btn"
-      style={{ display: user ? 'none' : undefined }}
-      onClick={(e) => {
-        e.preventDefault();
-        openAuthModal('login');
-      }}
-    >
-      <span>Sign in</span>
-      <img src="/ASSET/Icons/btn-arrow-black.svg" alt="" className="btn-secondary-arrow" />
-    </a>
-  );
-
   const signupButton = (
-    <a
-      href="#"
-      className="btn-primary"
-      id="auth-signup-btn"
-      ref={signupRef}
-      style={{ display: user ? 'none' : undefined }}
-      onClick={(e) => {
-        e.preventDefault();
-        openAuthModal('register');
-      }}
-    >
+    <Link href="/signup" className="btn-primary" id="auth-signup-btn" style={{ display: user ? 'none' : undefined }}>
       <span>Get started for free</span>
       <img src="/ASSET/Icons/btn-arrow.svg" alt="" className="btn-primary-arrow" />
-    </a>
+    </Link>
   );
 
   const dashboardButton = (
-    <Link
-      href="/files"
-      className="btn-secondary"
-      id="auth-dashboard-btn"
-      style={{ display: user ? undefined : 'none' }}
-    >
-      <span>Go to Dashboard</span>
+    <Link href="/inspirations" className="btn-secondary" id="auth-dashboard-btn" style={{ display: user ? undefined : 'none' }}>
+      <span>Go to Library</span>
     </Link>
+  );
+
+  const navSocial = (
+    <div className="nav-social">
+      <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="nav-social-link" aria-label="Motvin on Instagram">
+        <img src="/ASSET/landing/nav-instagram-filled.svg" alt="" width={20} height={20} />
+        <span className="nav-social-tip" aria-hidden="true">
+          Instagram
+        </span>
+      </a>
+      <a href={LINKEDIN_URL} target="_blank" rel="noopener noreferrer" className="nav-social-link" aria-label="Motvin on LinkedIn">
+        <img src="/ASSET/landing/nav-linkedin.svg" alt="" width={20} height={20} />
+        <span className="nav-social-tip" aria-hidden="true">
+          LinkedIn
+        </span>
+      </a>
+    </div>
   );
 
   const navActions = (
     <div className="nav-actions">
-      <div className="nav-extra-links">
-        <Link href="/icons" className="nav-item" onClick={closePanel}>
-          <span>Icons Library</span>
-          <span className="mi-nav-badge">New</span>
+      {navSocial}
+      {user ? (
+        <Link href="/inspirations" className="nav-login" onClick={closePanel}>
+          Go to Library
         </Link>
-        <a href="#" className="nav-item" style={{ display: 'none' }}>
-          <img src="/ASSET/Icons/community.svg" alt="Community" />
-          <span>Join Community</span>
-        </a>
-      </div>
-      {/* Below the breakpoint these three move out: sign-in to the panel
-          footer, sign-up and dashboard to the collapsed navbar's CTA slot. */}
-      {!isMobile && signinButton}
-      {!isMobile && signupButton}
-      {!isMobile && dashboardButton}
+      ) : (
+        <Link href="/login" className="nav-login" onClick={closePanel}>
+          Log in
+        </Link>
+      )}
     </div>
   );
 
   return (
     <div className="sticky-header">
       <header className="navbar" ref={navRef}>
-        <div className="navbar-container">
+        <div className={`navbar-container${collapsed ? ' is-collapsed' : ''}`} inert={collapsed || undefined}>
           <div className="navbar-left">
-            <a href="#" className="logo">
+            <Link href="/" className="logo" aria-label="Motvin home">
               <img src="/ASSET/Icons/motvin-logo.svg" alt="" className="mi-logo-mark" />
-            </a>
+            </Link>
             {!isMobile && navLinks}
           </div>
           {!isMobile && navActions}
@@ -265,6 +450,7 @@ export function Navbar() {
             {isMobile && signupButton}
             {isMobile && dashboardButton}
           </div>
+
           {/* Mobile-only hamburger: opens a dropdown holding the relocated nav */}
           <button
             className={`mi-nav-hamburger${panelOpen ? ' is-open' : ''}`}
@@ -278,11 +464,46 @@ export function Navbar() {
               setPanelOpen((open) => !open);
             }}
           >
-            <img src="/ASSET/Icons/nav-open.svg" alt="" className="mi-nav-hamburger-icon-open" />
-            <img src="/ASSET/Icons/nav-close.svg" alt="" className="mi-nav-hamburger-icon-close" />
+            <img src="/ASSET/Icons/nav-open-bold.svg" alt="" className="mi-nav-hamburger-icon-open" />
+            <img src="/ASSET/Icons/nav-close-bold.svg" alt="" className="mi-nav-hamburger-icon-close" />
           </button>
         </div>
       </header>
+
+      {/* Desktop, once scrolled: the pill gives way to these. */}
+      {!isMobile && (
+        <div
+          className={`nav-compact${collapsed ? ' is-visible' : ''}${overDark ? ' is-over-dark' : ''}`}
+          inert={!collapsed || undefined}
+        >
+          {user ? (
+            <Link href="/inspirations" className="nav-compact-btn is-dark">
+              Go to Library
+            </Link>
+          ) : (
+            <>
+              <Link href="/login" className="nav-compact-btn">
+                Log in
+              </Link>
+              <Link href="/signup" className="nav-compact-btn is-dark">
+                Get started
+              </Link>
+            </>
+          )}
+          <button
+            type="button"
+            className="nav-compact-menu"
+            aria-label="Show menu"
+           
+            onClick={reopenPill}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+              <path d="M5 8h14" />
+              <path d="M5 16h14" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       <div className={`dropdown-backdrop${openMenu ? ' active' : ''}`} id="dropdown-backdrop" />
 
@@ -290,6 +511,8 @@ export function Navbar() {
           nav accordions above. */}
       {!isMobile && <ProductsDropdown open={productsOpen} />}
       {!isMobile && <CommunityDropdown open={communityOpen} />}
+      {!isMobile && <CompanyDropdown open={companyOpen} onNavigate={closeMenus} onRequestApp={requestApp} />}
+      {requestOpen && <LandingRequestModal onClose={() => setRequestOpen(false)} />}
 
       <div
         className={`mi-nav-mobile-panel${panelOpen ? ' is-open' : ''}`}
@@ -298,36 +521,35 @@ export function Navbar() {
       >
         <div className="mi-nav-mobile-panel-main">
           <div className="mi-nav-mobile-panel-header">
-            <a href="#" className="mi-nav-mobile-panel-logo" aria-label="Motvin home">
+            <Link href="/" className="mi-nav-mobile-panel-logo" aria-label="Motvin home" onClick={closePanel}>
               <img src="/ASSET/Icons/motvin-logo.svg" alt="" />
-            </a>
-            <button
-              className="mi-nav-mobile-panel-close"
-              id="nav-mobile-panel-close"
-              aria-label="Close menu"
-              onClick={closePanel}
-            >
-              <img src="/ASSET/Icons/nav-close.svg" alt="" />
-            </button>
-          </div>
-          <div className="mi-nav-mobile-panel-content">
-            <div className="mi-nav-mobile-panel-list">
-              <div id="nav-mobile-links-slot">{isMobile && navLinks}</div>
-              <div id="nav-mobile-actions-slot">{isMobile && navActions}</div>
+            </Link>
+            <div className="mi-mm-head-actions">
+              {/* The page's main call to action rides in the menu's top row, as on mobbin.com. */}
+              <Link href={user ? '/inspirations' : '/signup'} className="mi-mm-cta" onClick={closePanel}>
+                {user ? 'Go to Library' : 'Get started'}
+              </Link>
+              <button
+                className="mi-nav-mobile-panel-close"
+                id="nav-mobile-panel-close"
+                aria-label="Close menu"
+                onClick={closePanel}
+              >
+                <img src="/ASSET/Icons/nav-close-bold.svg" alt="" />
+              </button>
             </div>
           </div>
+          <div className="mi-nav-mobile-panel-content">
+            <MobileMenu onNavigate={closePanel} onRequestApp={requestApp} instagramUrl={INSTAGRAM_URL} linkedinUrl={LINKEDIN_URL} />
+          </div>
         </div>
-        <div className="mi-nav-mobile-panel-actions">
-          {isMobile && signinButton}
-          <button
-            className="mi-nav-mobile-panel-signup"
-            id="nav-mobile-panel-signup"
-            type="button"
-            onClick={() => signupRef.current?.click()}
-          >
-            Get started
-          </button>
-        </div>
+        {!user && (
+          <div className="mi-nav-mobile-panel-actions mi-mm-foot">
+            <Link href="/login" className="mi-mm-signin" onClick={closePanel}>
+              Sign in
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

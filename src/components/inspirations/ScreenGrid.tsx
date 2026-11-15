@@ -1,0 +1,175 @@
+'use client';
+
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import type { App, SavedItemType, Screen } from '@/lib/inspirations/types';
+import { FloatCollectionBar } from './FloatCollectionBar';
+import { registerSaveAs, unregisterSaveAs } from './previewSaveAs';
+import { ScreenCard } from './ScreenCard';
+import { WebScreenCard } from './WebScreenCard';
+
+import { useApps } from './useApps';
+import { ScreenGridSkeleton } from './Skeletons';
+
+/**
+ * Fixed-size gallery: every card is the same 380x590 footprint (see
+ * .ins-card-shot in inspirations.css), laid out four to a row. Since cards no
+ * longer vary in height there is nothing to bin-pack — plain CSS Grid handles
+ * placement.
+ *
+ * Infinite loading: a sentinel below the grid calls `onLoadMore` when it
+ * scrolls into view. Cards use `content-visibility: auto` (CSS) so off-screen
+ * rows cost nothing to keep mounted.
+ */
+
+export function ScreenGrid({
+  screens,
+  apps: appsOverride,
+  loading = false,
+  hasMore = false,
+  onLoadMore,
+  showApp = true,
+  showMeta = true,
+  selectable = false,
+  textHighlights,
+  empty,
+  onRemoveItem,
+  webLayout = false,
+  webGrid = false,
+  saveItem,
+  prototype,
+}: {
+  screens: Screen[];
+  /** Overrides the shared app lookup; omit and the grid fetches it itself. */
+  apps?: Map<string, App>;
+  loading?: boolean;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
+  showApp?: boolean;
+  showMeta?: boolean;
+  selectable?: boolean;
+  textHighlights?: Record<string, Array<{ left: number; top: number; width: number; height: number }>>;
+  empty?: ReactNode;
+  onRemoveItem?: (id: string) => void;
+  webLayout?: boolean;
+  webGrid?: boolean;
+  /**
+   * What a selected screen is saved as. Plain screens by default; the UI
+   * Elements and Patterns pages save theirs as a UI element or a pattern, so
+   * they land in those tabs of the collection.
+   */
+  saveItem?: (screen: Screen) => { type: SavedItemType; id: string };
+  /**
+   * An extra card ahead of the screens that plays the app as a prototype:
+   * the screen `screenId` (the app page's first) with a "Prototype" badge,
+   * playing through `screens` on its own, and a click opens the flow player
+   * at `href`. That screen still has its own card right after it.
+   */
+  prototype?: { screenId: string; href: string; label: string; screens?: Screen[] };
+}) {
+  const fetchedApps = useApps();
+  const apps = appsOverride ?? fetchedApps;
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+  const protoScreen = prototype ? screens.find((s) => s.id === prototype.screenId) : undefined;
+  const selectedScreens = screens.filter((screen) => selectedIds.has(screen.id));
+  const selectedApp = selectedScreens.length ? apps.get(selectedScreens[0].appId) : undefined;
+
+  // The screen preview's Save saves these the same way (previewSaveAs.ts).
+  useEffect(() => {
+    if (!saveItem) return;
+    const key = Symbol('screen-grid');
+    registerSaveAs(key, screens.map((s) => s.id), saveItem);
+    return () => unregisterSaveAs(key);
+  }, [saveItem, screens]);
+
+  useEffect(() => {
+    if (!hasMore || !onLoadMore || loading) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) onLoadMore();
+      },
+      { rootMargin: '900px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, onLoadMore, loading, screens.length]);
+
+  // The first page is on its way: placeholders in the same layout the screens will land in.
+  if (loading && screens.length === 0) {
+    return <ScreenGridSkeleton count={10} meta={showMeta} web={webLayout || webGrid} />;
+  }
+
+  if (!loading && screens.length === 0) {
+    return <>{empty}</>;
+  }
+
+  return (
+    <>
+      <div className={`ins-grid ${webLayout || webGrid ? 'ins-web-grid' : ''}`} role="list">
+        {protoScreen && !webLayout && (
+          <ScreenCard
+            // A new first screen (another version) starts the reel over.
+            key={`prototype-${protoScreen.id}`}
+            screen={protoScreen}
+            app={apps.get(protoScreen.appId)}
+            showApp={showApp}
+            showMeta={showMeta}
+            index={0}
+            prototype={prototype}
+          />
+        )}
+        {screens.map((screen, index) => (
+          webLayout ? <WebScreenCard
+            key={screen.id}
+            screen={screen}
+            app={apps.get(screen.appId)}
+            showApp={showApp}
+            showMeta={showMeta}
+            selectable={selectable}
+            selected={selectedIds.has(screen.id)}
+            onToggleSelect={() => toggleSelection(screen.id)}
+          /> : <ScreenCard
+            key={screen.id}
+            screen={screen}
+            app={apps.get(screen.appId)}
+            showApp={showApp}
+            showMeta={showMeta}
+            selectable={selectable}
+            selected={selectedIds.has(screen.id)}
+            onToggleSelect={() => toggleSelection(screen.id)}
+            onRemove={onRemoveItem ? () => onRemoveItem(screen.id) : undefined}
+            index={index}
+            textHighlights={textHighlights?.[screen.id]}
+          />
+        ))}
+      </div>
+      {(hasMore || loading) && (
+        <div ref={sentinelRef} className="ins-grid-sentinel" aria-hidden>
+          {loading && <span className="ins-spinner" />}
+        </div>
+      )}
+      {selectedScreens.length > 0 && (
+        <FloatCollectionBar
+          screens={selectedScreens}
+          screenApp={selectedApp}
+          items={saveItem ? selectedScreens.map(saveItem) : undefined}
+          onClose={clearSelection}
+          onSaved={clearSelection}
+        />
+      )}
+    </>
+  );
+}

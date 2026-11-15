@@ -42,9 +42,19 @@ export function LibraryGrid({
   onCopy,
   onToggleSave,
 }: Props) {
+  // React 19 + useSearchParams-driven re-renders can leave stale card DOM
+  // inside `.mi-empty` when the root element type stays a `<div>` but its
+  // className flips from `mi-grid` → `mi-empty`. Force a proper unmount by
+  // tagging each variant with a distinct key so the reconciler treats them
+  // as separate subtrees.
   if (loading) {
     return (
-      <div className={`mi-grid density-${density}`} id="icon-grid" role="list">
+      <div
+        key="grid-loading"
+        className={`mi-grid density-${density}`}
+        id="icon-grid"
+        role="list"
+      >
         {Array.from({ length: SKELETON_COUNT }, (_, index) => (
           <div className="mi-card is-skeleton" key={`skeleton-${index}`} aria-hidden="true">
             <div className="mi-card-preview" />
@@ -58,14 +68,19 @@ export function LibraryGrid({
 
   if (!items.length) {
     return (
-      <div className="mi-empty" role="status">
+      <div key="grid-empty" className="mi-empty" role="status">
         <p>No {config.nounPlural} match your filters.</p>
       </div>
     );
   }
 
   return (
-    <div className={`mi-grid density-${density}`} id="icon-grid" role="list">
+    <div
+      key="grid-items"
+      className={`mi-grid density-${density}`}
+      id="icon-grid"
+      role="list"
+    >
       {items.map((item) => (
         <ItemCard
           key={item.id}

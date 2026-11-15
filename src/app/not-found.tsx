@@ -9,3 +9,5 @@
  * component for its not-found fallback.
  */
 export { default } from './404/page';
+
+export const metadata = { title: 'Page not found — Motvin' };

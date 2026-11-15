@@ -9,7 +9,7 @@ import {
   fetchAdmins,
   fetchAllReleaseNotes,
   hasAdminAccess,
-  isOwnerAdmin,
+  checkIsOwner,
   normaliseEmail,
   publishReleaseNote,
   removeAdmin,
@@ -104,10 +104,14 @@ export default function AdminPage() {
     }
     let cancelled = false;
     setAdminAccess('unknown');
-    setIsOwner(isOwnerAdmin(email));
+    setIsOwner(false);
     (async () => {
-      const ok = await hasAdminAccess(email);
-      if (!cancelled) setAdminAccess(ok ? 'granted' : 'denied');
+      // Both asked of Firestore (its rules know the owner), not of an email
+      // list in the browser.
+      const [ok, owner] = await Promise.all([hasAdminAccess(email), checkIsOwner()]);
+      if (cancelled) return;
+      setIsOwner(owner);
+      setAdminAccess(ok ? 'granted' : 'denied');
     })();
     return () => {
       cancelled = true;
@@ -333,7 +337,8 @@ export default function AdminPage() {
     async (raw: string) => {
       const target = normaliseEmail(raw);
       if (!target) return;
-      if (isOwnerAdmin(target)) {
+      // Only the owner manages admins, so the owner is the signed-in account.
+      if (isOwner && target === normaliseEmail(email)) {
         setBanner({ message: 'That email already has owner access.', tone: 'neutral' });
         return;
       }
@@ -346,7 +351,7 @@ export default function AdminPage() {
         setBanner({ message, tone: 'error' });
       }
     },
-    [email, loadAdmins],
+    [email, isOwner, loadAdmins],
   );
 
   const handleRemoveAdmin = useCallback(

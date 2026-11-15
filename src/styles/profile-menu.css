@@ -13,18 +13,73 @@
   display: inline-flex;
 }
 
-/* Avatar chip */
+/* Avatar chip & Pill */
+
+.ins-profile-pill {
+  transition: all var(--ins-fast) var(--ins-ease);
+  /* Figma "ins-header-profile": rounded on the right, with no background fill. */
+  border-radius: 0 9999px 9999px 0;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0 8px 0;
+  display: flex;
+}
+
+/* The avatar is only a picture; the menu opens from the button beside it. */
+.ins-profile-pill .mi-top-avatar-wrap {
+  cursor: default;
+}
+
+/* The menu button beside the avatar: three lines, no chrome. */
+.ins-profile-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 100px;
+  background: transparent;
+  cursor: var(--ins-cursor-hand, pointer);
+}
+
+.ins-profile-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.ins-profile-pill.is-logged-out {
+  /* No padding overrides needed */
+}
+
+.ins-profile-login-btn {
+  background: #000;
+  color: #fff;
+  border: none;
+  border-radius: 9999px;
+  height: 40px;
+  padding: 0 20px;
+  font: 500 15px/40px var(--font-inter), sans-serif;
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: opacity var(--ins-fast) var(--ins-ease);
+}
+
+.ins-profile-login-btn:hover {
+  opacity: 0.8;
+}
 
 .mi-top-avatar-wrap {
   width: 40px;
   height: 40px;
-  border: 1.8px solid rgb(92, 74, 228);
+  border: 1.5px solid var(--mi-ring, #464848);
   border-radius: 50%;
   padding: 1.8px;
+  background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   background: transparent;
 }
 
@@ -36,7 +91,7 @@
 .mi-top-avatar-wrap.mi-initials-mode {
   border: none;
   padding: 0;
-  background: transparent;
+  background: #fff;
 }
 
 .mi-top-avatar {
@@ -80,13 +135,13 @@
   top: calc(100% + 12px);
   right: 0;
   width: 250px;
-  background: rgb(254, 254, 254);
-  border: 1px solid rgb(239, 235, 231);
-  border-radius: 16px;
-  padding: 4px;
-  box-shadow:
-    rgba(37, 37, 34, 0.02) 0px 1px 1px,
-    rgba(37, 37, 34, 0.06) 0px 18px 24px;
+  background: #ffffff;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border: 7px solid #F0F0F0;
+  border-radius: 24px;
+  padding: 6px;
+  box-shadow: 0px 12px 80px 0px rgba(0, 0, 0, 0.08);
   z-index: 10000;
   display: none;
   opacity: 0;
@@ -101,8 +156,6 @@
 }
 
 .mi-profile-dropdown-inner {
-  background: rgb(247, 247, 247);
-  border: 1px solid rgb(239, 235, 231);
   border-radius: 12px;
   padding: 12px 6px 6px;
   display: flex;
@@ -138,7 +191,7 @@
 
 .mi-profile-email {
   font-family: Outfit, sans-serif;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 400;
   color: rgba(0, 0, 0, 0.6);
   margin: 0;
@@ -169,26 +222,28 @@
 .mi-profile-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px;
-  border-radius: 7px;
+  justify-content: flex-start;
+  gap: 16px;
+  padding: 9.5px 12px;
+  border-radius: 12px;
   text-decoration: none;
-  color: rgb(37, 37, 34);
+  color: #000c;
   font-family: Outfit, sans-serif;
   font-size: 16px;
   font-weight: 400;
   transition: background 0.15s;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   /* Menu items can be either <a> or <button>; strip the button chrome so the
      two render identically. */
   border: 0;
+  border-left: 2px solid transparent;
   background: transparent;
   width: 100%;
   text-align: left;
 }
 
 .mi-profile-item:hover {
-  background: rgb(235, 235, 235);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .mi-profile-item img {

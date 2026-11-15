@@ -1,6 +1,6 @@
 import type { LibraryItem } from '@/lib/api/normalize';
 import type { Category } from '@/lib/config/categories';
-import { flattenSvg } from './flatten';
+import { flattenSvg, normalizeSvgFile } from './flatten';
 import { renderLogoSvg } from './logos';
 import { renderSvg, type RenderOptions } from './svg';
 
@@ -69,18 +69,35 @@ export function editorFromGlobals(
       globals.color && globals.color !== 'currentColor'
         ? globals.color
         : DEFAULT_EDITOR.color,
-    // Colour styles keep their own palette; the colour control does nothing
-    // for them, so leave the default rather than implying it will.
-    fillMode: item.style === 'solid' ? 'solid' : DEFAULT_EDITOR.fillMode,
+    // Reference (motvin-icons.js:1676) resets fillMode from DEFAULT_EDITOR
+    // regardless of style — auto-flipping it to 'solid' turns every
+    // no-fill path in the artwork into a color-flooded silhouette
+    // (illustrations especially: OpenDoodles' outline paths become filled
+    // blobs). Keep the default; the visitor toggles Fill from the UI.
+    fillMode: DEFAULT_EDITOR.fillMode,
   };
+}
+
+/** Illustration styles that need round joins/caps to look right — mirrors
+ * styleOptions() in lib/render/index.ts, which the grid renderer applies. */
+function illustrationStyleOptions(style: string): Partial<RenderOptions> {
+  switch (style) {
+    case 'solid':
+    case 'duotone':
+    case 'thin':
+      return { cap: 'round', join: 'round' };
+    default:
+      return {};
+  }
 }
 
 export function editorRenderOptions(
   item: LibraryItem,
   editor: EditorState,
   sizeOverride?: number,
+  category: Category = 'icons',
 ): RenderOptions {
-  return {
+  const base: RenderOptions = {
     size: sizeOverride ?? editor.size,
     stroke: editor.stroke,
     color: editor.color,
@@ -101,6 +118,18 @@ export function editorRenderOptions(
     shapeRadius: editor.shapeRadius,
     shapeColor: editor.shapeColor,
   };
+  // Illustrations keep the legacy 'illustrations' variant so their palette
+  // survives — without this, a colour/3d/multi-colour illustration goes
+  // through the icons pipeline, which strips fills and forces a mono stroke.
+  // Matches the grid renderer (renderIllustrationItem in lib/render/index.ts).
+  if (category === 'illustrations') {
+    return {
+      ...base,
+      variant: 'illustrations',
+      ...illustrationStyleOptions(item.style),
+    };
+  }
+  return base;
 }
 
 export function renderEditorSvg(
@@ -120,7 +149,7 @@ export function renderEditorSvg(
       repaint: isSolid,
     });
   }
-  return renderSvg(item.svg, editorRenderOptions(item, editor, sizeOverride));
+  return renderSvg(item.svg, editorRenderOptions(item, editor, sizeOverride, category));
 }
 
 /**
@@ -144,6 +173,39 @@ export function currentSvgString(
   category: Category = 'icons',
 ): string {
   return flattenSvg(renderEditorSvg(item, editor, undefined, category));
+}
+
+/**
+ * Illustrations from remote-URL-only collections (Bioicons, some SVGRepo
+ * entries) ship without inline SVG — the grid renders them as `<img>`, which is
+ * useless for clipboard/export. Fetch the file, normalise it, and cache the
+ * markup on the item so every follow-up copy/download works. Port of
+ * `exportSvgFor` in motvin-ui/JS/illustrations.js:2038.
+ */
+export async function resolveInlineSvg(item: LibraryItem): Promise<void> {
+  if (item.svg || !item.imageUrl) return;
+  try {
+    const response = await fetch(item.imageUrl);
+    if (!response.ok) return;
+    const markup = normalizeSvgFile(await response.text());
+    if (markup) item.svg = markup;
+  } catch {
+    // Network / CORS failure — leave item.svg empty so the caller can fall
+    // back to whatever error message it uses.
+  }
+}
+
+/**
+ * Export-ready SVG for one item. Waits for `resolveInlineSvg` first so an
+ * imageUrl-only illustration is fetched before it goes to the clipboard.
+ */
+export async function exportSvgFor(
+  item: LibraryItem,
+  editor: EditorState,
+  category: Category = 'icons',
+): Promise<string> {
+  await resolveInlineSvg(item);
+  return currentSvgString(item, editor, category);
 }
 
 /** SVG rewritten for JSX: hyphenated attributes camelCased, xmlns dropped. */

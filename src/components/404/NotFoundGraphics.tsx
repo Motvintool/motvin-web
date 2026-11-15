@@ -1,8 +1,7 @@
 'use client';
 
 /**
- * Right-side 404 illustration with a plain-text fallback if the svg fails to
- * load.
+ * Right-side 404 illustration. Hidden if the svg fails to load.
  */
 export function NotFoundGraphics() {
   return (
@@ -15,7 +14,6 @@ export function NotFoundGraphics() {
           e.currentTarget.style.display = 'none';
         }}
       />
-      <div className="fallback-404">404</div>
     </div>
   );
 }

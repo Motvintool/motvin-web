@@ -1,0 +1,145 @@
+import {
+  INDUSTRIES,
+  PLATFORMS,
+  type Industry,
+  type Platform,
+  type Screen,
+  type ScreenState,
+  type ScreenType,
+  type Style,
+} from './types';
+
+/**
+ * Gallery filter state. Lives in the URL (`?platform=ios&industry=fintech`)
+ * so browser back/forward and shared links restore the exact view.
+ */
+
+export type ScreenFilters = {
+  platforms: Platform[];
+  screenTypes: ScreenType[];
+  states: ScreenState[];
+  industries: Industry[];
+  styles: Style[];
+  query: string;
+};
+
+export const EMPTY_FILTERS: ScreenFilters = {
+  platforms: [],
+  screenTypes: [],
+  states: [],
+  industries: [],
+  styles: [],
+  query: '',
+};
+
+/**
+ * The platform actually browsed when the URL names none. Our model: a
+ * visitor is always in exactly one platform's section — iOS by default —
+ * rather than an "all platforms" soup no control can describe. The
+ * URL stays clean for the default; only Webs (`web`) is ever written to it.
+ */
+export const DEFAULT_PLATFORM: Platform = 'ios';
+
+/** Filters with the platform default made real, for feeds and matching. */
+export function withDefaultPlatform(filters: ScreenFilters): ScreenFilters {
+  return filters.platforms.length ? filters : { ...filters, platforms: [DEFAULT_PLATFORM] };
+}
+
+function parseList<T extends string>(raw: string | null, allowed: readonly T[]): T[] {
+  if (!raw) return [];
+  const set = new Set<string>(allowed);
+  return Array.from(new Set(raw.split(',').filter((v): v is T => set.has(v))));
+}
+
+/**
+ * "Webs" (the header's second tab) is websites and web apps together, one
+ * section with no switch between them; "Apps" is iOS. A URL naming either web
+ * platform browses both, and the URL writes the pair as plain `web`.
+ */
+export const WEBS_PLATFORMS: readonly Platform[] = ['webapp', 'web'];
+
+/** True when the platforms are the Webs section (web apps and/or websites, nothing else). */
+export function isWebsPlatforms(platforms: readonly string[]): boolean {
+  return platforms.length > 0 && platforms.every((p) => (WEBS_PLATFORMS as readonly string[]).includes(p));
+}
+
+function parsePlatforms(raw: string | null): Platform[] {
+  const named = parseList(raw, PLATFORMS);
+  if (!named.some((p) => WEBS_PLATFORMS.includes(p))) return named;
+  return [...named.filter((p) => !WEBS_PLATFORMS.includes(p)), ...WEBS_PLATFORMS];
+}
+
+/**
+ * The platforms a URL is actually browsing: the validated `?platform=` list,
+ * or the default when it names none. What feeds, the header nav and the
+ * platform-scoped meta all agree on.
+ */
+export function browsedPlatforms(params: { get(name: string): string | null }): Platform[] {
+  const named = parsePlatforms(params.get('platform'));
+  return named.length ? named : [DEFAULT_PLATFORM];
+}
+
+/**
+ * Screen types, states and styles grow with the library (a new type appears as soon as a screen carries it), so
+ * the URL keeps any filter-safe value rather than only the built-in ones; a value nothing carries just matches
+ * nothing.
+ */
+function parseSlugs<T extends string>(raw: string | null): T[] {
+  if (!raw) return [];
+  return Array.from(new Set(raw.split(',').map((v) => v.trim().toLowerCase()).filter((v) => /^[a-z0-9]+(-[a-z0-9]+)*$/.test(v)))) as T[];
+}
+
+export function parseFilters(params: URLSearchParams): ScreenFilters {
+  return {
+    platforms: parsePlatforms(params.get('platform')),
+    screenTypes: parseSlugs<ScreenType>(params.get('type')),
+    states: parseSlugs<ScreenState>(params.get('state')),
+    industries: parseList(params.get('industry'), INDUSTRIES),
+    styles: parseSlugs<Style>(params.get('style')),
+    query: params.get('q')?.trim() ?? '',
+  };
+}
+
+export function serializeFilters(filters: ScreenFilters, base?: URLSearchParams): URLSearchParams {
+  const params = new URLSearchParams(base);
+  const setList = (key: string, values: string[]) => {
+    if (values.length) params.set(key, values.join(','));
+    else params.delete(key);
+  };
+  setList('platform', isWebsPlatforms(filters.platforms) ? ['web'] : filters.platforms);
+  setList('type', filters.screenTypes);
+  setList('state', filters.states);
+  setList('industry', filters.industries);
+  setList('style', filters.styles);
+  if (filters.query) params.set('q', filters.query);
+  else params.delete('q');
+  return params;
+}
+
+export function countActiveFilters(filters: ScreenFilters): number {
+  return (
+    filters.platforms.length +
+    filters.screenTypes.length +
+    filters.states.length +
+    filters.industries.length +
+    filters.styles.length
+  );
+}
+
+export function filtersEqual(a: ScreenFilters, b: ScreenFilters): boolean {
+  return serializeFilters(a).toString() === serializeFilters(b).toString();
+}
+
+export function toggleValue<T>(list: T[], value: T): T[] {
+  return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+}
+
+export function matchesFilters(screen: Screen, filters: ScreenFilters): boolean {
+  if (filters.platforms.length && !filters.platforms.includes(screen.platform)) return false;
+  // A screen is under every type it is, not only its main one.
+  if (filters.screenTypes.length && !(screen.screenTypes ?? [screen.screenType]).some((type) => filters.screenTypes.includes(type))) return false;
+  if (filters.states.length && !filters.states.some((v) => (screen.states ?? []).includes(v))) return false;
+  if (filters.industries.length && !filters.industries.includes(screen.industry)) return false;
+  if (filters.styles.length && !filters.styles.some((s) => screen.style.includes(s))) return false;
+  return true;
+}

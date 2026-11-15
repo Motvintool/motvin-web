@@ -44,7 +44,7 @@
   border: none;
   font-size: 24px;
   color: #5f6368;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   line-height: 1;
   padding: 4px;
 }
@@ -86,7 +86,7 @@
   font-size: 16px;
   font-weight: 500;
   color: #000;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: background 0.2s;
   box-sizing: border-box;
 }
@@ -170,7 +170,7 @@
   border-radius: 8px;
   font-size: 16px;
   font-weight: 700;
-  cursor: pointer;
+  cursor: var(--ins-cursor-hand, pointer);
   transition: opacity 0.2s;
   margin-top: 16px;
 }

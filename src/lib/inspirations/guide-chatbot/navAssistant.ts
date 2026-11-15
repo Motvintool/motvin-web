@@ -1,0 +1,1286 @@
+import { inspirationsApi } from '../api';
+import { correctText } from './fuzzy';
+import { appsUsingPattern, loadIndex, type LibraryIndex } from './guideIndex';
+import { asksElements, findElements, findFlowCategory, findNegations, findNumberFilter, findOrdinal, findPatternCategory, findPatterns, findStates, findStyles, findTopN, matchesNumber, splitIntents, stripElements, withoutNegations, type NumberFilter } from './guideParse';
+import { countedPlatforms, countsOn, PLATFORM_ONE } from '../appCounts';
+import { INSPIRATIONS_ROUTES } from '../routes';
+import { suggestQueries, type SearchSuggestion } from '../search';
+import { browsedPlatforms, EMPTY_FILTERS, isWebsPlatforms, WEBS_PLATFORMS } from '../filters';
+import { applySynonyms, findIndustry, findPlatform, findPlatforms, PLATFORM_ADJECTIVE, PLATFORM_LABEL, PLATFORM_QUERY, stripChatter } from './synonyms';
+import { elementLabel, flowCategoryLabel, INDUSTRY_LABEL, SCREEN_TYPE_LABEL, screenStateLabel, styleLabel } from '../taxonomy';
+import { FLOW_CATEGORY_PRESETS, isDesktopPlatform, type App, type Flow, type Pattern, type Platform, type ScreenState, type ScreenType, type Style } from '../types';
+
+/**
+ * The visitor-facing assistant: it answers "where do you want to go?" and the
+ * plain facts a visitor asks on the way — how many screens an app has, which
+ * app has the most flows, where a pattern is used — from the same public
+ * library data the search box uses. It can open a page, answer, ask which of
+ * several things was meant, or offer a small safe action (save, copy a link).
+ * No admin tools, no server call, no model.
+ */
+
+/** A button: a link to go to, or (with `ask`) a follow-up question to send as if typed. */
+export type NavTarget = { label: string; hint: string; href: string; iconSrc?: string; ask?: string };
+/** A card under an answer: one thing's facts, or (with `columns`/`rows`) a side-by-side comparison. */
+/** A comparison's apps head its columns; `lead` in a row is the column with the most, when one alone has it. */
+export type NavCard = { title: string; iconSrc?: string; facts: string[]; href?: string; columns?: string[]; apps?: { name: string; iconSrc?: string; href: string; subtitle: string }[]; rows?: { label: string; values: string[]; lead?: number }[] };
+/** Something the guide may do for the visitor, once they confirm it. */
+/** The one thing Buddy does beyond showing: copy a link, after the visitor says yes. */
+export type GuideAction = { kind: 'copy'; href: string; label: string };
+export type ReplyKind = 'nav' | 'answer' | 'clarify' | 'fallback' | 'smalltalk' | 'error' | 'action';
+export type NavReply = { text: string; targets: NavTarget[]; go?: NavTarget; card?: NavCard; app?: App; error?: boolean; kind?: ReplyKind; action?: GuideAction; results?: NavTarget[] };
+/** What the guide knows going in: the app being talked about, what it last listed, and the page the visitor is on. */
+export type NavContext = { app: App | null; results?: NavTarget[] | null; page?: { pathname: string; search?: string } | null };
+
+const PAGES: { keys: string[]; target: NavTarget }[] = [
+  { keys: ['explore', 'home', 'inspirations', 'start'], target: { label: 'Explore', hint: 'Home', href: INSPIRATIONS_ROUTES.explore } },
+  { keys: ['apps', 'all apps', 'app list', 'browse apps'], target: { label: 'Apps', hint: 'Page', href: INSPIRATIONS_ROUTES.apps } },
+  { keys: ['screens', 'all screens', 'screenshots'], target: { label: 'Screens', hint: 'Page', href: INSPIRATIONS_ROUTES.screens } },
+  { keys: ['flows', 'flow', 'user flows', 'all flows'], target: { label: 'Flows', hint: 'Page', href: INSPIRATIONS_ROUTES.flows } },
+  { keys: ['ui elements', 'ui element', 'elements', 'components', 'ui', 'ui kit', 'ui components'], target: { label: 'UI elements', hint: 'Page', href: INSPIRATIONS_ROUTES.uiElements } },
+  { keys: ['patterns', 'pattern'], target: { label: 'Patterns', hint: 'Page', href: INSPIRATIONS_ROUTES.patterns } },
+  { keys: ['collections', 'collection', 'boards', 'saved', 'my boards', 'my collections', 'my collection', 'my saved', 'saved items', 'saved apps', 'saved screens', 'what did i save', 'what have i saved', 'my saves', 'bookmarks', 'my bookmarks', 'favorites', 'favourites', 'my favorites', 'my favourites'], target: { label: 'Collections', hint: 'Page', href: INSPIRATIONS_ROUTES.collections } },
+  { keys: ['icons', 'icon library'], target: { label: 'Icon library', hint: 'Page', href: '/icons' } },
+  // After the quick pages (QUICK_PAGES takes 1–6), so their order stays.
+  // Not plain "settings": that's the settings screens (as "login" is login screens), of the app being talked
+  // about if there is one. The visitor's own page is "my settings", "account settings" and the like.
+  { keys: ['my settings', 'account settings', 'motvin settings', 'my account', 'preferences', 'profile settings'], target: { label: 'Settings', hint: 'Page', href: INSPIRATIONS_ROUTES.settings } },
+  { keys: ['search', 'search page', 'advanced search'], target: { label: 'Search', hint: 'Page', href: INSPIRATIONS_ROUTES.search } },
+];
+
+export const QUICK_PAGES: NavTarget[] = PAGES.slice(1, 7).map((page) => page.target);
+
+const pageFor = (query: string) => PAGES.find((entry) => entry.keys.some((key) => key === query || (query.length > 3 && key === `${query}s`)));
+
+const FILLER = /\b(please|can you|could you|take me to|take me|go to|open|show me|show|find me|find|look for|navigate to|navigate|bring me to|i want to see|i want|the|a|an|page|section|app|apps called)\b/g;
+
+const clean = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(FILLER, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const toTarget = (suggestion: SearchSuggestion): NavTarget => ({ label: suggestion.label, hint: suggestion.hint, href: suggestion.href, iconSrc: suggestion.iconSrc });
+
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const hasWord = (text: string, word: string) => new RegExp(`(^|[^\\p{L}\\p{N}])${escape(word)}($|[^\\p{L}\\p{N}])`, 'iu').test(text);
+
+/** A different phrasing each time, so repeated answers don't read like a template. */
+const pick = (options: string[]) => options[Math.floor(Math.random() * options.length)];
+
+type Section = { tab: 'screens' | 'ui-elements' | 'patterns' | 'flows'; label: string };
+const SECTIONS: { words: string[]; section: Section }[] = [
+  { words: ['flows', 'flow', 'journeys', 'journey'], section: { tab: 'flows', label: 'flows' } },
+  { words: ['ui elements', 'ui element', 'elements', 'components'], section: { tab: 'ui-elements', label: 'UI elements' } },
+  { words: ['patterns', 'pattern'], section: { tab: 'patterns', label: 'patterns' } },
+  { words: ['screens', 'screen', 'screenshots'], section: { tab: 'screens', label: 'screens' } },
+];
+
+// Screen types that are unambiguous even without the word "screen".
+// "settings" too: the visitor's own Settings page is "my settings" / "account settings" (see PAGES).
+const SAFE_TYPES = new Set(['splash', 'onboarding', 'login', 'signup', 'checkout', 'cart', 'pricing', 'permission', 'landing', 'dashboard', 'settings']);
+
+function findSection(text: string): Section | null {
+  const found = SECTIONS.find((entry) => entry.words.some((word) => hasWord(text, word)));
+  return found?.section ?? null;
+}
+
+type TypeHit = { key: string; label: string };
+
+function findScreenType(text: string): TypeHit | null {
+  const mentionsScreen = hasWord(text, 'screen') || hasWord(text, 'screens') || hasWord(text, 'page') || hasWord(text, 'pages');
+  for (const [key, label] of Object.entries(SCREEN_TYPE_LABEL)) {
+    if (key === 'other') continue;
+    const spoken = [key, label.toLowerCase()];
+    if (!spoken.some((word) => hasWord(text, word))) continue;
+    if (mentionsScreen || SAFE_TYPES.has(key)) return { key, label };
+  }
+  return null;
+}
+
+function findApps(text: string, apps: App[]): App[] {
+  const lower = text.toLowerCase();
+  const full = apps.filter((app) => hasWord(lower, app.name.toLowerCase()) || hasWord(lower, `${app.name.toLowerCase()}s`));
+  if (full.length) return full;
+  // "Zoho Corporation" is just "zoho" to a visitor, and "swiggys flows" is Swiggy's.
+  return apps.filter((app) => {
+    const first = app.name.toLowerCase().split(/\s+/)[0];
+    return first.length >= 4 && (hasWord(lower, first) || hasWord(lower, `${first}s`));
+  });
+}
+
+const words = (text: string) => text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+
+/** An app on several platforms says its counts per platform ("117 screens on iOS and 33 screens on Web Apps"), never one added-up total. */
+function countPhrase(app: App, kind: 'screens' | 'flows'): string {
+  const unit = kind === 'screens' ? 'screen' : 'flow';
+  const on = countedPlatforms(app);
+  if (on.length < 2) return plural(kind === 'screens' ? app.screenCount : app.flowCount, unit);
+  return on.map((platform) => `${plural(app.platformCounts?.[platform]?.[kind] ?? 0, unit)} on ${PLATFORM_LABEL[platform]}`).join(' and ');
+}
+
+const appTarget = (app: App, tab?: Section['tab'], platform?: Platform): NavTarget => ({
+  label: app.name,
+  // Its platform in place of a plain "App" ("iOS · 117 screens"); an app on several names each with its count.
+  hint: countedPlatforms(app).length > 1 ? countPhrase(app, 'screens') : `${app.platforms[0] ? PLATFORM_ONE[app.platforms[0]] : 'App'} · ${countPhrase(app, 'screens')}`,
+  href: ((base) => (tab && tab !== 'screens' ? `${base}${base.includes('?') ? '&' : '?'}tab=${tab}` : base))(INSPIRATIONS_ROUTES.app(app, platform)),
+  iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined,
+});
+
+/**
+ * A search for screens of one app, in a section the app is in: the one being browsed if it has the app, else
+ * the app's own — Webs for an app that isn't on iOS. Always named in the link (`?platform=web` / `ios`), so
+ * keepSection doesn't move it to the section being browsed: "Canva settings" asked from Apps found other apps'
+ * settings screens (Canva is only in Webs), and an iOS-only app asked about from Webs would have gone to Webs.
+ */
+function appSearch(app: App, query: string, scope?: readonly Platform[] | null): string {
+  const inWebs = app.platforms.some((platform) => WEBS_PLATFORMS.includes(platform));
+  const webs = scope?.length && isWebsPlatforms(scope) ? inWebs : inWebs && !app.platforms.includes('ios');
+  return `${INSPIRATIONS_ROUTES.searchFor(query)}&platform=${webs ? 'web' : 'ios'}`;
+}
+
+const plural = (count: number, word: string) => `${count.toLocaleString()} ${word}${count === 1 ? '' : 's'}`;
+
+/** "Swiggy", "Swiggy and Zomato", "Swiggy, Zomato and 3 more". */
+function listNames(names: string[], show = 3): string {
+  if (names.length <= show) return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] ?? '');
+  return `${names.slice(0, show).join(', ')} and ${names.length - show} more`;
+}
+
+/** Likely next questions about an app, minus the one just answered. */
+function followUps(app: App, used: Section['tab'] | 'count' | null): NavTarget[] {
+  const all: { key: Section['tab'] | 'count'; target: NavTarget }[] = [
+    { key: 'flows', target: { label: `${app.name} flows`, hint: 'Ask', href: '', ask: `${app.name} flows` } },
+    { key: 'count', target: { label: 'How many screens?', hint: 'Ask', href: '', ask: `how many screens does ${app.name} have` } },
+    { key: 'ui-elements', target: { label: 'UI elements', hint: 'Ask', href: '', ask: `${app.name} ui elements` } },
+    { key: 'patterns', target: { label: 'Patterns', hint: 'Ask', href: '', ask: `${app.name} patterns` } },
+  ];
+  return all.filter((entry) => entry.key !== used).slice(0, 3).map((entry) => entry.target);
+}
+
+const COMPARE = /\b(compare|versus|vs\.?|difference between|differences between)\b/i;
+
+/** Apps listed as chips, remembered so "the second one" has something to point at. */
+const appResults = (list: App[]) => list.map((app) => appTarget(app));
+
+/** The Apps page, introduced by naming what is in it — the answer to "apps", "i want app", "which apps do you have". */
+function allApps(apps: App[]): NavReply {
+  if (apps.length === 0) return { text: 'Opening Apps.', targets: [], go: QUICK_PAGES[0] };
+  const byScreens = [...apps].sort((a, b) => b.screenCount - a.screenCount);
+  return { text: `The library has ${plural(apps.length, 'app')} — ${listNames(byScreens.map((app) => app.name), 4)}. Opening Apps.`, targets: appResults(byScreens.slice(0, 4)), go: QUICK_PAGES[0], results: appResults(byScreens) };
+}
+
+/** Words left once the app name and generic words are gone — what the visitor is naming. */
+function leftoverWords(text: string, apps: App[]): string[] {
+  let rest = clean(text);
+  for (const app of apps) rest = rest.replace(new RegExp(escape(app.name.toLowerCase()), 'g'), ' ').replace(new RegExp(`\\b${escape(app.name.toLowerCase().split(/\s+/)[0])}\\b`, 'g'), ' ');
+  return rest
+    .replace(/\b(flows?|journeys?|how|many|much|does|do|have|has|what|are|is|of|in|for|and|with|its|it)\b/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word.length >= 3);
+}
+
+const flowTarget = (flow: Flow, index: LibraryIndex, withApp: boolean): NavTarget => ({
+  label: withApp ? `${flow.name} · ${index.appById.get(flow.appId)?.name ?? 'Flow'}` : flow.name,
+  hint: 'Flow',
+  href: `${INSPIRATIONS_ROUTES.flows}?flow=${encodeURIComponent(flow.id)}`,
+});
+
+function flowCard(flow: Flow, index: LibraryIndex): NavCard {
+  const app = index.appById.get(flow.appId);
+  const steps = flow.screenIds?.length ?? 0;
+  return { title: flow.name, iconSrc: app ? (inspirationsApi.mediaUrl(app.logo) ?? undefined) : undefined, facts: [...(app ? [app.name] : []), ...(flow.category ? [flowCategoryLabel(flow.category)] : []), ...(steps ? [plural(steps, 'step')] : [])], href: `${INSPIRATIONS_ROUTES.flows}?flow=${encodeURIComponent(flow.id)}` };
+}
+
+function matchFlows(searchWords: string[], app: App | null, index: LibraryIndex): Flow[] {
+  if (!searchWords.length) return [];
+  return index.flows.filter((flow) => (!app || flow.appId === app.id) && searchWords.every((word) => flow.name.toLowerCase().includes(word))).slice(0, 6);
+}
+
+const patternTarget = (pattern: Pattern): NavTarget => ({ label: pattern.name, hint: `Pattern · ${pattern.category}`, href: INSPIRATIONS_ROUTES.pattern(pattern) });
+
+function patternCard(pattern: Pattern, index: LibraryIndex): NavCard {
+  const used = appsUsingPattern(index, pattern);
+  return { title: pattern.name, facts: [pattern.category, plural(pattern.screenIds?.length ?? 0, 'screen'), ...(used.length ? [`In ${listNames(used.map((app) => app.name), 3)}`] : [])], href: INSPIRATIONS_ROUTES.pattern(pattern) };
+}
+
+async function countScreens(filters: { type?: string; states?: ScreenState[]; styles?: Style[]; element?: string }, app: App | null, platforms: readonly Platform[] | null): Promise<number | null> {
+  try {
+    const page = await inspirationsApi.listScreens({ ...EMPTY_FILTERS, platforms: platforms ? [...platforms] : [], screenTypes: filters.type ? [filters.type as ScreenType] : [], states: filters.states ?? [], styles: filters.styles ?? [] }, 0, 'curated', { ...(app ? { app: app.id } : {}), ...(filters.element ? { element: filters.element } : {}) });
+    return page.total;
+  } catch {
+    return null;
+  }
+}
+
+/** The apps a kind of screen appears in, read off the first page of matching screens. */
+async function appsWithScreens(filters: { type?: string; states?: ScreenState[]; styles?: Style[]; element?: string }, index: LibraryIndex, platforms: readonly Platform[] | null): Promise<{ apps: App[]; total: number } | null> {
+  try {
+    const page = await inspirationsApi.listScreens({ ...EMPTY_FILTERS, platforms: platforms ? [...platforms] : [], screenTypes: filters.type ? [filters.type as ScreenType] : [], states: filters.states ?? [], styles: filters.styles ?? [] }, 0, 'curated', filters.element ? { element: filters.element } : {});
+    const seen = new Map<string, App>();
+    for (const screen of page.items) {
+      const app = index.appById.get(screen.appId);
+      if (app) seen.set(app.id, app);
+    }
+    return { apps: [...seen.values()], total: page.total };
+  } catch {
+    return null;
+  }
+}
+
+type Ranking = { metric: 'screens' | 'flows' | 'rating' | 'newest'; order: 'high' | 'low' };
+
+/** "which app has the most flows", "top rated apps", "smallest app", "newest app" — a question about apps, ranked. */
+function findRanking(raw: string): Ranking | null {
+  const text = raw.replace(/\bat (?:least|most)\b/g, ' ');
+  // "least flows", "which has the most screens": a ranking of apps even without the word.
+  const bare = /^(?:which (?:one |app )?(?:has|have) )?(?:the )?(most|least|fewest|biggest|largest|smallest|highest|lowest)\s+(flows|screens|rated|rating)\s*\??$/.exec(text.trim());
+  if (bare) return { metric: bare[2].startsWith('rat') ? 'rating' : (bare[2] as 'flows' | 'screens'), order: /^(?:least|fewest|smallest|lowest)$/.test(bare[1]) ? 'low' : 'high' };
+  if (!/\bapps?\b/.test(text)) return null;
+  if (/\b(newest|latest|most recent|recently added|new)\b/.test(text)) return { metric: 'newest', order: 'high' };
+  if (/\b(oldest|earliest|first added)\b/.test(text)) return { metric: 'newest', order: 'low' };
+  const high = /\b(most|biggest|largest|highest|top|best)\b/.test(text);
+  const low = /\b(least|fewest|smallest|lowest)\b/.test(text);
+  if (!high && !low) return null;
+  const metric = /\brat(?:ed|ing|ings)\b|\bbest\b/.test(text) ? 'rating' : hasWord(text, 'flows') || hasWord(text, 'flow') ? 'flows' : 'screens';
+  return { metric, order: low ? 'low' : 'high' };
+}
+
+const latestOf = (app: App) => Math.max(0, ...(app.versions ?? []).map((version) => Date.parse(version.capturedAt) || 0));
+
+function answerRanking(list: App[], ranking: Ranking, scopeLabel: string | null, topN: number | null): NavReply {
+  const scope = scopeLabel ? `Among ${scopeLabel}, ` : '';
+  // After "Among … apps," a leading "The" drops to lower case; a brand name keeps its capital.
+  const sentence = (text: string) => (scope ? `${scope}${text.startsWith('The ') ? `the${text.slice(3)}` : text}` : text);
+  if (ranking.metric === 'rating') {
+    const rated = list.filter((app) => app.rating !== null).sort((a, b) => (ranking.order === 'high' ? (b.rating ?? 0) - (a.rating ?? 0) : (a.rating ?? 0) - (b.rating ?? 0)));
+    if (rated.length === 0) {
+      // No ratings to rank by: the biggest apps instead, said as what they are.
+      const biggest = [...list].sort((a, b) => b.screenCount - a.screenCount).slice(0, 3);
+      if (!biggest.length) return { text: 'No ratings have been recorded yet.', targets: QUICK_PAGES.slice(0, 3) };
+      return { text: `Apps aren’t rated here yet, so I can’t say which is best. The biggest are ${listNames(biggest.map((app) => `${app.name} (${plural(app.screenCount, 'screen')})`), 3)}.`, targets: appResults(biggest), results: appResults(biggest) };
+    }
+    const shown = rated.slice(0, topN ?? 3).map((app) => `${app.name} (${(app.rating ?? 0).toFixed(1)})`);
+    return { text: sentence(`The ${ranking.order === 'high' ? 'top rated' : 'lowest rated'} ${rated.length === 1 ? 'app is' : 'apps are'} ${listNames(shown, topN ?? 3)}.`), targets: appResults(rated.slice(0, topN ?? 3)), app: rated[0], results: appResults(rated) };
+  }
+  if (ranking.metric === 'newest') {
+    const dated = list.filter((app) => latestOf(app) > 0).sort((a, b) => (ranking.order === 'high' ? latestOf(b) - latestOf(a) : latestOf(a) - latestOf(b)));
+    if (dated.length === 0) return { text: 'No capture dates have been recorded yet.', targets: QUICK_PAGES.slice(0, 3) };
+    const first = dated[0];
+    const when = new Date(latestOf(first)).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    return { text: sentence(`The ${ranking.order === 'high' ? 'newest' : 'oldest'} app is ${first.name}, captured ${when}.`), targets: appResults(dated.slice(0, topN ?? 3)), app: first, results: appResults(dated) };
+  }
+  const count = (app: App) => (ranking.metric === 'flows' ? app.flowCount : app.screenCount);
+  const ordered = [...list].sort((a, b) => (ranking.order === 'high' ? count(b) - count(a) : count(a) - count(b)));
+  const noun = ranking.metric;
+  if (topN && topN > 1) {
+    const shown = ordered.slice(0, topN).map((app) => `${app.name} (${count(app).toLocaleString()})`);
+    return { text: sentence(`The top ${Math.min(topN, ordered.length)} by ${noun}: ${listNames(shown, topN)}.`), targets: appResults(ordered.slice(0, topN)), app: ordered[0], results: appResults(ordered) };
+  }
+  const [first, second] = ordered;
+  const lead = `${first.name} has the ${ranking.order === 'high' ? 'most' : 'fewest'} ${noun} (${count(first).toLocaleString()})`;
+  const tail = second ? `, followed by ${second.name} (${count(second).toLocaleString()})` : '';
+  return { text: sentence(`${lead}${tail}.`), targets: appResults(ordered.slice(0, 3)), app: first, results: appResults(ordered) };
+}
+
+/**
+ * Two or three apps side by side: a sentence on who has more (the card has
+ * the numbers, so the sentence doesn't repeat them all), and a card with the
+ * apps heading the columns and the numbers lined up under them.
+ */
+function compareApps(list: App[]): NavReply {
+  const shown = list.slice(0, 3);
+  const kind = (app: App) => INDUSTRY_LABEL[app.industry] ?? app.industry;
+  const where = (app: App) => (app.platforms?.length ? app.platforms.map((platform) => PLATFORM_LABEL[platform]).join(', ') : '—');
+  const rated = shown.some((app) => app.rating !== null && app.rating !== undefined);
+  // The one column with the highest number, or none when it's shared.
+  const leader = (values: number[]) => {
+    const top = Math.max(...values);
+    return values.filter((value) => value === top).length === 1 ? values.indexOf(top) : undefined;
+  };
+  const screens = shown.map((app) => app.screenCount);
+  const flows = shown.map((app) => app.flowCount);
+  const ratings = shown.map((app) => app.rating ?? -1);
+  const more = shown.length === 2 ? 'more' : 'the most';
+  const byScreens = leader(screens);
+  const byFlows = leader(flows);
+  const part = (lead: number | undefined, noun: string, values: number[]) =>
+    lead === undefined ? `they're level on ${noun} (${Math.max(...values).toLocaleString()})` : `${shown[lead].name} has ${more} ${noun} (${values[lead].toLocaleString()})`;
+  const text =
+    byScreens !== undefined && byScreens === byFlows
+      ? `${shown[byScreens].name} has ${more} screens (${screens[byScreens].toLocaleString()}) and flows (${flows[byFlows].toLocaleString()}).`
+      : `${part(byScreens, 'screens', screens).replace(/^t/, 'T')}, and ${part(byFlows, 'flows', flows)}.`;
+  // Apps from different sections are counted on different platforms: say so, rather than pass it off as like for like.
+  const countedOn = shown.map((app) => countedPlatforms(app).map((platform) => PLATFORM_ONE[platform]).join(' and ') || '—');
+  const mixed = new Set(countedOn).size > 1;
+  const note = mixed ? ` Note: these count different platforms — ${listNames(shown.map((app, i) => `${app.name} on ${countedOn[i]}`), 3)}.` : '';
+  return {
+    text: `${text}${note}`,
+    targets: appResults(shown),
+    card: {
+      title: 'Side by side',
+      facts: [],
+      columns: shown.map((app) => app.name),
+      apps: shown.map((app) => ({ name: app.name, iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined, href: INSPIRATIONS_ROUTES.app(app), subtitle: kind(app) })),
+      rows: [
+        { label: 'Screens', values: screens.map((count) => count.toLocaleString()), lead: byScreens },
+        { label: 'Flows', values: flows.map((count) => count.toLocaleString()), lead: byFlows },
+        { label: 'Platforms', values: shown.map(where) },
+        ...(mixed ? [{ label: 'Counted on', values: countedOn }] : []),
+        ...(rated ? [{ label: 'Rating', values: shown.map((app) => (app.rating === null || app.rating === undefined ? '—' : `★ ${app.rating.toFixed(1)}`)), lead: leader(ratings) }] : []),
+      ],
+    },
+    results: appResults(shown),
+  };
+}
+
+const GREETING = /^((hi+|hello+|hey+|hola|yo|howdy|good (morning|afternoon|evening)|sup|namaste|vanakkam)(,?\s+(there|buddy|motvin( buddy)?|friend))?|(motvin )?buddy)\b[\s!.?]*$/i;
+const THANKS = /^(?:thanks?|thank you|thx|ty|tysm|cheers|nanri|nandri|dhanyavad|dhanyawad|shukriya|gracias|merci|danke|arigato|ok(?:ay)?|cool|great|nice|awesome|perfect|got it|brilliant|wonderful|love it)\b(?:[\s,!.]+(?:so much|a lot|very much|a ton|again|buddy|mate|man|bro|you|guide|motvin|that'?s (?:great|perfect|helpful)|for (?:the )?help|for that|thanks?|thank you))*[\s!.?]*$/i;
+const BYE = /^(?:(?:ok(?:ay)?|alright|cool|thanks?|thank you)[\s,!.]*)?(?:bye+|goodbye|good bye|see (?:you|ya)(?: later)?|cya|later|good night|take care|talk (?:to you )?later)[\s!.]*$/i;
+const HELP = /^(?:help|what can you do|what do you do|how (?:does this|do you) work|what is this|what can i (?:find|do|see|ask)(?: here| in here| on here)?|what(?:'s| is| are)? (?:in )?here|what do you have|what have you got|how can you help(?: me)?|what can you help (?:me )?with|how do i use (?:this|you|it)|how to use (?:this|you)|what is this for|what are you for)\b[\s!.?]*$/i;
+/** The guide only takes people around; it never changes the library. */
+/** "what is Webs", "difference between Apps and Webs". */
+const ABOUT_SECTIONS = /\bwhat(?:'s| is| are| does)? (?:the )?webs?\b(?! apps?\b)(?: (?:section|tab|mean))?\s*\??$|\bdifference between (?:the )?(?:apps? and webs?|webs? and apps?)\b|\b(?:apps? (?:vs\.?|versus|or) webs?|webs? (?:vs\.?|versus|or) apps?)\s*\??$/i;
+/** "how do I save", "how do collections work" — how saving works, not a request to save. */
+const HOW_SAVE = /\bhow (?:do|can|to|would|should) (?:i |you |we )?(?:save|bookmark|collect|add (?:\w+ )?to (?:a |my )?collection)|\bhow (?:do|does) (?:collections?|saving|bookmarks?) work\b|\bwhat (?:are|is) (?:a )?collections?\b/i;
+const CLEAR_HISTORY = /^(?:please\s+)?(?:clear|delete|erase|remove|wipe)\s+(?:all\s+)?(?:my\s+)?(?:chat\s+)?(?:history|chats?|conversations?|messages)\b/i;
+const CREATE_WORD = /^(?:please\s+)?(?:(?:how (?:do|can) i|can i|i want to|i wanna|i'd like to|let me|help me)\s+)?(?:upload|add|create|submit|import)\s+(?:an?\s+|my\s+|the\s+|new\s+|some\s+)*(?:apps?|videos?|screens?|screenshots?|flows?|patterns?)\b/i;
+const DELETE_WORD = /^(?:please\s+)?(?:how (?:do|can) i\s+|can i\s+)?(?:delete|remove|erase|rename|edit|destroy)\b/i;
+const GO_BACK = /^(?:go back|back|go to the previous page|previous page|take me back|go back please|back please)[\s!.?]*$/i;
+const REOPEN = /^(?:(?:please\s+)?(?:open|show|take me to|go to|take me back to|go back to|back to)\s+(?:me\s+)?(?:the\s+)?(?:last|previous|same|that|this)(?:\s+one|\s+app)?(?:\s+again)?|(?:open|show)\s+(?:it|that|this)\s+again|back to (?:it|that|this))[\s!.?]*$/i;
+/** "what about web apps", "and websites?", "only ios ones": the same question, for another platform. */
+const FOLLOW_PLATFORM = /^(?:and|what about|how about|only|just|but|now|then|also)\s+(?:me\s+)?(?:the\s+)?(web ?apps?|webs|web|ios|iphone|websites?)(?:\s+(?:ones?|version|too|also))*\s*[?!.]*$/i;
+/** A judgement of taste is not something the library can answer. */
+const JUDGE = /\b(?:better|worse|nicer|prettier|best looking|best designed|good design|best ui|best ux|most beautiful|ugliest)\b/i;
+const POPULAR = /\b(?:popular|trending|trends?|famous|viral|most used|most viewed|most downloaded|hottest)\b/i;
+const UNTRACKED = /\b(?:free|paid|premium|open[- ]source)\s+apps?\b|\bhow many (?:users|downloads)\b/i;
+const RECENT = /\b(?:recently added|newly added|just added|latest|newest|what'?s new|whats new|what is new|anything new|new arrivals?|recent(?:ly)?)\b/i;
+/** "what is a bottom sheet", "explain filter chips". */
+const DEFINE = /^(?:what(?:'s| is| are)|whats|explain|define|meaning of)\b/i;
+const ABOUT_MOTVIN = /\bwho (?:built|made|created|owns|runs|is behind) (?:motvin|this|the (?:library|site|app|website))\b|\bwhat is motvin\b/i;
+const PLAN_Q = /\bis (?:this|it|motvin) (?:free|paid|cheap|expensive)\b|\bhow much does (?:this|it|motvin) cost\b|\bwhat does (?:this|it|motvin) cost\b/i;
+const RECOMMEND = /\b(?:recommend|suggest)\b|\bwhat should i (?:look|see|start|check)|\bwhere (?:do|should) i (?:start|begin)\b|\bi(?:'m| am) (?:lost|stuck|not sure)\b|\bi don'?t know\b|\bshow (?:me )?everything\b|\bnot sure what\b/i;
+/** Words that are not a subject, so they never turn "Zomato" into a search. */
+const NOT_A_SUBJECT = new Set(['everything', 'anything', 'something', 'about', 'please', 'thanks', 'thank', 'kindly', 'quickly', 'today', 'again', 'there', 'where', 'which', 'these', 'those', 'would', 'could', 'should', 'want', 'need', 'like', 'give', 'bring', 'take', 'have', 'with', 'that', 'this', 'from', 'into', 'just', 'only', 'also', 'then', 'them', 'some', 'your', 'show', 'check', 'looks', 'looking', 'display', 'details', 'information', 'more', 'tell', 'screens', 'screen', 'pages', 'flows', 'while', 'inside', 'within']);
+const WHO = /\b(who are you|who made you|who built you|what are you|what(?:'?s| is) your name|are you (?:an? )?(?:ai|bot|robot|human|person|real|chat ?gpt|gpt|claude|gemini|copilot|siri|alexa))\b/i;
+/** A filler reply with nothing to look up — "lol", "hmm", "ok", "yes" — gets a friendly nudge, not "couldn't find". */
+const FILLER_REPLY = /^(?:lo+l+|lmao|ha(?:ha)+h?|he(?:he)+|hm+|k+|ok+|okay|oh+|ah+|yes|yeah|yep|yup|no|nope|nah|wow+|hmm+ok|sure|fine|alright)[\s!.?]*$/i;
+/** Only emoji (or other pictographs): read as a hello. */
+/** A wish for ideas with nothing specific named: "inspire me", "something cool", "where do I start". */
+const INSPIRE = /\b(?:inspir(?:e|ed|ation|ations|ing)|something (?:cool|nice|new|good|interesting|fun|beautiful)|surprise me|anything|i'?m bored|where (?:do|should) i (?:start|begin)|random(?:ly)?|show me something|ideas?)\b/i;
+/** Unhappy with Buddy ("you are useless", "this is not helpful", "doesn't work"): a kind reply, not a search. */
+const UNHAPPY = /^(?:(?:you(?:'re| are)?|u r|this(?: is)?|buddy(?: is)?|that(?:'s| is| was)?|it(?:'s| is)?)\s+(?:so\s+|really\s+|very\s+|totally\s+)?(?:useless|stupid|dumb|bad|terrible|rubbish|annoying|wrong|not (?:helpful|useful|working|good))\b|.*\b(?:you suck|this sucks|hate you|not helpful|doesn'?t (?:help|work)|not working)\b)/i;
+const ONLY_EMOJI = /^[\p{Extended_Pictographic}\u200d\ufe0f\s]+$/u;
+const HOW_ARE_YOU = /\bhow are you\b/i;
+const APOLOGY = /^(?:sorry|my bad|oops)[\s!.]*$/i;
+// "it", "this", "the one you showed me": the app from the last answer.
+const REFERS_BACK = /\b(it|its|it's|this|this app|that app|this one|that one|same app|the one|you (?:just )?(?:showed|opened|gave|mentioned)|showed me|last (?:one|app)|previous (?:one|app))\b/i;
+/** A question that wants yes or no. */
+const YES_NO = /^(?:is|are|does|do|did|was|were|can|could|will|would|has|have|am|isn't|aren't|doesn't|don't)\b/i;
+/** A question that wants a fact. */
+// "how about Zomato" is a change of subject, not a question.
+const WH = /^(?:what|which|where|when|who|why|what's|where's|who's|how(?!\s+about\b))\b/i;
+/** "tell me about Swiggy", "what is Zomato" — a request for the app's details, not its page. */
+const INFO = /\b(?:tell me (?:more )?about|what is|what's|whats|who is|info(?:rmation)? (?:on|about)|details (?:on|about|of)|describe|overview of|more about|know about)\b|\b(?:details|info|information|overview|summary)\s*\??$/i;
+/** Asks where an app runs, without naming a platform. */
+const PLATFORM_ASKED = /\b(?:platforms?|runs? on|running on|available on|works? on|supported on|support|device|mobile|phone|where (?:does|do|is|can) (?:it|this|that|\w+) (?:run|work|live))\b/i;
+/** Asks what kind of app it is, without naming a kind. */
+const INDUSTRY_ASKED = /\b(?:kind of app|type of app|sort of app|category|categories|industry|what kind|what type|what sort)\b/i;
+const RATING_ASKED = /\b(?:rating|ratings|rated|stars?|score|how good|any good|good)\b/i;
+const MOBILE = /\b(?:mobile|phone|phones|smartphone)\b/i;
+/** Words that widen a question from the app being talked about to the whole library. */
+const LIBRARY_SCOPE = /\b(?:library|in total|total|overall|altogether|all (?:the )?apps|every app|across|everything|whole)\b/i;
+/** "which apps use …", "where is … used", "who has …": asks for the apps that have a thing. */
+const WHICH_APPS = /\b(?:which|what|who)\s+(?:apps?|ones?)\b|\bwhere (?:is|are) .+? used\b|\bapps? (?:that|which|with|using|have|has)\b/i;
+/** "save Swiggy", "add this to my collection", "bookmark it". */
+const SAVE = /\b(?:save|bookmark|add (?:\w+ )?to (?:my )?(?:collection|board|saved)|keep)\b/i;
+/** "copy link", "share this", "link to Swiggy". */
+const COPY = /\b(?:copy (?:the )?(?:link|url)|share (?:this|it|\w+)|get (?:the |a )?link|link to)\b/i;
+/** "apps like Swiggy", "similar to Zomato", "alternatives to …". */
+const SIMILAR = /\b(?:similar(?: to)?|like|alternatives? (?:to|for)|competitors? (?:of|to)|comparable (?:to|with))\b/i;
+const WHERE_AM_I = /\b(?:which app is this|what app is this|where am i|what page is this|what is this page|what am i looking at)\b/i;
+const RANDOM = /\b(?:random|surprise me|anything|pick one for me|something)\b/i;
+
+const ON_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web Apps', web: 'the web' };
+const article = (word: string) => (/^[aeiou]/i.test(word) ? 'an' : 'a');
+const platformList = (app: App) => listNames((app.platforms ?? []).map((platform) => ON_LABEL[platform]));
+
+/** The text with the named apps taken out, so "Apple Music" is never read as "on iOS". */
+function withoutNames(text: string, named: App[]): string {
+  let rest = text;
+  for (const app of named) {
+    rest = rest.replace(new RegExp(escape(app.name.toLowerCase()), 'g'), ' ');
+    const first = app.name.toLowerCase().split(/\s+/)[0];
+    if (first.length >= 4) rest = rest.replace(new RegExp(`\\b${escape(first)}\\b`, 'g'), ' ');
+  }
+  return rest;
+}
+
+/** One app's details in a sentence and a card, for "tell me about Swiggy" and for questions that need no page. */
+function describeApp(app: App): NavReply {
+  const kind = INDUSTRY_LABEL[app.industry] ?? app.industry;
+  const where = app.platforms?.length ? ` on ${platformList(app)}` : '';
+  return {
+    text: `${app.name} is ${article(kind)} ${kind} app${where}, with ${countPhrase(app, 'screens')} and ${countPhrase(app, 'flows')}.`,
+    targets: [appTarget(app), ...followUps(app, 'count').slice(0, 2)],
+    card: { title: app.name, iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined, facts: [kind, ...(app.platforms?.length ? [app.platforms.map((platform) => PLATFORM_LABEL[platform]).join(' · ')] : []), countPhrase(app, 'screens'), countPhrase(app, 'flows')], href: INSPIRATIONS_ROUTES.app(app) },
+    app,
+  };
+}
+
+/** The app the visitor is looking at, read off the address. */
+function appOnPage(context: NavContext | undefined, index: LibraryIndex): App | null {
+  const match = /^\/inspirations\/app\/([^/?#]+)/.exec(context?.page?.pathname ?? '');
+  return match ? (index.appBySlug.get(decodeURIComponent(match[1])) ?? null) : null;
+}
+
+/** The apps the last answer listed, in the order they were shown. */
+function listedApps(context: NavContext | undefined, index: LibraryIndex): App[] {
+  return (context?.results ?? [])
+    .map((target) => /^\/inspirations\/app\/([^/?#]+)/.exec(target.href)?.[1])
+    .map((slug) => (slug ? index.appBySlug.get(decodeURIComponent(slug)) : undefined))
+    .filter((app): app is App => Boolean(app));
+}
+
+/**
+ * A question about one app's facts — where it runs, what kind it is, how it is
+ * rated, whether it has flows or a certain screen — answered from the app's own
+ * record. Null when the message is not that kind of question.
+ */
+async function answerAboutApp(app: App, text: string, question: boolean, yesNo: boolean, section: Section | null, screenType: TypeHit | null, asksCount: boolean, platforms: readonly Platform[] | null): Promise<NavReply | null> {
+  const rest = withoutNames(text, [app]);
+  // "open Claude iOS": the platform word left over once the app is named is the platform asked for.
+  const platformsAsked = findPlatforms(rest).length ? findPlatforms(rest) : findPlatforms(clean(rest));
+  const wantsMobile = MOBILE.test(rest) && platformsAsked.length === 0;
+  const kind = INDUSTRY_LABEL[app.industry] ?? app.industry;
+
+  // Where it runs.
+  if (platformsAsked.length > 0 || wantsMobile || PLATFORM_ASKED.test(rest)) {
+    if (!app.platforms?.length) return { text: `${app.name} doesn’t list a platform yet.`, targets: [appTarget(app)], app };
+    const onAll = `${app.name} is on ${platformList(app)}.`;
+    if (wantsMobile) {
+      const mobile = app.platforms.some((platform) => !isDesktopPlatform(platform));
+      return { text: mobile ? `Yes — ${onAll}` : `No — ${app.name} isn’t on mobile. It’s on ${platformList(app)}.`, targets: [appTarget(app)], app };
+    }
+    if (platformsAsked.length === 1) {
+      // "the web version of Claude": a web app and a website are both the web, so either one answers it.
+      // "Website" asked by name stays a website.
+      const loose = platformsAsked[0] === 'web' && !/\b(?:web ?sites?|sites?)\b/.test(rest);
+      const asked = app.platforms.includes(platformsAsked[0]) ? platformsAsked[0] : (loose && app.platforms.find(isDesktopPlatform)) || platformsAsked[0];
+      const on = app.platforms.includes(asked);
+      const text = on ? (yesNo ? `Yes — ${onAll}` : onAll) : `${yesNo ? 'No — ' : ''}${app.name} ${asked === 'web' ? 'has no website here' : `isn’t on ${ON_LABEL[asked]}`}. It’s on ${platformList(app)}.`;
+      // "show Swiggy on iOS" still opens Swiggy when it is there; a question never navigates.
+      // It opens on that platform: "Claude on web" from iOS goes to Claude's web screens.
+      return { text: !question && on && app.platforms.length > 1 ? `Opening ${app.name} on ${PLATFORM_ONE[asked]}.` : text, targets: [appTarget(app, undefined, on ? asked : undefined), ...followUps(app, null).slice(0, 2)], go: !question && on ? appTarget(app, undefined, asked) : undefined, app };
+    }
+    return { text: onAll, targets: [appTarget(app), ...followUps(app, null).slice(0, 2)], app };
+  }
+
+  // What kind of app it is.
+  const industryAsked = question || /\bapps?\b/.test(rest) ? findIndustry(rest) : null;
+  if (industryAsked || INDUSTRY_ASKED.test(rest)) {
+    const is = `${app.name} is ${article(kind)} ${kind} app.`;
+    if (industryAsked && industryAsked !== app.industry) return { text: `No — ${app.name} is ${article(kind)} ${kind} app, not ${INDUSTRY_LABEL[industryAsked]}.`, targets: [appTarget(app)], app };
+    return { text: yesNo ? `Yes — ${is}` : is, targets: [appTarget(app), ...followUps(app, null).slice(0, 2)], app };
+  }
+
+  if (RATING_ASKED.test(rest)) {
+    if (app.rating === null || app.rating === undefined) return { text: `No one has rated ${app.name} yet.`, targets: [appTarget(app)], app };
+    const from = app.ratingCount ? ` from ${plural(app.ratingCount, 'rating')}` : '';
+    return { text: `${app.name} is rated ${app.rating.toFixed(1)} out of 5${from}.`, targets: [appTarget(app)], app };
+  }
+
+  if (INFO.test(rest)) return describeApp(app);
+
+  // "Does it have flows?", "does Swiggy have a login screen?"
+  if (yesNo && !asksCount) {
+    if (screenType) {
+      const total = await countScreens({ type: screenType.key }, app, platforms);
+      if (total !== null) {
+        const see: NavTarget = { label: `See ${screenType.label.toLowerCase()} screens`, hint: 'Search', href: appSearch(app, `${app.name} ${screenType.label.toLowerCase()}`, platforms) };
+        return total > 0
+          ? { text: `Yes — ${app.name} has ${plural(total, `${screenType.label.toLowerCase()} screen`)}.`, targets: [see, ...followUps(app, 'count').slice(0, 2)], app }
+          : { text: `No — ${app.name} has no ${screenType.label.toLowerCase()} screens.`, targets: followUps(app, null), app };
+      }
+    }
+    if (section?.tab === 'flows') {
+      return app.flowCount > 0
+        ? { text: `Yes — ${app.name} has ${countPhrase(app, 'flows')}.`, targets: [{ ...appTarget(app, 'flows'), label: `${app.name} flows` }, ...followUps(app, 'flows').slice(0, 2)], app }
+        : { text: `No — ${app.name} has no flows yet.`, targets: followUps(app, 'flows'), app };
+    }
+    if (section?.tab === 'screens') return { text: `Yes — ${app.name} has ${countPhrase(app, 'screens')}.`, targets: [appTarget(app), ...followUps(app, 'count').slice(0, 2)], app };
+  }
+  return null;
+}
+
+/** Marks a reply with what sort of thing it was, for the log and the UI. */
+function classify(reply: NavReply): NavReply {
+  if (reply.kind) return reply;
+  if (reply.error) return { ...reply, kind: 'error' };
+  if (reply.action) return { ...reply, kind: 'action' };
+  if (reply.go) return { ...reply, kind: 'nav' };
+  if (/^(Which app do you mean\?|Which one\?|A few (?:matches|flows match) — which one\?|Did you mean this\?|.* — which one\?)$/.test(reply.text)) return { ...reply, kind: 'clarify' };
+  return { ...reply, kind: 'answer' };
+}
+
+export async function resolveNavigation(raw: string, context?: NavContext): Promise<NavReply> {
+  const trimmed = stripChatter(raw.trim().slice(0, 240));
+  const parts = splitIntents(trimmed);
+  if (parts.length === 1) return classify(await resolveWithNotes(parts[0], context));
+
+  // "open zomato and show its flows": each part in turn, each knowing what the one before found.
+  let working: NavContext = { app: context?.app ?? null, results: context?.results ?? null, page: context?.page ?? null };
+  const texts: string[] = [];
+  let last: NavReply | null = null;
+  let go: NavTarget | undefined;
+  for (const part of parts) {
+    const reply = classify(await resolveWithNotes(part, working));
+    texts.push(reply.text);
+    if (reply.app) working = { ...working, app: reply.app, results: reply.results ?? null };
+    if (reply.results) working = { ...working, results: reply.results };
+    if (reply.go) go = reply.go;
+    last = reply;
+  }
+  if (!last) return classify(await resolveWithNotes(trimmed, context));
+  return classify({ ...last, text: texts.join(' '), go, kind: undefined });
+}
+
+/**
+ * Every link an answer gives stays in the visitor's section. On a Webs page, list pages carry Webs'
+ * `?platform=web` and an app on several platforms opens on its web one; iOS is the default and needs
+ * nothing. A platform the visitor names wins (its links say which), and so does a link that already does.
+ */
+async function keepSection(reply: NavReply, text: string, context: NavContext | undefined): Promise<NavReply> {
+  if (!context?.page) return reply;
+  const section = browsedPlatforms(new URLSearchParams(context.page.search ?? ''));
+  const index = await loadIndex();
+  if (section.includes('ios') || findPlatforms(applySynonyms(text.toLowerCase())).length > 0) return reply;
+  const fix = (href: string): string => {
+    if (!href.startsWith('/inspirations') || /[?&]platform=/.test(href)) return href;
+    const [path, query = ''] = href.split('?');
+    const sp = new URLSearchParams(query);
+    const slug = /^\/inspirations\/app\/([^/]+)$/.exec(path)?.[1];
+    if (slug) {
+      const app = index.appBySlug.get(decodeURIComponent(slug));
+      const on = app?.platforms?.find((platform) => section.includes(platform));
+      if (!app || !on || app.platforms.length < 2) return href;
+      sp.set('platform', on);
+    } else if (/^\/inspirations(?:\/(?:apps|screens|flows|ui-elements|patterns|search))?\/?$/.test(path)) {
+      sp.set('platform', 'web');
+    } else {
+      return href;
+    }
+    return `${path}?${sp.toString()}`;
+  };
+  const target = (entry: NavTarget): NavTarget => ({ ...entry, href: fix(entry.href) });
+  // A copied link is a full address; its path is fixed like any other.
+  const copyHref = (href: string): string => {
+    const at = href.indexOf('/inspirations');
+    return at < 0 ? href : `${href.slice(0, at)}${fix(href.slice(at))}`;
+  };
+  return {
+    ...reply,
+    targets: reply.targets.map(target),
+    go: reply.go && target(reply.go),
+    results: reply.results?.map(target),
+    // "Copy the link to Claude" in Webs copies its web page's link.
+    action: reply.action?.kind === 'copy' ? { ...reply.action, href: copyHref(reply.action.href) } : reply.action,
+    card: reply.card && { ...reply.card, href: reply.card.href && fix(reply.card.href), apps: reply.card.apps?.map((entry) => ({ ...entry, href: fix(entry.href) })) },
+  };
+}
+
+async function resolveWithNotes(text: string, context: NavContext | undefined): Promise<NavReply> {
+  const notes: string[] = [];
+  const reply = await keepSection(await resolveInner(text, context, notes), text, context);
+  // Say so when a misspelling was read as something, but only if the answer acted on it.
+  if (notes.length > 0 && !reply.error && (reply.go || reply.card || reply.app)) {
+    return { ...reply, text: `${reply.text} (I read ${listNames(notes, 3)}.)` };
+  }
+  return reply;
+}
+
+async function resolveInner(raw: string, context: NavContext | undefined, notes: string[]): Promise<NavReply> {
+  const original = stripChatter(raw.trim());
+  if (APOLOGY.test(original)) return { text: 'No problem at all. Where would you like to go?', targets: QUICK_PAGES.slice(0, 4), kind: 'smalltalk' };
+  if (GREETING.test(original)) return { text: pick(['Hi! Where would you like to go? Tell me an app or a page, or pick one below.', 'Hello! What are you looking for today? An app, a page, or a type of screen?', 'Hey there! Say an app or page and I’ll take you straight to it.']), targets: QUICK_PAGES, kind: 'smalltalk' };
+  if (UNHAPPY.test(original)) return { text: 'Sorry about that! Tell me what you’re looking for, like an app name, “login screens” or “onboarding flows”, and I’ll take you straight there.', targets: QUICK_PAGES.slice(0, 4), kind: 'smalltalk' };
+  if (ONLY_EMOJI.test(original)) return { text: pick(['👋 Hi! Tell me an app, a page or a type of screen, and I’ll take you there.', '😊 Hello! What would you like to explore? An app, a page, or a type of screen.']), targets: QUICK_PAGES, kind: 'smalltalk' };
+  if (FILLER_REPLY.test(original)) return { text: pick(['Sure! What would you like to explore next? An app, a page, or a type of screen.', 'Got it. Where to next? Try an app name or something like “login screens”.']), targets: QUICK_PAGES.slice(0, 4), kind: 'smalltalk' };
+  if (THANKS.test(original)) return { text: pick(['Anytime. Tell me where to go next.', 'Happy to help. Where to next?', 'You’re welcome. Anything else you’d like to see?']), targets: [], kind: 'smalltalk' };
+  if (HOW_ARE_YOU.test(original)) return { text: 'Doing great, thanks for asking! Where would you like to go?', targets: QUICK_PAGES.slice(0, 4), kind: 'smalltalk' };
+  if (WHO.test(original)) return { text: 'I’m Motvin Buddy, Motvin’s own guide. I help you find apps, screens and flows, and answer quick questions like how many screens an app has.', targets: QUICK_PAGES.slice(0, 4), kind: 'smalltalk' };
+  if (ABOUT_MOTVIN.test(original)) return { text: 'Motvin is a library of real app screens, flows and UI patterns to get inspired by. I’m Motvin Buddy: I take you to the right app or page.', targets: QUICK_PAGES.slice(0, 4), kind: 'answer' };
+  if (PLAN_Q.test(original)) return { text: 'I don’t know about plans or prices. I only take you around the library. Try asking me for an app or a page.', targets: QUICK_PAGES.slice(0, 4), kind: 'answer' };
+  if (BYE.test(original)) return { text: pick(['Bye! I’m here whenever you need a hand.', 'See you! Come back any time.', 'Take care! Just open me when you need to find something.']), targets: [], kind: 'smalltalk' };
+  if (GO_BACK.test(original)) return { text: 'Going back.', targets: [], go: { label: 'Back', hint: 'Back', href: '__back__' } };
+  if (ABOUT_SECTIONS.test(original)) {
+    return {
+      text: 'Motvin has two sections. Apps is iPhone apps. Webs is the web: web apps (like Claude in a browser) and websites. Each one shows only its own apps, screens, flows and counts. Switch between them at the top of the page.',
+      targets: [QUICK_PAGES[0], { ...QUICK_PAGES[0], label: 'Webs', hint: 'Section', href: `${INSPIRATIONS_ROUTES.apps}?platform=web` }],
+      kind: 'answer',
+    };
+  }
+  if (HOW_SAVE.test(original)) {
+    return {
+      text: 'Tick the circle on screens and choose Save, or use Save on an open screen or flow. What you save goes into Collections (the bookmark at the top).',
+      targets: [PAGES.find((entry) => entry.target.label === 'Collections')!.target],
+      kind: 'answer',
+    };
+  }
+  if (CLEAR_HISTORY.test(original)) return { text: 'You can delete a chat from Chat history with its bin icon, or choose Clear all there. Your chats stay in this browser only.', targets: [], kind: 'answer' };
+  if (DELETE_WORD.test(original) || CREATE_WORD.test(original)) {
+    return { text: 'I can only take you around Motvin. I can’t add, change or delete anything in the library. Admins manage apps and uploads from the admin tools.', targets: QUICK_PAGES.slice(0, 4), kind: 'answer' };
+  }
+  // "what is this" while looking at an app or a pattern asks about that, not for help.
+  const lookingAtSomething = Boolean(context?.app) || /^\/inspirations\/(?:app|pattern)\//.test(context?.page?.pathname ?? '');
+  if (HELP.test(original) && !(lookingAtSomething && /^what is this\??$/i.test(original))) {
+    // The examples name real apps of the section being browsed, never apps the library doesn't have.
+    const helpSection = browsedPlatforms(new URLSearchParams(context?.page?.search ?? ''));
+    const [first, second] = (await loadIndex()).apps
+      .filter((app) => app.platforms.some((platform) => helpSection.includes(platform)))
+      .sort((a, b) => countsOn(b, helpSection).screens - countsOn(a, helpSection).screens);
+    const examples = first
+      ? `Try “how many screens does ${first.name} have?”, “open ${(second ?? first).name}”, “${first.name} flows”, “login screens” or “empty states”.`
+      : 'Try “login screens”, “empty states” or “bottom sheets”.';
+    return { text: `I take you around Motvin and answer quick questions about its apps, screens and flows. ${examples}`, targets: QUICK_PAGES, kind: 'smalltalk' };
+  }
+  const query = clean(original);
+  const page = pageFor(query);
+  const isAppsPage = page?.target.href === QUICK_PAGES[0].href;
+  // "i want app" says nothing but that they want apps; like "apps" itself, it is answered once the apps are known.
+  const wantsApps = isAppsPage || (!query && /\bapps?\b/i.test(original));
+  if (!query && !wantsApps) return { text: 'Tell me where to go — an app, a page like Flows or Screens, or something to search for.', targets: QUICK_PAGES, kind: 'fallback' };
+
+  if (page && !isAppsPage) return { text: pick([`Opening ${page.target.label}.`, `Taking you to ${page.target.label}.`, `Here’s the ${page.target.label} page.`]), targets: [], go: page.target };
+  // A style on its own: "dark", "minimal".
+  const bareStyle = /^(dark|light|minimal|bold|playful|corporate|editorial|experimental)(?: (?:mode|theme|ui|style))?$/.exec(query);
+  if (bareStyle) return { text: `Showing ${bareStyle[1]} screens.`, targets: [], go: { label: `${bareStyle[1][0].toUpperCase()}${bareStyle[1].slice(1)} screens`, hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}?style=${bareStyle[1]}` } };
+
+  const fullIndex = await loadIndex();
+  const { apps: everyApp, patterns: allPatterns, meta } = fullIndex;
+  const unreachable = !fullIndex.reachable;
+  const elementKinds = fullIndex.elements.map((element) => element.kind);
+  const flowCategories = meta?.taxonomy.flowCategories ?? [];
+
+  // Read the question the way it was meant: fix confident misspellings, then fold
+  // everyday wording ("sign in", "buy") into the library's own words.
+  const typed = original.toLowerCase();
+  const fixed = unreachable ? { text: typed, corrections: [] } : correctText(typed, fullIndex.vocabulary);
+  const shownAs = new Map<string, string>();
+  for (const app of everyApp) words(app.name).forEach((word) => shownAs.set(word, app.name.split(/\s+/).find((part) => part.toLowerCase() === word) ?? word));
+  fixed.corrections.forEach((change) => notes.push(`“${change.from}” as “${shownAs.get(change.to) ?? change.to}”`));
+  const lowerAll = applySynonyms(fixed.text);
+
+  // What is ruled out — "except Swiggy", "not Zomato" — is read first and taken out of the sentence.
+  const negatedPhrases = findNegations(lowerAll);
+  const negatedApps = negatedPhrases.flatMap((phrase) => findApps(phrase, everyApp));
+  const negatedPlatforms = negatedPhrases.flatMap((phrase) => findPlatforms(phrase));
+  const lower = negatedPhrases.length ? withoutNegations(lowerAll) : lowerAll;
+  // The section the visitor is in (Webs on a web page, iOS otherwise): unless they name a platform, lists,
+  // rankings and suggestions are of that section's apps only — never iOS apps offered on a web page. An app
+  // named by name is still found wherever it is ("open Spotify" from Webs still opens Spotify).
+  const sectionPlatforms = context?.page ? browsedPlatforms(new URLSearchParams(context.page.search ?? '')) : null;
+  const namesPlatform = findPlatforms(lower).length > 0 || negatedPlatforms.length > 0;
+  const scope = sectionPlatforms && !namesPlatform ? sectionPlatforms : null;
+  // Each app counted on the section only: Claude in Webs has its web screens, so a ranking or a total is
+  // never iOS and web added together. (Copies — compare apps by id, not by identity.)
+  const apps = scope
+    ? everyApp.filter((app) => app.platforms?.some((platform) => scope.includes(platform))).map((app) => {
+        const here = countsOn(app, scope);
+        const platformCounts = app.platformCounts && Object.fromEntries(Object.entries(app.platformCounts).filter(([platform]) => scope.includes(platform as Platform)));
+        // Its uploads on the section ("newest app" in iOS is by iOS upload dates); an older manifest keeps them all.
+        const versions = (app.versions ?? []).filter((version) => !version.platforms || version.platforms.some((platform) => scope.includes(platform)));
+        return { ...app, screenCount: here.screens, flowCount: here.flows, platformCounts, versions };
+      })
+    : everyApp;
+  const scopedById = new Map(apps.map((app) => [app.id, app]));
+  // The section's flows, and its UI element counts: an app named from outside the section keeps all of its flows.
+  const namedOutside = new Set(findApps(lower, everyApp).filter((app) => !scopedById.has(app.id)).map((app) => app.id));
+  const index: LibraryIndex = scope ? { ...fullIndex, flows: fullIndex.flows.filter((flow) => scope.includes(flow.platform) || namedOutside.has(flow.appId)) } : fullIndex;
+  const elements = scope ? await inspirationsApi.listElements([...scope]).catch(() => fullIndex.elements) : fullIndex.elements;
+  // Each pattern with only the section's screens (a screen id reads "<app>-<platform>-…"), so its screen count
+  // and the apps it's "in" are never iOS and web added together.
+  const patterns = scope
+    ? allPatterns.map((pattern) => ({ ...pattern, screenIds: (pattern.screenIds ?? []).filter((id) => scope.some((platform) => everyApp.some((app) => id.startsWith(`${app.id}-${platform}-`)))) }))
+    : allPatterns;
+  // An app's own part of the section, for counting its screens; an app not in the section counts whole.
+  const scopeOf = (app: App | null) => (scope && (!app || app.platforms?.some((platform) => scope.includes(platform))) ? scope : null);
+  const negatedIds = new Set(negatedApps.map((app) => app.id));
+  const working = lower;
+
+  // A misspelt page name ("flwos") is still a page.
+  if (fixed.corrections.length > 0) {
+    const fixedPage = pageFor(clean(working));
+    if (fixedPage) return { text: `Opening ${fixedPage.target.label}.`, targets: [], go: fixedPage.target };
+  }
+
+  const asksCount = /\bhow (many|much)\b|\b(count|number of|total)\b/.test(lower);
+  const section = findSection(lower);
+  const namedElements = findElements(working, elementKinds);
+  // "screens with a search bar" is about the search bar, not about search screens.
+  const screenType = section?.tab === 'flows' ? null : findScreenType(namedElements.length ? stripElements(lower, namedElements) : lower);
+  const states = findStates(lower);
+  const styles = findStyles(lower);
+  const industryHit = findIndustry(lower);
+  const adjective = /\b(ios|iphone|web ?apps?|webs|web|websites?)\s+(?:[\w-]+\s+){0,2}?(?:screens?|pages?|flows?|ui)\b/.exec(lower);
+  const platformHit = findPlatform(lower) ?? (adjective ? findPlatform(`on ${adjective[1]}`) : null);
+  /** The Screens page, filtered by everything the sentence named. */
+  const screenQuery = (sort?: string) => {
+    const params = new URLSearchParams();
+    if (screenType) params.set('type', screenType.key);
+    if (states.length) params.set('state', states.join(','));
+    if (styles.length) params.set('style', styles.join(','));
+    if (industryHit) params.set('industry', industryHit);
+    if (platformHit) params.set('platform', platformHit);
+    if (sort) params.set('sort', sort);
+    return params;
+  };
+  const screenScope = `${platformHit ? ` on ${PLATFORM_LABEL[platformHit]}` : ''}${industryHit ? ` from ${INDUSTRY_LABEL[industryHit].toLowerCase()} apps` : ''}`;
+  const yesNo = YES_NO.test(original);
+  const question = yesNo || WH.test(original) || /\?\s*$/.test(original);
+  // Something about an app is being asked — enough to know "it" needs an app.
+  const asksAboutAnApp = Boolean(section || asksCount || screenType || states.length || styles.length || findPlatform(lower) || findIndustry(lower) || PLATFORM_ASKED.test(lower) || INDUSTRY_ASKED.test(lower) || RATING_ASKED.test(lower) || INFO.test(lower) || SAVE.test(lower) || COPY.test(lower) || SIMILAR.test(lower));
+
+  // Pages and screen-type links need no data, so they still work offline;
+  // everything else looks something up and has nothing to look it up in.
+  if (unreachable) {
+    if (screenType && !asksCount) {
+      const go: NavTarget = { label: `${screenType.label} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` };
+      return { text: `Showing ${screenType.label.toLowerCase()} screens.`, targets: [], go };
+    }
+    if (wantsApps) return allApps([]);
+    return {
+      text: 'I can’t reach the library right now. Check your connection and try again.',
+      targets: [{ label: 'Try again', hint: 'Retry', href: '', ask: original }],
+      error: true,
+    };
+  }
+
+  // Where the visitor is: the app page they have open is a subject too.
+  const pageApp = appOnPage(context, index);
+  if (WHERE_AM_I.test(lower)) {
+    if (pageApp) return { ...describeApp(pageApp), text: `You’re looking at ${pageApp.name}. ${describeApp(pageApp).text}` };
+    const where = PAGES.find((entry) => entry.target.href === (context?.page?.pathname ?? '').replace(/\/$/, ''));
+    return { text: where ? `You’re on the ${where.target.label} page.` : 'You’re in Motvin Inspirations. Tell me an app or a page and I’ll take you there.', targets: QUICK_PAGES.slice(0, 4) };
+  }
+
+  if (wantsApps) return allApps(apps);
+
+  // "the second one", "both", "all of them": picking from what was just listed.
+  const ordinal = findOrdinal(lower);
+  const listed = listedApps(context, index);
+  if (ordinal && listed.length > 0) {
+    if (ordinal.kind === 'both' && listed.length >= 2) return compareApps(listed.slice(0, 2));
+    if (ordinal.kind === 'all') return { text: `Here they all are — ${listNames(listed.map((app) => app.name), 6)}.`, targets: appResults(listed), results: appResults(listed) };
+    const chosen = ordinal.kind === 'index' ? listed[ordinal.index] : ordinal.kind === 'last' ? listed[listed.length - 1] : listed.find((app) => app.id !== context?.app?.id);
+    if (chosen) return { text: pick([`Opening ${chosen.name}.`, `Taking you to ${chosen.name}.`, `Here’s ${chosen.name}.`]), targets: followUps(chosen, null), go: appTarget(chosen), app: chosen };
+    return { text: `I only listed ${plural(listed.length, 'app')} — ${listNames(listed.map((app) => app.name), 6)}. Which one?`, targets: appResults(listed), results: appResults(listed) };
+  }
+
+  // "what about web apps", "and web?": the same question for another platform, about what was just listed or opened.
+  const followPlatform = FOLLOW_PLATFORM.exec(lower.trim());
+  const followAsked = followPlatform ? findPlatform(`on ${followPlatform[1]}`) : null;
+  if (followPlatform && followAsked && findApps(lower, everyApp).length === 0) {
+    const asked = followAsked;
+    const current = context?.app ?? pageApp ?? null;
+    if (listed.length > 1) {
+      const on = listed.filter((app) => app.platforms?.includes(asked));
+      return on.length
+        ? { text: `Of those, ${listNames(on.map((app) => app.name), 4)} ${on.length === 1 ? 'is' : 'are'} on ${ON_LABEL[asked]}.`, targets: appResults(on.slice(0, 4)), results: appResults(on) }
+        : { text: `None of those are on ${ON_LABEL[asked]}.`, targets: appResults(listed.slice(0, 3)), results: appResults(listed) };
+    }
+    if (current) {
+      const on = current.platforms?.includes(asked);
+      return { text: on ? `Yes — ${current.name} is on ${platformList(current)}.` : `${current.name} isn’t on ${ON_LABEL[asked]}. It’s on ${platformList(current)}.`, targets: [appTarget(current), ...followUps(current, null).slice(0, 2)], app: current };
+    }
+    return resolveInner(PLATFORM_QUERY[asked], undefined, notes);
+  }
+
+  // "open the last app again", "back to that one".
+  if (REOPEN.test(lower.trim())) {
+    const current = context?.app ?? pageApp ?? null;
+    if (current) return { text: pick([`Opening ${current.name} again.`, `Back to ${current.name}.`]), targets: followUps(current, null), go: appTarget(current), app: current };
+    const biggest = [...apps].sort((a, b) => b.screenCount - a.screenCount).slice(0, 5);
+    return { text: 'Which app do you mean?', targets: biggest.map((app) => ({ label: app.name, hint: 'App', href: '', ask: `open ${app.name}`, iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined })), kind: 'clarify' };
+  }
+
+  // A named app is found wherever it is, and counted on the section when it is in it.
+  let mentioned = findApps(lower, everyApp).filter((app) => !negatedIds.has(app.id)).map((app) => scopedById.get(app.id) ?? app);
+  // "its flows", "is this on iOS" — the app from the last answer.
+  const subject = context?.app ?? pageApp ?? null;
+  if (!mentioned.length && subject && REFERS_BACK.test(lower) && asksAboutAnApp && !(INFO.test(lower) && clean(lower.replace(INFO, ' ')).split(' ').filter((word) => word && !/^(it|its|this|that|one|app|here)$/.test(word)).length > 0)) mentioned = [subject];
+  // "how many screens?" straight after opening Zomato means Zomato's screens. The
+  // app being talked about is the subject of any question about app facts, unless
+  // the question widens itself: "in the whole library", "all apps", "which app has…".
+  // "how many patterns" (no "it" / "its") is the library's count, not the last app's.
+  const widened = LIBRARY_SCOPE.test(lower) || /\bapps\b/i.test(lower) || findRanking(lower) !== null || COMPARE.test(lower) || findIndustry(lower) !== null || WHICH_APPS.test(lower) || Boolean(adjective) || (asksCount && /\bpatterns?\b/.test(lower) && !REFERS_BACK.test(lower));
+  // "what is this" carries to the app; "what is the meaning of life" does not — when the only
+  // sign of an app question is a "what is / tell me about" opener, the rest must be nothing but a pronoun.
+  const onlyInfo = INFO.test(lower) && !(section || asksCount || screenType || states.length || styles.length || findPlatform(lower) || PLATFORM_ASKED.test(lower) || INDUSTRY_ASKED.test(lower) || RATING_ASKED.test(lower) || SAVE.test(lower) || COPY.test(lower) || SIMILAR.test(lower));
+  const infoRest = clean(lower.replace(INFO, ' ')).split(' ').filter((word) => word && !/^(it|its|this|that|one|app|here)$/.test(word));
+  const vagueInfo = onlyInfo && infoRest.length > 0;
+  const definesAThing = DEFINE.test(original.trim()) && !REFERS_BACK.test(lower) && (findPatterns(working, patterns).length > 0 || namedElements.length > 0);
+  const carried = !mentioned.length && Boolean(subject) && asksAboutAnApp && !widened && !vagueInfo && !definesAThing;
+  if (carried && subject) mentioned = [subject];
+  // A way back out to the whole library, offered whenever the app was assumed.
+  const wholeLibrary: NavTarget[] = carried ? [{ label: 'Whole library', hint: 'Ask', href: '', ask: `${original.replace(/\?\s*$/, '')} in the whole library` }] : [];
+
+  // Things named in the library beyond apps: patterns, UI elements, flow categories.
+  // On a pattern page, "this" / "it" is that pattern.
+  const foundPatterns = findPatterns(working, patterns);
+  const scoped = Boolean(industryHit || platformHit) && (states.length > 0 || Boolean(screenType)) && !/\bpatterns?\b/.test(lower);
+  const namedPatterns = scoped ? [] : foundPatterns.length ? foundPatterns : [];
+  const flowCategory = findFlowCategory(working, flowCategories);
+  const askedFlowCategory = findFlowCategory(working, [...FLOW_CATEGORY_PRESETS]);
+  const numberFilter = findNumberFilter(lower);
+  const topN = findTopN(lower);
+
+  // Things the library cannot know, said plainly, with the nearest thing it can show.
+  if (JUDGE.test(lower) && mentioned.length !== 1) {
+    if (mentioned.length >= 2) {
+      const side = compareApps(mentioned);
+      return { ...side, text: `Which is better is a matter of taste, so I won’t pick one. Here they are side by side. ${side.text}` };
+    }
+    const label = screenType ? `${screenType.label.toLowerCase()} screens` : 'screens';
+    return { text: `Which is better is a matter of taste, so I won’t pick for you. I can show you ${label} to compare yourself.`, targets: [{ label: `See ${label}`, hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}${screenQuery().toString() ? `?${screenQuery()}` : ''}` }, QUICK_PAGES[0]] };
+  }
+  const biggestApps = [...apps].sort((a, b) => b.screenCount - a.screenCount);
+  if (POPULAR.test(lower) && !mentioned.length) {
+    if (section?.tab === 'screens' || screenType) {
+      const go: NavTarget = { label: 'Most popular screens', hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}${screenQuery().toString() ? `?${screenQuery()}` : ''}` };
+      return { text: 'Showing the screens in their most popular order.', targets: [], go };
+    }
+    return { text: `I don’t track what’s popular or trending. By size, ${listNames(biggestApps.slice(0, 3).map((app) => app.name), 3)} have the most screens.`, targets: appResults(biggestApps.slice(0, 3)), results: appResults(biggestApps) };
+  }
+  if (UNTRACKED.test(lower) && !mentioned.length) {
+    return { text: 'Motvin doesn’t record whether an app is free or paid, or how many people use it. I can list every app, though.', targets: [QUICK_PAGES[0], ...appResults(biggestApps.slice(0, 2))] };
+  }
+  if (RECENT.test(lower) && !mentioned.length && (findRanking(lower) === null || /\bapps\b/.test(lower)) && !asksCount) {
+    const forApps = /\bapps\b/.test(lower);
+    const params = screenQuery('newest');
+    const go: NavTarget = forApps ? { label: 'Newest apps', hint: 'Apps', href: `${INSPIRATIONS_ROUTES.apps}?sort=newest` } : { label: 'Newest screens', hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}?${params}` };
+    const other: NavTarget = forApps ? { label: 'Newest screens', hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}?sort=newest` } : { label: 'Newest apps', hint: 'Apps', href: `${INSPIRATIONS_ROUTES.apps}?sort=newest` };
+    return { text: forApps ? 'Showing the newest apps first.' : 'Showing the newest screens first.', targets: [other], go };
+  }
+
+  // Buddy is for exploring: it copies a link (after asking), but saving is the visitor's own, from the Save buttons.
+  if (COPY.test(lower)) {
+    const target = mentioned[0] ?? subject;
+    if (!target) return { text: 'Which app’s link would you like? Name it, or open it first.', targets: appResults([...apps].sort((a, b) => b.screenCount - a.screenCount).slice(0, 4)), kind: 'clarify' };
+    const href = INSPIRATIONS_ROUTES.app(target);
+    return { text: `Copy the link to ${target.name}?`, targets: [appTarget(target)], action: { kind: 'copy', href, label: target.name }, app: target, kind: 'action' };
+  }
+  if (SAVE.test(lower)) {
+    const target = mentioned[0] ?? subject;
+    const collections = PAGES.find((entry) => entry.target.label === 'Collections')!.target;
+    return {
+      text: `I’m here to help you explore, so I don’t save things. ${target ? `Open ${target.name} and use its Save button` : 'Use the Save button on an app, screen or flow'}, or tick screens and choose Save.`,
+      targets: target ? [appTarget(target), collections] : [collections],
+      app: target ?? undefined,
+      kind: 'answer',
+    };
+  }
+
+  // "its flows" with nothing it could refer to: ask, with the biggest apps as the choices.
+  if (!mentioned.length && !subject && REFERS_BACK.test(lower) && asksAboutAnApp && apps.length > 0) {
+    const biggest = [...apps].sort((a, b) => b.screenCount - a.screenCount).slice(0, 5);
+    return {
+      text: 'Which app do you mean?',
+      targets: biggest.map((app) => ({ label: app.name, hint: 'App', href: '', ask: `${original} ${app.name}`, iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined })),
+      kind: 'clarify',
+    };
+  }
+
+  if (mentioned.length === 1) {
+    const app = mentioned[0];
+
+    // "apps like Swiggy": others of the same kind.
+    if (SIMILAR.test(withoutNames(lower, [app])) && !COMPARE.test(lower)) {
+      const kin = apps.filter((other) => other.id !== app.id && other.industry === app.industry).sort((a, b) => b.screenCount - a.screenCount);
+      const kind = INDUSTRY_LABEL[app.industry] ?? app.industry;
+      if (kin.length === 0) return { text: `${app.name} is the only ${kind} app in the library so far.`, targets: [appTarget(app), QUICK_PAGES[0]], app };
+      return { text: `Apps like ${app.name} (${kind}): ${listNames(kin.map((other) => other.name), 4)}.`, targets: appResults(kin.slice(0, 4)), app, results: appResults(kin) };
+    }
+
+    // A pattern or UI element inside one app.
+    if (namedPatterns.length === 1 && !section) {
+      const pattern = namedPatterns[0];
+      const used = appsUsingPattern(index, pattern);
+      const has = used.some((other) => other.id === app.id);
+      return { text: has ? `Yes — ${app.name} uses the “${pattern.name}” pattern.` : `${app.name} doesn’t use the “${pattern.name}” pattern. It appears in ${used.length ? listNames(used.map((other) => other.name), 3) : 'no apps yet'}.`, targets: [patternTarget(pattern), { ...appTarget(app, 'patterns'), label: `${app.name} patterns` }], card: patternCard(pattern, index), app };
+    }
+    if (namedElements.length > 0 && !screenType && !(section?.tab === 'screens' && states.length)) {
+      const kind = namedElements[0];
+      const total = await countScreens({ element: kind }, app, scopeOf(app));
+      const label = elementLabel(kind).toLowerCase();
+      const go = { ...appTarget(app, 'ui-elements'), label: `${app.name} UI elements` };
+      if (total === null) return { text: `Opening ${app.name}’s UI elements.`, targets: followUps(app, 'ui-elements'), go, app };
+      if (total === 0) return { text: `${yesNo ? 'No — ' : ''}${app.name} has no screens with ${label}s.`, targets: [go, ...followUps(app, 'ui-elements').slice(0, 2)], app };
+      return { text: `${yesNo ? 'Yes — ' : ''}${app.name} has ${plural(total, 'screen')} with ${label}s.`, targets: [go, ...followUps(app, 'ui-elements').slice(0, 2)], go: question ? undefined : go, app };
+    }
+
+    // Screens in a certain state or style inside one app.
+    if ((states.length || styles.length) && !asksCount) {
+      const what = [...styles.map((style) => styleLabel(style).toLowerCase()), ...states.map((state) => screenStateLabel(state).toLowerCase()), screenType ? screenType.label.toLowerCase() : ''].filter(Boolean).join(' ');
+      const total = await countScreens({ type: screenType?.key, states, styles }, app, scopeOf(app));
+      const go: NavTarget = { label: `${app.name} ${what} screens`, hint: 'Search', href: appSearch(app, `${app.name} ${what}`, scopeOf(app)) };
+      if (yesNo && total !== null) return total > 0 ? { text: `Yes — ${app.name} has ${plural(total, `${what} screen`)}.`, targets: [go, ...followUps(app, null).slice(0, 2)], app } : { text: `No — ${app.name} has no ${what} screens.`, targets: followUps(app, null), app };
+      return { text: total !== null && total > 0 ? `${app.name} has ${plural(total, `${what} screen`)}. Showing them.` : `Showing ${app.name}’s ${what} screens.`, targets: followUps(app, null).slice(0, 2), go, app };
+    }
+    if ((states.length || styles.length) && asksCount) {
+      const what = [...styles.map((style) => styleLabel(style).toLowerCase()), ...states.map((state) => screenStateLabel(state).toLowerCase()), screenType ? screenType.label.toLowerCase() : ''].filter(Boolean).join(' ');
+      const total = await countScreens({ type: screenType?.key, states, styles }, app, scopeOf(app));
+      if (total !== null) return { text: `${app.name} has ${plural(total, `${what} screen`)}.`, targets: [...wholeLibrary, { label: `See them`, hint: 'Search', href: appSearch(app, `${app.name} ${what}`, scopeOf(app)) }, ...followUps(app, 'count').slice(0, 1)], app };
+    }
+
+    // A flow of a certain kind inside one app.
+    if (flowCategory && !asksCount) {
+      const inCategory = index.flows.filter((flow) => flow.appId === app.id && flow.category === flowCategory);
+      const label = flowCategoryLabel(flowCategory).toLowerCase();
+      if (inCategory.length === 1) return { text: `Opening ${app.name}’s ${label} flow, “${inCategory[0].name}”.`, targets: followUps(app, 'flows').slice(0, 2), go: flowTarget(inCategory[0], index, false), card: flowCard(inCategory[0], index), app };
+      if (inCategory.length > 1) return { text: `${app.name} has ${plural(inCategory.length, `${label} flow`)} — which one?`, targets: inCategory.slice(0, 6).map((flow) => flowTarget(flow, index, false)), app, kind: 'clarify' };
+      if (index.flows.some((flow) => flow.appId === app.id)) return { text: `${app.name} has no ${label} flow recorded. Here are all its flows.`, targets: followUps(app, 'flows'), go: { ...appTarget(app, 'flows'), label: `${app.name} flows` }, app };
+    }
+
+    const fact = await answerAboutApp(app, lower, question, yesNo, section, screenType, asksCount, scopeOf(app));
+    if (fact) return fact;
+    if (asksCount && screenType) {
+      const total = await countScreens({ type: screenType.key }, app, scopeOf(app));
+      if (total !== null) {
+        return {
+          text: `${app.name} has ${plural(total, `${screenType.label.toLowerCase()} screen`)}.`,
+          targets: [...wholeLibrary, { label: `See ${screenType.label.toLowerCase()} screens`, hint: 'Search', href: appSearch(app, `${app.name} ${screenType.label.toLowerCase()}`, scopeOf(app)) }, ...followUps(app, 'count').slice(0, 2)],
+          app,
+        };
+      }
+    }
+    if (section?.tab === 'flows' && !asksCount) {
+      const flowMatches = matchFlows(leftoverWords(working, everyApp), app, index);
+      if (flowMatches.length === 1) return { text: `Opening the “${flowMatches[0].name}” flow.`, targets: followUps(app, 'flows').slice(0, 2), go: flowTarget(flowMatches[0], index, false), card: flowCard(flowMatches[0], index), app };
+      if (flowMatches.length > 1) return { text: `${app.name} has a few flows like that — which one?`, targets: flowMatches.map((flow) => flowTarget(flow, index, false)), app, kind: 'clarify' };
+    }
+    if (asksCount) {
+      const saysFlows = hasWord(lower, 'flows') || hasWord(lower, 'flow');
+      const saysScreens = hasWord(lower, 'screens') || hasWord(lower, 'screen');
+      const neither = !saysFlows && !saysScreens;
+      const parts = [saysScreens || neither ? countPhrase(app, 'screens') : '', saysFlows || neither ? countPhrase(app, 'flows') : ''].filter(Boolean);
+      return {
+        text: `${app.name} has ${parts.join(' and ')}.`,
+        targets: [...wholeLibrary, appTarget(app), ...followUps(app, 'count').slice(0, 2)],
+        card: { title: app.name, iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined, facts: [countPhrase(app, 'screens'), countPhrase(app, 'flows')], href: INSPIRATIONS_ROUTES.app(app) },
+        app,
+      };
+    }
+    if (screenType) {
+      const search = `${app.name} ${screenType.label.toLowerCase()}`;
+      const go: NavTarget = { label: `${app.name} ${screenType.label.toLowerCase()} screens`, hint: 'Search', href: appSearch(app, search, scopeOf(app)) };
+      const allOfType: NavTarget[] = carried ? [{ label: `All ${screenType.label.toLowerCase()} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` }] : [];
+      return { text: `Showing ${app.name}’s ${screenType.label.toLowerCase()} screens.`, targets: [...allOfType, ...followUps(app, null).slice(0, 2)], go, app };
+    }
+    if (section) {
+      const go = { ...appTarget(app, section.tab), label: `${app.name} ${section.label}` };
+      return { text: pick([`Opening ${app.name}’s ${section.label}.`, `Here are ${app.name}’s ${section.label}.`]), targets: followUps(app, section.tab), go, app };
+    }
+    if (question && !section && !screenType) return describeApp(app);
+    const extra = leftoverWords(working, everyApp).filter((word) => word.length >= 5 && !NOT_A_SUBJECT.has(word) && !/^\d+$/.test(word));
+    if (extra.length > 0 && !carried) {
+      const subject = extra.join(' ');
+      const go: NavTarget = { label: `${app.name} · ${subject}`, hint: 'Search', href: appSearch(app, `${app.name} ${subject}`, scopeOf(app)) };
+      return { text: `Searching ${app.name} for “${subject}”.`, targets: [appTarget(app), ...followUps(app, null).slice(0, 2)], go, app };
+    }
+    // Named from the other section: say where it is, so the jump to its page is no surprise.
+    if (scope && !scopedById.has(app.id)) {
+      // Named by the site's own two sections ("Apps" is iOS, "Webs" is web apps and websites), not "Web App".
+      const where = app.platforms.includes('ios') ? 'Apps (iOS)' : 'Webs';
+      return { text: `${app.name} is only in ${where}. Opening it there.`, targets: followUps(app, null), go: appTarget(app), app };
+    }
+    return { text: pick([`Opening ${app.name}.`, `Taking you to ${app.name}.`, `Here’s ${app.name}.`]), targets: followUps(app, null), go: appTarget(app), app };
+  }
+
+  if (mentioned.length > 1 && COMPARE.test(lower)) return compareApps(mentioned);
+
+  // "compare all apps": the biggest few side by side.
+  if (!mentioned.length && COMPARE.test(lower) && /\b(?:all|every|the|these|those)\s+apps\b|^compare apps\b/.test(lower) && apps.length >= 2) {
+    const top = [...apps].sort((a, b) => b.screenCount - a.screenCount).slice(0, 3);
+    const side = compareApps(top);
+    return { ...side, text: apps.length > 3 ? `The ${top.length} biggest of ${apps.length} apps, side by side. ${side.text}` : side.text };
+  }
+
+  if (mentioned.length > 1 && (asksCount || section || screenType)) {
+    const named = mentioned.slice(0, 4);
+    const saysFlows = hasWord(lower, 'flows') || hasWord(lower, 'flow');
+    const saysScreens = hasWord(lower, 'screens') || hasWord(lower, 'screen');
+    if (asksCount || section?.tab === 'flows' || section?.tab === 'screens') {
+      const flowsOnly = section?.tab === 'flows' || (saysFlows && !saysScreens);
+      const both = (saysFlows && saysScreens) || (asksCount && !saysFlows && !saysScreens);
+      const bits = (app: App) => (flowsOnly ? [plural(app.flowCount, 'flow')] : both ? [plural(app.screenCount, 'screen'), plural(app.flowCount, 'flow')] : [plural(app.screenCount, 'screen')]);
+      return {
+        text: `${named.map((app) => `${app.name} has ${bits(app).join(' and ')}`).join('. ')}.`,
+        targets: named.map((app) => ({ ...appTarget(app, flowsOnly ? 'flows' : undefined), label: flowsOnly ? `${app.name} flows` : app.name })),
+        results: appResults(named),
+      };
+    }
+    if (section) {
+      return { text: `Here are the ${section.label} of ${listNames(named.map((app) => app.name), 4)}.`, targets: named.map((app) => ({ ...appTarget(app, section.tab), label: `${app.name} ${section.label}` })), results: appResults(named) };
+    }
+    if (screenType) {
+      const type = screenType.label.toLowerCase();
+      return { text: `Here are the ${type} screens of ${listNames(named.map((app) => app.name), 4)}.`, targets: named.map((app) => ({ label: `${app.name} ${type}`, hint: 'Search', href: appSearch(app, `${app.name} ${type}`, scope) })), results: appResults(named) };
+    }
+  }
+  if (mentioned.length > 1) return { text: 'Which app do you mean?', targets: mentioned.slice(0, 6).map((app) => appTarget(app, section?.tab)), results: appResults(mentioned), kind: 'clarify' };
+
+  // "apps except Swiggy": everything but.
+  if (negatedApps.length > 0 && !findIndustry(lower) && !findPlatform(lower) && !numberFilter && !findRanking(lower)) {
+    const rest = apps.filter((app) => !negatedIds.has(app.id)).sort((a, b) => b.screenCount - a.screenCount);
+    if (rest.length === 0) return { text: `That leaves no apps — ${listNames(negatedApps.map((app) => app.name), 3)} ${negatedApps.length === 1 ? 'is' : 'are'} all there is.`, targets: [QUICK_PAGES[0]] };
+    return { text: `Apart from ${listNames(negatedApps.map((app) => app.name), 3)}: ${listNames(rest.map((app) => app.name), 4)}.`, targets: appResults(rest.slice(0, 4)), results: appResults(rest) };
+  }
+
+  // A pattern, named or by category, across the library.
+  if (namedPatterns.length > 0) {
+    // "modal patterns": the whole category, not one pattern in it.
+    const askedCategory = findPatternCategory(working, patterns);
+    if (askedCategory && !DEFINE.test(original.trim()) && !WHICH_APPS.test(lower) && !asksCount) {
+      return { text: `Opening the ${askedCategory.toLowerCase()} patterns.`, targets: namedPatterns.slice(0, 6).map(patternTarget), go: { label: `${askedCategory} patterns`, hint: 'Patterns', href: INSPIRATIONS_ROUTES.patternCategory(askedCategory) } };
+    }
+    if (namedPatterns.length === 1) {
+      const pattern = namedPatterns[0];
+      const used = appsUsingPattern(index, pattern);
+      if (DEFINE.test(original.trim()) && !WHICH_APPS.test(lower) && !asksCount) {
+        return { text: pattern.description ? `${pattern.name}: ${pattern.description}` : `${pattern.name} is a ${pattern.category.toLowerCase()} pattern.`, targets: [patternTarget(pattern), ...appResults(used.slice(0, 3))], card: patternCard(pattern, index), results: appResults(used) };
+      }
+      if (WHICH_APPS.test(lower) || asksCount) {
+        return used.length
+          ? { text: `The “${pattern.name}” pattern appears in ${plural(used.length, 'app')} — ${listNames(used.map((app) => app.name), 4)}.`, targets: [patternTarget(pattern), ...appResults(used.slice(0, 3))], card: patternCard(pattern, index), results: appResults(used) }
+          : { text: `The “${pattern.name}” pattern isn’t tied to any app’s screens yet.`, targets: [patternTarget(pattern)], card: patternCard(pattern, index) };
+      }
+      return { text: `Opening the “${pattern.name}” pattern.`, targets: appResults(used.slice(0, 3)), go: patternTarget(pattern), card: patternCard(pattern, index), results: appResults(used) };
+    }
+    return { text: `A few ${namedPatterns[0].category.toLowerCase()} patterns — which one?`, targets: namedPatterns.slice(0, 6).map(patternTarget), kind: 'clarify' };
+  }
+
+  // A UI element across the library.
+  // "list AI apps", "show me a list of food apps" ask for apps; "list" there is not the UI element.
+  const asksForApps = /\bapps?\b/.test(lower) && namedElements.every((kind) => kind === 'list');
+  if (namedElements.length > 0 && !asksForApps && !screenType && (!section || section.tab === 'screens') && !(section?.tab === 'screens' && states.length) && !scoped) {
+    const kind = namedElements[0];
+    const label = elementLabel(kind).toLowerCase();
+    const count = elements.find((element) => element.kind === kind)?.count ?? 0;
+    const go: NavTarget = { label: `${elementLabel(kind)} examples`, hint: 'UI elements', href: `${INSPIRATIONS_ROUTES.uiElements}?element=${encodeURIComponent(kind)}` };
+    if (DEFINE.test(original.trim()) && !WHICH_APPS.test(lower) && !asksCount) {
+      return { text: `I don’t write definitions, but ${plural(count, 'screen')} in the library have ${label}s. Have a look.`, targets: [go] };
+    }
+    if (WHICH_APPS.test(lower) || asksCount) {
+      const found = await appsWithScreens({ element: kind }, index, scope);
+      if (found && found.apps.length) return { text: `${plural(count || found.total, 'screen')} have ${label}s, in ${listNames(found.apps.map((app) => app.name), 4)}.`, targets: [go, ...appResults(found.apps.slice(0, 3))], results: appResults(found.apps) };
+      return { text: count ? `${plural(count, 'screen')} have ${label}s.` : `No screens with ${label}s yet.`, targets: [go] };
+    }
+    return { text: count ? `Showing ${label}s — ${plural(count, 'screen')}.` : `Showing ${label}s.`, targets: [], go };
+  }
+  if (asksElements(lower) && (!section || section.tab === 'ui-elements') && !mentioned.length && !asksCount) {
+    const top = [...elements].sort((a, b) => b.count - a.count).slice(0, 5);
+    const target = PAGES.find((entry) => entry.target.label === 'UI elements')!.target;
+    return { text: top.length ? `The most common UI elements: ${listNames(top.map((element) => `${elementLabel(element.kind).toLowerCase()}s (${element.count})`), 5)}.` : 'Opening UI elements.', targets: top.slice(0, 4).map((element) => ({ label: elementLabel(element.kind), hint: 'UI elements', href: `${INSPIRATIONS_ROUTES.uiElements}?element=${encodeURIComponent(element.kind)}` })), go: target };
+  }
+
+  // Screens by state or style across the library — "empty states", "dark mode screens", "loading login screens".
+  if (states.length || styles.length) {
+    const what = [...styles.map((style) => styleLabel(style).toLowerCase()), ...states.map((state) => screenStateLabel(state).toLowerCase()), screenType ? screenType.label.toLowerCase() : ''].filter(Boolean).join(' ');
+    const params = screenQuery();
+    const go: NavTarget = { label: `${what.charAt(0).toUpperCase()}${what.slice(1)} screens`, hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}?${params}` };
+    if (WHICH_APPS.test(lower) || asksCount) {
+      const found = await appsWithScreens({ type: screenType?.key, states, styles }, index, scope);
+      if (found) return found.total > 0 ? { text: `The library has ${plural(found.total, `${what} screen`)}${found.apps.length ? `, in ${listNames(found.apps.map((app) => app.name), 4)}` : ''}.`, targets: [go, ...appResults(found.apps.slice(0, 3))], results: appResults(found.apps) } : { text: `No ${what} screens yet.`, targets: [QUICK_PAGES[1]] };
+    }
+    return { text: `Showing ${what} screens${screenScope}.`, targets: [], go };
+  }
+
+  if (askedFlowCategory && !flowCategory) return { text: `No ${flowCategoryLabel(askedFlowCategory).toLowerCase()} flows yet.`, targets: [QUICK_PAGES[2]] };
+
+  // A kind of flow across the library — "onboarding flows", "which apps have a checkout flow".
+  if (flowCategory) {
+    const inCategory = index.flows.filter((flow) => flow.category === flowCategory);
+    const label = flowCategoryLabel(flowCategory);
+    const go: NavTarget = { label: `${label} flows`, hint: 'Flows', href: `${INSPIRATIONS_ROUTES.flows}?category=${encodeURIComponent(flowCategory)}` };
+    const owners = [...new Map(inCategory.map((flow) => [flow.appId, index.appById.get(flow.appId)])).values()].filter((app): app is App => Boolean(app));
+    if (WHICH_APPS.test(lower) || asksCount) {
+      return inCategory.length
+        ? { text: `There ${inCategory.length === 1 ? 'is' : 'are'} ${plural(inCategory.length, `${label.toLowerCase()} flow`)}, in ${listNames(owners.map((app) => app.name), 4)}.`, targets: [go, ...appResults(owners.slice(0, 3))], results: appResults(owners) }
+        : { text: `No ${label.toLowerCase()} flows yet.`, targets: [QUICK_PAGES[2]] };
+    }
+    if (inCategory.length === 1) return { text: `Opening the one ${label.toLowerCase()} flow, “${inCategory[0].name}” from ${index.appById.get(inCategory[0].appId)?.name ?? 'the library'}.`, targets: [], go: flowTarget(inCategory[0], index, false), card: flowCard(inCategory[0], index) };
+    const singular = /\bflow\b/.test(lower) && !/\bflows\b/.test(lower);
+    if (singular && inCategory.length > 1 && inCategory.length <= 6) return { text: `A few ${label.toLowerCase()} flows — which one?`, targets: [...inCategory.map((flow) => flowTarget(flow, index, true)), go], kind: 'clarify' };
+    return { text: inCategory.length ? `Showing ${plural(inCategory.length, `${label.toLowerCase()} flow`)}.` : `Showing ${label.toLowerCase()} flows.`, targets: appResults(owners.slice(0, 3)), go, results: appResults(owners) };
+  }
+
+  // "login screens from food apps", "ios checkout screens": screens, narrowed to a kind of app.
+  if ((industryHit || platformHit) && screenType && !states.length && !styles.length && !asksCount && !WHICH_APPS.test(lower) && !numberFilter && findRanking(lower) === null) {
+    const go: NavTarget = { label: `${screenType.label} screens`, hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}?${screenQuery()}` };
+    return { text: `Showing ${screenType.label.toLowerCase()} screens${screenScope}.`, targets: [], go };
+  }
+
+  // Questions about the apps themselves, from the library's own numbers: what kind
+  // they are (food, fintech), where they run (iOS, Web Apps, Webs), how big they are.
+  const industry = findIndustry(lower);
+  const platform = findPlatform(lower);
+  const kind = [industry ? INDUSTRY_LABEL[industry] : '', platform ? PLATFORM_ADJECTIVE[platform] : ''].filter(Boolean).join(' ');
+  let pool = apps.filter((app) => (!industry || app.industry === industry) && (!platform || app.platforms?.includes(platform)) && !negatedIds.has(app.id) && !negatedPlatforms.some((excluded) => app.platforms?.includes(excluded)));
+  const ranking = findRanking(lower);
+  if (numberFilter) {
+    const value = (app: App) => (numberFilter.field === 'screens' ? app.screenCount : numberFilter.field === 'flows' ? app.flowCount : (app.rating ?? null));
+    pool = pool.filter((app) => matchesNumber(value(app), numberFilter));
+    const describe = (filter: NumberFilter) => `${{ gt: 'more than', gte: 'at least', lt: 'fewer than', lte: 'at most', eq: 'exactly' }[filter.op]} ${filter.value}${filter.field === 'rating' ? ' stars' : ` ${filter.field}`}`;
+    const ordered = [...pool].sort((a, b) => (value(b) ?? 0) - (value(a) ?? 0));
+    if (ranking && ordered.length) return answerRanking(ordered, ranking, `${kind ? `${kind} ` : ''}apps with ${describe(numberFilter)}`, topN);
+    if (ordered.length === 0) return { text: `No ${kind ? `${kind} ` : ''}apps have ${describe(numberFilter)}.`, targets: [QUICK_PAGES[0]] };
+    const shown = ordered.map((app) => `${app.name} (${numberFilter.field === 'rating' ? (app.rating ?? 0).toFixed(1) : (value(app) ?? 0).toLocaleString()})`);
+    return { text: `${plural(ordered.length, `${kind ? `${kind} ` : ''}app`)} ${ordered.length === 1 ? 'has' : 'have'} ${describe(numberFilter)}: ${listNames(shown, 4)}.`, targets: appResults(ordered.slice(0, 4)), app: ordered[0], results: appResults(ordered) };
+  }
+  if (ranking && pool.length > 0) return answerRanking(pool, ranking, kind ? `${kind} apps` : null, topN);
+  if (industry || platform || negatedPlatforms.length) {
+    const byScreens = [...pool].sort((a, b) => b.screenCount - a.screenCount);
+    const params = new URLSearchParams();
+    if (platform) params.set('platform', platform);
+    if (industry) params.set('industry', industry);
+    const scopeLabel = kind || (negatedPlatforms.length ? `non-${negatedPlatforms.map((excluded) => PLATFORM_ADJECTIVE[excluded]).join('/')}` : '');
+    const kindPage: NavTarget = { label: `All ${scopeLabel} apps`, hint: 'Apps', href: params.toString() ? `${INSPIRATIONS_ROUTES.apps}?${params}` : INSPIRATIONS_ROUTES.apps };
+    if (byScreens.length === 0) {
+      // None here, but some in the other section: say where they are rather than a dead end.
+      const elsewhere = scope ? everyApp.filter((app) => (!industry || app.industry === industry) && (!platform || app.platforms?.includes(platform)) && !scopedById.has(app.id)) : [];
+      // Never naming the other section's apps here — only where to look.
+      if (elsewhere.length) {
+        const toWebs = Boolean(scope?.includes('ios'));
+        const there = toWebs ? 'Webs' : 'Apps';
+        const sp = new URLSearchParams(industry ? { industry } : {});
+        if (toWebs) sp.set('platform', 'web');
+        const href = sp.toString() ? `${INSPIRATIONS_ROUTES.apps}?${sp}` : INSPIRATIONS_ROUTES.apps;
+        return { text: `There are no ${scopeLabel} apps in ${toWebs ? 'iOS' : 'Webs'} yet. ${there} has some.`, targets: [{ label: `${scopeLabel ? `${scopeLabel[0].toUpperCase()}${scopeLabel.slice(1)} apps` : 'Apps'} in ${there}`, hint: 'Section', href }] };
+      }
+      return { text: `There are no ${scopeLabel} apps in the library yet. If you’d like one added, choose Request apps in the profile menu.`, targets: [QUICK_PAGES[0]] };
+    }
+    const exceptNote = negatedApps.length ? ` (leaving out ${listNames(negatedApps.map((app) => app.name), 3)})` : '';
+    if (asksCount) {
+      return {
+        text: `There ${byScreens.length === 1 ? 'is' : 'are'} ${plural(byScreens.length, `${scopeLabel} app`)}${exceptNote} — ${listNames(byScreens.map((app) => app.name), 4)}.`,
+        targets: [kindPage, ...appResults(byScreens.slice(0, 3))],
+        app: byScreens[0],
+        results: appResults(byScreens),
+      };
+    }
+    return { text: `Showing ${scopeLabel} apps${exceptNote}.`, targets: appResults(byScreens.slice(0, 3)), go: kindPage, results: appResults(byScreens) };
+  }
+
+  // "which apps do you have", "list all apps": the whole library.
+  if (/^(?:(?:what|which|list|show|all|browse)\s+)*(?:all\s+)?apps?(?:\s+(?:do you have|are there|do you know|you have|available|list))?\s*\??$/i.test(original)) return allApps(apps);
+
+  // "i am lost", "recommend something": a gentle way in.
+  if (RECOMMEND.test(lower) && !mentioned.length) {
+    return {
+      text: `Not sure where to start? ${listNames(biggestApps.slice(0, 3).map((app) => app.name), 3)} have the most to explore, or I can pick one for you.`,
+      targets: [...appResults(biggestApps.slice(0, 3)), { label: 'Surprise me', hint: 'Ask', href: '', ask: 'surprise me an app' }],
+      results: appResults(biggestApps),
+    };
+  }
+
+  // "surprise me", "a random app".
+  if (RANDOM.test(lower) && /\bapps?\b|\bsurprise me\b|\bpick one for me\b/i.test(lower) && apps.length > 0) {
+    const chosen = apps[Math.floor(Math.random() * apps.length)];
+    return { text: `How about ${chosen.name}? ${describeApp(chosen).text}`, targets: followUps(chosen, null), go: appTarget(chosen), app: chosen };
+  }
+
+  if (asksCount && screenType) {
+    const total = await countScreens({ type: screenType.key }, null, scopeOf(null));
+    if (total !== null) {
+      if (WHICH_APPS.test(lower)) {
+        const found = await appsWithScreens({ type: screenType.key }, index, scope);
+        if (found?.apps.length) return { text: `${plural(total, `${screenType.label.toLowerCase()} screen`)} across ${listNames(found.apps.map((app) => app.name), 4)}.`, targets: appResults(found.apps.slice(0, 3)), results: appResults(found.apps) };
+      }
+      return { text: `The library has ${plural(total, `${screenType.label.toLowerCase()} screen`)}.`, targets: [{ label: `See ${screenType.label.toLowerCase()} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` }] };
+    }
+  }
+  if (screenType && WHICH_APPS.test(lower)) {
+    const found = await appsWithScreens({ type: screenType.key }, index, scope);
+    if (found) return found.apps.length ? { text: `${screenType.label} screens appear in ${listNames(found.apps.map((app) => app.name), 4)} (${plural(found.total, 'screen')}).`, targets: [{ label: `All ${screenType.label.toLowerCase()} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` }, ...appResults(found.apps.slice(0, 3))], results: appResults(found.apps) } : found.total > 0 ? { text: `${plural(found.total, `${screenType.label.toLowerCase()} screen`)} in the library.`, targets: [{ label: `All ${screenType.label.toLowerCase()} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` }] } : { text: `No ${screenType.label.toLowerCase()} screens yet.`, targets: [QUICK_PAGES[1]] };
+  }
+
+  if (section?.tab === 'flows' && !asksCount) {
+    const flowMatches = matchFlows(leftoverWords(working, everyApp), null, index);
+    if (flowMatches.length === 1) return { text: `Opening the “${flowMatches[0].name}” flow.`, targets: [], go: flowTarget(flowMatches[0], index, false), card: flowCard(flowMatches[0], index) };
+    if (flowMatches.length > 1) return { text: 'A few flows match — which one?', targets: flowMatches.map((flow) => flowTarget(flow, index, true)), kind: 'clarify' };
+  }
+
+  // "how many patterns": those with a screen on the section.
+  if (asksCount && /\bpatterns?\b/.test(lower) && !mentioned.length) {
+    const here = scope ? patterns.filter((pattern) => pattern.screenIds.length > 0) : patterns;
+    return { text: `The library has ${plural(here.length, 'pattern')}.`, targets: [PAGES.find((entry) => entry.target.label === 'Patterns')!.target] };
+  }
+  if (asksCount && !screenType) {
+    const screens = apps.reduce((sum, app) => sum + app.screenCount, 0);
+    const flows = apps.reduce((sum, app) => sum + app.flowCount, 0);
+    if (apps.length) return { text: `The library has ${plural(apps.length, 'app')}, ${plural(screens, 'screen')} and ${plural(flows, 'flow')}.`, targets: QUICK_PAGES.slice(0, 4) };
+  }
+
+  if (screenType) {
+    const go: NavTarget = { label: `${screenType.label} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` };
+    return { text: `Showing ${screenType.label.toLowerCase()} screens.`, targets: [], go };
+  }
+
+  // The suggestions match anywhere inside a name ("hi" is inside "Filter chips"),
+  // so only a match that starts a word counts, and only a long-enough query may
+  // open one without asking.
+  const searchQuery = clean(working) || query;
+  const startsAWord = new RegExp(`(^|[^\\p{L}\\p{N}])${escape(searchQuery)}`, 'iu');
+  let matches: NavTarget[] = [];
+  try {
+    matches = searchQuery.length >= 3 ? (await suggestQueries(searchQuery, 8, sectionPlatforms && !namesPlatform ? sectionPlatforms : undefined)).map(toTarget).filter((target) => startsAWord.test(target.label)).slice(0, 6) : [];
+  } catch {
+    // Fall through to a plain search link.
+  }
+
+  const exact = matches.find((target) => target.label.toLowerCase() === searchQuery);
+  if (exact) return { text: `Opening ${exact.label}.`, targets: [], go: exact };
+  if (matches.length === 1 && searchQuery.length >= 4) return { text: `Opening ${matches[0].label}.`, targets: [], go: matches[0] };
+  if (matches.length >= 1) return { text: matches.length === 1 ? 'Did you mean this?' : 'A few matches — which one?', targets: matches, kind: 'clarify' };
+
+  if (section?.tab === 'screens' && !question) {
+    const topic = searchQuery.replace(/\b(?:screens?|pages?|ui|designs?|examples?|ideas?|screenshots?)\b/g, ' ').replace(/\s+/g, ' ').trim();
+    if (topic.length >= 3) return { text: `Searching screens for “${topic}”.`, targets: [QUICK_PAGES[1]], go: { label: `Search for “${topic}”`, hint: 'Search', href: INSPIRATIONS_ROUTES.searchFor(topic) } };
+  }
+  if (section) {
+    const sectionPage = PAGES.find((entry) => entry.target.label.toLowerCase() === section.label.toLowerCase())?.target;
+    if (sectionPage) return { text: `Opening ${sectionPage.label}.`, targets: [], go: sectionPage };
+  }
+
+  // "give me inspiration", "show something cool", "surprise me": nothing specific to find, so a few good places to
+  // start instead of "couldn't find it".
+  if (INSPIRE.test(original)) {
+    return {
+      text: pick(['Here are a few good places to start. Pick one and I’ll take you there.', 'Happy to inspire! Start with one of these.']),
+      targets: [
+        { label: 'Newest screens', hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}?sort=newest` },
+        { label: 'Onboarding flows', hint: 'Flows', href: `${INSPIRATIONS_ROUTES.flows}?category=onboarding` },
+        { label: 'Login screens', hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=login` },
+        PAGES.find((entry) => entry.target.label === 'Patterns')!.target,
+      ],
+      kind: 'answer',
+    };
+  }
+
+  // Quoted back short (a question has no length limit); the search itself uses all of it.
+  const quoted = searchQuery.length > 40 ? `${searchQuery.slice(0, 39).trimEnd()}…` : searchQuery;
+  const search: NavTarget = { label: `Search for “${quoted}”`, hint: 'Search', href: INSPIRATIONS_ROUTES.searchFor(searchQuery) };
+  // A question (a "?", four words or more, or a question word first: "whats the weather today") gets the
+  // polite "not something I know" answer, not "couldn't find it" as if it were a page name.
+  const sounded = /\?\s*$/.test(original) || searchQuery.split(' ').length >= 4 || /^(?:what|what'?s|whats|how|why|who|when|where|which|is|are|can|could|do|does|will|should|tell me)\b/i.test(original.trim());
+  return {
+    text: sounded
+      ? 'I’m Motvin Buddy, here to help you get around Motvin, so I can’t answer that one. I can open an app or page, tell you how many screens an app has, or search the library.'
+      : `I couldn’t find “${quoted}” in Motvin. I can search the library for it. If it’s an app you’d like added, choose Request apps in the profile menu.`,
+    targets: [search, ...QUICK_PAGES.slice(0, 3)],
+    kind: 'fallback',
+  };
+}

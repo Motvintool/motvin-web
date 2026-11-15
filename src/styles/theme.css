@@ -273,9 +273,13 @@
 }
 
 /* ─── Smooth theme transition ─────────────────────────── */
-*,
-*::before,
-*::after {
+/* Only on the pages that load this file (Inspirations, the library, legal),
+   so it doesn't stay on after a client-side move to another page and add
+   transitions to — or strip them from — everything there. :where() keeps the
+   bare selectors' specificity. */
+:where(html:has(.ins-root, .mi-app-shell, .legal)) *,
+:where(html:has(.ins-root, .mi-app-shell, .legal)) *::before,
+:where(html:has(.ins-root, .mi-app-shell, .legal)) *::after {
   transition:
     background-color 0.2s ease,
     border-color 0.2s ease,
@@ -284,10 +288,7 @@
 }
 
 /* Disable transitions on elements that should never animate (images, icons) */
-img,
-svg,
-canvas,
-video,
+:where(html:has(.ins-root, .mi-app-shell, .legal)) :is(img, svg, canvas, video),
 .no-theme-transition {
   transition: none !important;
 }

@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="xMidYMid meet" style="display: block;" width="20" height="20" viewBox="2.75 3.5 19.5 19.5" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="linkedin">
+<circle id="Dot" cx="5" cy="5" r="1.35" fill="black"/>
+<!-- A 1.6px line where the navbar shows the icon at 18px (Instagram's is 1.5px): the open "in"
+     reads lighter than Instagram's closed square, so the extra weight makes the two look the same.
+     The box sits a little low (viewBox y 3.5) so the "in", heavy at the bottom, looks centred. -->
+<path id="Letters" d="M5 21V8.5M11 21V8.5M11 13.5a4.5 4.5 0 0 1 9 0V21" stroke="black" stroke-width="1.733"/>
+</g>
+</svg>

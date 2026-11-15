@@ -10,7 +10,13 @@ import {
   type BulkCopyFormat,
 } from '@/lib/export/formats';
 import { downloadFiles, dataUrlToBytes, type ZipFile } from '@/lib/export/zip';
-import { currentSvgString, editorFromGlobals, toPngDataUrl } from '@/lib/render/editor';
+import {
+  editorFromGlobals,
+  exportSvgFor,
+  toPngDataUrl,
+} from '@/lib/render/editor';
+import { combineSvgs } from '@/lib/render/flatten';
+import { useRequireLogin } from './useRequireLogin';
 
 /**
  * Bulk-selection strip — port of motvin-ui/COMPONENT/Multi Actions Strip.js.
@@ -52,6 +58,7 @@ export function MultiActionsStrip({
   const [openMenu, setOpenMenu] = useState<'copy' | 'download' | 'more' | null>(null);
   const [busy, setBusy] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const requireLogin = useRequireLogin();
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -67,13 +74,27 @@ export function MultiActionsStrip({
   const allOnPageSelected = items.length > 0 && items.every((i) => selectedIds.has(i.id));
   const toggleLabel = allOnPageSelected ? 'Clear selection' : 'Select all visible icons';
 
-  const svgFor = (item: LibraryItem) =>
-    currentSvgString(item, editorFromGlobals(item, globals), config.slug);
+  const svgFor = (item: LibraryItem): Promise<string> =>
+    exportSvgFor(item, editorFromGlobals(item, globals), config.slug);
 
   const handleCopy = async () => {
-    const parts = selected.map((item) => formatSvg(svgFor(item), copyFormat, item));
+    // Mirrors motvin-icons.js:1677 — bulk copy requires sign-in.
+    if (!requireLogin()) return;
+    // Reference note (bulk-export.js:12): concatenated <svg> roots are not a
+    // valid SVG document, so Figma / Illustrator / a saved .svg keep the first
+    // root and drop the rest. Merge them into one document instead.
+    const rendered = await Promise.all(
+      selected.map(async (item) => ({ name: item.name, svg: await svgFor(item) })),
+    );
+    const payload =
+      copyFormat === 'svg'
+        ? combineSvgs(rendered)
+        : joinFormatted(
+            rendered.map(({ svg }, i) => formatSvg(svg, copyFormat, selected[i])),
+            copyFormat,
+          );
     try {
-      await navigator.clipboard.writeText(joinFormatted(parts, copyFormat));
+      await navigator.clipboard.writeText(payload);
       onToast(`${selected.length} copied`);
     } catch {
       onToast('Copy failed — clipboard unavailable');
@@ -82,6 +103,8 @@ export function MultiActionsStrip({
   };
 
   const handleDownload = async () => {
+    // Mirrors motvin-icons.js:1720 — bulk download requires sign-in.
+    if (!requireLogin()) return;
     setBusy(true);
     setOpenMenu(null);
     try {
@@ -90,20 +113,31 @@ export function MultiActionsStrip({
         files = await Promise.all(
           selected.map(async (item) => ({
             name: `${item.name}.png`,
-            data: dataUrlToBytes(await toPngDataUrl(svgFor(item), 512)),
+            data: dataUrlToBytes(await toPngDataUrl(await svgFor(item), 512)),
             type: 'image/png',
           })),
         );
       } else {
-        files = selected.map((item) => ({
-          name: `${item.name}.svg`,
-          data: svgFor(item),
-          type: 'image/svg+xml',
-        }));
+        files = await Promise.all(
+          selected.map(async (item) => ({
+            name: `${item.name}.svg`,
+            data: await svgFor(item),
+            type: 'image/svg+xml' as const,
+          })),
+        );
       }
 
       const written = downloadFiles(files, `motvin-${config.nounPlural}.zip`);
-      onToast(written === 1 ? 'Downloaded' : `${written} files downloaded`);
+      // Match reference message shape (motvin-icons.js:1766-1770 / 1788-1790)
+      // so `/downloaded/i` in Toast routes this through the stack toast.
+      // Defer the toast a beat so the browser can paint the download UI
+      // first — otherwise React re-renders and the toast animates in
+      // before the download indicator, making it look like the toast
+      // fires before the download starts.
+      const kind = downloadFormat.toUpperCase();
+      const message =
+        written === 1 ? `${kind} downloaded` : `Downloaded ${written} ${kind}s as a ZIP`;
+      window.setTimeout(() => onToast(message), 150);
     } catch {
       onToast('Download failed');
     } finally {

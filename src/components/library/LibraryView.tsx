@@ -8,6 +8,7 @@ import { ProductBanner } from './ProductBanner';
 import { AllModalShells } from './ModalShells';
 import { LegacyStubs } from './LegacyStubs';
 import { SidebarCollapseToggle } from './SidebarCollapseToggle';
+import { StackToastRuntime } from './StackToastRuntime';
 import { Toast, ToastProvider } from './Toast';
 import { TooltipRuntime } from './TooltipRuntime';
 
@@ -137,6 +138,7 @@ export function LibraryView({ config }: Props) {
       <LegacyStubs />
       <SidebarCollapseToggle />
       <TooltipRuntime />
+      <StackToastRuntime />
     </>
     </ToastProvider>
   );

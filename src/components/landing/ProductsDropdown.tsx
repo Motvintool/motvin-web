@@ -1,3 +1,10 @@
+import { optimizedImage } from '@/lib/inspirations/optimizedImage';
+
+// The feature cards show their pictures about 235px wide; the originals are
+// 1296px, so they are resized on the way.
+const CONVERT_IMAGE = optimizedImage('/ASSET/Images/convert-websites.webp', 240);
+const TOOLS_IMAGE = optimizedImage('/ASSET/Images/explore-creative-tools.webp', 240);
+
 /**
  * Products mega-menu. Markup ported verbatim from motvin-ui/index.html
  * (#products-dropdown); open/close state is owned by Navbar.
@@ -22,12 +29,9 @@ export function ProductsDropdown({ open }: { open: boolean }) {
               </div>
               <div className="feature-card-body">
                 <div className="feature-card-img-wrapper">
-                  <img
-                    src="/ASSET/Images/convert-websites.webp"
-                    alt="Convert websites graphic"
-                  />
+                  <img {...CONVERT_IMAGE} alt="Convert websites graphic" decoding="async" />
                 </div>
-                <p>Capture any website and turn it into ediable design layers.</p>
+                <p>Capture any website and turn it into editable design layers.</p>
               </div>
             </a>
             {/* Feature 2 */}
@@ -42,10 +46,7 @@ export function ProductsDropdown({ open }: { open: boolean }) {
               </div>
               <div className="feature-card-body">
                 <div className="feature-card-img-wrapper">
-                  <img
-                    src="/ASSET/Images/explore-creative-tools.webp"
-                    alt="Explore creative tools graphic"
-                  />
+                  <img {...TOOLS_IMAGE} alt="Explore creative tools graphic" decoding="async" />
                 </div>
                 <p>Colors, icons, templates, and resources all in one place.</p>
               </div>
@@ -54,10 +55,24 @@ export function ProductsDropdown({ open }: { open: boolean }) {
         </div>
         {/* Right Column: Product Links */}
         <div className="products-dropdown-right">
-          <p className="dropdown-heading">Explore all products</p>
+          <p className="dropdown-heading">More tools</p>
+          {/* Tools that aren't live yet are plain rows with a "Soon" tag, not links. */}
           <div className="dropdown-products-grid">
+            {/* Motvin Inspirations */}
+            <a href="/inspirations" className="product-link">
+              <div
+                className="product-link-icon"
+                style={{ backgroundColor: "rgba(92,74,225,0.08)" }}
+              >
+                <img src="/ASSET/Icons/motvin-logo.svg" alt="" />
+              </div>
+              <div className="product-link-text">
+                <h4>Motvin Inspirations</h4>
+                <p>Browse screens, flows and patterns from real apps</p>
+              </div>
+            </a>
             {/* Motvin Convert */}
-            <a href="/MOTVIN" target="_blank" className="product-link">
+            <div className="product-link is-soon" aria-disabled="true">
               <div
                 className="product-link-icon"
                 style={{ backgroundColor: "rgba(135,79,255,0.08)" }}
@@ -65,12 +80,15 @@ export function ProductsDropdown({ open }: { open: boolean }) {
                 <img src="/ASSET/svg/motvin-convert.svg" alt="" />
               </div>
               <div className="product-link-text">
-                <h4>Motvin Convert</h4>
-                <p>Turn any webite into an editable design</p>
+                <h4>
+                  Motvin Convert
+                  <span className="product-soon">Soon</span>
+                </h4>
+                <p>Turn any website into an editable design</p>
               </div>
-            </a>
+            </div>
             {/* Motvin Extension */}
-            <a href="#" className="product-link">
+            <div className="product-link is-soon" aria-disabled="true">
               <div
                 className="product-link-icon"
                 style={{ backgroundColor: "rgba(0,182,255,0.08)" }}
@@ -78,10 +96,13 @@ export function ProductsDropdown({ open }: { open: boolean }) {
                 <img src="/ASSET/svg/motvin-extension.svg" alt="" />
               </div>
               <div className="product-link-text">
-                <h4>Motvin Extension</h4>
+                <h4>
+                  Motvin Extension
+                  <span className="product-soon">Soon</span>
+                </h4>
                 <p>Convert websites directly from your browser</p>
               </div>
-            </a>
+            </div>
             {/* Motvin Icons */}
             <a href="/icons" target="_blank" className="product-link">
               <div
@@ -122,7 +143,7 @@ export function ProductsDropdown({ open }: { open: boolean }) {
               </div>
             </a>
             {/* Motvin Typescales */}
-            <a href="/MOTVIN/typeface" target="_blank" className="product-link">
+            <div className="product-link is-soon" aria-disabled="true">
               <div
                 className="product-link-icon"
                 style={{ backgroundColor: "rgba(255,55,55,0.08)" }}
@@ -130,10 +151,13 @@ export function ProductsDropdown({ open }: { open: boolean }) {
                 <img src="/ASSET/svg/motvin-typescales.svg" alt="" />
               </div>
               <div className="product-link-text">
-                <h4>Motvin Typescales</h4>
-                <p>Generate and customize typeface varients</p>
+                <h4>
+                  Motvin Typescales
+                  <span className="product-soon">Soon</span>
+                </h4>
+                <p>Generate and customize typeface variants</p>
               </div>
-            </a>
+            </div>
           </div>
         </div>
       </div>

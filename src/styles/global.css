@@ -3,6 +3,16 @@
    Tokens defined here are non-theme-specific (layout, animation, utilities).
 */
 
+html,
+body,
+button,
+input,
+select,
+textarea,
+body * {
+  font-family: var(--font-manrope), sans-serif !important;
+}
+
 .main-shell-loading {
   position: relative;
 }
