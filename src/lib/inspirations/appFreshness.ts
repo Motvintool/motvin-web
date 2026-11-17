@@ -80,3 +80,23 @@ export function freshFirst<T extends Pick<App, 'versions'>>(
     .sort((a, b) => a.r - b.r || b.since.localeCompare(a.since) || a.i - b.i)
     .map((x) => x.app);
 }
+
+/** The date (`YYYY-MM-DD`) of an app's first version on the given platforms, or undefined when it has none. */
+export function firstVersionDate(app: Pick<App, 'versions'>, platforms?: readonly Platform[]): string | undefined {
+  return versionDates(app, platforms)[0];
+}
+
+/**
+ * The "New this week" page's apps: the ones the admin picked for it in this section (Apps (iOS) or Webs, never
+ * mixed), in the order they set — picks not placed yet follow in the order they were picked.
+ */
+export function newThisWeek<T extends Pick<App, 'id'>>(apps: T[], settings?: LibrarySettings['newThisWeek'], platforms?: readonly Platform[]): T[] {
+  const section = platforms?.length && platforms.every((p) => p === 'web' || p === 'webapp') ? 'webs' : 'ios';
+  const picks = settings?.added[section] ?? [];
+  const order = settings?.order[section] ?? [];
+  const placed = (id: string) => {
+    const at = order.indexOf(id);
+    return at === -1 ? order.length + picks.indexOf(id) : at;
+  };
+  return apps.filter((app) => picks.includes(app.id)).sort((a, b) => placed(a.id) - placed(b.id));
+}

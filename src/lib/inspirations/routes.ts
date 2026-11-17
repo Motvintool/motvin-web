@@ -4,6 +4,8 @@ import type { App, Pattern, Platform } from './types';
 export const INSPIRATIONS_ROUTES = {
   explore: '/inspirations',
   apps: '/inspirations/apps',
+  /** The apps the admin picks each week (Library admin → Week’s new apps). */
+  newThisWeek: '/inspirations/new',
   screens: '/inspirations/screens',
   uiElements: '/inspirations/ui-elements',
   flows: '/inspirations/flows',

@@ -367,10 +367,18 @@ export type LibraryMeta = {
   generatedAt: string;
 };
 
+/** App ids for each section of the library: Apps (iOS) and Webs. */
+export type SectionIds = { ios: string[]; webs: string[] };
+
 /** General settings for the whole library. */
 export type LibrarySettings = {
   /** How many days an app card shows "Latest" after its first version, and "Updated" after a newer one. */
   freshness: { newDays: number; updatedDays: number };
+  /**
+   * The "New this week" page: the apps the admin picked for it, for each section apart — Apps (iOS) and Webs
+   * never mix — and the order they put them in. Missing from a library built before it existed.
+   */
+  newThisWeek?: Record<'added' | 'order', SectionIds>;
 };
 
 /** Real analysis output, when an analyzer has stored some for a screen. */

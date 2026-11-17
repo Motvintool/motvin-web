@@ -18,7 +18,7 @@ import { useGoToLogin } from './useGoToLogin';
 /**
  * Avatar chip + profile menu for the Inspirations header. The chip is the library's own badge; the menu is
  * the Figma "profile-menu" (node 1329-2714): who you are and a Manage profile button, then Collections,
- * Settings (signed in), Admin Settings (admin only) and Request apps, then Icon library and Release notes, Log out, and a
+ * New this week, Settings (signed in), Admin Settings (admin only) and Request apps, then Icon library and Release notes, Log out, and a
  * footer with the legal links and Instagram.
  */
 const ICON = '/ASSET/Icons/Motvin';
@@ -161,6 +161,16 @@ export function ProfileMenu() {
                   <span className="ins-pmenu-lead">
                     <img src={`${ICON}/profile-collections.svg`} alt="" width={18} height={18} />
                     Collections
+                  </span>
+                  <img src={`${ICON}/profile-arrow.svg`} alt="" width={12} height={12} />
+                </Link>
+                {/* Opens on the section being browsed (Apps or Webs), as the page menu does. */}
+                <Link
+                  href={`${INSPIRATIONS_ROUTES.newThisWeek}${searchParams.get('platform') ? `?platform=${searchParams.get('platform')}` : ''}`}
+                  className="ins-pmenu-item" role="menuitem" onClick={() => setOpen(false)}>
+                  <span className="ins-pmenu-lead">
+                    <img src={`${ICON}/week-app-release.svg`} alt="" width={18} height={18} />
+                    Week’s new apps
                   </span>
                   <img src={`${ICON}/profile-arrow.svg`} alt="" width={12} height={12} />
                 </Link>

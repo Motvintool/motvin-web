@@ -16,6 +16,7 @@ const PAGES: { path: string; priority: number; changeFrequency: 'daily' | 'weekl
   { path: '/', priority: 1, changeFrequency: 'weekly' },
   { path: INSPIRATIONS_ROUTES.explore, priority: 0.9, changeFrequency: 'daily' },
   { path: '/inspirations/apps', priority: 0.9, changeFrequency: 'daily' },
+  { path: INSPIRATIONS_ROUTES.newThisWeek, priority: 0.8, changeFrequency: 'daily' },
   { path: '/inspirations/screens', priority: 0.9, changeFrequency: 'daily' },
   { path: '/inspirations/ui-elements', priority: 0.8, changeFrequency: 'daily' },
   { path: '/inspirations/flows', priority: 0.8, changeFrequency: 'daily' },
