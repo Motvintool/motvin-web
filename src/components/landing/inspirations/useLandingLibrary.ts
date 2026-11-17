@@ -3,7 +3,6 @@
 import { countsOn } from '@/lib/inspirations/appCounts';
 import { useEffect, useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
-import { appCardScreens } from '@/lib/inspirations/cover';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { INDUSTRY_LABEL } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type LibraryCounts } from '@/lib/inspirations/types';
@@ -36,15 +35,20 @@ export function useLandingLibrary(): { apps: LandingApp[]; counts: LibraryCounts
 
     void (async () => {
       const [list, meta] = await Promise.all([inspirationsApi.listApps(), inspirationsApi.getMeta()]);
-      const details = await Promise.all(list.map((app) => inspirationsApi.getApp(app.id)));
+      // Each app's card screens only (not its full record): an app on several platforms, its first platform's.
+      const firstOf = (app: (typeof list)[number]) => (app.platforms.length > 1 ? app.platforms[0] : '');
+      const groups = [...new Set(list.map(firstOf))];
+      const answers = await Promise.all(
+        groups.map((p) => inspirationsApi.appCards(list.filter((app) => firstOf(app) === p).map((app) => app.id), p ? [p] : undefined)),
+      );
+      const cards = new Map(answers.flatMap((m) => [...m]));
       if (cancelled) return;
       setCounts(meta.counts);
       setApps(
-        list.map((app, i) => {
+        list.map((app) => {
           const wide = app.platforms.length > 0 && app.platforms.every((p) => isDesktopPlatform(p));
           // An app on several platforms: its first platform's cover (iOS before the web), linked to that page.
-          const screens = details[i]?.screens ?? [];
-          const cover = appCardScreens(app, app.platforms.length > 1 ? screens.filter((s) => s.platform === app.platforms[0]) : screens)[0];
+          const cover = cards.get(app.id)?.[0];
           return {
             id: app.id,
             name: app.name,

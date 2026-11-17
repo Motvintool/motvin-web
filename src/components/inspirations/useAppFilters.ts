@@ -8,7 +8,7 @@ import { localDateString } from '@/lib/inspirations/dates';
 import { browsedPlatforms, isWebsPlatforms } from '@/lib/inspirations/filters';
 import type { StoreStats } from '@/lib/inspirations/storeStats';
 import { elementLabel, flowCategoryLabel, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
-import type { App, Platform } from '@/lib/inspirations/types';
+import type { App } from '@/lib/inspirations/types';
 import type { FilterSection } from './FiltersPanel';
 import { useAsync } from './useAsync';
 import { useLibrarySettings } from './useMeta';
@@ -109,27 +109,27 @@ export function useAppFilters(apps: App[]) {
   // "Has flows" was `flows=1` before the panel listed flow categories.
   picked.flows = picked.flows.map((v) => (v === '1' ? 'any' : v));
 
-  // What each app holds. Its record is the request AppsGrid already makes for the card, so this is cached.
-  const ids = apps.map((a) => a.id).join(',');
+  // What each app holds: once the panel is open or a content filter is set (it's one request for every app).
+  const contentKeys: Key[] = ['screens', 'ui', 'flows', 'looks'];
+  const wantFacets = panelOpen || contentKeys.some((k) => picked[k].length);
   const { data: facets } = useAsync(async () => {
-    const details = await Promise.all(apps.map((a) => inspirationsApi.getApp(a.id)));
-    const on = (p: Platform) => platforms.includes(p);
+    if (!wantFacets) return null;
+    const all = await inspirationsApi.appFacets(platforms);
     return new Map<string, Facets>(
-      apps.map((a, i) => {
-        const screens = (details[i]?.screens ?? []).filter((s) => on(s.platform));
-        const flows = (details[i]?.flows ?? []).filter((f) => on(f.platform));
+      apps.map((a) => {
+        const f = all.get(a.id);
         return [
           a.id,
           {
-            screens: new Set(screens.map((s) => s.screenType).filter((t) => t !== 'other')),
-            ui: new Set(screens.flatMap((s) => s.elements)),
-            flows: new Set(flows.map((f) => f.category).filter(Boolean)),
-            looks: new Set(screens.flatMap((s) => s.style)),
+            screens: new Set(f?.screens ?? []),
+            ui: new Set(f?.ui ?? []),
+            flows: new Set(f?.flows ?? []),
+            looks: new Set(f?.looks ?? []),
           },
         ];
       }),
     );
-  }, `app-facets:${platforms.join(',')}:${ids}`);
+  }, `app-facets:${wantFacets ? `${platforms.join(',')}:${apps.map((a) => a.id).join(',')}` : ''}`);
 
   // App Store numbers, iOS only: once the panel is open or a store filter is set.
   const storeKeys: Key[] = ['rating', 'price', 'chart', 'store'];
@@ -239,7 +239,7 @@ export function useAppFilters(apps: App[]) {
 
   // A pick only counts once the data behind it is in; until then it rules nothing out.
   const ready = (key: Key) =>
-    ['screens', 'ui', 'flows', 'looks'].includes(key) ? Boolean(facets) : storeKeys.includes(key) ? Boolean(stats) : true;
+    contentKeys.includes(key) ? Boolean(facets) : storeKeys.includes(key) ? Boolean(stats) : true;
   const sectionTest = (g: (typeof groups)[number], values: string[]): Test => {
     const tests = values.map((v) => g.options.find((o) => o.value === v)?.test).filter((t): t is Test => Boolean(t));
     if (!tests.length || !ready(g.key)) return () => true;

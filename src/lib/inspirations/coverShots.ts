@@ -1,5 +1,4 @@
 import { inspirationsApi } from './api';
-import { appCardScreens } from './cover';
 import type { Screen } from './types';
 
 export type CoverShot = { src: string; ratio: number };
@@ -20,10 +19,8 @@ export const FALLBACK_COVER_SHOTS: CoverShot[] = [
  */
 export async function loadAppCoverShots(): Promise<CoverShot[]> {
   const apps = (await inspirationsApi.listApps()).filter((app) => app.platforms.includes('ios'));
-  const details = await Promise.all(apps.map((app) => inspirationsApi.getApp(app.id)));
-  const perApp = apps.map((app, i) =>
-    appCardScreens(app, (details[i]?.screens ?? []).filter((screen) => screen.platform === 'ios')),
-  );
+  const cards = await inspirationsApi.appCards(apps.map((app) => app.id), ['ios']);
+  const perApp = apps.map((app) => cards.get(app.id) ?? []);
   const total = perApp.reduce((sum, screens) => sum + screens.length, 0);
   const dealt: Screen[] = [];
   for (let round = 0; dealt.length < total; round++) {

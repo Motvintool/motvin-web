@@ -37,15 +37,10 @@ export async function suggestQueries(raw: string, limit = 7, scope?: readonly Pl
   // The section's own address for the lists (Webs is ?platform=web; iOS is the default and needs none).
   const section = scoped && !scope!.includes('ios') ? 'platform=web' : '';
   const withSection = (href: string) => (section ? `${href}${href.includes('?') ? '&' : '?'}${section}` : href);
-  // What the section actually has: its apps' screen types (their records are cached), and the patterns
-  // with a screen on it — a screen id reads "<app>-<platform>-…".
+  // What the section actually has: its apps' screen types (one small answer for every app), and the
+  // patterns with a screen on it — a screen id reads "<app>-<platform>-…".
   const typesHere = scoped
-    ? new Set(
-        (await Promise.all(apps.map((app) => inspirationsApi.getApp(app.id))))
-          .flatMap((detail) => detail?.screens ?? [])
-          .filter((screen) => inScope(screen.platform))
-          .map((screen) => screen.screenType as string),
-      )
+    ? new Set([...(await inspirationsApi.appFacets(scope!)).values()].flatMap((facets) => facets.screens))
     : null;
   const platformOfId = (id: string): Platform | null => {
     const app = allApps.find((entry) => id.startsWith(`${entry.id}-`));
