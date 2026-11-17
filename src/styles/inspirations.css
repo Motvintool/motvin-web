@@ -2805,6 +2805,8 @@ select.ins-input {
   margin-top: 8px;
 }
 
+.ins-app-grid-more { margin-top: 20px; }
+
 .ins-spinner {
   width: 18px;
   height: 18px;

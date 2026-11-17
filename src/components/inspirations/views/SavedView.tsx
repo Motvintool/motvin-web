@@ -1,6 +1,5 @@
 'use client';
 
-import { appCardScreens } from '@/lib/inspirations/cover';
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -158,9 +157,16 @@ export function SavedView() {
     })
     .filter((entry): entry is { savedId: string; app: App; platform: Platform | null } => Boolean(entry));
   const { data: appPreviews, loading: appPreviewsLoading } = useAsync(async () => {
-    const details = await Promise.all(savedApps.map(({ app }) => inspirationsApi.getApp(app.id)));
-    const own = (platform: Platform | null, screens: Screen[]) => (platform ? screens.filter((s) => s.platform === platform) : screens);
-    return new Map(savedApps.map(({ savedId, app, platform }, index) => [savedId, appCardScreens(app, own(platform, details[index]?.screens ?? []))]));
+    // Each saved app's card screens on the platform it was saved on (all of its own when none was kept).
+    const platformsSaved = [...new Set(savedApps.map(({ platform }) => platform ?? ''))];
+    const answers = await Promise.all(
+      platformsSaved.map(async (p) => {
+        const ids = [...new Set(savedApps.filter(({ platform }) => (platform ?? '') === p).map(({ app }) => app.id))];
+        return [p, ids.length ? await inspirationsApi.appCards(ids, p ? [p] : undefined) : new Map<string, Screen[]>()] as const;
+      }),
+    );
+    const byPlatform = new Map(answers);
+    return new Map(savedApps.map(({ savedId, app, platform }) => [savedId, byPlatform.get(platform ?? '')?.get(app.id) ?? []]));
     // Keyed by the apps resolved, not the ids saved: the app list arrives after the collection, and the
     // previews must load again once it does.
   }, `saved-app-previews:${savedApps.map((entry) => entry.savedId).join(',')}`);

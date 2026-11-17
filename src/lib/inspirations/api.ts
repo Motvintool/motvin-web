@@ -1,3 +1,4 @@
+import { appCardScreens } from './cover';
 import type { ScreenFilters } from './filters';
 import type {
   App,
@@ -164,6 +165,12 @@ const EMPTY_SEARCH: SearchResults = {
 
 export const PAGE_SIZE = 30;
 
+/** How many apps one /app-cards request asks about (the backend's MAX_APP_CARDS). */
+const APP_CARDS_PER_REQUEST = 100;
+
+/** What one app holds on the platforms asked about (inspirationsApi.appFacets). */
+export type AppFacets = Record<'screens' | 'ui' | 'flows' | 'looks', string[]>;
+
 export const inspirationsApi = {
   /**
    * Counts and the taxonomy actually present in the store — for everything,
@@ -215,6 +222,65 @@ export const inspirationsApi = {
 
   getApp(slug: string): Promise<{ app: App; screens: Screen[]; flows: Flow[]; patterns: Pattern[] } | null> {
     return request(`/app/${encodeURIComponent(slug)}`, TTL.item, null);
+  },
+
+  /**
+   * The screens each of these apps' grid cards shows (see appCardScreens), on
+   * these platforms only, keyed by app id — a few screens per app instead of
+   * every app's full list. A backend without the route (404) gets each app's
+   * full record instead, picked here the same way.
+   */
+  /**
+   * What each app holds on these platforms, keyed by app id — its screen
+   * types (not "other"), UI elements, flow categories and styles — for the
+   * apps Filters panel. A backend without the route (404) gets every app's
+   * full record instead.
+   */
+  async appFacets(platforms: readonly string[]): Promise<Map<string, AppFacets>> {
+    const params = new URLSearchParams();
+    listParam('platform', platforms.slice(), params);
+    const facets = await request<Record<string, AppFacets> | null>(`/app-facets?${params}`, TTL.list, null);
+    if (facets) return new Map(Object.entries(facets));
+    const apps = await inspirationsApi.listApps();
+    const details = await Promise.all(apps.map((a) => inspirationsApi.getApp(a.id)));
+    const on = (p: string) => !platforms.length || platforms.includes(p);
+    return new Map(
+      apps.map((a, i) => {
+        const screens = (details[i]?.screens ?? []).filter((s) => on(s.platform));
+        const flows = (details[i]?.flows ?? []).filter((f) => on(f.platform));
+        return [
+          a.id,
+          {
+            screens: [...new Set(screens.map((s) => s.screenType).filter((t) => t !== 'other'))],
+            ui: [...new Set(screens.flatMap((s) => s.elements))],
+            flows: [...new Set(flows.map((f) => f.category).filter(Boolean))],
+            looks: [...new Set(screens.flatMap((s) => s.style))],
+          },
+        ];
+      }),
+    );
+  },
+
+  async appCards(ids: string[], platforms?: readonly string[]): Promise<Map<string, Screen[]>> {
+    // The backend answers for up to 100 apps at a time (MAX_APP_CARDS): a longer list goes in parts.
+    if (ids.length > APP_CARDS_PER_REQUEST) {
+      const parts = Array.from({ length: Math.ceil(ids.length / APP_CARDS_PER_REQUEST) }, (_, i) =>
+        ids.slice(i * APP_CARDS_PER_REQUEST, (i + 1) * APP_CARDS_PER_REQUEST),
+      );
+      const answers = await Promise.all(parts.map((part) => inspirationsApi.appCards(part, platforms)));
+      return new Map(answers.flatMap((m) => [...m]));
+    }
+    const params = new URLSearchParams({ ids: ids.join(',') });
+    listParam('platform', platforms?.slice(), params);
+    const cards = await request<Record<string, Screen[]> | null>(`/app-cards?${params}`, TTL.item, null);
+    if (cards) return new Map(ids.map((id) => [id, cards[id] ?? []]));
+    const details = await Promise.all(ids.map((id) => inspirationsApi.getApp(id)));
+    return new Map(
+      ids.map((id, i) => {
+        const screens = (details[i]?.screens ?? []).filter((s) => !platforms?.length || platforms.includes(s.platform));
+        return [id, details[i] ? appCardScreens(details[i].app, screens) : []];
+      }),
+    );
   },
 
   getScreen(id: string): Promise<{ screen: Screen; app: App | null; flows: Flow[]; patterns: Pattern[] } | null> {
