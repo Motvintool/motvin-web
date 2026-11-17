@@ -82,6 +82,7 @@ export function Header() {
   const BROWSE_PATHS: string[] = [
     INSPIRATIONS_ROUTES.explore,
     INSPIRATIONS_ROUTES.apps,
+    INSPIRATIONS_ROUTES.newThisWeek,
     INSPIRATIONS_ROUTES.screens,
     INSPIRATIONS_ROUTES.uiElements,
     INSPIRATIONS_ROUTES.flows,

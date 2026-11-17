@@ -12,6 +12,7 @@ import { FlowsPanel } from './FlowsPanel';
 import { RequestsPanel } from './RequestsPanel';
 import { ScreensPanel } from './ScreensPanel';
 import { SettingsPanel } from './SettingsPanel';
+import { WeeklyAppsPanel } from './WeeklyAppsPanel';
 import { useAdminState } from './useAdminState';
 
 /**
@@ -28,13 +29,14 @@ import { useAdminState } from './useAdminState';
  * recordings go through Agent Upload.
  */
 
-type Tab = 'analytics' | 'add' | 'batch' | 'protect' | 'screens' | 'apps' | 'flows' | 'requests' | 'settings';
+type Tab = 'analytics' | 'add' | 'batch' | 'protect' | 'weekly' | 'screens' | 'apps' | 'flows' | 'requests' | 'settings';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'analytics', label: 'Analytics' },
   { id: 'add', label: 'Manual Upload' },
   { id: 'batch', label: 'Agent Upload' },
   { id: 'protect', label: 'Protect screens' },
+  { id: 'weekly', label: 'Week’s new apps' },
   { id: 'screens', label: 'Screens' },
   { id: 'apps', label: 'Apps' },
   { id: 'flows', label: 'Flows' },
@@ -126,6 +128,7 @@ export function AdminView() {
           {tab === 'add' && <AddScreensPanel state={state} busy={busy} run={run} onUploaded={refresh} />}
           {tab === 'batch' && <BatchPanel state={state} onChanged={refresh} />}
           {tab === 'protect' && <ProtectPanel />}
+          {tab === 'weekly' && <WeeklyAppsPanel state={state} busy={busy} run={run} />}
           {tab === 'screens' && <ScreensPanel state={state} busy={busy} run={run} />}
           {tab === 'apps' && <AppsPanel state={state} busy={busy} run={run} />}
           {tab === 'flows' && <FlowsPanel state={state} busy={busy} run={run} />}

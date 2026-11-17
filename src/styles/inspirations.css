@@ -21319,3 +21319,31 @@ body:has(aside.ins-guide) .ins-assist-switch {
   max-height: 100%;
   overflow-y: auto;
 }
+
+/* Admin → Week’s new apps: one row per picked app — its Remove button, then arrows to move it up or down. */
+.ins-week-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ins-week-row { display: flex; align-items: center; gap: 6px; }
+.ins-week-row .ins-protect-app { flex: 1; min-width: 0; }
+.ins-week-move {
+  display: grid; flex: none; place-items: center; width: 36px; height: 36px; border: 1px solid var(--ins-border); border-radius: 12px;
+  background: var(--ins-card); color: var(--ins-text); cursor: var(--ins-cursor-hand, pointer);
+}
+.ins-week-move:hover:not(:disabled) { border-color: var(--ins-border-strong); }
+.ins-week-move:disabled { opacity: 0.35; cursor: default; }
+.ins-week-move.is-down svg { rotate: 180deg; }
+.ins-week-section { display: flex; flex-direction: column; gap: 8px; }
+.ins-week-section-title { margin: 6px 0 0; font-size: 14px; font-weight: 600; }
+.ins-week-add { align-self: flex-start; }
+.ins-week-add-menu { left: 0; width: 320px; padding: 8px; }
+.ins-week-add-menu .ins-app-search { margin-bottom: 6px; }
+.ins-week-add-list { display: flex; flex-direction: column; max-height: 360px; overflow-y: auto; scrollbar-width: thin; }
+.ins-week-add-item { display: flex; align-items: center; gap: 12px; width: 100%; justify-content: flex-start; }
+.ins-week-add-logo { flex: none; border-radius: 10px; object-fit: cover; }
+.ins-week-row .ins-protect-app .ins-btn--sm { flex: none; }
+/* The menu's search box is one rounded field: the input inside it draws no border or ring of its own. */
+.ins-week-add-menu .ins-app-search input,
+.ins-week-add-menu .ins-app-search input:focus,
+.ins-week-add-menu .ins-app-search input:focus-visible { height: auto; padding: 0; border: 0; border-radius: 0; outline: none; box-shadow: none; background: none; }
+.ins-week-add-item .ins-app-option-text .ins-muted { font-size: 12px; }
+.ins-week-add-menu .ins-flowtree-menu-footer { margin: 6px -8px -8px; }
+.ins-week-add-menu .ins-flowtree-apply:disabled { opacity: 0.4; cursor: default; }

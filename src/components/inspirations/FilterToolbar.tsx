@@ -301,6 +301,8 @@ export function NavPill({ counts, activeCount = null }: { counts: LibraryCounts 
   // every other browse page's menu, the same as the other five.
   const items: { key: string; label: string; href: string; count: number | undefined }[] = [
     { key: 'explore', label: 'Explore', href: INSPIRATIONS_ROUTES.explore, count: undefined },
+    // The apps the admin picked this week; no count (it changes through the week).
+    { key: 'new', label: 'New this week', href: INSPIRATIONS_ROUTES.newThisWeek, count: undefined },
     ...CONTENT_KINDS.map((k) => ({
       key: k.kind,
       // In Webs, "Apps" lists web apps and websites, and says so.

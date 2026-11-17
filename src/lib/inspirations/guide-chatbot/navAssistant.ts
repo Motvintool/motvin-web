@@ -356,6 +356,8 @@ const FOLLOW_PLATFORM = /^(?:and|what about|how about|only|just|but|now|then|als
 const JUDGE = /\b(?:better|worse|nicer|prettier|best looking|best designed|good design|best ui|best ux|most beautiful|ugliest)\b/i;
 const POPULAR = /\b(?:popular|trending|trends?|famous|viral|most used|most viewed|most downloaded|hottest)\b/i;
 const UNTRACKED = /\b(?:free|paid|premium|open[- ]source)\s+apps?\b|\bhow many (?:users|downloads)\b/i;
+// The apps added this week: the "New this week" page (not a sort of all apps — that's "newest apps").
+const THIS_WEEK = /\b(?:new this week|this week['’]?s apps|this week|new apps|newly added apps|recently added apps|just added apps|what['’]?s new|what is new|anything new|new arrivals?)\b/i;
 const RECENT = /\b(?:recently added|newly added|just added|latest|newest|what'?s new|whats new|what is new|anything new|new arrivals?|recent(?:ly)?)\b/i;
 /** "what is a bottom sheet", "explain filter chips". */
 const DEFINE = /^(?:what(?:'s| is| are)|whats|explain|define|meaning of)\b/i;
@@ -856,6 +858,10 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   }
   if (UNTRACKED.test(lower) && !mentioned.length) {
     return { text: 'Motvin doesn’t record whether an app is free or paid, or how many people use it. I can list every app, though.', targets: [QUICK_PAGES[0], ...appResults(biggestApps.slice(0, 2))] };
+  }
+  if (THIS_WEEK.test(lower) && !mentioned.length && !asksCount && !section && !screenType) {
+    const go: NavTarget = { label: 'New this week', hint: 'Page', href: INSPIRATIONS_ROUTES.newThisWeek };
+    return { text: 'Here are the apps added this week.', targets: [{ label: 'Newest apps', hint: 'Apps', href: `${INSPIRATIONS_ROUTES.apps}?sort=newest` }], go };
   }
   if (RECENT.test(lower) && !mentioned.length && (findRanking(lower) === null || /\bapps\b/.test(lower)) && !asksCount) {
     const forApps = /\bapps\b/.test(lower);

@@ -1068,6 +1068,15 @@ describe('taste, popularity, price: said plainly', () => {
     expect((await ask('newest apps')).go?.href).toBe('/inspirations/apps?sort=newest');
     expect((await ask('newest app')).text).toBe('No capture dates have been recorded yet.');
   });
+
+  it('opens New this week for this week’s apps', async () => {
+    for (const text of ['new this week', 'show me new apps', 'what’s new', 'whats new this week', 'recently added apps', 'any new arrivals']) {
+      expect((await ask(text)).go?.href, text).toBe('/inspirations/new');
+    }
+    // A sort of every app, or new screens of a kind, stays where it was.
+    expect((await ask('newest apps')).go?.href).toBe('/inspirations/apps?sort=newest');
+    expect((await ask('new login screens')).go?.href).not.toBe('/inspirations/new');
+  });
 });
 
 describe('definitions never navigate', () => {
