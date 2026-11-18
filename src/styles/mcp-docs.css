@@ -1,0 +1,652 @@
+/* The MCP setup guides (/mcp/clients, /mcp/clients/<id>): McpDocs.tsx.
+   Built on the landing styles (.lpi tokens, navbar, footer); prefixed mcd-. */
+
+.lpi.mcd-page {
+  background: transparent;
+  padding-bottom: 0;
+}
+
+/* Sidebar, guide, "On this page". */
+.mcd {
+  /* The gap under the navbar. The side columns stick at exactly this height,
+     so they never move: only the guide in the middle scrolls. */
+  --mcd-top: 196px;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 200px;
+  gap: 80px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: var(--mcd-top) 32px 140px;
+  font-family: var(--font-outfit), sans-serif;
+}
+
+/* ---- Sidebar ----
+   An open list on the page, no panel: grey marks, light text, no dividers.
+   Each group hangs off a thin rail; the open page gets a dark marker on the
+   rail, bold text and its brand colour, instead of a box. */
+.mcd-side {
+  position: sticky;
+  top: var(--mcd-top);
+  align-self: start;
+  max-height: calc(100vh - var(--mcd-top) - 24px);
+  overflow-y: auto;
+  padding: 0;
+  scrollbar-width: none;
+}
+
+.mcd-side::-webkit-scrollbar { display: none; }
+
+.mcd-side-label {
+  margin: 0 0 12px;
+  line-height: 18px;
+  padding: 0 12px 0 26px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a8a8ae;
+}
+
+/* "All clients": the heading doubles as the link to every client. Hover
+   darkens it and draws a dotted underline. */
+.mcd-side-label.mcd-side-all {
+  display: inline-block;
+  margin-left: 26px;
+  padding: 0 0 3px;
+  border-bottom: 1.5px dotted transparent;
+  text-decoration: none;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+/* Grouped side list: small uppercase headings, no rail, the open tool in a soft grey pill. */
+.mcd-side ul { padding-left: 0; gap: 1px; }
+.mcd-side ul::before { display: none; }
+.mcd-side ul > li.mcd-side-group-label { padding: 20px 10px 6px; font-size: 11px; font-weight: 600; line-height: 18px; letter-spacing: 0.07em; text-transform: uppercase; color: #a8a8ae; }
+.mcd-side ul > li.mcd-side-group-label:first-child { padding-top: 0; }
+.mcd-side ul > li.mcd-side-group-label.is-gap { padding: 10px 0 0; }
+.mcd-side a:not(.mcd-side-all) { min-height: 34px; transition: color 0.18s, background 0.18s; }
+.mcd-side a:not(.mcd-side-all):hover { background: #f7f7f9; }
+.mcd-side a.is-active:not(.mcd-side-all) { background: #f2f2f4; }
+.mcd-side a.is-active:not(.mcd-side-all)::before { display: none; }
+.mcd-side-tag { margin-left: auto; font-size: 11px; font-weight: 400; color: #b4b4ba; }
+
+/* /mcp/clients: one card grid per group, under a small label. */
+.mcd-group { margin-top: 32px; }
+.mcd-group-label { margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #8a8a90; }
+
+.mcd-side-label.mcd-side-all:hover,
+.mcd-side-label.mcd-side-all.is-active {
+  color: #141414;
+  border-bottom-color: #141414;
+}
+
+.mcd-side ul {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0 0 0 16px;
+  list-style: none;
+}
+
+/* The rail. */
+.mcd-side ul::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: #d9d9df;
+}
+
+.mcd-side a:not(.mcd-side-all) {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 14.5px;
+  font-weight: 400;
+  color: #5c5c63;
+  text-decoration: none;
+  transition: color 0.18s;
+}
+
+.mcd-side-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: #9a9aa0;
+}
+
+.mcd-side-icon > span { display: grid; place-items: center; }
+.mcd-side-icon svg { display: block; width: 16px; height: 16px; }
+
+.mcd-side a:not(.mcd-side-all):hover { color: #141414; }
+.mcd-side a:not(.mcd-side-all):hover .mcd-side-icon { color: #5c5c63; }
+
+/* The open page: a dark marker on the rail, bold text, its mark in colour. */
+.mcd-side a.is-active:not(.mcd-side-all) {
+  color: #141414;
+  font-weight: 600;
+}
+
+.mcd-side a.is-active:not(.mcd-side-all)::before {
+  content: '';
+  position: absolute;
+  left: -11.5px;
+  top: 50%;
+  width: 3px;
+  height: 20px;
+  border-radius: 3px;
+  background: #141414;
+  translate: 0 -50%;
+}
+
+.mcd-side a.is-active .mcd-side-icon { color: #141414; }
+
+/* Under the list, signed in only: a small card linking to your connected tools and usage. */
+.mcd-side a.mcd-side-card { display: flex; align-items: center; gap: 12px; margin: 22px 0 0 0; padding: 12px 16px 12px 12px; min-height: 0; border-radius: 14px; background: #fff; border: 1px solid #e6e6ea; color: #141414; transition: border-color 0.18s, background 0.18s; }
+.mcd-side a.mcd-side-card:hover { border-color: #cfcfd5; background: #fafafb; color: #141414; }
+.mcd-side-card-icon { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 10px; background: #f5f5f7; color: #141414; }
+.mcd-side-card-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.mcd-side-card-text b { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.mcd-side-card-text span { font-size: 12.5px; line-height: 1.35; color: #77777e; }
+.mcd-side-card > svg { flex: none; color: #a8a8ae; transition: transform 0.18s, color 0.18s; }
+.mcd-side a.mcd-side-card:hover > svg { color: #141414; transform: translateX(2px); }
+.mcd-side-plug { display: block; width: 16px; height: 16px; background: currentColor; -webkit-mask: url(/ASSET/Icons/ai-tools.svg) center / contain no-repeat; mask: url(/ASSET/Icons/ai-tools.svg) center / contain no-repeat; }
+
+/* ---- The guide ---- */
+.mcd-main { min-width: 0; max-width: 820px; }
+
+.mcd-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 22px;
+  font-size: 13px;
+  line-height: 18px;
+  color: #a8a8ae;
+}
+
+.mcd-crumbs a { color: #8a8a90; text-decoration: none; transition: color 0.15s; }
+.mcd-crumbs a:hover { color: #141414; }
+.mcd-crumbs [aria-current] { color: #141414; font-weight: 500; }
+
+.mcd-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+  font-family: var(--font-hero), var(--font-outfit), sans-serif;
+  font-size: 48px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  color: #141414;
+}
+
+.mcd-title-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: #f7f7f9;
+  color: #141414;
+}
+
+.mcd-intro {
+  margin: 18px 0 0;
+  font-size: 18px;
+  line-height: 1.55;
+  color: #5c5c63;
+}
+
+/* Needs an account · About a minute · No API key */
+.mcd-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  color: #6b6b72;
+}
+
+.mcd-meta li { display: inline-flex; align-items: center; gap: 7px; }
+.mcd-meta svg { color: #9a9aa0; }
+
+/* A command or file name inside a sentence. */
+.mcd-inline {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #f2f3f7;
+  font-size: 0.88em;
+  color: #141414;
+  white-space: nowrap;
+}
+
+/* Commands in the blue note: a deeper blue tint of the note itself, kept
+   whole on one line (they only wrap on phones, see below). */
+.mcd-note .mcd-inline {
+  padding: 1px 6px;
+  background: #dde6ff;
+  color: #16224a;
+  font-size: 0.85em;
+  white-space: nowrap;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.mcd-inline.is-long,
+.mcd-note .mcd-inline.is-long { white-space: normal; overflow-wrap: anywhere; }
+
+.landing-root .mcd-inline {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace !important;
+}
+
+/* Troubleshooting: an accordion of hairline rows, no boxes. */
+.mcd-faq { border-bottom: 1px solid #ececef; }
+
+.mcd-faq details { border-top: 1px solid #ececef; }
+
+.mcd-faq summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 2px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #141414;
+  list-style: none;
+  cursor: pointer;
+}
+
+.mcd-faq summary::-webkit-details-marker { display: none; }
+.mcd-faq summary svg { flex: none; color: #9a9aa0; transition: rotate 0.2s, color 0.2s; }
+.mcd-faq summary:hover svg { color: #141414; }
+.mcd-faq details[open] summary svg { rotate: 180deg; color: #141414; }
+
+.mcd-faq details p {
+  margin: -4px 0 0;
+  padding: 0 2px 18px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #5c5c63;
+}
+
+.mcd-faq b { color: #141414; font-weight: 600; }
+
+.mcd-help { margin: 20px 0 0; font-size: 14.5px; color: #8a8a90; }
+.mcd-help a { color: #141414; font-weight: 500; text-decoration: underline; text-decoration-color: #c9c9ce; text-underline-offset: 3px; }
+.mcd-help a:hover { text-decoration-color: #141414; }
+
+.mcd-h2 {
+  margin: 56px 0 18px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #141414;
+  scroll-margin-top: 120px;
+}
+
+.mcd-p { margin: 0 0 16px; font-size: 16px; line-height: 1.6; color: #3d3d43; }
+
+/* Guide header: the title group on the left, the one-click install (Cursor, VS Code)
+   on the right, level with the title. Stacks under it on narrow screens. */
+.mcd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px 32px; }
+.mcd-head-text { min-width: 0; }
+.mcd-head-action { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-top: 6px; }
+@media (max-width: 720px) {
+  .mcd-head { flex-direction: column; }
+  .mcd-head-action { margin-top: 0; align-items: flex-start; }
+}
+
+.mcd-install-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 44px;
+  padding: 0 18px 0 15px;
+  border-radius: 999px;
+  /* A white pill with a beam of the logo's colours running round its border, over a soft grey edge. */
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    conic-gradient(from var(--mcd-beam), transparent 0 58%, #00b6ff 72%, #874fff 84%, #ff3737 94%, transparent 100%) border-box,
+    linear-gradient(#e2e2e7, #e2e2e7) border-box;
+  color: #141414;
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  animation: mcd-beam 3.2s linear infinite;
+  transition: background 0.18s;
+}
+
+.mcd-install-btn:hover {
+  background:
+    linear-gradient(#fafafb, #fafafb) padding-box,
+    conic-gradient(from var(--mcd-beam), transparent 0 58%, #00b6ff 72%, #874fff 84%, #ff3737 94%, transparent 100%) border-box,
+    linear-gradient(#e2e2e7, #e2e2e7) border-box;
+}
+.mcd-install-btn svg { color: #141414; }
+button.mcd-install-btn { font-family: inherit; cursor: pointer; }
+
+@property --mcd-beam { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@keyframes mcd-beam { to { --mcd-beam: 360deg; } }
+@media (prefers-reduced-motion: reduce) { .mcd-install-btn { animation: none; } }
+/* Hover label: the navbar's own tip (.nav-social-tip in landing.css). */
+.mcd-install-btn { position: relative; }
+.mcd-install-btn:hover .nav-social-tip,
+.mcd-install-btn:focus-visible .nav-social-tip { opacity: 1; transform: translate(-50%, 0); }
+
+/* Steps: small solid numbers on a thin line, easy to follow down the page. */
+.mcd-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: mcd-step;
+}
+
+.mcd-steps > li {
+  position: relative;
+  padding: 0 0 26px 44px;
+  counter-increment: mcd-step;
+}
+
+.mcd-steps > li::before {
+  content: counter(mcd-step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #141414;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.mcd-steps > li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 12.25px;
+  top: 32px;
+  bottom: 6px;
+  width: 1.5px;
+  border-radius: 1px;
+  background: #d4d4da;
+}
+
+.mcd-steps p { margin: 2px 0 0; font-size: 16px; line-height: 1.6; color: #3d3d43; }
+.mcd-steps b { color: #141414; font-weight: 600; }
+.mcd-steps p a { color: #141414; font-weight: 500; text-decoration: underline; text-decoration-color: #c9c9ce; text-underline-offset: 3px; }
+.mcd-steps p a:hover { text-decoration-color: #141414; }
+.mcd-steps ul { margin: 10px 0 0; padding-left: 18px; font-size: 15px; line-height: 1.6; color: #5c5c63; }
+
+/* Code to copy: light neutral grey, monospace, an icon button to copy. */
+.mcd-code {
+  position: relative;
+  margin-top: 14px;
+  padding: 18px 64px 18px 22px;
+  border-radius: 14px;
+  background: #f6f6f7;
+  color: #141414;
+}
+
+.mcd-code pre {
+  margin: 0;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre;
+}
+
+/* landing.css sets one font on everything under .landing-root with
+   !important; code has to win that to be monospace. */
+.landing-root .mcd-code pre,
+.landing-root .mcd-code pre * {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace !important;
+}
+
+.mcd-code .mcd-code-copy {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #141414;
+}
+
+/* Multi-line code keeps the button at the top. */
+.mcd-code.is-multi .mcd-code-copy { top: 12px; translate: none; }
+
+.mcd-code .mcd-code-copy:hover { background: #ebebed; }
+.mcd-code .mcd-code-copy.is-copied { background: transparent; color: #16a34a; }
+
+/* A note after the steps: a soft blue tint, so it reads as a note at a
+   glance, with a blue info mark and text tinted to match. */
+.mcd-note {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: #eef3ff;
+  color: #3366f0;
+}
+
+.mcd-note svg { flex: none; margin-top: 2px; }
+.mcd-note p { margin: 0; font-size: 15px; line-height: 1.55; color: #33405e; }
+.mcd-note b { font-weight: 600; color: #16224a; }
+
+/* What to ask: grey rows, each with a chat mark and a copy icon. */
+.mcd-prompts { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+
+.mcd-prompts li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 14px;
+  background: #f7f7f9;
+  font-size: 15px;
+  color: #141414;
+}
+
+.mcd-prompt-mark { display: grid; place-items: center; flex: none; color: #9a9aa0; }
+.mcd-prompt-text { flex: 1; min-width: 0; }
+
+.mcd-prompts .mcd-prompt-copy {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #4a4a50;
+}
+
+.mcd-prompts .mcd-prompt-copy:hover { background: #fff; color: #141414; }
+.mcd-prompts .mcd-prompt-copy.is-copied { background: transparent; color: #16a34a; }
+
+/* Previous / next guide. */
+.mcd-pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 56px;
+}
+
+.mcd-pager-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+  padding: 16px 20px;
+  border: 1px solid #ececef;
+  border-radius: 16px;
+  background: #fff;
+  text-decoration: none;
+  transition: border-color 0.15s;
+}
+
+.mcd-pager-link:hover { border-color: #c9c9ce; }
+.mcd-pager-link span { font-size: 13px; color: #8a8a8f; }
+.mcd-pager-link b { font-size: 16px; font-weight: 600; color: #141414; }
+.mcd-pager-link.is-next { margin-left: auto; text-align: right; }
+
+/* The address box and cards on /mcp/clients. */
+.mcd-address { margin-top: 28px; }
+.mcd .mcl-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* ---- On this page: an open list on the same rail as the sidebar. ---- */
+.mcd-toc {
+  position: sticky;
+  top: var(--mcd-top);
+  align-self: start;
+}
+
+.mcd-toc-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  line-height: 18px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a8a8ae;
+}
+
+.mcd-toc ul {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0 0 0 16px;
+  list-style: none;
+}
+
+.mcd-toc ul::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: #d9d9df;
+}
+
+.mcd-toc a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 4px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #5c5c63;
+  text-decoration: none;
+  transition: color 0.18s;
+}
+
+.mcd-toc a:hover { color: #141414; }
+
+.mcd-toc a.is-active { color: #141414; font-weight: 600; }
+
+.mcd-toc a.is-active::before {
+  content: '';
+  position: absolute;
+  left: -11.5px;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: 3px;
+  background: #141414;
+  translate: 0 -50%;
+}
+
+/* Keyboard focus. */
+.mcd a:focus-visible,
+.mcd button:focus-visible {
+  outline: 2px solid #141414;
+  outline-offset: 2px;
+}
+
+/* Phones only: the tools in one swipeable row above the guide. */
+.mcd-mnav { display: none; }
+
+/* ---- Smaller screens ---- */
+@media (max-width: 1200px) {
+  .mcd { grid-template-columns: 210px minmax(0, 1fr); gap: 56px; }
+  .mcd-toc { display: none; }
+}
+
+@media (max-width: 800px) {
+  .mcd { grid-template-columns: 1fr; gap: 24px; padding: 160px 20px 96px; }
+  .mcd-side { position: static; max-height: none; display: none; }
+  .mcd-title { font-size: 36px; }
+  .mcd .mcl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mcd-pager-link { min-width: 0; flex: 1; }
+  .mcd-note .mcd-inline { white-space: normal; overflow-wrap: anywhere; }
+
+  .mcd-mnav {
+    display: flex;
+    gap: 6px;
+    margin: 0 -20px 32px;
+    padding: 0 20px 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .mcd-mnav::-webkit-scrollbar { display: none; }
+
+  .mcd-mnav a {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex: none;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: #f7f7f9;
+    font-size: 14px;
+    font-weight: 500;
+    color: #4a4a50;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .mcd-mnav a > span { display: grid; place-items: center; }
+  .mcd-mnav a.is-active { background: #141414; color: #fff; }
+  .mcd-mnav a.is-active > span { color: #fff !important; }
+
+  /* Commands wrap instead of scrolling sideways. */
+  .mcd-code { padding: 16px 52px 16px 16px; }
+  .mcd-code pre { font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .mcd-code .mcd-code-copy { right: 8px; }
+}

@@ -21,7 +21,7 @@ type Sort = 'name' | 'screens' | 'flows' | 'steps' | 'versions' | 'latest';
 const DAYS = 14;
 
 /** One hue per chart (each chart is a single series), from the validated categorical palette. */
-const HUE = { blue: '#2a78d6', orange: '#eb6834', aqua: '#1baf7a', yellow: '#eda100', magenta: '#e87ba4', green: '#008300', violet: '#6250d6', red: '#e34948' } as const;
+export const HUE = { blue: '#2a78d6', orange: '#eb6834', aqua: '#1baf7a', yellow: '#eda100', magenta: '#e87ba4', green: '#008300', violet: '#6250d6', red: '#e34948' } as const;
 
 /** The categorical order, used in this order and never cycled; past it, the rest fold into "Other". */
 const SERIES = [HUE.blue, HUE.orange, HUE.aqua, HUE.yellow, HUE.magenta, HUE.green, HUE.violet, HUE.red];
@@ -331,7 +331,7 @@ export function AnalyticsPanel({
   );
 }
 
-function Kpi({ value, label, note, onClick, warn = false, color, badge, badgeTitle, side, children }: { value: string; label: string; note: string; onClick?: () => void; warn?: boolean; color?: string; badge?: string; badgeTitle?: string; side?: ReactNode; children?: ReactNode }) {
+export function Kpi({ value, label, note, onClick, warn = false, color, badge, badgeTitle, side, children }: { value: string; label: string; note: string; onClick?: () => void; warn?: boolean; color?: string; badge?: string; badgeTitle?: string; side?: ReactNode; children?: ReactNode }) {
   const body = (
     <>
       <span className="ins-kpi-top">
@@ -383,7 +383,7 @@ function MiniSplit({ rows, colors, counts = false, format }: { rows: Array<[stri
   );
 }
 
-function CardHead({ title, desc, aside }: { title: string; desc: string; aside?: string }) {
+export function CardHead({ title, desc, aside }: { title: string; desc: string; aside?: string }) {
   return (
     <header className="ins-analytics-head">
       <span className="ins-analytics-head-text">
@@ -410,7 +410,7 @@ function smoothPath(values: number[], width: number, height: number, pad = 4) {
 }
 
 /** A tiny trend line for a KPI card. */
-function Sparkline({ values, color }: { values: number[]; color: string }) {
+export function Sparkline({ values, color }: { values: number[]; color: string }) {
   const line = smoothPath(values, 84, 28, 3);
   return (
     <svg className="ins-spark" viewBox="0 0 84 28" aria-hidden preserveAspectRatio="none">
@@ -421,7 +421,7 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
 }
 
 /** An area chart with a crosshair and the exact figure on hover. */
-function AreaChart({ points, color, unit }: { points: Array<{ label: string; short: string; value: number }>; color: string; unit: string }) {
+export function AreaChart({ points, color, unit }: { points: Array<{ label: string; short: string; value: number }>; color: string; unit: string }) {
   const [hover, setHover] = useState<number | null>(null);
   const W = 600;
   const H = 170;

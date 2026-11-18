@@ -177,54 +177,31 @@ export function Footer() {
         <div className="lpi-footer-top">
           <div className="lpi-footer-brand">
             <img className="lpi-footer-mark" src="/ASSET/Icons/footer-logo.svg" alt="Motvin" />
-            <p>
-              AI-powered UI design platform. Convert websites, generate design systems, and build
-              modern interfaces faster.
-            </p>
+            <p>AI-powered UI design platform</p>
             {/* Who owns the screens and logos shown on Motvin, and where owners
                 can ask for them to be removed (the Copyrights page's removal section). */}
             <p className="lpi-footer-note">
-              App names, logos and screenshots belong to their owners. Motvin isn&apos;t affiliated with them.{' '}
+              Screens and logos belong to their owners Motvin isn&apos;t affiliated{' '}
               <Link href="/copyrights#ask-for-a-change-or-removal">Request a removal</Link>
             </p>
-            <a
-              className="lpi-footer-community"
-              href="https://chat.whatsapp.com/JxLUrQpNpaXJ4ido6muIW6?s=cl&p=i&ilr=4"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Join Community
-            </a>
           </div>
 
+          {/* Only live pages: the tools that aren't out yet stay off the footer
+              until they launch. */}
           <nav className="lpi-footer-links" aria-label="Footer">
-            <div>
-              <h2>Tools</h2>
-              {/* Not live yet: plain text with a "Soon" tag, like the Resources column. */}
-              <span className="is-soon" title="Coming Soon" aria-disabled="true">Color Generator</span>
-              <span className="is-soon" title="Coming Soon" aria-disabled="true">Typescale</span>
-              <span className="is-soon" title="Coming Soon" aria-disabled="true">Live Convert</span>
-            </div>
-            <div>
-              <h2>Resources</h2>
-              {/* Not live yet: plain text, so a click doesn't jump to the top of the page. */}
-              <span className="is-soon" title="Coming Soon" aria-disabled="true">Documentation</span>
-              <span className="is-soon" title="Coming Soon" aria-disabled="true">Blog</span>
-              <span className="is-soon" title="Coming Soon" aria-disabled="true">Tutorials</span>
-              <a
-                href="https://chat.whatsapp.com/JxLUrQpNpaXJ4ido6muIW6?s=cl&p=i&ilr=4"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Community
-              </a>
-              <Link href="/about">About us</Link>
-            </div>
             <div>
               <h2>Library</h2>
               <a href="/icons" target="_blank">Icons</a>
               <a href="/logos" target="_blank">Logos</a>
               <a href="/illustrations" target="_blank">Illustrations</a>
+            </div>
+            <div>
+              <h2>Resources</h2>
+              <Link href="/mcp">MCP for AI tools</Link>
+              <a href="https://chat.whatsapp.com/JxLUrQpNpaXJ4ido6muIW6?s=cl&p=i&ilr=4" target="_blank" rel="noopener noreferrer">
+                Community
+              </a>
+              <Link href="/about">About us</Link>
             </div>
           </nav>
         </div>

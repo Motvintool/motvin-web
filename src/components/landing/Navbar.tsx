@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { getGuestUid } from '@/lib/firebase/auth';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import { CommunityDropdown } from './CommunityDropdown';
 import { CompanyDropdown } from './CompanyDropdown';
 import { MobileMenu } from './MobileMenu';
 import { ProductsDropdown } from './ProductsDropdown';
@@ -47,21 +46,25 @@ const HOVER_CLOSE_DELAY = 180;
 const INSTAGRAM_URL = 'https://www.instagram.com/motvintool/';
 const LINKEDIN_URL = 'https://www.linkedin.com/company/motvin/home';
 
-type Menu = 'products' | 'community' | 'company' | null;
+type Menu = 'products' | 'company' | null;
 
 // Each desktop menu panel, by id. They render outside the nav, so they get
 // their own hover listeners.
 const MENU_PANELS: [id: string, menu: Exclude<Menu, null>][] = [
   ['products-dropdown', 'products'],
   ['company-dropdown', 'company'],
-  ['community-dropdown', 'community'],
 ];
 
 /** Which menu a trigger opens, from its data-menu attribute. */
 const menuOf = (el: EventTarget | null) =>
   (el instanceof HTMLElement ? el.dataset.menu : undefined) as Exclude<Menu, null> | undefined;
 
-export function Navbar() {
+/**
+ * `compactAfter`: how far (px) the page scrolls before the pill tucks away.
+ * Pages whose content starts close under the navbar (the MCP guides) pass a
+ * smaller value so it gets out of the way as soon as reading starts.
+ */
+export function Navbar({ compactAfter = COMPACT_AFTER }: { compactAfter?: number } = {}) {
   const { user } = useAuth();
   // Desktop mega-menu (>1300px) — only one open at a time.
   const [openMenu, setOpenMenu] = useState<Menu>(null);
@@ -104,7 +107,7 @@ export function Navbar() {
       frame = requestAnimationFrame(() => {
         const y = window.scrollY;
         const dy = y - lastYRef.current;
-        if (y <= COMPACT_AFTER) {
+        if (y <= compactAfter) {
           setScrolled(false);
           lastYRef.current = y;
         } else if (Math.abs(dy) > SCROLL_DIRECTION_THRESHOLD) {
@@ -131,7 +134,7 @@ export function Navbar() {
       cancelAnimationFrame(frame);
       window.removeEventListener('scroll', onScroll);
     };
-  }, []);
+  }, [compactAfter]);
 
   const reopenPill = () => {
     reopenedAtRef.current = window.scrollY;
@@ -288,9 +291,7 @@ export function Navbar() {
   const collapsed = !isMobile && scrolled && !pillReopened && !openMenu;
 
   const productsOpen = openMenu === 'products';
-  const communityOpen = openMenu === 'community';
   const productsAccordionOpen = openAccordion === 'products';
-  const communityAccordionOpen = openAccordion === 'community';
   const companyOpen = openMenu === 'company';
   const companyAccordionOpen = openAccordion === 'company';
   // Picking a Resources link closes the menu, and the hamburger panel on mobile.
@@ -333,12 +334,6 @@ export function Navbar() {
       >
         {isMobile && <ProductsDropdown open={productsAccordionOpen} />}
       </div>
-      <div
-        className={`mi-nav-community-accordion${communityAccordionOpen ? ' is-open' : ''}`}
-        id="mi-nav-community-accordion"
-      >
-        {isMobile && <CommunityDropdown open={communityAccordionOpen} />}
-      </div>
       {/* Resources: Updates, About us, Request apps and Copyrights. */}
       <a
         href="#"
@@ -363,23 +358,10 @@ export function Navbar() {
           style={{ width: '14px', height: '14px', opacity: '0.5' }}
         />
       </a>
-      <a
-        href="#"
-        className={`nav-item${communityOpen ? ' active' : ''}${communityAccordionOpen ? ' is-accordion-open' : ''}`}
-        id="community-dropdown-trigger"
-        data-menu="community"
-        onClick={onMenuClick}
-        onPointerEnter={onMenuEnter}
-        onPointerLeave={onMenuLeave}
-      >
-        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Join us</span>
-        <img
-          src="/ASSET/Icons/nav-drop-arrow.svg"
-          alt=""
-          className="community-mobile-arrow"
-          style={{ width: '14px', height: '14px', opacity: '0.5' }}
-        />
-      </a>
+      {/* A plain link to the MCP page (it replaced the "Join us" community menu). */}
+      <Link href="/mcp" className="nav-item" id="mcp-nav-link" onClick={closeMenus}>
+        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>MCP</span>
+      </Link>
       <div
         className={`mi-nav-company-accordion${companyAccordionOpen ? ' is-open' : ''}`}
         id="mi-nav-company-accordion"
@@ -510,7 +492,6 @@ export function Navbar() {
       {/* Desktop mega-menus. On mobile the same components render inside the
           nav accordions above. */}
       {!isMobile && <ProductsDropdown open={productsOpen} />}
-      {!isMobile && <CommunityDropdown open={communityOpen} />}
       {!isMobile && <CompanyDropdown open={companyOpen} onNavigate={closeMenus} onRequestApp={requestApp} />}
       {requestOpen && <LandingRequestModal onClose={() => setRequestOpen(false)} />}
 

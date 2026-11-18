@@ -14289,11 +14289,67 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 .ins-set-action button:hover, .ins-set-tools button:hover, .ins-set-confirm button:hover { background: var(--ins-border); }
 .ins-set-action button:active { transform: scale(0.97); }
 .ins-set-action button:disabled { opacity: 0.5; }
+/* AI tools: the person's own usage — today vs the daily limit, the week, recent searches. */
+.ins-set-usage { padding-bottom: 22px; }
+.ins-set-usage-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; padding: 16px 0 20px; border-bottom: 1px solid var(--ins-border); }
+.ins-set-usage-big { margin: 4px 0 10px; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; color: var(--ins-text); }
+.ins-set-usage-big span { font-size: 15px; font-weight: 500; letter-spacing: 0; color: var(--ins-sub); }
+.ins-set-usage-bar { height: 6px; margin-bottom: 10px; border-radius: 99px; background: var(--ins-card-alt); overflow: hidden; }
+.ins-set-usage-bar span { display: block; height: 100%; border-radius: inherit; background: #874fff; transition: width 300ms; }
+.ins-set-usage-bar.is-high span { background: #c4320a; }
+.ins-set-usage-cols { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; height: 96px; margin-top: 10px; }
+.ins-set-usage-col { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
+/* Solid bars with their count on top; an empty day is a short rounded stub. */
+.ins-set-usage-plot { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; width: 100%; min-height: 0; }
+.ins-set-usage-plot b { font-size: 11px; font-weight: 700; line-height: 16px; color: var(--ins-text); }
+.ins-set-usage-fill { width: 100%; max-width: 20px; border-radius: 7px; background: #874fff; transition: height 300ms; }
+.ins-set-usage-fill.is-zero { height: 4px; border-radius: 99px; background: var(--ins-border); }
+.ins-set-usage-col i { font-style: normal; font-size: 12px; color: var(--ins-sub); }
+.ins-set-usage-col.is-today i { font-weight: 700; color: var(--ins-text); }
+/* Hover a day: a small dark label above the chart with the date and its calls. */
+.ins-set-usage-col { position: relative; cursor: default; }
+.ins-set-usage-col::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translate(-50%, 4px); padding: 6px 10px; border-radius: 8px; background: var(--ins-text); color: var(--ins-card); font-size: 12px; font-weight: 600; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 150ms, transform 150ms; z-index: 2; }
+.ins-set-usage-col.is-start::after { left: 0; transform: translate(0, 4px); }
+.ins-set-usage-col.is-end::after { left: auto; right: 0; transform: translate(0, 4px); }
+.ins-set-usage-col:hover::after { opacity: 1; transform: translate(-50%, 0); }
+.ins-set-usage-col.is-start:hover::after, .ins-set-usage-col.is-end:hover::after { transform: none; }
+.ins-set-usage-col:hover .ins-set-usage-fill { filter: brightness(1.08); }
+.ins-set-usage-col:hover i { color: var(--ins-text); }
+.ins-set-usage-searches { padding-top: 16px; }
+/* Each search: a soft round search icon, the phrase, then which tool and when. */
+.ins-set-usage-searches ul { display: grid; gap: 14px; margin: 14px 0 0; padding: 0; list-style: none; }
+.ins-set-usage-searches li { display: flex; align-items: center; gap: 12px; }
+.ins-set-usage-search-icon { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 99px; background: var(--ins-card-alt); color: var(--ins-sub); }
+.ins-set-usage-search-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ins-set-usage-query { min-width: 0; font-size: 14px; font-weight: 500; color: var(--ins-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ins-set-usage-query::first-letter { text-transform: uppercase; }
+.ins-set-usage-searches li .ins-set-value { font-size: 13px; }
+@media (max-width: 720px) {
+  .ins-set-usage-top { grid-template-columns: 1fr; gap: 20px; }
+}
+
+/* AI tools: the tool's name links to its setup guide; underlined on hover. */
+.ins-set-tool-link { color: inherit; text-decoration: none; text-underline-offset: 3px; }
+.ins-set-tool-link:hover { text-decoration: underline; text-decoration-color: var(--ins-sub); }
+/* A row with an icon on the left of both lines (AI tools: the tool's logo). */
+.ins-set-row-main { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.ins-set-tool-icon { display: grid; place-items: center; flex: none; width: 48px; height: 48px; border-radius: 14px; background: var(--ins-card-alt); }
+.ins-set-tool-icon svg { display: block; }
+.ins-set-tool-icon--add { border: 1.5px dashed var(--ins-border); background: transparent; font-size: 22px; font-weight: 400; line-height: 1; color: var(--ins-sub); }
+/* A link in a settings row that reads as one of its buttons (AI tools: Connect a tool). */
+.ins-set-action .ins-set-link-btn { padding: 9px 16px; border-radius: 99px; font-size: 14px; font-weight: 600; color: var(--ins-text); background: var(--ins-card-alt); text-decoration: none; transition: background 160ms; }
+.ins-set-action .ins-set-link-btn:hover { background: var(--ins-border); }
+/* A quieter link beside a row's main button: no fill until hovered. */
+.ins-set-action .ins-set-link-btn.is-quiet { background: transparent; color: var(--ins-sub); }
+.ins-set-action .ins-set-link-btn.is-quiet:hover { background: var(--ins-card-alt); color: var(--ins-text); }
 .ins-set-action .is-primary { background: var(--ins-text); color: var(--ins-card); }
 .ins-set-action .is-primary:hover { background: var(--ins-text); opacity: 0.88; }
 .ins-set-action .is-quiet { background: transparent; color: var(--ins-muted); }
 .ins-set-action .is-danger, .ins-set-confirm .is-danger { background: rgba(196, 50, 10, 0.1); color: #c4320a; }
 .ins-set-action .is-danger:hover, .ins-set-confirm .is-danger:hover { background: rgba(196, 50, 10, 0.18); }
+/* A mild destructive action (AI tools: Disconnect): a soft red wash and a lighter red label. */
+.ins-set-action .is-danger-quiet { background: rgba(196, 50, 10, 0.07); color: #cc4a2c; }
+.ins-set-action .is-danger-quiet:hover { background: rgba(196, 50, 10, 0.12); color: #c4320a; }
 .ins-set-card--danger { border-color: rgba(196, 50, 10, 0.2); }
 .ins-set-card--danger .ins-set-heading { color: #c4320a; }
 .ins-set-input { width: min(320px, 100%); padding: 0; margin: 0; border: 0; border-radius: 0; background: transparent; font: inherit; font-size: 14px; line-height: inherit; color: var(--ins-text); outline: none; box-shadow: none; }
@@ -14366,6 +14422,23 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 
 .ins-set-tree { width: 300px; justify-self: start; }
 @media (max-width: 820px) { .ins-set { column-gap: 0; } }
+
+/* AI tools page: "Your usage" in a sticky right column, like the side list on the left.
+   Under 1400px there is no room for three columns, so the card sits in the page instead. */
+.ins-set.has-aside { grid-template-columns: minmax(280px, 1fr) minmax(0, 860px) minmax(280px, 1fr); }
+.ins-set.has-aside .ins-set-tree { width: min(300px, 100%); }
+.ins-set-aside { grid-column: 3; grid-row: 1; justify-self: start; width: min(340px, 100%); position: sticky; top: calc(var(--ins-header-h, 82px) + 28px); max-height: calc(100vh - var(--ins-header-h, 82px) - 56px); overflow-y: auto; scrollbar-width: none; }
+.ins-set-aside::-webkit-scrollbar { display: none; }
+.ins-set-usage-inline { display: none; }
+.ins-set-usage--vertical .ins-set-usage-top { grid-template-columns: 1fr; gap: 22px; }
+.ins-set-usage--vertical .ins-set-usage-cols { height: 80px; }
+@media (max-width: 1599px) { .ins-set.has-aside { column-gap: 56px; } }
+@media (max-width: 1399px) {
+  .ins-set.has-aside { grid-template-columns: minmax(300px, 1fr) minmax(0, 860px) minmax(0, 1fr); column-gap: 96px; }
+  .ins-set-aside { display: none; }
+  .ins-set-usage-inline { display: block; }
+}
+@media (max-width: 820px) { .ins-set.has-aside { grid-template-columns: minmax(0, 1fr); column-gap: 0; } }
 
 /* Request tile header: chip, Edit and delete share one 32px row and one baseline. */
 .ins-set-slot header { min-height: 32px; margin-bottom: 6px; }

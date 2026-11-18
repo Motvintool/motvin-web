@@ -35,6 +35,11 @@ export default function PrivacyPage() {
                   <strong>Basic usage data.</strong> Standard technical information such as pages visited and device type, used to keep the site working
                   and to see which parts people use.
                 </li>
+                <li>
+                  <strong>AI tools you connect (MCP).</strong> If you connect an AI tool such as Claude, ChatGPT or Cursor to Motvin, we keep which tool
+                  it is, when you connected it and last used it, how many times it searched Motvin each day for the last week, and your last few searches
+                  (the words your AI tool searched for). The AI tool only reads the design library; it never sees your collections, ratings or requests.
+                </li>
               </ul>
             </>
           ),
@@ -45,6 +50,7 @@ export default function PrivacyPage() {
             <ul>
               <li>To run your account and keep your collections, ratings and requests available on every device you log in from.</li>
               <li>To decide which apps to add to the library next, and to tell you when one you asked for arrives, if you left an email.</li>
+              <li>To show you your connected AI tools and their usage in Settings, and to keep fair daily limits on AI-tool searches.</li>
               <li>To fix problems, prevent abuse and improve Motvin.</li>
             </ul>
           ),
@@ -54,7 +60,8 @@ export default function PrivacyPage() {
           body: (
             <p>
               Account sign-in and your saved data are handled by Google Firebase (Authentication and Cloud Firestore). The design library itself is served
-              from Motvin&rsquo;s own servers. We do not sell your personal information, and we do not share it with advertisers.
+              from Motvin&rsquo;s own servers, and so are the records of your connected AI tools; usage counts are stored under a one-way code rather
+              than your email, and kept for at most 90 days. We do not sell your personal information, and we do not share it with advertisers.
             </p>
           ),
         },
@@ -77,6 +84,9 @@ export default function PrivacyPage() {
               <li>
                 <strong>Delete.</strong> You can delete any request, and you can delete your whole account from Settings. Deleting your account removes
                 your requests too.
+              </li>
+              <li>
+                <strong>Disconnect an AI tool.</strong> Settings → AI tools lists every tool you connected; Disconnect cuts its access right away.
               </li>
               <li>
                 <strong>Ask us.</strong> For anything else, such as a copy of what we hold, write to <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.

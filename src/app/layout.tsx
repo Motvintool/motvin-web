@@ -76,7 +76,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="en" className={`${outfit.variable} ${inter.variable} ${pacifico.variable} ${manrope.variable} ${heading.variable} ${hero.variable}`} suppressHydrationWarning>
+    // data-scroll-behavior: landing pages turn on smooth scrolling (landing.css); from Next 16 this attribute is
+    // what makes a page change still jump straight to the top instead of gliding up from the old position.
+    <html
+      lang="en"
+      data-scroll-behavior="smooth"
+      className={`${outfit.variable} ${inter.variable} ${pacifico.variable} ${manrope.variable} ${heading.variable} ${hero.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         {/* Sets data-theme on <html> before first paint to avoid a flash of the
             wrong theme. Must stay blocking and must run before any stylesheet. */}

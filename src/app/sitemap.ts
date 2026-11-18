@@ -26,6 +26,8 @@ const PAGES: { path: string; priority: number; changeFrequency: 'daily' | 'weekl
   { path: '/illustrations', priority: 0.7, changeFrequency: 'weekly' },
   { path: '/updates', priority: 0.6, changeFrequency: 'weekly' },
   { path: '/about', priority: 0.5, changeFrequency: 'monthly' },
+  { path: '/mcp', priority: 0.6, changeFrequency: 'monthly' },
+  { path: '/mcp/clients', priority: 0.5, changeFrequency: 'monthly' },
   { path: '/privacy', priority: 0.3, changeFrequency: 'monthly' },
   { path: '/terms', priority: 0.3, changeFrequency: 'monthly' },
   { path: '/copyrights', priority: 0.3, changeFrequency: 'monthly' },
