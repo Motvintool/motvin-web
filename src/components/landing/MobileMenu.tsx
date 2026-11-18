@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
+import { SHOW_MCP_IN_NAV } from '@/lib/mcp/visibility';
 
 /**
  * The hamburger panel's list (<=1300px): every link at once under small group labels, in large type, the
@@ -30,8 +31,8 @@ export function MobileMenu({
         { label: 'Icons', href: '/icons', external: true },
         { label: 'Logos', href: '/logos', external: true },
         { label: 'Illustrations', href: '/illustrations', external: true },
-        // The desktop navbar's "MCP" link (it replaced the "Join us" community menu).
-        { label: 'MCP', href: '/mcp' },
+        // The desktop navbar's "MCP" link (it replaced the "Join us" community menu); hidden while MCP is tested privately.
+        ...(SHOW_MCP_IN_NAV ? [{ label: 'MCP', href: '/mcp' }] : []),
         { label: 'Convert', soon: true },
         { label: 'Extension', soon: true },
         { label: 'Typescales', soon: true },
