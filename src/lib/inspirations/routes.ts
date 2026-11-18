@@ -22,6 +22,7 @@ export const INSPIRATIONS_ROUTES = {
   admin: '/inspirations/admin',
   settings: '/inspirations/settings',
   settingsRequests: '/inspirations/settings?section=requests',
+  settingsTools: '/inspirations/settings?section=tools',
   /**
    * An app's page. Given a platform, an app on more than one opens on that one (`?platform=`):
    * Claude's card in Web Apps opens Claude as a web app, not its iOS screens.

@@ -1,0 +1,331 @@
+/* The /mcp hero (McpHero.tsx): a light stage, the glowing blue core the one
+   strong colour on it.
+   Everything here is prefixed mh-. Motion is CSS; the active tool is React. */
+
+/* Edge to edge, from the very top: the fixed navbar floats over it. */
+.mh {
+  padding: 0;
+}
+
+/* Exactly one screen tall: every vertical size below is tied to the window
+   height (vh), so the headline, buttons, core, tools and tagline all fit
+   above the fold on a laptop as on a large monitor. */
+.mh-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 100vh;
+  min-height: 100svh;
+  /* The deep bottom padding sits below the fold: room for the glow and
+     ripples to fade out before the hero ends, so nothing is cut off. */
+  padding: clamp(128px, 22vh, 260px) 24px clamp(140px, 20vh, 240px);
+  box-sizing: border-box;
+  background: #fff;
+  color: #141414;
+  text-align: center;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* A white fade over the bottom of the hero, above the glow and ripples
+   (which also sit at z-index -1, earlier in the stack) but under the
+   content, so the light dissolves into the page instead of ending in a line. */
+.mh-card::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: clamp(160px, 24vh, 280px);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff 80%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* The light under everything: Motvin blue, brightest behind the core. */
+.mh-glow {
+  position: absolute;
+  left: 50%;
+  bottom: -120px;
+  width: 1100px;
+  height: 900px;
+  translate: -50% 0;
+  background:
+    radial-gradient(closest-side at 50% 78%, rgba(58, 86, 255, 0.13), rgba(58, 86, 255, 0.05) 45%, rgba(58, 86, 255, 0) 75%),
+    radial-gradient(closest-side at 50% 78%, rgba(120, 140, 255, 0.08), rgba(120, 140, 255, 0) 62%);
+  filter: blur(20px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.mh-title {
+  margin: 0;
+  font-family: var(--font-hero), var(--font-outfit), sans-serif;
+  font-size: clamp(44px, min(6.6vw, 9vh), 100px);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  text-wrap: balance;
+}
+
+.mh-lead {
+  max-width: 620px;
+  margin: clamp(12px, 2vh, 26px) auto 0;
+  font-family: var(--font-outfit), sans-serif;
+  font-size: 17px;
+  line-height: 1.5;
+  color: #5c5c63;
+}
+
+.mh-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  margin-top: clamp(18px, 3.2vh, 36px);
+}
+
+/* The one button: black pill in a soft ring. */
+.mh-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  height: 60px;
+  padding: 0 30px 0 16px;
+  border-radius: 999px;
+  background: #141414;
+  color: #fff;
+  font-family: var(--font-outfit), sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow:
+    0 0 0 6px rgba(20, 20, 20, 0.05),
+    0 0 0 7px rgba(20, 20, 20, 0.08),
+    0 18px 40px -16px rgba(20, 20, 20, 0.45);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.mh-cta:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 6px rgba(20, 20, 20, 0.06),
+    0 0 0 7px rgba(20, 20, 20, 0.1),
+    0 22px 48px -16px rgba(20, 20, 20, 0.55);
+}
+
+.mh-cta-plus {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #fff;
+  color: #141414;
+}
+
+.mh-cta-plus svg { width: 14px; height: 14px; }
+
+
+/* ---- The stage ---- */
+.mh-stage {
+  position: relative;
+  width: 100%;
+  margin-top: clamp(36px, 8vh, 120px);
+}
+
+/* Tools left, the core, tools right, all on one line. */
+.mh-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(24px, 4vw, 64px);
+}
+
+
+.mh-orb {
+  position: relative;
+  flex: none;
+  width: clamp(170px, 24vh, 300px);
+  aspect-ratio: 1;
+}
+
+/* The light round the core, as in the reference: a wide royal-blue bloom,
+   strongest at the ring and fading far out, breathing slowly. */
+.mh-orb-halo {
+  position: absolute;
+  inset: -85%;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    rgba(58, 86, 255, 0.4) 0%,
+    rgba(58, 86, 255, 0.26) 30%,
+    rgba(70, 98, 255, 0.1) 55%,
+    rgba(90, 118, 255, 0.03) 75%,
+    rgba(90, 118, 255, 0) 100%
+  );
+  animation: mh-breathe 4.4s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Ripples: soft rings of blue light that grow out from the core and fade,
+   four of them a quarter-cycle apart, like rings spreading on water. */
+.mh-ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(70, 98, 255, 0) 62%, rgba(70, 98, 255, 0.1) 80%, rgba(70, 98, 255, 0.04) 90%, rgba(70, 98, 255, 0) 100%);
+  opacity: 0;
+  animation: mh-ripple 8s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+  pointer-events: none;
+  /* Behind everything in the hero (the card isolates its own stack), so the
+     rings pass under the headline, buttons and icons, not over them. */
+  z-index: -1;
+}
+
+.mh-ripple:nth-child(2) { animation-delay: 2s; }
+.mh-ripple:nth-child(3) { animation-delay: 4s; }
+.mh-ripple:nth-child(4) { animation-delay: 6s; }
+
+@keyframes mh-ripple {
+  0% { opacity: 0; scale: 0.95; }
+  12% { opacity: 1; }
+  100% { opacity: 0; scale: 4.6; }
+}
+
+/* The thick outer ring: periwinkle to royal blue round the circle, with a
+   notch where its tail fades out, turning slowly. */
+.mh-orb-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(110, 136, 255, 0) 0deg,
+    rgba(110, 136, 255, 0.55) 30deg,
+    #8ea3ff 120deg,
+    #6d88ff 220deg,
+    #4f6cff 320deg,
+    #4f6cff 336deg,
+    rgba(79, 108, 255, 0) 337deg
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent 70%, #000 70.6%);
+  mask: radial-gradient(farthest-side, transparent 70%, #000 70.6%);
+  opacity: 0.62;
+  animation: mh-spin 7s linear infinite;
+}
+
+/* The core: a deep royal-blue disc, lit from the top. */
+.mh-orb-core {
+  position: absolute;
+  inset: 13%;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 55%),
+    radial-gradient(circle at 50% 50%, #3550f5 0%, #2d44e8 60%, #2838d4 100%);
+  box-shadow:
+    inset 0 -16px 36px rgba(10, 16, 90, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 14px 40px -10px rgba(42, 62, 224, 0.4);
+  color: #fff;
+}
+
+/* The active tool's mark in the core: about a third of the disc. */
+.mh-orb-mark {
+  width: 36%;
+  height: auto;
+  aspect-ratio: 1;
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.3));
+  animation: mh-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* The tools: neutral grey marks in a row, the lit one in ink. */
+.mh-tools {
+  display: flex;
+  align-items: center;
+  gap: clamp(20px, 4vw, 64px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mh-tool {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  opacity: calc(1.08 - var(--d, 1) * 0.13);
+  scale: calc(1.06 - var(--d, 1) * 0.05);
+  transition: opacity 0.35s, scale 0.35s;
+}
+
+.mh-tool.is-active { opacity: 1; scale: 1.08; }
+
+.mh-tool button {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: #b3b5bc;
+  cursor: pointer;
+  transition: color 0.35s, transform 0.35s, background 0.35s;
+}
+
+.mh-tool svg { width: 32px; height: 32px; }
+
+.mh-tool button:hover { color: #6b6d75; }
+
+/* The lit tool: just the mark, in ink — no tile, no shadow. */
+.mh-tool.is-active button { color: #141414; }
+
+
+.mh-tagline {
+  position: relative;
+  margin: clamp(28px, 4.8vh, 76px) 0 0;
+  font-family: var(--font-outfit), sans-serif;
+  font-size: 15px;
+  color: #5c5c63;
+}
+
+.mh-tagline b { color: #141414; font-weight: 600; display: inline-block; animation: mh-rise 0.4s ease both; }
+
+@keyframes mh-spin { to { rotate: 360deg; } }
+@keyframes mh-breathe { 0%, 100% { opacity: 0.8; scale: 1; } 50% { opacity: 1; scale: 1.06; } }
+@keyframes mh-rise { from { opacity: 0; translate: 0 10px; scale: 0.9; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .mh-orb-ring, .mh-orb-halo, .mh-orb-mark, .mh-tagline b,
+  .mh-ripple { display: none; }
+}
+
+/* ---- Smaller screens ---- */
+@media (max-width: 900px) {
+  .mh-card { padding-left: 20px; padding-right: 20px; }
+  .mh-title { font-size: clamp(40px, 8.4vw, 64px); }
+  .mh-tool { opacity: 0.85; scale: 1; }
+  .mh-row { flex-wrap: wrap; gap: 28px 18px; }
+  .mh-orb { order: -1; flex-basis: 100%; margin: 0 auto; }
+  .mh-tools { gap: 14px 18px; }
+}
+
+@media (max-width: 640px) {
+  .mh-title { font-size: clamp(38px, 11vw, 46px); }
+  .mh-lead { font-size: 15px; }
+  .mh-lead-break { display: none; }
+  .mh-actions { flex-direction: column; gap: 16px; }
+  .mh-orb { width: 180px; }
+  .mh-tool button { width: 42px; height: 42px; }
+  .mh-tool svg { width: 24px; height: 24px; }
+}

@@ -11,12 +11,6 @@ import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 
 type Item = { label: string; href?: string; external?: boolean; soon?: boolean; onClick?: () => void };
 
-const COMMUNITY = [
-  ['Creative Mind’s 1', 'https://chat.whatsapp.com/JxLUrQpNpaXJ4ido6muIW6?s=cl&p=i&ilr=4'],
-  ['Creative Mind’s 2', 'https://chat.whatsapp.com/KJDBfXpJLukHwo76xnoTSA?s=cl&p=i&ilr=4'],
-  ['Creative Mind’s 3', 'https://chat.whatsapp.com/HP7TNbjBEE6CCfkGVMBqLA?s=cl&p=i&ilr=4'],
-] as const;
-
 export function MobileMenu({
   onNavigate,
   onRequestApp,
@@ -36,6 +30,8 @@ export function MobileMenu({
         { label: 'Icons', href: '/icons', external: true },
         { label: 'Logos', href: '/logos', external: true },
         { label: 'Illustrations', href: '/illustrations', external: true },
+        // The desktop navbar's "MCP" link (it replaced the "Join us" community menu).
+        { label: 'MCP', href: '/mcp' },
         { label: 'Convert', soon: true },
         { label: 'Extension', soon: true },
         { label: 'Typescales', soon: true },
@@ -51,7 +47,6 @@ export function MobileMenu({
         { label: 'Copyrights', href: '/copyrights' },
       ],
     },
-    { title: 'Community', items: COMMUNITY.map(([label, href]) => ({ label, href, external: true })) },
     {
       title: 'Socials',
       items: [

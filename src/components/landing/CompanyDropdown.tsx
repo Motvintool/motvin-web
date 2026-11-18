@@ -20,6 +20,12 @@ const ENTRIES: Entry[] = [
     icon: icon(<><path d="M11 3l1.8 4.7 4.7 1.8-4.7 1.8L11 16l-1.8-4.7L4.5 9.5l4.7-1.8z" /><path d="M18.5 14.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" /></>),
   },
   {
+    title: 'Motvin MCP',
+    text: 'Connect Claude, Cursor or ChatGPT to the library',
+    href: '/mcp',
+    icon: icon(<><rect x="4" y="4" width="16" height="16" rx="4" /><path d="M9 12h6M12 9v6" /></>),
+  },
+  {
     title: 'About us',
     text: 'Our story and the founder',
     href: '/about',

@@ -1,0 +1,34 @@
+/* /mcp/connect — approving an AI tool's connection. Follows the light,
+   centred look of the login screen (ins-login), which the same page shows to
+   signed-out visitors, so the two steps read as one flow. */
+
+.mcp-connect { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 32px 20px; background: #fff; color: #111; overflow-y: auto; }
+.mcp-connect-card { width: min(420px, 100%); display: flex; flex-direction: column; align-items: stretch; text-align: center; }
+.mcp-connect-logo { width: 48px; height: 48px; margin: 0 auto; display: block; }
+
+.mcp-connect-eyebrow { margin: 28px 0 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #008ff0; }
+.mcp-connect-title { margin: 10px 0 8px; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; color: #111; }
+.mcp-connect-title strong { font-weight: 700; }
+.mcp-connect-sub { margin: 0 0 24px; font-size: 15px; line-height: 1.5; color: #6b6b70; }
+.mcp-connect-sub strong { color: #111; font-weight: 500; }
+.mcp-connect-link { padding: 0; border: 0; background: none; color: #008ff0; font: inherit; cursor: var(--ins-cursor-hand, pointer); }
+.mcp-connect-link:hover { text-decoration: underline; }
+.mcp-connect-link:disabled { opacity: 0.55; cursor: default; }
+
+.mcp-connect-permissions { margin: 0 0 24px; padding: 16px 18px; list-style: none; text-align: left; border: 1px solid #e2e2e6; border-radius: 12px; background: #fafafa; }
+.mcp-connect-permissions li { position: relative; padding-left: 26px; font-size: 14px; line-height: 1.5; color: #333; }
+.mcp-connect-permissions li + li { margin-top: 10px; }
+.mcp-connect-permissions li::before { content: ''; position: absolute; left: 0; top: 4px; width: 14px; height: 14px; border-radius: 50%; background: #008ff0 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E") center / 9px no-repeat; }
+
+.mcp-connect-actions { display: flex; flex-direction: column; gap: 10px; }
+.mcp-connect-allow, .mcp-connect-deny { height: 48px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: var(--ins-cursor-hand, pointer); transition: background 0.15s, border-color 0.15s; }
+.mcp-connect-allow { display: flex; align-items: center; justify-content: center; border: 0; background: #008ff0; color: #fff; text-decoration: none; }
+.mcp-connect-allow:hover { background: #1a91ee; }
+.mcp-connect-deny { border: 1px solid #e2e2e6; background: #fff; color: #111; }
+.mcp-connect-deny:hover { background: #fafafa; border-color: #cfcfd5; }
+.mcp-connect-allow:disabled, .mcp-connect-deny:disabled { opacity: 0.55; cursor: default; }
+
+.mcp-connect-hint { margin: 20px 0 0; font-size: 13px; line-height: 1.5; color: #8a8a90; }
+.mcp-connect-hint strong { color: #555; font-weight: 500; }
+.mcp-connect-hint a { color: #008ff0; text-decoration: none; }
+.mcp-connect-hint a:hover { text-decoration: underline; }

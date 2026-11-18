@@ -10,6 +10,7 @@ import { ProtectPanel } from './ProtectPanel';
 import { hasRecordings, onRecordings } from './recordingHandoff';
 import { FlowsPanel } from './FlowsPanel';
 import { RequestsPanel } from './RequestsPanel';
+import { McpUsagePanel } from './McpUsagePanel';
 import { ScreensPanel } from './ScreensPanel';
 import { SettingsPanel } from './SettingsPanel';
 import { WeeklyAppsPanel } from './WeeklyAppsPanel';
@@ -29,7 +30,7 @@ import { useAdminState } from './useAdminState';
  * recordings go through Agent Upload.
  */
 
-type Tab = 'analytics' | 'add' | 'batch' | 'protect' | 'weekly' | 'screens' | 'apps' | 'flows' | 'requests' | 'settings';
+type Tab = 'analytics' | 'add' | 'batch' | 'protect' | 'weekly' | 'screens' | 'apps' | 'flows' | 'requests' | 'mcp' | 'settings';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'analytics', label: 'Analytics' },
@@ -41,6 +42,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'apps', label: 'Apps' },
   { id: 'flows', label: 'Flows' },
   { id: 'requests', label: 'Requests' },
+  { id: 'mcp', label: 'MCP usage' },
   { id: 'settings', label: 'Settings' },
 ];
 
@@ -133,6 +135,7 @@ export function AdminView() {
           {tab === 'apps' && <AppsPanel state={state} busy={busy} run={run} />}
           {tab === 'flows' && <FlowsPanel state={state} busy={busy} run={run} />}
           {tab === 'requests' && <RequestsPanel />}
+          {tab === 'mcp' && <McpUsagePanel />}
           {tab === 'settings' && <SettingsPanel state={state} busy={busy} run={run} />}
         </section>
       )}
