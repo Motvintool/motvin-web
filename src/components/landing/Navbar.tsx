@@ -10,6 +10,7 @@ import { CompanyDropdown } from './CompanyDropdown';
 import { MobileMenu } from './MobileMenu';
 import { ProductsDropdown } from './ProductsDropdown';
 import { REQUEST_APP_EVENT } from './RequestAppLink';
+import { SHOW_MCP_IN_NAV } from '@/lib/mcp/visibility';
 
 // The library's request form, loaded (with its styles) only when it opens.
 const LandingRequestModal = dynamic(() => import('./LandingRequestModal'), { ssr: false });
@@ -358,10 +359,12 @@ export function Navbar({ compactAfter = COMPACT_AFTER }: { compactAfter?: number
           style={{ width: '14px', height: '14px', opacity: '0.5' }}
         />
       </a>
-      {/* A plain link to the MCP page (it replaced the "Join us" community menu). */}
-      <Link href="/mcp" className="nav-item" id="mcp-nav-link" onClick={closeMenus}>
-        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>MCP</span>
-      </Link>
+      {/* A plain link to the MCP page (it replaced the "Join us" community menu); hidden while MCP is tested privately. */}
+      {SHOW_MCP_IN_NAV && (
+        <Link href="/mcp" className="nav-item" id="mcp-nav-link" onClick={closeMenus}>
+          <span style={{ '--item-offset': '13px' } as React.CSSProperties}>MCP</span>
+        </Link>
+      )}
       <div
         className={`mi-nav-company-accordion${companyAccordionOpen ? ' is-open' : ''}`}
         id="mi-nav-company-accordion"
