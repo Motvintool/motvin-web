@@ -279,8 +279,7 @@ function QuickCopyButton({ client, url }: { client: McpClient; url: string }) {
         const copy = navigator.clipboard?.writeText(value).then(() => setCopied(true)) ?? Promise.resolve();
         if (client.quickOpen) {
           const page = client.quickOpen;
-          // Web pages open in a new tab; an app link (antigravity-ide://) is handed to the system instead.
-          void copy.finally(() => (page.startsWith('http') ? window.open(page, '_blank', 'noopener,noreferrer') : (window.location.href = page)));
+          void copy.finally(() => window.open(page, '_blank', 'noopener,noreferrer'));
         }
       }}
       aria-live="polite"
@@ -376,7 +375,12 @@ export function McpClientGuide({ client }: { client: McpClient }) {
         </div>
         <div className="mcd-head-action">
           {/* Terminal guides need no button: the command and its copy button are right in the steps. */}
-          {client.group === 'terminal' ? null : client.install ? <InstallButton client={client} kind={client.install} url={url} /> : <QuickCopyButton client={client} url={url} />}
+          {/* Terminal guides run commands, and editors without an install link are set up by hand: no button for either. */}
+          {client.install ? (
+            <InstallButton client={client} kind={client.install} url={url} />
+          ) : client.group === 'terminal' || client.group === 'editor' ? null : (
+            <QuickCopyButton client={client} url={url} />
+          )}
         </div>
       </div>
 
