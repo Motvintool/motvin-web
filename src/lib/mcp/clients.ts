@@ -77,6 +77,8 @@ export type McpClient = {
   legacy?: boolean;
   /** How to take Motvin out of the tool itself, for the guide's "Disconnect or remove". */
   remove: ClientStep;
+  /** Fixes only this tool needs, listed first under Troubleshooting (one with the same question replaces the general answer), so the steps stay on the main path. */
+  help?: { q: string; a: string }[];
 };
 
 /**
@@ -117,10 +119,10 @@ export const MCP_CLIENTS: McpClient[] = [
     steps: [
       { text: 'New to Claude Code? Install it first in your terminal:', code: 'npm install -g @anthropic-ai/claude-code' },
       { text: 'Then add Motvin:', code: 'claude mcp add --transport http --scope user motvin {url}' },
-      { text: 'Start Claude Code by running `claude`, then type `/mcp`. Choose **motvin**, then **Authenticate**.' },
+      { text: 'Start Claude Code in your terminal:', code: 'claude' },
+      { text: 'Inside Claude Code (not your terminal), type this, then choose **motvin** → **Authenticate**:', code: '/mcp' },
       { text: 'A browser window opens on motvin.com. Sign in with your Motvin account and click **Allow**.' },
     ],
-    note: '`--scope user` adds Motvin for every folder you open Claude Code in. Check it with `claude mcp list`.',
   },
   {
     id: 'codex',
@@ -133,10 +135,13 @@ export const MCP_CLIENTS: McpClient[] = [
     steps: [
       { text: 'New to Codex? Install it first in your terminal, then run `codex` once to sign in with your ChatGPT account:', code: 'npm install -g @openai/codex' },
       { text: 'Then add Motvin:', code: 'codex mcp add motvin --url {url}' },
-      { text: 'Then sign in:', code: 'codex mcp login motvin' },
-      { text: 'A browser window opens on motvin.com. Sign in and click **Allow**, then start Codex by running `codex`.' },
+      { text: 'A browser window opens on motvin.com. Sign in with your Motvin account and click **Allow**.' },
+      { text: 'Start Codex in your terminal:', code: 'codex' },
     ],
-    note: 'The ChatGPT desktop app and the Codex IDE extension read the same settings (`~/.codex/config.toml`), so Motvin is there too.',
+    help: [
+      { q: 'The browser didn’t open', a: 'Run `codex mcp login motvin` in your terminal.' },
+      { q: 'Codex says “authentication required”', a: 'Inside Codex, type `/mcp login motvin` and sign in again.' },
+    ],
   },
   {
     id: 'github-copilot-cli',
@@ -149,14 +154,19 @@ export const MCP_CLIENTS: McpClient[] = [
     steps: [
       { text: 'New to Copilot CLI? Install it first in your terminal, then run `copilot` once to sign in with GitHub:', code: 'npm install -g @github/copilot' },
       { text: 'Then add Motvin:', code: 'copilot mcp add --transport http motvin {url}' },
-      { text: 'Start Copilot CLI by running `copilot`, then type:', code: '/mcp auth motvin' },
+      { text: 'Start Copilot CLI in your terminal:', code: 'copilot' },
+      { text: 'Inside Copilot CLI (not your terminal), type:', code: '/mcp auth motvin' },
       { text: 'Sign in with your Motvin account in the browser and click **Allow**.' },
     ],
   },
   {
     id: 'antigravity-cli',
     group: 'terminal',
-    remove: { text: 'To remove Motvin from Antigravity CLI completely, delete the motvin entry from `~/.gemini/config/mcp_config.json`.' },
+    remove: { text: 'To remove Motvin from Antigravity CLI completely, run this in your terminal:', code: 'agy mcp remove motvin' },
+    help: [
+      { q: 'It says “agy: command not found”', a: 'Run the `export PATH` line the installer printed under **Warning**, then open a new terminal window.' },
+      { q: 'Choosing motvin only restarts it', a: 'Pick **Authenticate**, not **Restart**. Restart reconnects without signing in.' },
+    ],
     name: 'Antigravity CLI',
     icon: 'antigravity',
     color: '#4285F4',
@@ -164,27 +174,29 @@ export const MCP_CLIENTS: McpClient[] = [
     steps: [
       { text: 'New to Antigravity CLI? Install it first in your terminal, then run `agy` once to sign in with Google:', code: 'curl -fsSL https://antigravity.google/cli/install.sh | bash' },
       { text: 'Then add Motvin:', code: 'agy mcp add motvin {url}' },
-      { text: 'Start Antigravity CLI by running `agy`, then type `/mcp` to check motvin is listed.' },
-      { text: 'When Antigravity asks you to authenticate motvin, sign in with your Motvin account and click **Allow**.' },
+      { text: 'Start Antigravity CLI in your terminal:', code: 'agy' },
+      { text: 'Inside Antigravity CLI (not your terminal), type:', code: '/mcp' },
+      { text: 'Move to **motvin** with **↓**, press **Enter**, then choose **Authenticate**.' },
+      { text: 'A browser window opens on motvin.com. Sign in with your Motvin account and click **Allow**.' },
     ],
-    note: 'Prefer the settings file? Add `"motvin": { "serverUrl": "{url}" }` under `mcpServers` in `~/.gemini/config/mcp_config.json`. The Antigravity app and IDE read the same file, but each one signs in separately.',
   },
   {
     id: 'gemini-cli',
     group: 'terminal',
     legacy: true,
-    remove: { text: 'To remove Motvin from Gemini CLI completely, delete the motvin entry from `~/.gemini/settings.json` and restart `gemini`.' },
+    remove: { text: 'To remove Motvin from Gemini CLI completely, run this in your terminal:', code: 'gemini mcp remove -s user motvin' },
+    help: [{ q: '“Sign in with Google” fails', a: 'Google turned it off for personal accounts. Choose **Use Gemini API Key** (free at aistudio.google.com/apikey), or use the Antigravity CLI guide instead.' }],
     name: 'Gemini CLI',
     icon: 'gemini',
     color: '#8E75B2',
     intro: 'Add Motvin to Gemini CLI from your terminal, then sign in from inside it.',
     steps: [
-      { text: 'New to Gemini CLI? Install it first in your terminal, then run `gemini` once to sign in with your Google account:', code: 'npm install -g @google/gemini-cli' },
+      { text: 'New to Gemini CLI? Install it first in your terminal, then run `gemini` once and choose **Use Gemini API Key**:', code: 'npm install -g @google/gemini-cli' },
       { text: 'Then add Motvin:', code: 'gemini mcp add -s user --transport http motvin {url}' },
-      { text: 'Start Gemini CLI by running `gemini`, then type:', code: '/mcp auth motvin' },
+      { text: 'Start Gemini CLI in your terminal:', code: 'gemini' },
+      { text: 'Inside Gemini CLI (not your terminal), type:', code: '/mcp auth motvin' },
       { text: 'Sign in with your Motvin account in the browser and click **Allow**.' },
     ],
-    note: 'Google replaced Gemini CLI with Antigravity CLI in June 2026; see the Antigravity CLI guide for that. `-s user` adds Motvin for every folder. Prefer the settings file? Add `"motvin": { "httpUrl": "{url}" }` under `mcpServers` in `~/.gemini/settings.json`.',
   },
   {
     id: 'cursor',
@@ -216,7 +228,6 @@ export const MCP_CLIENTS: McpClient[] = [
       { text: 'Choose **HTTP**, paste the server address, enter **motvin** as the server ID and choose **Global**:', code: '{url}' },
       { text: 'Run **MCP: List Servers**, pick motvin and choose **Start Server**. Sign in with your Motvin account in the browser and click **Allow**.' },
     ],
-    note: 'Prefer the terminal? Run `code --add-mcp \'{"name":"motvin","type":"http","url":"{url}"}\'` — it does the same.',
   },
   {
     id: 'antigravity-ide',
@@ -225,6 +236,7 @@ export const MCP_CLIENTS: McpClient[] = [
     quickOpen: 'antigravity-ide://',
     quickCopy: { kind: 'config', value: '{\n  "mcpServers": {\n    "motvin": { "serverUrl": "{url}" }\n  }\n}', file: '~/.gemini/config/mcp_config.json' },
     remove: { text: 'To remove Motvin from Antigravity IDE completely, open **…** → **MCP Servers**, click **More actions** (**⋮**) next to motvin and choose **Delete**.' },
+    help: [{ q: 'Antigravity asks for a code', a: 'Paste it into **Enter authorization code** and click **Submit**.' }],
     name: 'Antigravity IDE',
     icon: 'antigravity',
     color: '#4285F4',
@@ -233,9 +245,8 @@ export const MCP_CLIENTS: McpClient[] = [
       { text: 'New to Antigravity? Download the app from **antigravity.google**, open it and sign in with your Google account.' },
       { text: 'Click the **…** at the top right of the **Agent** panel → **MCP Servers** → **View raw config**. Paste this into the file that opens (`~/.gemini/config/mcp_config.json`) and save:', code: '{\n  "mcpServers": {\n    "motvin": { "serverUrl": "{url}" }\n  }\n}' },
       { text: 'Back in **Manage MCP servers**, click **Refresh**, then **Authenticate** next to motvin.' },
-      { text: 'Sign in with your Motvin account and click **Allow**. If Antigravity asks for a code, paste it into **Enter authorization code** and click **Submit**.' },
+      { text: 'Sign in with your Motvin account and click **Allow**.' },
     ],
-    note: 'Already added Motvin with Antigravity CLI? Skip adding it — they share the file — but still click Authenticate here, since each one signs in separately.',
   },
   {
     id: 'windsurf',
@@ -250,7 +261,7 @@ export const MCP_CLIENTS: McpClient[] = [
     steps: [
       { text: 'Open **Customize** → **MCPs** and open the config file, `~/.config/devin/mcp_config.json`.' },
       { text: 'Add Motvin and save:', code: '{\n  "mcpServers": {\n    "motvin": { "url": "{url}" }\n  }\n}' },
-      { text: 'Refresh the list, click **Authenticate** next to motvin and sign in with your Motvin account.' },
+      { text: 'Refresh the list, click **Authenticate** next to motvin, then sign in with your Motvin account and click **Allow**.' },
     ],
   },
   {
@@ -269,7 +280,7 @@ export const MCP_CLIENTS: McpClient[] = [
       { text: 'Click **I understand and want to continue**, then **Create as a plugin**.' },
       { text: 'Install Motvin from your plugins, then sign in with your Motvin account and click **Allow**.' },
     ],
-    note: 'Custom MCP servers may not be offered on every ChatGPT plan or workspace.',
+    note: 'Don’t see **Add custom MCP server**? Your ChatGPT plan or workspace may not offer it yet.',
   },
   {
     id: 'claude',
@@ -286,7 +297,7 @@ export const MCP_CLIENTS: McpClient[] = [
       { text: 'Keep the options marked **Detected**, click **Add**, then **Connect**.' },
       { text: 'Sign in with your Motvin account and click **Allow**.' },
     ],
-    note: 'In a chat, click **+** → **Connectors** and turn Motvin on. On Team and Enterprise plans an owner adds it first in **Organization settings** → **Connectors**.',
+    note: 'To use it, open **Connectors** in a chat and turn Motvin on. On Team plans, an owner adds Motvin first.',
   },
   {
     id: 'figma',
@@ -298,7 +309,7 @@ export const MCP_CLIENTS: McpClient[] = [
     icon: 'figma',
     color: '#F24E1E',
     intro: 'Add Motvin as a connector in Figma Make.',
-    note: 'Custom connectors need a paid Figma plan, and an organization admin may need to turn them on first.',
+    note: 'Don’t see **Create connector**? It needs a paid Figma plan, and your admin may need to turn it on.',
     steps: [
       { text: 'Open a Figma Make file and click **Add context** → **Connectors**.' },
       { text: 'Under **Created by you**, click **Create connector**.' },
@@ -333,7 +344,6 @@ export const MCP_CLIENTS: McpClient[] = [
       { text: 'Add an HTTP MCP server with the address:', code: '{url}' },
       { text: 'On first use a browser window opens on motvin.com. Sign in with your Motvin account and click **Allow**.' },
     ],
-    note: 'No API key is needed: the tool signs in through your browser, the way you sign in to Motvin.',
   },
 ];
 

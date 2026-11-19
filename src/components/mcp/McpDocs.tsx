@@ -448,7 +448,7 @@ export function McpClientGuide({ client }: { client: McpClient }) {
       </h2>
       {/* One row per question, divided by hairlines; the answer opens on click. */}
       <div className="mcd-faq">
-        {TROUBLESHOOTING.map((item) => (
+        {[...(client.help ?? []), ...TROUBLESHOOTING.filter((item) => !client.help?.some((own) => own.q === item.q))].map((item) => (
           <details key={item.q}>
             <summary>
               {item.q}
