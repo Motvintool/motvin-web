@@ -69,7 +69,7 @@ export type McpClient = {
    * or a config snippet and the file it goes in. Without it, the server address.
    */
   quickCopy?: { kind: 'command'; value: string } | { kind: 'config'; value: string; file: string };
-  /** After copying, also open this — a web page in a new tab, or an app by its link (e.g. antigravity-ide://). */
+  /** After copying, also open this web page in a new tab. */
   quickOpen?: string;
   /** Where it sits in the tool lists; "Other clients" has none and comes last. */
   group?: ClientGroup;
@@ -208,33 +208,35 @@ export const MCP_CLIENTS: McpClient[] = [
     install: 'cursor',
     intro: 'Add Motvin to Cursor’s MCP settings, then sign in once.',
     steps: [
-      { text: 'Open **Customize** in the sidebar → **MCPs**, or open `~/.cursor/mcp.json` directly.' },
-      { text: 'Add Motvin and save the file:', code: '{\n  "mcpServers": {\n    "motvin": { "url": "{url}" }\n  }\n}' },
-      { text: 'In **Customize** → **MCPs**, turn motvin on.' },
-      { text: 'Sign in with your Motvin account in the browser and click **Allow**.' },
+      { text: 'New to Cursor? Download it from **cursor.com**, open it and sign in.' },
+      { text: 'Open **Customize** in the sidebar → **MCPs**, then open the config file, `~/.cursor/mcp.json`.' },
+      { text: 'Paste this and save:', code: '{\n  "mcpServers": {\n    "motvin": { "url": "{url}" }\n  }\n}' },
+      { text: 'Back in **Customize** → **MCPs**, turn **motvin** on.' },
+      { text: 'A browser window opens on motvin.com. Sign in with your Motvin account and click **Allow**.' },
     ],
   },
   {
     id: 'vscode',
     group: 'editor',
     remove: { text: 'To remove Motvin from VS Code completely, run **MCP: List Servers** from the Command Palette, pick motvin and choose **Uninstall**.' },
+    help: [{ q: 'The browser didn’t open', a: 'Run **MCP: List Servers**, pick **motvin** and choose **Start Server**.' }],
     name: 'VS Code',
     icon: 'vscode',
     color: '#007ACC',
     install: 'vscode',
     intro: 'Add Motvin to VS Code for use with Copilot’s agent mode.',
     steps: [
-      { text: 'Open the Command Palette and run **MCP: Add Server**.' },
-      { text: 'Choose **HTTP**, paste the server address, enter **motvin** as the server ID and choose **Global**:', code: '{url}' },
-      { text: 'Run **MCP: List Servers**, pick motvin and choose **Start Server**. Sign in with your Motvin account in the browser and click **Allow**.' },
+      { text: 'New to VS Code? Download it from **code.visualstudio.com**, open it and sign in to GitHub Copilot.' },
+      { text: 'Press **Cmd/Ctrl + Shift + P** and run **MCP: Add Server**.' },
+      { text: 'Choose **HTTP** and paste this address:', code: '{url}' },
+      { text: 'Enter **motvin** as the server ID and choose **Global**.' },
+      { text: 'A browser window opens on motvin.com. Sign in with your Motvin account and click **Allow**.' },
     ],
   },
   {
     id: 'antigravity-ide',
     group: 'editor',
     // No install link exists, so the button copies the config and then opens the app.
-    quickOpen: 'antigravity-ide://',
-    quickCopy: { kind: 'config', value: '{\n  "mcpServers": {\n    "motvin": { "serverUrl": "{url}" }\n  }\n}', file: '~/.gemini/config/mcp_config.json' },
     remove: { text: 'To remove Motvin from Antigravity IDE completely, open **…** → **MCP Servers**, click **More actions** (**⋮**) next to motvin and choose **Delete**.' },
     help: [{ q: 'Antigravity asks for a code', a: 'Paste it into **Enter authorization code** and click **Submit**.' }],
     name: 'Antigravity IDE',
@@ -243,25 +245,33 @@ export const MCP_CLIENTS: McpClient[] = [
     intro: 'Add Motvin to the Antigravity IDE, Google’s AI code editor.',
     steps: [
       { text: 'New to Antigravity? Download the app from **antigravity.google**, open it and sign in with your Google account.' },
-      { text: 'Click the **…** at the top right of the **Agent** panel → **MCP Servers** → **View raw config**. Paste this into the file that opens (`~/.gemini/config/mcp_config.json`) and save:', code: '{\n  "mcpServers": {\n    "motvin": { "serverUrl": "{url}" }\n  }\n}' },
-      { text: 'Back in **Manage MCP servers**, click **Refresh**, then **Authenticate** next to motvin.' },
-      { text: 'Sign in with your Motvin account and click **Allow**.' },
+      { text: 'In the **Agent** panel, click **…** at the top right → **MCP Servers** → **View raw config**.' },
+      { text: 'Paste this and save:', code: '{\n  "mcpServers": {\n    "motvin": { "serverUrl": "{url}" }\n  }\n}' },
+      { text: 'Back in **Manage MCP servers**, click **Refresh**, then **Authenticate** next to **motvin**.' },
+      { text: 'A browser window opens on motvin.com. Sign in with your Motvin account and click **Allow**.' },
     ],
   },
   {
     id: 'windsurf',
     group: 'editor',
-    quickCopy: { kind: 'config', value: '{\n  "mcpServers": {\n    "motvin": { "url": "{url}" }\n  }\n}', file: 'mcp_config.json' },
-    remove: { text: 'To remove Motvin from Devin Desktop completely, delete the motvin entry from `~/.config/devin/mcp_config.json`, save, and refresh the list in **Customize** → **MCPs**.' },
+    remove: { text: 'To remove Motvin from Devin Desktop completely, delete it from the list in **Customize** → **MCPs**.' },
+    help: [
+      {
+        q: 'The New MCP panel won’t close',
+        a: 'Click **Cancel**, then add Motvin in Devin’s settings file instead: put `"motvin": { "serverUrl": "{url}" }` under `mcpServers` in `~/.config/devin/mcp_config.json`, save, and restart Devin.',
+      },
+    ],
     // Windsurf was renamed Devin Desktop in June 2026; the id stays so old links work.
     name: 'Devin Desktop',
     icon: 'devin',
     color: '#3969CA',
     intro: 'Add Motvin to Devin Desktop (formerly Windsurf) for use with Cascade.',
     steps: [
-      { text: 'Open **Customize** → **MCPs** and open the config file, `~/.config/devin/mcp_config.json`.' },
-      { text: 'Add Motvin and save:', code: '{\n  "mcpServers": {\n    "motvin": { "url": "{url}" }\n  }\n}' },
-      { text: 'Refresh the list, click **Authenticate** next to motvin, then sign in with your Motvin account and click **Allow**.' },
+      { text: 'New to Devin Desktop? Download it from **devin.ai/desktop**, open it and sign in.' },
+      { text: 'Open **Customize** → **MCPs** and click **+** at the top right.' },
+      { text: 'Name it **motvin**, set **Transport type** to **HTTP** and paste this as the **Server URL**:', code: '{url}' },
+      { text: 'Click **Add**, tick **I understand and want to proceed** and confirm.' },
+      { text: 'Click **Authenticate** next to **motvin**. A browser window opens on motvin.com. Sign in and click **Allow**.' },
     ],
   },
   {
@@ -278,7 +288,8 @@ export const MCP_CLIENTS: McpClient[] = [
       { text: 'Click **Add** at the top right, then **Add custom MCP server**.' },
       { text: 'Name it **Motvin**, paste the address under **Server URL** and choose **OAuth** under **Authentication**:', code: '{url}' },
       { text: 'Click **I understand and want to continue**, then **Create as a plugin**.' },
-      { text: 'Install Motvin from your plugins, then sign in with your Motvin account and click **Allow**.' },
+      { text: 'Install Motvin from your plugins.' },
+      { text: 'A window opens on motvin.com. Sign in with your Motvin account and click **Allow**.' },
     ],
     note: 'Don’t see **Add custom MCP server**? Your ChatGPT plan or workspace may not offer it yet.',
   },
@@ -295,7 +306,7 @@ export const MCP_CLIENTS: McpClient[] = [
       { text: 'Open **Customize** → **Connectors**, click **Add**, then **Add custom connector**.' },
       { text: 'Name it **Motvin**, paste the server address and click **Continue**:', code: '{url}' },
       { text: 'Keep the options marked **Detected**, click **Add**, then **Connect**.' },
-      { text: 'Sign in with your Motvin account and click **Allow**.' },
+      { text: 'A window opens on motvin.com. Sign in with your Motvin account and click **Allow**.' },
     ],
     note: 'To use it, open **Connectors** in a chat and turn Motvin on. On Team plans, an owner adds Motvin first.',
   },
@@ -314,7 +325,8 @@ export const MCP_CLIENTS: McpClient[] = [
       { text: 'Open a Figma Make file and click **Add context** → **Connectors**.' },
       { text: 'Under **Created by you**, click **Create connector**.' },
       { text: 'Name it **Motvin** and paste the server address:', code: '{url}' },
-      { text: 'Click **Create**, then **Connect**. Sign in with your Motvin account and click **Allow**.' },
+      { text: 'Click **Create**, then **Connect**.' },
+      { text: 'A window opens on motvin.com. Sign in with your Motvin account and click **Allow**.' },
     ],
   },
   {
@@ -327,9 +339,10 @@ export const MCP_CLIENTS: McpClient[] = [
     color: '#F26207',
     intro: 'Add Motvin to the Replit Agent’s MCP servers.',
     steps: [
-      { text: 'In Replit, open **Settings** → **Integrations** → **Your integrations**, click **Add custom**, then **Add personal MCP server**.' },
+      { text: 'In Replit, open **Settings** → **Integrations** → **Your integrations**.' },
+      { text: 'Click **Add custom**, then **Add personal MCP server**.' },
       { text: 'Name it **Motvin**, paste the server address and click **Test & save**:', code: '{url}' },
-      { text: 'Sign in with your Motvin account when asked and click **Allow**.' },
+      { text: 'A window opens on motvin.com. Sign in with your Motvin account and click **Allow**.' },
     ],
   },
   {
