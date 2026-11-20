@@ -23,6 +23,7 @@ import {
 import { isColorStyle } from '@/lib/render/svg';
 import { ModalPortal } from './ModalPortal';
 import { useRequireLogin } from './useRequireLogin';
+import { DETAIL_SHORTCUTS } from './shortcuts';
 
 /**
  * Item detail view with the full editor — port of openDetail() in
@@ -808,7 +809,8 @@ export function DetailModal({
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <path d="M6 6L20 20M20 6L6 20" />
+          {/* Centred on 12,12 — the old 6→20 run sat 1.25px low and right. */}
+          <path d="M5 5L19 19M19 5L5 19" />
         </svg>
       </button>
 
@@ -844,20 +846,8 @@ export function DetailModal({
               ×
             </button>
           </div>
-          {[
-            ['C', 'Copy SVG'],
-            ['D', 'Download SVG'],
-            ['P', 'Download PNG'],
-            ['S', 'Save / Unsave'],
-            ['F', 'Find similar'],
-            ['E', 'Expand'],
-            ['G', 'Toggle grid'],
-            ['R', 'Reset'],
-            ['←/→', 'Prev / Next'],
-            ['Esc', 'Close'],
-            ['?', 'This help'],
-          ].map(([key, label]) => (
-            <div key={key} style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+          {DETAIL_SHORTCUTS.map(([keys, label]) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
               <span style={{ opacity: 0.75 }}>{label}</span>
               <kbd
                 style={{
@@ -869,7 +859,7 @@ export function DetailModal({
                   fontSize: 12,
                 }}
               >
-                {key}
+                {keys.join('/')}
               </kbd>
             </div>
           ))}
@@ -1010,7 +1000,7 @@ export function DetailModal({
               onClick={onClose}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 6L20 20M20 6L6 20" />
+                <path d="M5 5L19 19M19 5L5 19" />
               </svg>
             </button>
           </div>

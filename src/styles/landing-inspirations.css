@@ -3688,25 +3688,6 @@ html.lpi-at-footer body {
    (the word's 2px gap read as a space before it on tablets and desktops too). */
 .hero-section .interactive-word-wrapper { gap: 0; }
 
-/* The open phone menu's top row sits exactly where the top bar's does: the same side padding (20px on a
-   phone, 24px on a tablet), the same 70px height, and the logo and close at the menu button's spots. */
-@media (max-width: 1300px) {
-  .mi-nav-mobile-panel-header {
-    height: 70px;
-    flex-basis: 70px;
-    padding-top: 13px;
-    padding-bottom: 13px;
-    align-items: flex-start;
-  }
-  .mi-nav-mobile-panel-header .mi-nav-mobile-panel-logo { margin-top: 2px; }
-}
-@media (max-width: 600px) {
-  .mi-nav-mobile-panel { padding-left: 20px; padding-right: 20px; }
-}
-@media (min-width: 601px) and (max-width: 1300px) {
-  .mi-nav-mobile-panel { padding-left: 24px; padding-right: 24px; }
-}
-
 /* A phone: the footer packed to fit one screen (it was 1017px on a 747px one), so the page can slide up off
    it as on a desktop (Footer.tsx turns the reveal on only while the whole footer fits). Same content:
    Tools and Library share the left column beside Resources, the copy and gaps a little tighter. */
@@ -3752,110 +3733,24 @@ html.lpi-at-footer body {
 @media (max-width: 600px) {
 }
 
-/* ---- The hamburger menu (<=1300px), after mobbin.com's: every link at once under small grey group labels,
-   in large type; the call to action in the top row, Sign in across the bottom. Motvin's black pills,
-   and Manrope. ---- */
-@media (max-width: 1300px) {
-  .mi-mm-head-actions { display: flex; align-items: center; gap: 10px; }
-  .mi-mm-cta {
-    display: inline-flex;
-    align-items: center;
-    height: 40px;
-    padding: 0 18px;
-    border-radius: 999px;
-    background: #0b0c0e;
-    color: #fff;
-    font-size: 15px;
-    font-weight: 600;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-  .mi-mm-cta:active { scale: 0.97; }
-
-  .mi-mm { display: flex; flex-direction: column; gap: 28px; padding: 16px 0 28px; }
-  .mi-mm-title { margin: 0 0 8px; color: #8a8a8f; font-size: 13px; font-weight: 600; letter-spacing: 0; }
-  .mi-mm-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
-  .mi-mm-link {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 7px 0;
-    color: #0b0c0e;
-    font-size: 22px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    line-height: 1.2;
-    text-decoration: none;
-  }
-  .mi-mm-link:active { opacity: 0.6; }
-  .mi-mm-link.is-soon { color: #a1a1a6; }
-  .mi-mm-soon {
-    padding: 3px 8px;
-    border-radius: 999px;
-    background: #f1f1f3;
-    color: #8a8a8f;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0;
-  }
-
-  /* Sign in rides along the bottom, with the list fading out behind it as it scrolls. */
-  .mi-nav-mobile-panel-actions.mi-mm-foot {
-    position: sticky;
-    bottom: 0;
-    display: block;
-    margin: 0;
-    padding: 28px 0 0;
-    background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff 45%);
-  }
-  .mi-mm-signin {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 52px;
-    border-radius: 999px;
-    background: #f2f2f4;
-    color: #0b0c0e;
-    font-size: 16px;
-    font-weight: 600;
-    text-decoration: none;
-  }
-  .mi-mm-signin:active { background: #e8e8eb; }
-}
-
-/* The compact top bar (phone, tablet) and the open menu's top row: no line beneath, as on mobbin.com. */
+/* The compact top bar (phone, tablet): no line beneath, as on mobbin.com (the open menu's row: mobile-menu.css). */
 @media (max-width: 1300px) {
   .navbar.navbar { border-bottom: 0; }
-  .mi-nav-mobile-panel { border-bottom: 0; }
 }
-/* Sign in sits on the panel's very bottom edge, its own white beneath it, so no list shows below it. */
-@media (max-width: 1300px) {
-  .mi-nav-mobile-panel:has(.mi-mm-foot) { padding-bottom: 0; }
-  .mi-nav-mobile-panel-actions.mi-mm-foot { padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
-}
-
-/* The compact top bar a little taller (70px -> 80px): 18px above and below its 44px row, and the open menu's
-   top row the same, so the logo, button and close keep their spots when it opens. */
+/* The compact top bar a little taller (70px -> 80px): 18px above and below its 44px row. The open menu's top
+   row matches it in mobile-menu.css, so the logo, button and close keep their spots when it opens. */
 @media (max-width: 1300px) {
   .navbar.navbar { height: 80px; padding-top: 18px; padding-bottom: 18px; }
-  .mi-nav-mobile-panel-header { height: 80px; flex-basis: 80px; padding-top: 18px; padding-bottom: 18px; }
 }
 
-/* The top bar's button (and the open menu's) 44px tall in the taller bar, filling its row as before. */
+/* The top bar's button 44px tall in the taller bar, filling its row as before (the menu's: mobile-menu.css). */
 @media (max-width: 1300px) {
   .mi-nav-mobile-cta-slot #auth-signup-btn,
-  .mi-nav-mobile-cta-slot #auth-dashboard-btn,
-  .mi-mm-cta { height: 44px; box-sizing: border-box; }
+  .mi-nav-mobile-cta-slot #auth-dashboard-btn { height: 44px; box-sizing: border-box; }
   .mi-nav-mobile-cta-slot #auth-signup-btn,
   .mi-nav-mobile-cta-slot #auth-dashboard-btn { display: inline-flex; align-items: center; padding-top: 0; padding-bottom: 0; }
   .mi-nav-mobile-cta-slot [style*="display: none"] { display: none !important; }
-  .mi-nav-hamburger, .mi-nav-mobile-panel-close { align-self: center; }
-}
-/* Both rows centre their items on the 44px line, so the logo and close sit exactly where the bar's do. */
-@media (max-width: 1300px) {
-  .mi-nav-mobile-panel-header { align-items: center; }
-  .mi-nav-mobile-panel-header .mi-nav-mobile-panel-logo { margin-top: 0; }
+  .mi-nav-hamburger { align-self: center; }
 }
 
 /* The library's request form over a landing-style page: above the page's top bar (1000) and its cookie and

@@ -2,6 +2,11 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
+import {
+  DEFAULT_SORT,
+  parseLibraryParams,
+  type LibraryParams,
+} from '@/lib/api/libraryParams';
 
 /**
  * Search, filters, sort and page, held in the URL.
@@ -15,45 +20,21 @@ import { useCallback, useMemo } from 'react';
  * Params are omitted when empty, so the default view stays a clean `/icons`.
  */
 
-export type LibraryParams = {
-  query: string;
-  page: number;
-  sources: string[];
-  styles: string[];
-  categories: string[];
-  licenses: string[];
-  sort: string;
-  /** Right-panel "Saved" view. */
-  saved: boolean;
-};
-
-// Matches the original's `localStorage.getItem("mi.sort") || "all"`.
-export const DEFAULT_SORT = 'all';
+export type { LibraryParams } from '@/lib/api/libraryParams';
+export { DEFAULT_SORT } from '@/lib/api/libraryParams';
 
 const LIST_KEYS = ['sources', 'styles', 'categories', 'licenses'] as const;
-
-function parseList(value: string | null): string[] {
-  return value ? value.split(',').filter(Boolean) : [];
-}
 
 export function useLibraryParams() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const params = useMemo<LibraryParams>(() => {
-    const rawPage = parseInt(searchParams.get('page') ?? '1', 10);
-    return {
-      query: searchParams.get('q') ?? '',
-      page: Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1,
-      sources: parseList(searchParams.get('sources')),
-      styles: parseList(searchParams.get('styles')),
-      categories: parseList(searchParams.get('categories')),
-      licenses: parseList(searchParams.get('licenses')),
-      sort: searchParams.get('sort') ?? DEFAULT_SORT,
-      saved: searchParams.get('saved') === '1',
-    };
-  }, [searchParams]);
+  // The same parsing the server uses for its first page (lib/api/libraryParams).
+  const params = useMemo<LibraryParams>(
+    () => parseLibraryParams((key) => searchParams.get(key)),
+    [searchParams],
+  );
 
   const setParams = useCallback(
     (patch: Partial<LibraryParams>, options: { replace?: boolean } = {}) => {

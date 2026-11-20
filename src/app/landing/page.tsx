@@ -11,6 +11,7 @@ import { Navbar } from '@/components/landing/Navbar';
 import { Templates } from '@/components/landing/Templates';
 import '@/styles/landing.css';
 import '@/styles/landing-inspirations.css';
+import '@/styles/mobile-menu.css';
 
 /**
  * Landing page — port of motvin-ui/index.html.

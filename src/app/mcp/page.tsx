@@ -8,6 +8,7 @@ import { ClosingCta } from '@/components/landing/inspirations/ClosingCta';
 import { McpLanding } from '@/components/mcp/McpLanding';
 import '@/styles/landing.css';
 import '@/styles/landing-inspirations.css';
+import '@/styles/mobile-menu.css';
 import '@/styles/mcp-hero.css';
 import '@/styles/mcp.css';
 

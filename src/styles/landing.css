@@ -805,10 +805,6 @@
   display: none;
 }
 
-.mi-nav-mobile-panel {
-  display: none;
-}
-
 .mi-nav-products-accordion {
   display: none;
 }
@@ -5384,10 +5380,6 @@
    ========================================================= */
 @media (max-width: 1300px) {
 
-  body.mi-nav-mobile-open {
-    overflow: hidden;
-  }
-
   .footer-banner,
   .footer-margin-inner {
     display: none;
@@ -5491,78 +5483,6 @@
     .mi-nav-hamburger {
       margin-left: 8px;
     }
-  }
-
-  .mi-nav-mobile-panel {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 1002;
-    flex-direction: column;
-    justify-content: space-between;
-    background: #fff;
-    border-bottom: 1px solid #e4e7ec;
-    max-height: none;
-    overflow-y: auto;
-    padding: 0 16px 28px;
-    box-sizing: border-box;
-  }
-
-  .mi-nav-mobile-panel.is-open {
-    display: flex;
-  }
-
-  .mi-nav-mobile-panel-main {
-    display: flex;
-    flex: 0 0 auto;
-    flex-direction: column;
-    gap: 24px;
-  }
-
-  .mi-nav-mobile-panel-content {
-    display: flex;
-    flex: 0 0 auto;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .mi-nav-mobile-panel-header {
-    position: sticky;
-    top: 0;
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 66px;
-    flex: 0 0 66px;
-    padding-top: 13px;
-    padding-bottom: 13px;
-    box-sizing: border-box;
-    background: #fff;
-  }
-
-  .mi-nav-mobile-panel-logo,
-  .mi-nav-mobile-panel-logo img {
-    display: block;
-    width: 36px;
-    height: 36px;
-  }
-
-  .mi-nav-mobile-panel-close {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    padding: 8px;
-    border: 0;
-    background: transparent;
-    cursor: var(--ins-cursor-hand, pointer);
-  }
-
-  .mi-nav-mobile-panel-close img {
-    width: 24px;
-    height: 24px;
   }
 
   .mi-nav-mobile-panel-list {
@@ -5750,14 +5670,6 @@
     border-bottom: 1px solid rgba(0, 0, 0, 0.16);
     border-radius: 0;
     box-sizing: border-box;
-  }
-
-  .mi-nav-mobile-panel-actions {
-    display: flex;
-    flex: 0 0 auto;
-    gap: 16px;
-    width: 100%;
-    margin-top: 52px;
   }
 
   .mi-nav-mobile-panel-signup,

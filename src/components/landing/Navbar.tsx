@@ -7,7 +7,7 @@ import { useAuth } from '@/components/shared/AuthProvider';
 import { getGuestUid } from '@/lib/firebase/auth';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { CompanyDropdown } from './CompanyDropdown';
-import { MobileMenu } from './MobileMenu';
+import { INSTAGRAM_URL, LINKEDIN_URL, MobileMenuPanel } from './MobileMenu';
 import { ProductsDropdown } from './ProductsDropdown';
 import { REQUEST_APP_EVENT } from './RequestAppLink';
 import { SHOW_MCP_IN_NAV } from '@/lib/mcp/visibility';
@@ -44,8 +44,6 @@ const COMPACT_MIDDLE = 59;
 // The menus open on hover (desktop, mouse); this grace period lets the
 // pointer travel from a label down into its menu without it closing.
 const HOVER_CLOSE_DELAY = 180;
-const INSTAGRAM_URL = 'https://www.instagram.com/motvintool/';
-const LINKEDIN_URL = 'https://www.linkedin.com/company/motvin/home';
 
 type Menu = 'products' | 'company' | null;
 
@@ -498,43 +496,7 @@ export function Navbar({ compactAfter = COMPACT_AFTER }: { compactAfter?: number
       {!isMobile && <CompanyDropdown open={companyOpen} onNavigate={closeMenus} onRequestApp={requestApp} />}
       {requestOpen && <LandingRequestModal onClose={() => setRequestOpen(false)} />}
 
-      <div
-        className={`mi-nav-mobile-panel${panelOpen ? ' is-open' : ''}`}
-        id="nav-mobile-panel"
-        ref={panelRef}
-      >
-        <div className="mi-nav-mobile-panel-main">
-          <div className="mi-nav-mobile-panel-header">
-            <Link href="/" className="mi-nav-mobile-panel-logo" aria-label="Motvin home" onClick={closePanel}>
-              <img src="/ASSET/Icons/motvin-logo.svg" alt="" />
-            </Link>
-            <div className="mi-mm-head-actions">
-              {/* The page's main call to action rides in the menu's top row, as on mobbin.com. */}
-              <Link href={user ? '/inspirations' : '/signup'} className="mi-mm-cta" onClick={closePanel}>
-                {user ? 'Go to Library' : 'Get started'}
-              </Link>
-              <button
-                className="mi-nav-mobile-panel-close"
-                id="nav-mobile-panel-close"
-                aria-label="Close menu"
-                onClick={closePanel}
-              >
-                <img src="/ASSET/Icons/nav-close-bold.svg" alt="" />
-              </button>
-            </div>
-          </div>
-          <div className="mi-nav-mobile-panel-content">
-            <MobileMenu onNavigate={closePanel} onRequestApp={requestApp} instagramUrl={INSTAGRAM_URL} linkedinUrl={LINKEDIN_URL} />
-          </div>
-        </div>
-        {!user && (
-          <div className="mi-nav-mobile-panel-actions mi-mm-foot">
-            <Link href="/login" className="mi-mm-signin" onClick={closePanel}>
-              Sign in
-            </Link>
-          </div>
-        )}
-      </div>
+      <MobileMenuPanel open={panelOpen} onClose={closePanel} onRequestApp={requestApp} panelRef={panelRef} />
     </div>
   );
 }

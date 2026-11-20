@@ -4,6 +4,7 @@ import { McpClientsIndex } from '@/components/mcp/McpDocs';
 import { McpDocsPage } from '@/components/mcp/McpDocsPage';
 import '@/styles/landing.css';
 import '@/styles/landing-inspirations.css';
+import '@/styles/mobile-menu.css';
 import '@/styles/mcp.css';
 import '@/styles/mcp-docs.css';
 

@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { ModalPortal } from './ModalPortal';
 
 /**
  * Transient confirmations — port of toast() in motvin-ui/JS/motvin-icons.js.
@@ -93,9 +94,13 @@ export function useToast(): ToastContextValue {
 
 export function Toast() {
   const { message } = useToast();
+  // On <body>, like the copy toasts and the library's popups: inside the page shell it would sit
+  // under anything drawn over the shell (an open Motvin Buddy, a popup).
   return (
-    <div className={`mi-toast${message ? ' is-visible' : ''}`} id="toast" role="status">
-      {message}
-    </div>
+    <ModalPortal>
+      <div className={`mi-toast${message ? ' is-visible' : ''}`} id="toast" role="status">
+        {message}
+      </div>
+    </ModalPortal>
   );
 }

@@ -1,18 +1,19 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { InspirationsShell } from '@/components/inspirations/InspirationsShell';
+import { CONTACT_EMAIL } from '@/lib/contact';
 import '@/styles/theme.css';
 import '@/styles/inspirations.css';
 import '@/styles/profile-menu.css';
 import '@/styles/legal.css';
 
+// The pages import it from here; it lives in lib/contact so non-legal screens can use it too.
+export { CONTACT_EMAIL };
+
 /**
  * The shell for Motvin's public legal pages (Privacy, Terms, Copyrights): the logo, a title, a short intro,
  * sections of plain text, and links to the other two pages.
- *
- * Where people write to us. Change it here and every page follows.
  */
-export const CONTACT_EMAIL = 'motvintool@gmail.com';
 
 /** When these pages were last revised. */
 export const LEGAL_UPDATED = '18 November 2026';

@@ -7,6 +7,7 @@ import { NotFoundHero } from '@/components/404/NotFoundHero';
 import { Footer } from '@/components/landing/Footer';
 import '@/styles/landing.css';
 import '@/styles/landing-inspirations.css';
+import '@/styles/mobile-menu.css';
 import '@/styles/not-found.css';
 
 /**

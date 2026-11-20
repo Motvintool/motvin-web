@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useAuth } from '@/components/shared/AuthProvider';
 
 /**
  * Left rail — port of `aside.mi-left-sidebar` in the three library pages.
@@ -25,6 +26,7 @@ export function LibrarySidebar({
   mobileMenuOpen,
   onToggleMobileMenu,
 }: Props) {
+  const { user } = useAuth();
   const itemClass = (tab: SidebarTab) =>
     `mi-sidebar-item${active === tab ? ' is-active' : ''}`;
 
@@ -32,11 +34,17 @@ export function LibrarySidebar({
     <aside className="mi-left-sidebar" aria-label="Navigation">
       <div className="mi-sidebar-top">
         <Link href="/" className="mi-sidebar-logo" aria-label="Motvin home">
-          <img
-            src="/ASSET/Icons/nav-icon-motvin-logo.svg"
-            alt="Motvin"
-            className="mi-sidebar-logo-img"
-          />
+          {/* The phone/tablet bar shows the landing bar's logo file (its 38px
+              artboard sizes the mark differently from the rail's 42px one), so
+              it doesn't change size when the shared menu opens over it. */}
+          <picture>
+            <source media="(max-width: 1300px)" srcSet="/ASSET/Icons/motvin-logo.svg" />
+            <img
+              src="/ASSET/Icons/nav-icon-motvin-logo.svg"
+              alt="Motvin"
+              className="mi-sidebar-logo-img"
+            />
+          </picture>
         </Link>
         <button className={itemClass('filters')} onClick={() => onSelect('filters')} data-sidebar="filters" title="Filters">
           <span className="mi-sidebar-icon-container">
@@ -151,26 +159,35 @@ export function LibrarySidebar({
           />
         </button>
       </div>
-      {/* Mobile-only hamburger: opens a dropdown holding the relocated nav */}
-      <button
-        className={`mi-mobile-menu-toggle${mobileMenuOpen ? ' is-open' : ''}`}
-        id="mobile-menu-toggle"
-        aria-label="Menu"
-        aria-expanded={mobileMenuOpen}
-        aria-controls="mobile-menu-panel"
-        onClick={onToggleMobileMenu}
-      >
-        <img
-          src="/ASSET/Icons/nav-open.svg"
-          alt=""
-          className="mi-mobile-menu-icon-open"
-        />
-        <img
-          src="/ASSET/Icons/nav-close.svg"
-          alt=""
-          className="mi-mobile-menu-icon-close"
-        />
-      </button>
+      {/* Phone/tablet top bar, as on the landing pages: the call to action, then
+          the hamburger that opens the shared menu (MobileMenuPanel). */}
+      <div className="mi-mobile-navbar-actions">
+        <Link
+          href={user ? '/inspirations' : '/signup'}
+          className={`mi-mobile-get-started${user ? '' : ' is-dark'}`}
+        >
+          {user ? 'Go to Library' : 'Get started for free'}
+        </Link>
+        <button
+          className={`mi-mobile-menu-toggle${mobileMenuOpen ? ' is-open' : ''}`}
+          id="mobile-menu-toggle"
+          aria-label="Menu"
+          aria-expanded={mobileMenuOpen}
+          aria-controls="nav-mobile-panel"
+          onClick={onToggleMobileMenu}
+        >
+          <img
+            src="/ASSET/Icons/nav-open-bold.svg"
+            alt=""
+            className="mi-mobile-menu-icon-open"
+          />
+          <img
+            src="/ASSET/Icons/nav-close-bold.svg"
+            alt=""
+            className="mi-mobile-menu-icon-close"
+          />
+        </button>
+      </div>
     </aside>
   );
 }

@@ -1,4 +1,5 @@
 import type { LibraryItem } from '@/lib/api/normalize';
+import { scopeSvgNames } from './scope';
 
 /**
  * SVG rendering pipeline — port of renderSvg() / renderStyled() in
@@ -258,7 +259,9 @@ export function renderSvg(paths: string, opts: RenderOptions = {}): string {
 
   // An inner <svg> maps the artwork's native viewBox into the 24×24 canvas.
   // width/height in percent so vector editors scale it correctly on paste.
-  const innerSvg = `<svg viewBox="${viewBox}" width="24" height="24" x="0" y="0" preserveAspectRatio="xMidYMid meet" fill-rule="evenodd" clip-rule="evenodd">${cleanPaths}</svg>`;
+  // Gradients and clip paths are named per item: a grid inlines many SVGs into
+  // one document, where a shared `id="a"` resolves to whichever came first.
+  const innerSvg = `<svg viewBox="${viewBox}" width="24" height="24" x="0" y="0" preserveAspectRatio="xMidYMid meet" fill-rule="evenodd" clip-rule="evenodd">${scopeSvgNames(cleanPaths)}</svg>`;
 
   const iconAttrs = `opacity="${opacity}"${shadow > 0 ? ' filter="url(#mi-shd)"' : ''}${transforms.length ? ` transform="${transforms.join(' ')}"` : ''}${dashAttr}`;
   const group = `<g ${iconAttrs}>${innerSvg}</g>`;

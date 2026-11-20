@@ -352,7 +352,7 @@
     #874fff 100%
   );
   color: #fff;
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   font-size: 16px;
   font-weight: 500;
   line-height: normal;
@@ -403,8 +403,31 @@ body.mi-has-product-banner.mi-product-banner-hidden .mi-app-shell {
 }
 
 .mi-app-shell,
-.mi-app-shell * {
-  font-family: var(--font-outfit), sans-serif !important;
+.mi-app-shell *,
+/* The library's type is Manrope, as on Inspirations (the site-wide rule in global.css), kept here
+   too for what's portalled out of the shell to escape its overflow clipping — and the toast, drawn
+   on <body> to stay above anything over the shell (Toast.tsx). */
+.mi-recolor-dropdown,
+.mi-recolor-dropdown *,
+.mi-toast {
+  font-family: var(--font-manrope), sans-serif !important;
+}
+
+/* Manrope draws about a weight lighter than the Outfit the library was drawn in, so its text sits
+   one step up to look the same (regular 400 → 500, medium 500 → 600, …). Text with no weight of its
+   own starts at 500; form controls take it too rather than the browser's regular. :where() keeps all
+   this weaker than any class that sets a weight. */
+:where(.mi-app-shell, .mi-recolor-dropdown) {
+  font-weight: 500;
+}
+:where(.mi-app-shell, .mi-recolor-dropdown) :where(button, input, select, textarea) {
+  font-weight: inherit;
+}
+/* The detail view's "similar" grid reuses the cards, but it was Manrope all along (it's drawn outside
+   the shell), so its cards keep their weights. */
+.mi-modal .mi-card-name,
+.mi-modal .mi-card-source {
+  font-weight: 400;
 }
 
 /* =========================================================
@@ -445,6 +468,11 @@ body.mi-has-product-banner.mi-product-banner-hidden .mi-app-shell {
   transition:
     transform 0.15s ease,
     opacity 0.15s ease;
+}
+
+/* The <picture> only swaps the file per breakpoint; the img lays out as before. */
+.mi-sidebar-logo picture {
+  display: contents;
 }
 
 .mi-sidebar-logo:hover {
@@ -549,9 +577,9 @@ body.mi-has-product-banner.mi-product-banner-hidden .mi-app-shell {
 }
 
 .mi-sidebar-label {
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 16.5px;
   letter-spacing: 0;
   color: #606576;
@@ -571,7 +599,7 @@ body.mi-has-product-banner.mi-product-banner-hidden .mi-app-shell {
 }
 
 .mi-sidebar-item.is-active .mi-sidebar-label {
-  font-weight: 600;
+  font-weight: 700;
   color: #1d1d1d;
 }
 
@@ -655,8 +683,8 @@ body.is-panel-floating .mi-main {
   justify-content: center;
   padding: 4px 9px;
   color: #000;
-  font-family: var(--font-outfit), sans-serif;
-  font-weight: 500;
+  font-family: var(--font-manrope), sans-serif;
+  font-weight: 600;
   font-size: 11px;
   line-height: 10px;
   letter-spacing: 0.4px;
@@ -686,8 +714,8 @@ body.is-panel-floating .mi-main {
   gap: 6px;
   padding: 6px 12px;
   border-radius: 10px;
-  font-family: var(--font-outfit), sans-serif;
-  font-weight: 500;
+  font-family: var(--font-manrope), sans-serif;
+  font-weight: 600;
   font-size: 16px;
   color: #2e3238;
   letter-spacing: -0.16px;
@@ -705,8 +733,8 @@ body.is-panel-floating .mi-main {
   border-radius: 4px;
   padding: 0 4px;
   color: #000;
-  font-family: var(--font-outfit), sans-serif;
-  font-weight: 500;
+  font-family: var(--font-manrope), sans-serif;
+  font-weight: 600;
   font-size: 12px;
   display: flex;
   align-items: center;
@@ -737,8 +765,8 @@ body.is-panel-floating .mi-main {
   background: white;
   text-decoration: none;
   color: #2e3238;
-  font-family: var(--font-outfit), sans-serif;
-  font-weight: 500;
+  font-family: var(--font-manrope), sans-serif;
+  font-weight: 600;
   font-size: 16px;
   letter-spacing: -0.16px;
   transition: background 0.15s ease;
@@ -874,18 +902,18 @@ body.is-panel-floating .mi-main {
 }
 
 .mi-products-dropdown-item-label {
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   font-size: 16px;
-  font-weight: 400;
+  font-weight: 500;
   color: #252522;
   letter-spacing: -0.2344px;
   line-height: normal;
 }
 
 .mi-products-dropdown-item-sub {
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   font-size: 15px;
-  font-weight: 400;
+  font-weight: 500;
   color: rgba(37, 37, 34, 0.56);
   letter-spacing: -0.0762px;
   line-height: normal;
@@ -977,13 +1005,13 @@ body.is-panel-floating .mi-main {
 }
 
 .mi-cat-dropdown-label {
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   color: #324252;
   font-size: 16px;
 }
 
 .mi-cat-dropdown-val {
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   color: #0a0a0a;
   font-size: 16px;
   flex: 1;
@@ -1062,8 +1090,8 @@ body.is-panel-floating .mi-main {
 }
 
 .mi-category-menu-label {
-  font-family: var(--font-outfit), sans-serif;
-  font-weight: 400;
+  font-family: var(--font-manrope), sans-serif;
+  font-weight: 500;
   font-size: 16px;
   color: rgba(0, 0, 0, 0.8);
   white-space: nowrap;
@@ -1075,8 +1103,8 @@ body.is-panel-floating .mi-main {
   background: rgba(0, 0, 0, 0.04);
   border-radius: 100px;
   padding: 4px 8px;
-  font-family: var(--font-outfit), sans-serif;
-  font-weight: 400;
+  font-family: var(--font-manrope), sans-serif;
+  font-weight: 500;
   font-size: 15px;
   color: rgba(0, 0, 0, 0.7);
   white-space: nowrap;
@@ -1116,9 +1144,9 @@ body.is-panel-floating .mi-main {
   border-radius: 50%;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   color: #000;
-  font-family: "SF Pro Text", var(--font-outfit), sans-serif;
+  font-family: "SF Pro Text", var(--font-manrope), sans-serif;
   font-size: 16px;
-  font-weight: 400;
+  font-weight: 500;
   line-height: 20px;
 }
 
@@ -1183,17 +1211,17 @@ body.is-panel-floating .mi-main {
   border: none;
   background: transparent;
   padding-left: 12px;
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   font-size: 17px;
   color: #000000;
-  font-weight: 500;
+  font-weight: 600;
   opacity: 1;
   outline: none;
 }
 
 .mi-search-input::placeholder {
   color: #808080;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 16px;
 }
 
@@ -1447,9 +1475,9 @@ body.is-panel-floating .mi-main {
   border: 0;
   border-radius: 0;
   background: transparent;
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   font-size: 16px;
-  font-weight: 400;
+  font-weight: 500;
   line-height: 24px;
   color: #626262;
   cursor: var(--ins-cursor-hand, pointer);
@@ -1474,7 +1502,7 @@ body.is-panel-floating .mi-main {
   background: #000;
   border-radius: 50px;
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 12px;
 }
 
@@ -1488,7 +1516,7 @@ body.is-panel-floating .mi-main {
 .mi-sort-tab.is-active {
   background: transparent;
   color: #000;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .mi-sort-tab.is-active::after {
@@ -1555,7 +1583,7 @@ body.is-panel-floating .mi-main {
   padding: 2px 6px 3px 6px;
   border-radius: 999px;
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 16px;
   color: white;
   min-width: 22px;
@@ -1744,7 +1772,7 @@ body.is-panel-floating .mi-main {
 .mi-card-name {
   height: 18px;
   font-size: 13px;
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   line-height: 18px;
   color: #999999;
   text-align: center;
@@ -1753,7 +1781,7 @@ body.is-panel-floating .mi-main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 400;
+  font-weight: 500;
 }
 
 .mi-card-source {
@@ -1766,12 +1794,13 @@ body.is-panel-floating .mi-main {
   background: rgba(0, 0, 0, 0.06);
   border-radius: 100px;
   color: #555555;
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   font-size: 13px;
-  line-height: 12px;
+  /* Room for Manrope's descenders ("g", "p"); 3px + 14px + 3px is still the tag's 20px. */
+  line-height: 14px;
   text-transform: capitalize;
   letter-spacing: 0.06em;
-  font-weight: 400;
+  font-weight: 500;
   text-align: center;
 }
 
@@ -1899,7 +1928,7 @@ body.is-panel-floating .mi-main {
   padding: 0 10px;
   border-radius: 8px;
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--mi-ink-2);
   background: none;
   border: none;
@@ -2054,12 +2083,10 @@ body.is-resizing-rp * {
   background: rgba(15, 17, 22, 0.45);
 }
 
-/* Mobile-only hamburger + its consolidated nav dropdown (hidden on desktop) */
+/* Phone/tablet top bar actions (hidden on desktop); the hamburger opens the
+   shared menu in mobile-menu.css */
+.mi-mobile-navbar-actions,
 .mi-mobile-menu-toggle {
-  display: none;
-}
-
-.mi-mobile-menu-panel {
   display: none;
 }
 
@@ -2219,7 +2246,7 @@ body.is-panel-floating .mi-rp-edge-resizer {
 
 .mi-rp-header span {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 16px;
   color: rgba(0, 0, 0, 0.6);
   line-height: 16px;
@@ -2259,6 +2286,191 @@ body.is-panel-floating .mi-rp-edge-resizer {
   line-height: 16px;
   padding: 0 4px;
   margin-bottom: 12px;
+}
+
+/* ── Plugins and Help tabs (PanelGuides.tsx) ─────────────────────────────
+   Section titles reuse .mi-rp-title; rows hover like the Packs list. */
+.mi-rp-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding-bottom: 8px;
+}
+
+.mi-rp-guide-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mi-rp-guide-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fafafb 0%, #fff 100%);
+}
+
+.mi-rp-guide-hero-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(15, 17, 22, 0.06);
+}
+
+.mi-rp-guide-hero-icon img {
+  width: 22px;
+  height: 22px;
+}
+
+.mi-rp-guide-badge {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(92, 74, 228, 0.1);
+  color: #5c4ae4;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 14px;
+}
+
+.mi-rp-guide-hero-title {
+  margin: 0;
+  color: rgba(0, 0, 0, 0.9);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 22px;
+}
+
+.mi-rp-guide-hero-text {
+  margin: 0;
+  color: rgba(0, 0, 0, 0.55);
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.mi-rp-guide-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.mi-rp-guide-row.is-link {
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: background 0.15s ease;
+}
+
+.mi-rp-guide-row.is-link:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.mi-rp-guide-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #f4f4f6;
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.mi-rp-guide-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mi-rp-guide-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mi-rp-guide-name {
+  color: rgba(0, 0, 0, 0.88);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.mi-rp-guide-text {
+  color: rgba(0, 0, 0, 0.5);
+  font-size: 12.5px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+/* The row's go-to mark; it stays the same on hover (only the row tints). */
+.mi-rp-guide-go {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.mi-rp-guide-go svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* The shortcut list: a bordered white card with no row lines, generous
+   spacing alone separating the rows, so twelve of them stay light. */
+.mi-rp-guide-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.mi-rp-guide-key {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+  color: rgba(0, 0, 0, 0.7);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.mi-rp-kbd-group {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.mi-rp-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 /* Sources */
@@ -2369,7 +2581,7 @@ body.is-panel-floating .mi-rp-edge-resizer {
 
 .mi-rp-all-title {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 16px;
   color: black;
   flex: 1;
@@ -2406,8 +2618,8 @@ body.is-panel-floating .mi-rp-edge-resizer {
   background: rgba(0, 0, 0, 0.06);
   border-radius: 100px;
   padding: 4px 8px;
-  font-family: var(--font-outfit), sans-serif;
-  font-weight: 500;
+  font-family: var(--font-manrope), sans-serif;
+  font-weight: 600;
   font-size: 15px;
   color: black;
 }
@@ -2504,7 +2716,7 @@ body.is-panel-floating .mi-rp-edge-resizer {
   background: rgba(0, 0, 0, 0.04);
   border-radius: 100px;
   padding: 4px 8px;
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   font-size: 15px;
   color: rgba(0, 0, 0, 0.7);
 }
@@ -2650,7 +2862,7 @@ body.is-panel-floating .mi-rp-edge-resizer {
   justify-content: center;
   border-radius: 86.957px;
   font-family: var(--font-inter), sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 15px;
   color: #6b7280;
 }
@@ -2674,7 +2886,7 @@ body.is-panel-floating .mi-rp-edge-resizer {
 .mi-rp-license-active span {
   flex: 1;
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 16px;
   color: black;
   transition: color 0.2s;
@@ -2744,14 +2956,14 @@ body.is-panel-floating .mi-rp-edge-resizer {
 
 .mi-rp-cat-label {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-weight: 400;
+  font-weight: 500;
   font-size: 16px;
   color: rgba(0, 0, 0, 0.8);
   white-space: nowrap;
 }
 
 .mi-rp-cat-item.is-active .mi-rp-cat-label {
-  font-weight: 500;
+  font-weight: 600;
   color: black;
 }
 
@@ -2759,8 +2971,8 @@ body.is-panel-floating .mi-rp-edge-resizer {
   background: rgba(0, 0, 0, 0.04);
   border-radius: 100px;
   padding: 4px 8px;
-  font-family: var(--font-outfit), sans-serif;
-  font-weight: 400;
+  font-family: var(--font-manrope), sans-serif;
+  font-weight: 500;
   font-size: 15px;
   color: rgba(0, 0, 0, 0.7);
 }
@@ -2859,7 +3071,7 @@ body.is-panel-floating .mi-rp-edge-resizer {
   position: fixed;
   inset: 0;
   z-index: 100;
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   display: none;
   align-items: flex-start;
   justify-content: center;
@@ -4000,7 +4212,7 @@ body.mi-full .mi-editor {
   padding: 12px 18px;
   border-radius: 12px;
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 600;
   box-shadow: var(--mi-shadow-lg);
   opacity: 0;
   transition:
@@ -4104,7 +4316,7 @@ body.mi-full .mi-editor {
 
 .mi-page-nav-btn span {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 16px;
   line-height: 24px;
   color: black;
@@ -4118,7 +4330,7 @@ body.mi-full .mi-editor {
   height: 36px;
   border-radius: 50%;
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 16px;
   line-height: 24px;
   color: black;
@@ -4179,6 +4391,13 @@ body.mi-full .mi-editor {
     margin-top: var(--header-h);
   }
 
+  /* A static shell ignores the desktop `top` offset, so the fixed beta banner
+     sat over the logo row. Reserve its height with a margin instead. */
+  html.mi-banner-reserved .mi-app-shell,
+  body.mi-has-product-banner .mi-app-shell {
+    margin-top: var(--mi-product-banner-height, 44px);
+  }
+
   .mi-left-sidebar {
     position: relative;
     flex-direction: row;
@@ -4186,10 +4405,15 @@ body.mi-full .mi-editor {
     justify-content: space-between;
     flex-shrink: 0;
     width: 100%;
-    height: 70px;
+    /* The landing pages' compact top bar: 18px above and below a 44px row,
+       sides 24px on a tablet and 20px on a phone (see the 600px block). */
+    height: 80px;
     border-right: none;
-    border-bottom: 1px solid var(--mi-border);
-    padding: 13px 16px;
+    /* The line beneath is a shadow, not a border: a border inside the 80px
+       nudged the row up half a pixel and the open menu then didn't match. */
+    border-bottom: 0;
+    box-shadow: inset 0 -1px 0 var(--mi-border);
+    padding: 18px 24px;
     overflow: visible;
   }
 
@@ -4272,26 +4496,35 @@ body.mi-full .mi-editor {
   .mi-mobile-navbar-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
   }
 
-  .mi-mobile-get-started {
+  /* The landing pages' top-bar button: a 44px pill, grey "Go to Library"
+     when signed in, black "Get started for free" for visitors. The open
+     menu's button turns black in the same spot (mobile-menu.css). Shell-scoped
+     to win over the library's own button styles. */
+  .mi-app-shell .mi-mobile-get-started {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 184px;
     height: 44px;
-    padding: 12px 24px;
-    border-radius: 8px;
-    background: #202124;
-    color: #f3f4f6;
-    font-family: var(--font-inter), sans-serif !important;
-    font-size: 16px;
-    font-weight: 400;
+    padding: 0 18px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: #f3f3f5;
+    color: #141414;
+    font-family: var(--font-manrope), sans-serif !important;
+    font-size: 14px;
+    font-weight: 600;
     line-height: 20px;
     letter-spacing: 0;
     text-decoration: none;
     white-space: nowrap;
+  }
+
+  .mi-app-shell .mi-mobile-get-started.is-dark {
+    background: #141414;
+    color: #f3f4f6;
   }
 
   .mi-mobile-menu-toggle img {
@@ -4309,71 +4542,6 @@ body.mi-full .mi-editor {
 
   .mi-mobile-menu-toggle.is-open .mi-mobile-menu-icon-close {
     display: block;
-  }
-
-  .mi-mobile-menu-panel {
-    display: none;
-    position: fixed;
-    top: 70px;
-    left: 0;
-    right: 0;
-    z-index: 998;
-    flex-direction: column;
-    background: #fff;
-    border-bottom: 1px solid var(--mi-border);
-    box-shadow: 0 12px 24px rgba(15, 17, 22, 0.12);
-    max-height: calc(100vh - 70px);
-    overflow-y: auto;
-  }
-
-  .mi-mobile-menu-panel.is-open {
-    display: flex;
-  }
-
-  .mi-mobile-menu-nav,
-  .mi-mobile-menu-sidebar {
-    display: flex;
-    flex-direction: column;
-    padding: 8px;
-  }
-
-  .mi-mobile-menu-divider {
-    height: 1px;
-    background: var(--mi-border);
-    margin: 0 8px;
-  }
-
-  /* Relocated nav links + sidebar items render as a normal vertical menu list */
-  .mi-mobile-menu-panel .mi-top-nav {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .mi-mobile-menu-panel .mi-top-nav-link {
-    width: 100%;
-    padding: 12px;
-    border-radius: 8px;
-  }
-
-  .mi-mobile-menu-panel .mi-sidebar-item {
-    display: flex;
-    flex-direction: row;
-    justify-content: flex-start;
-    align-items: center;
-    width: 100%;
-    height: auto;
-    padding: 12px;
-    gap: 12px;
-    border-radius: 8px;
-  }
-
-  .mi-mobile-menu-panel .mi-sidebar-icon-container {
-    padding: 0;
-  }
-
-  .mi-mobile-menu-panel .mi-sidebar-label {
-    display: inline-block;
   }
 
   /* Right filter panel becomes a full-height slide-in drawer instead of vanishing,
@@ -4394,11 +4562,13 @@ body.mi-full .mi-editor {
        from 100% to 0% instantly is fine — the drawer is a modal-style takeover
        and the extra motion isn't earning its keep. */
     transition: none;
-    box-shadow: -12px 0 32px rgba(15, 17, 22, 0.18);
   }
 
+  /* Shadow only while open: parked just past the right edge, the closed
+     drawer's -12px/32px shadow still fell back into view as a dark fade. */
   .mi-right-panel.is-mobile-open {
     transform: translateX(0) !important;
+    box-shadow: -12px 0 32px rgba(15, 17, 22, 0.18);
   }
 
   .mi-right-panel-inner {
@@ -4459,8 +4629,7 @@ body.mi-full .mi-editor {
     justify-content: space-between;
   }
 
-  /* Default hidden here; unhidden by the more specific
-     .mi-mobile-menu-panel .mi-top-nav rule once it's relocated there. */
+  /* Community and Release Notes live in the hamburger menu here. */
   .mi-top-nav {
     display: none;
   }
@@ -4548,12 +4717,8 @@ body.mi-full .mi-editor {
     justify-content: center;
   }
 
-  /* Recolor now sits near the left edge of .mi-sort-bar-right, so anchor
-     the dropdown to the button's left edge instead of its right edge
-     (which pushed it mostly off-screen). */
+  /* Placement is computed in LibraryToolbar (the menu is portalled). */
   .mi-recolor-dropdown {
-    right: auto;
-    left: 0;
     max-width: calc(100vw - 24px);
   }
 
@@ -4605,6 +4770,21 @@ body.mi-full .mi-editor {
   .mi-pagination-bar {
     max-width: calc(100vw - 24px);
     overflow-x: auto;
+  }
+}
+
+/* A phone: the top bar's sides 20px, as the landing pages' bar. */
+@media (max-width: 600px) {
+  .mi-left-sidebar {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  /* Detail view: three crumbs don't fit beside its three buttons; the
+     category goes, so the item's name is readable. */
+  #crumb-category,
+  #crumb-category + .mi-new-crumb-sep {
+    display: none;
   }
 }
 
@@ -4672,6 +4852,150 @@ body.mi-full .mi-editor {
   user-select: none;
 }
 
+/* ── Loading placeholders, the Inspirations way (inspirations.css .ins-skel):
+   flat grey shapes of the real content, and one soft band of light sweeping
+   across the whole screen. The band's gradient is fixed to the viewport, so
+   every shape shows its own slice of the same sweep and the page lights up
+   as one surface instead of each shape flashing on its own. */
+.mi-skel {
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #ececef;
+  pointer-events: none;
+}
+
+.mi-skel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 41%,
+    rgba(255, 255, 255, 0.5) 47%,
+    rgba(255, 255, 255, 0.85) 50%,
+    rgba(255, 255, 255, 0.5) 53%,
+    transparent 59%,
+    transparent 100%
+  );
+  background-size: 200vw 100%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  animation: mi-shimmer 2s ease-in-out infinite;
+}
+
+/* The band starts just off the left edge, glides across, then rests off the
+   right edge for a beat (same timing as Inspirations' insShimmer). */
+@keyframes mi-shimmer {
+  0% { background-position: -120vw 0; }
+  75%, 100% { background-position: 20vw 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mi-skel::after {
+    animation: none;
+    background-image: none;
+  }
+}
+
+/* Grid card: an icon-sized block, a name line, a source pill. */
+.mi-card.is-skeleton {
+  cursor: default;
+  pointer-events: none;
+}
+
+.mi-card.is-skeleton .mi-card-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mi-card.is-skeleton .mi-card-source {
+  padding: 0;
+  background: none;
+}
+
+.mi-skel--icon {
+  border-radius: 24%;
+}
+
+.mi-skel--name {
+  width: 60px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+/* Names vary in length, so the grid doesn't look stamped. */
+.mi-card.is-skeleton:nth-child(4n + 2) .mi-skel--name { width: 72px; }
+.mi-card.is-skeleton:nth-child(4n + 3) .mi-skel--name { width: 48px; }
+.mi-card.is-skeleton:nth-child(4n) .mi-skel--name { width: 66px; }
+
+.mi-skel--tag {
+  width: 64px;
+  height: 20px;
+  border-radius: 999px;
+}
+
+/* The "All" tab's count while the total loads. */
+.mi-sort-tab-count.mi-skel {
+  width: 64px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50px;
+  background: #ececef;
+}
+
+/* Filters panel rows. The real rows' `span { flex: 1 }` would stretch the
+   dot and logo shapes into bars, so the placeholders keep their own sizes. */
+.mi-rp-item.is-skeleton,
+.mi-rp-style-item.is-skeleton {
+  cursor: default;
+}
+
+.mi-rp-item.is-skeleton .mi-skel,
+.mi-rp-style-item.is-skeleton .mi-skel {
+  flex: none;
+}
+
+.mi-rp-item.is-skeleton .mi-skel--badge {
+  margin-left: auto;
+}
+
+.mi-skel--check,
+.mi-skel--dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.mi-skel--logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+}
+
+.mi-skel--label {
+  height: 12px;
+  border-radius: 999px;
+}
+
+.mi-skel--badge {
+  width: 46px;
+  height: 25px;
+  margin-left: auto;
+  border-radius: 999px;
+}
+
+.mi-rp-badge-lg.mi-skel {
+  width: 64px;
+  height: 28px;
+  padding: 0;
+  background: #ececef;
+}
+
 
 /* --- NEW DETAIL MODAL STYLES --- */
 
@@ -4710,16 +5034,24 @@ body.mi-full .mi-new-scroll-area {
   flex-shrink: 0;
 }
 
+/* The crumbs give way to the buttons: the item's name shortens with an
+   ellipsis instead of wrapping and pushing the close button off a phone
+   screen. On a phone the category crumb is dropped (see the 600px block), so
+   the name keeps the room: "Logos › 100tb". */
 .mi-new-crumbs {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 
 .mi-new-crumb {
+  flex-shrink: 0;
   color: #6b7280;
   font-size: 16px;
   text-decoration: none;
+  white-space: nowrap;
   padding: 4px 8px;
   border-radius: 6px;
   transition: background 0.2s;
@@ -4730,12 +5062,17 @@ body.mi-full .mi-new-scroll-area {
 }
 
 .mi-new-crumb--current {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: #000;
   font-weight: 500;
 }
 
 .mi-new-topbar-actions {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 16px;
 }
@@ -5251,7 +5588,7 @@ details[open] .mi-new-section-icon {
 }
 
 .mi-new-btn-save-collection span {
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   font-weight: 500;
   font-size: 16px;
   line-height: 20px;
@@ -5345,7 +5682,7 @@ details[open] .mi-new-section-icon {
 .mi-new-banner-text h4 {
   margin: 0;
   font-size: 15px;
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   font-weight: 700;
   line-height: 20.8px;
   display: flex;
@@ -5374,7 +5711,7 @@ details[open] .mi-new-section-icon {
   font-size: 15px;
   margin: 0;
   line-height: 18px;
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   font-weight: 400;
 }
 
@@ -5385,7 +5722,7 @@ details[open] .mi-new-section-icon {
   border-radius: 6px;
   height: 34px;
   font-size: 15px;
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   font-weight: 500;
   cursor: var(--ins-cursor-hand, pointer);
   display: flex;
@@ -5771,7 +6108,7 @@ details[open] .mi-new-section-icon {
   min-width: 0;
   margin: 0;
   color: #080048;
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-manrope), sans-serif;
   font-size: 16px;
   font-weight: 400;
   line-height: 20px;
@@ -5960,9 +6297,13 @@ body.mi-full .topbar-close svg {
     padding: 0 16px;
   }
 
+  /* Stacked, the preview leads: in markup order it sat ~1300px down, under
+     every Customize control. Preview, then Customize, then Export. */
   .mi-new-center {
+    order: -1;
     padding: 16px;
     overflow-y: visible;
+    border-bottom: 1px solid var(--mi-border);
   }
 
   .mi-new-canvas-box {
@@ -6035,12 +6376,36 @@ body.mi-full .topbar-close svg {
   /* The prev/next + close controls float outside the card at fixed desktop
      offsets — pull them onto the visible edges instead, and use the topbar
      close button (which already exists) rather than the floating one. */
+  /* The arrows are white, drawn for the dark backdrop beside the desktop
+     card. Here the card fills the screen, so at mid-height they were white on
+     white and still sat over the content (the Save button). Round dark
+     buttons in the bottom corners instead: visible, and off the content. */
+  .mi-detail-nav-btn {
+    top: auto;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(15, 17, 22, 0.72);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 12px rgba(15, 17, 22, 0.18);
+    transform: none;
+  }
+
+  .mi-detail-nav-btn img {
+    width: 9px;
+    height: 24px;
+  }
+
   .mi-detail-nav-btn--previous {
-    left: 8px;
+    left: 16px;
   }
 
   .mi-detail-nav-btn--next {
-    right: 8px;
+    right: 16px;
   }
 
   .float-close {

@@ -109,6 +109,9 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  // NEXT_DIST_DIR lets a check build write somewhere else (NEXT_DIST_DIR=.next-build next build), so a
+  // dev server running from .next keeps its files — building over them broke its fonts once.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   // A self-contained server in .next/standalone (only the files it needs), which the Dockerfile runs.
   output: 'standalone',
   // Off by default in production already; stated so it stays off — browser

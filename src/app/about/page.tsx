@@ -14,6 +14,7 @@ import { CONTACT_EMAIL } from '@/components/legal/LegalPage';
 import { optimizedImage } from '@/lib/inspirations/optimizedImage';
 import '@/styles/landing.css';
 import '@/styles/landing-inspirations.css';
+import '@/styles/mobile-menu.css';
 import '@/styles/about.css';
 
 export const metadata: Metadata = pageMetadata(
