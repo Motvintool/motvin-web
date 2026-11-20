@@ -83,7 +83,7 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>Delete.</strong> You can delete any request, and you can delete your whole account from Settings. Deleting your account removes
-                your requests too.
+                your requests too, disconnects your AI tools and erases their usage history.
               </li>
               <li>
                 <strong>Disconnect an AI tool.</strong> Settings → AI tools lists every tool you connected; Disconnect cuts its access right away.

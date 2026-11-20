@@ -153,6 +153,9 @@
 /* Under the list, signed in only: a small card linking to your connected tools and usage. */
 .mcd-side a.mcd-side-card { display: flex; align-items: center; gap: 12px; margin: 22px 0 0 0; padding: 12px 16px 12px 12px; min-height: 0; border-radius: 14px; background: #fff; border: 1px solid #e6e6ea; color: #141414; transition: border-color 0.18s, background 0.18s; }
 .mcd-side a.mcd-side-card:hover { border-color: #cfcfd5; background: #fafafb; color: #141414; }
+/* On short windows the sidebar scrolls; the card stays pinned to its foot, whole, with the
+   list passing under it (a white band above it keeps the two from touching). */
+.mcd-side a.mcd-side-card { position: sticky; bottom: 0; z-index: 1; box-shadow: 0 -22px 0 #fff; }
 .mcd-side-card-icon { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 10px; background: #f5f5f7; color: #141414; }
 .mcd-side-card-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .mcd-side-card-text b { font-size: 14px; font-weight: 600; line-height: 1.3; }

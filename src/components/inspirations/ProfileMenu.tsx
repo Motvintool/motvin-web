@@ -5,6 +5,8 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { LibraryProfileBadge, badgeWrapClassName } from '@/components/library/LibraryProfileBadge';
 import { useAuth } from '@/components/shared/AuthProvider';
+import { useMcpToday } from '@/lib/mcp/useMcpToday';
+import { SHOW_MCP_IN_NAV } from '@/lib/mcp/visibility';
 import { useHydrated } from '@/components/shared/useHydrated';
 import { useIsLibraryAdmin } from './useIsLibraryAdmin';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
@@ -42,6 +44,8 @@ export function ProfileMenu() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const signedIn = Boolean(user && !user.isAnonymous);
+  // "Get MCP" or today's AI-tool calls; the header shows it on wide screens, this menu on narrow ones.
+  const mcp = useMcpToday();
   // Shown once the server confirms this account is an admin (no admin email
   // in the browser code); the admin API still checks every call itself.
   const libraryAdmin = useIsLibraryAdmin();
@@ -181,6 +185,27 @@ export function ProfileMenu() {
                       Settings
                     </span>
                     <img src={`${ICON}/profile-arrow.svg`} alt="" width={12} height={12} />
+                  </Link>
+                )}
+                {mcp && (mcp.connected || SHOW_MCP_IN_NAV) && (
+                  <Link
+                    href={mcp.connected ? INSPIRATIONS_ROUTES.settingsTools : '/mcp/clients'}
+                    className="ins-pmenu-item ins-pmenu-item--compact"
+                    role="menuitem"
+                    onClick={() => setOpen(false)}
+                  >
+                    <span className="ins-pmenu-lead">
+                      <span className="ins-pmenu-mcp-icon" aria-hidden />
+                      {mcp.connected ? 'AI tools' : 'Get MCP'}
+                    </span>
+                    {mcp.connected ? (
+                      <span className="ins-pmenu-mcp-count">
+                        {mcp.used.toLocaleString()}
+                        {mcp.limit ? `/${mcp.limit.toLocaleString()}` : ''} today
+                      </span>
+                    ) : (
+                      <img src={`${ICON}/profile-arrow.svg`} alt="" width={12} height={12} />
+                    )}
                   </Link>
                 )}
                 {showAdmin && (

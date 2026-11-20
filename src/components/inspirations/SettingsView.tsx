@@ -9,7 +9,7 @@ import { useAuth } from '@/components/shared/AuthProvider';
 import { ensureReady, getGuestUid } from '@/lib/firebase/auth';
 import { deleteMyRequest, HANDOFF_NOTICE_EVENT, listMyRequests, MAX_REQUESTS_PER_USER, type MyRequest } from '@/lib/firebase/appRequests';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import { cleanToolName, disconnectAllMcpConnections, disconnectMcpConnection, getMyMcpUsage, listMcpConnections, toolFor, usedAgo, type McpConnection, type McpMyUsage } from '@/lib/mcp/connections';
+import { cleanToolName, disconnectAllMcpConnections, disconnectMcpConnection, forgetMcpData, getMyMcpUsage, listMcpConnections, toolFor, usedAgo, type McpConnection, type McpMyUsage } from '@/lib/mcp/connections';
 import { McpIcon } from '@/components/mcp/McpShared';
 import { PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import { PlusIcon, TrashIcon } from './Icons';
@@ -347,6 +347,8 @@ function AccountSection() {
       // Their requests go first, while the account can still prove they are theirs.
       const mine = await listMyRequests(user.uid);
       await Promise.all(mine.map((r) => deleteMyRequest(r.id)));
+      // Then their AI tools lose access and their usage history is erased, before the account itself goes.
+      await forgetMcpData();
       await deleteUser(auth.currentUser);
       show('Your account was deleted');
       router.replace(INSPIRATIONS_ROUTES.explore);
@@ -841,7 +843,7 @@ function UsageCard({ usage, vertical = false }: { usage: McpMyUsage; vertical?: 
               // The hover label opens toward the middle, so the end days stay inside the card.
               const side = index < 2 ? 'is-start' : index > usage.days.length - 3 ? 'is-end' : '';
               return (
-                <div key={day.date} className={`ins-set-usage-col ${today ? 'is-today' : ''} ${side}`} data-tip={tip} aria-label={tip}>
+                <div key={day.date} className={`ins-set-usage-col ${today ? 'is-today' : ''} ${side}`} data-hint={tip} aria-label={tip}>
                   <span className="ins-set-usage-plot">
                     {day.calls > 0 && <b>{day.calls.toLocaleString()}</b>}
                     <span className={`ins-set-usage-fill ${day.calls ? '' : 'is-zero'}`} style={day.calls ? { height: `max(8px, calc((100% - 20px) * ${day.calls / peak}))` } : undefined} />

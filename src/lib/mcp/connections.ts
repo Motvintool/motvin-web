@@ -64,6 +64,11 @@ export function disconnectAllMcpConnections(): Promise<{ disconnected: number }>
   return call<{ disconnected: number }>('', { method: 'DELETE' });
 }
 
+/** For deleting a Motvin account: disconnects every AI tool and erases the person's usage history. */
+export function forgetMcpData(): Promise<{ disconnected: number }> {
+  return call<{ disconnected: number }>('/forget', { method: 'POST' });
+}
+
 /**
  * A tool's own name without the server label some add on connect:
  * "Claude Code (motvin)" → "Claude Code".

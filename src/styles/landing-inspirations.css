@@ -2965,11 +2965,10 @@ html.lpi-at-footer body {
   }
 
   /* Menus open as a floating rounded card under the pill, not a full-width
-     sheet, over a soft white veil. No blur: a page-wide blur sat right over
-     the playing hero video and the bobbing icons, and had to be redrawn all
-     the time, which made the open menus flicker on hover. */
+     sheet, with the page left as it is behind them: no veil, no blur. The
+     backdrop stays (clear) only to catch the click that closes the menu. */
   .landing-root .dropdown-backdrop {
-    background: rgba(255, 255, 255, 0.72);
+    background: transparent;
   }
 
   /* Layered card: a soft grey frame, a white card inside it, and the

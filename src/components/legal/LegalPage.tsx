@@ -16,7 +16,7 @@ export { CONTACT_EMAIL };
  */
 
 /** When these pages were last revised. */
-export const LEGAL_UPDATED = '18 November 2026';
+export const LEGAL_UPDATED = '20 November 2026';
 
 const PAGES = [
   { href: '/privacy', label: 'Privacy' },
