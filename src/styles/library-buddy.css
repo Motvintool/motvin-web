@@ -1,0 +1,146 @@
+/* Motvin Buddy on the library pages (components/library/LibraryBuddy.tsx).
+   Its look and motion are the Inspirations Buddy's own rules (buddy-guide.css,
+   generated from inspirations.css); this file only fits it into the library
+   page: where the button sits and which layer it's on. */
+
+/* The button sits in the grid's corner: 20px from the bottom, and 20px from
+   the right panel's line (--mi-buddy-edge, measured by LibraryBuddy).
+   --mi-buddy-edge-start is that same spot worked out from the layout, so the
+   button is already in place while the page loads, before it can be measured:
+   the panel's line is 42px inside it (.mi-right-panel's padding) while docked,
+   and at 1300px and below the panel is a drawer, so the corner is the window's. */
+.mi-buddy-scope {
+  --mi-buddy-edge-start: calc(var(--right-panel-w) - 42px);
+}
+@media (max-width: 1300px) {
+  .mi-buddy-scope { --mi-buddy-edge-start: 0px; }
+}
+body.is-panel-floating .mi-buddy-scope { --mi-buddy-edge-start: 0px; }
+
+.mi-buddy-scope .ins-dock-pill {
+  right: calc(var(--mi-buddy-edge, var(--mi-buddy-edge-start)) + 20px);
+  /* --mi-buddy-lift: above the cookie banner while it shows (measured by LibraryBuddy). */
+  bottom: calc(20px + var(--mi-buddy-lift, 0px));
+  /* The Inspirations button's own transitions (buddy-guide.css), plus rising over the cookie banner. */
+  transition:
+    background-color 200ms var(--ins-ease),
+    color 200ms var(--ins-ease),
+    opacity 200ms var(--ins-ease),
+    box-shadow 220ms var(--ins-ease),
+    scale 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    bottom 240ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  /* Over the pagination strip (100), under the toast (200) and the menus. */
+  z-index: 150;
+}
+
+/* A quick press, as on Inspirations — with the rise kept at its own pace. */
+.mi-buddy-scope .ins-dock-pill:active { transition-duration: 200ms, 200ms, 200ms, 90ms, 90ms, 240ms; }
+
+/* Opened, Buddy is what's in use: it and its dim go over the page's own bars, the right panel and
+   the cookie banner (900) — a first visit can type at once; the banner is there again on closing. */
+.mi-buddy-scope .ins-guide-backdrop { z-index: 905; }
+.mi-buddy-scope .ins-guide { z-index: 906; }
+
+@media (max-width: 640px) {
+  .mi-buddy-scope .ins-dock-pill {
+    right: calc(var(--mi-buddy-edge, var(--mi-buddy-edge-start)) + 12px);
+    bottom: calc(12px + var(--mi-buddy-lift, 0px));
+  }
+}
+
+/* A detail popup or the phone menu is on top: the button steps aside. */
+body.mi-nav-mobile-open .mi-buddy-scope .ins-dock-pill,
+body:has(.mi-modal.is-open) .mi-buddy-scope .ins-dock-pill { display: none; }
+
+/* The top matches in an answer, as the Inspirations Buddy shows the app it
+   found: small tiles drawn as the grid's cards are, a tap opens one. */
+.mi-buddy-found {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+.mi-buddy-found.is-illustrations { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mi-buddy-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  padding: 8px;
+  border: 0;
+  border-radius: 12px;
+  background: #f4f5f7;
+  color: #0b0c0e;
+  cursor: pointer;
+  overflow: hidden;
+  transition: background 140ms ease, scale 140ms ease;
+  animation: insChipIn 240ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.mi-buddy-found.is-illustrations .mi-buddy-tile { aspect-ratio: 4 / 3; padding: 6px; }
+button.mi-buddy-tile:hover { background: #eceef1; scale: 1.04; }
+button.mi-buddy-tile:active { scale: 0.96; }
+.mi-buddy-tile:nth-child(2) { animation-delay: 40ms; }
+.mi-buddy-tile:nth-child(3) { animation-delay: 80ms; }
+.mi-buddy-tile:nth-child(4) { animation-delay: 120ms; }
+.mi-buddy-tile:nth-child(5) { animation-delay: 160ms; }
+.mi-buddy-tile:nth-child(6) { animation-delay: 200ms; }
+.mi-buddy-tile > svg,
+.mi-buddy-tile > img {
+  display: block;
+  width: 100%;
+  max-width: 28px;
+  height: auto;
+  max-height: 100%;
+}
+.mi-buddy-found.is-logos .mi-buddy-tile > svg,
+.mi-buddy-found.is-logos .mi-buddy-tile > img { max-width: 32px; }
+.mi-buddy-found.is-illustrations .mi-buddy-tile > svg,
+.mi-buddy-found.is-illustrations .mi-buddy-tile > img { max-width: 100%; }
+@media (prefers-reduced-motion: reduce) { .mi-buddy-tile { animation: none; } }
+
+/* Carried over from another library (LibraryBuddy's handoff): the same panel, so nothing that was
+   already on screen animates in again — the panel, the earlier messages, the suggestion row it came
+   with. Only what arrives afterwards (the answer's tiles, new messages) has its usual motion. */
+.mi-buddy-scope .ins-guide.is-carried,
+.mi-buddy-scope .ins-chat.is-carried,
+.mi-buddy-scope .ins-chat.is-carried *:not(.mi-skel):not(.mi-buddy-tile),
+.mi-buddy-scope .ins-guide-suggest.is-carried .ins-chip-btn {
+  animation: none !important;
+}
+
+/* The confirm box Buddy asks with ("Clear chat history?") opens over Buddy itself (906). */
+.ins-confirm-overlay { z-index: 910; }
+
+/* Toasts ("Copied", "Chat deleted") stay readable over an open Buddy (906) and its confirm box:
+   the plain one (Toast.tsx) and the stacked copy toasts (public/vendor/motvin-stack-toast.js). */
+body .mi-toast,
+body .mi-copy-toast-list { z-index: 950; }
+
+/* An answer's "See all …" pill, quiet grey rather than the Inspirations Buddy's black: a long chat
+   holds one per answer, and a column of black buttons pulls the eye from the tiles they belong to.
+   Clearly darker than the tiles (#f4f5f7), so it still reads as a button. */
+/* It spans the tiles' width, so the answer reads as three aligned rows — sentence, tiles, way on —
+   with the arrow at the end saying where it goes. */
+.mi-buddy-scope .ins-guide-file {
+  align-self: stretch;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #e2e5e9;
+  color: #0b0c0e;
+  font-size: 13px;
+  box-shadow: none;
+  transition: background 140ms ease, scale 140ms ease;
+}
+.mi-buddy-scope .ins-guide-file:hover { background: #d7dbe0; }
+.mi-buddy-scope .ins-guide-file:active { scale: 0.99; }
+.mi-buddy-scope .ins-guide-file svg { color: #6b6f7a; opacity: 1; transition: transform 140ms ease, color 140ms ease; }
+.mi-buddy-scope .ins-guide-file:hover svg { color: #0b0c0e; transform: translateX(2px); }
+
+/* "New chat" as a round icon button, the size of the history one beside it (44px). */
+.mi-buddy-scope .ins-guide-newchat.is-icon {
+  justify-content: center;
+  width: 44px;
+  padding: 0;
+  gap: 0;
+}

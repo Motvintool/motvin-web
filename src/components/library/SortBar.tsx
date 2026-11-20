@@ -56,11 +56,14 @@ export function SortBar({
               onClick={() => onSortChange(option.value)}
             >
               {option.label}
-              {option.value === 'all' && (
-                <span className="mi-sort-tab-count" aria-hidden="true">
-                  {loading ? '—' : total.toLocaleString()}
-                </span>
-              )}
+              {option.value === 'all' &&
+                (loading ? (
+                  <span className="mi-sort-tab-count mi-skel" aria-hidden="true" />
+                ) : (
+                  <span className="mi-sort-tab-count" aria-hidden="true">
+                    {total.toLocaleString()}
+                  </span>
+                ))}
             </button>
           ))}
         </div>
@@ -110,24 +113,27 @@ export function SortBar({
 }
 
 /** Client-side reorder of the current page — port of sortGridItems(). */
-export function sortItems<T extends { name: string; popularity: number; id: string }>(
-  items: T[],
-  sort: string,
-): T[] {
+export function sortItems<
+  T extends { name: string; popularity: number; id: string; weightBand?: number },
+>(items: T[], sort: string): T[] {
   const list = items.filter(Boolean);
+  // Thin lists hairlines before heavier light weights (see the API's
+  // weightBand); every sort orders within each group rather than mixing them.
+  const band = (a: T, b: T) => (a.weightBand ?? 0) - (b.weightBand ?? 0);
   switch (sort) {
     case 'popular':
-      return [...list].sort((a, b) => b.popularity - a.popularity);
+      return [...list].sort((a, b) => band(a, b) || b.popularity - a.popularity);
     case 'trending':
       // Deterministic pseudo-shuffle weighted by popularity, as in the original.
       return [...list].sort(
         (a, b) =>
+          band(a, b) ||
           b.popularity * Math.sin(b.id.length) - a.popularity * Math.sin(a.id.length),
       );
     case 'name-asc':
-      return [...list].sort((a, b) => a.name.localeCompare(b.name));
+      return [...list].sort((a, b) => band(a, b) || a.name.localeCompare(b.name));
     case 'name-desc':
-      return [...list].sort((a, b) => b.name.localeCompare(a.name));
+      return [...list].sort((a, b) => band(a, b) || b.name.localeCompare(a.name));
     default:
       // "all" and "relevance" keep the API's own ordering.
       return list;

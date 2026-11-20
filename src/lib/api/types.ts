@@ -69,6 +69,8 @@ export type RawItem = {
   sourceStyle?: string;
   /** Icons only: whether the stroke-width control applies to this item. */
   isEditableStroke?: boolean;
+  /** Thin icons only: 0 for a hairline, 1 for a heavier light weight. */
+  weightBand?: number;
   viewBox?: string;
   /** Logos only: intrinsic dimensions, which are not square. */
   width?: number;

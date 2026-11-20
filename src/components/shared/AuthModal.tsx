@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type FormEvent,
@@ -76,6 +77,23 @@ export function AuthModalProvider({ children }: { children: ReactNode }) {
   const close = useCallback(() => setIsOpen(false), []);
 
   const contextValue = useMemo(() => ({ open, close }), [open, close]);
+
+  // The modal sits on top of others (the library's detail modal opens it for
+  // Copy/Download). Capture keys first so Escape closes this one rather than
+  // the dialog behind it, and arrows typed in the email field don't page that
+  // dialog's icons.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      event.stopPropagation();
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [isOpen, close]);
 
   const isLogin = mode === 'login';
 

@@ -9,6 +9,7 @@ import { PublicAuthBanner } from '@/components/updates/public/PublicAuthBanner';
 import { ReleaseFeed } from '@/components/updates/public/ReleaseFeed';
 import '@/styles/landing.css';
 import '@/styles/landing-inspirations.css';
+import '@/styles/mobile-menu.css';
 import '@/styles/updates-feed.css';
 
 export const metadata: Metadata = pageMetadata(

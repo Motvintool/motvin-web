@@ -11,6 +11,9 @@ import {
 import { LibraryProfileMenu } from './LibraryProfileMenu';
 import type { SidebarTab } from './LibrarySidebar';
 
+/** The library's Community group (WhatsApp); the phone menu links it too. */
+export const COMMUNITY_URL = 'https://chat.whatsapp.com/JxLUrQpNpaXJ4ido6muIW6?s=cl&p=i&ilr=4';
+
 /**
  * The top pane — port of `header.mi-top-header` in the three library pages.
  *
@@ -71,7 +74,7 @@ export function LibraryTopHeader({ config, onSelectSidebarTab }: Props) {
           />
           <nav className="mi-top-nav">
             <a
-              href="https://chat.whatsapp.com/JxLUrQpNpaXJ4ido6muIW6?s=cl&p=i&ilr=4"
+              href={COMMUNITY_URL}
               target="_blank"
               className="mi-top-nav-link"
             >

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { FilterCounts } from '@/hooks/useLibraryStats';
 import type { SidebarTab } from './LibrarySidebar';
+import { HelpGuide, PluginsGuide } from './PanelGuides';
 
 /**
  * The right panel shell — port of `.mi-rp-filters` in the library pages.
@@ -20,7 +21,19 @@ const TAB_TITLES: Record<SidebarTab, string> = {
   help: 'Help',
 };
 
+// The rail's own icon for each tab, so the header matches what was clicked.
+// Filters keeps its inline sliders icon below.
+const TAB_ICONS: Partial<Record<SidebarTab, string>> = {
+  categories: '/ASSET/Icons/sidebar-packs.svg',
+  saved: '/ASSET/Icons/sidebar-saved.svg',
+  plugins: '/ASSET/Icons/sidebar-plugins.svg',
+  help: '/ASSET/Icons/sidebar-helps.svg',
+};
+
 type Props = {
+  /** The library's nouns ("icon"/"icons"), for the Plugins and Help copy. */
+  noun: string;
+  nounPlural: string;
   activeTab: SidebarTab;
   onSelect?: (tab: SidebarTab) => void;
   /** Below the panel's breakpoint it slides over the grid rather than sitting beside it. */
@@ -37,6 +50,8 @@ type Props = {
 };
 
 export function RightPanel({
+  noun,
+  nounPlural,
   activeTab,
   onSelect,
   open,
@@ -437,27 +452,37 @@ export function RightPanel({
             className="mi-rp-heading"
             style={{ display: 'flex', alignItems: 'center', gap: 8 }}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ opacity: 0.6, color: 'var(--mi-ink)' }}
-            >
-              <line x1="4" y1="21" x2="4" y2="14" />
-              <line x1="4" y1="10" x2="4" y2="3" />
-              <line x1="12" y1="21" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12" y2="3" />
-              <line x1="20" y1="21" x2="20" y2="16" />
-              <line x1="20" y1="12" x2="20" y2="3" />
-              <line x1="1" y1="14" x2="7" y2="14" />
-              <line x1="9" y1="8" x2="15" y2="8" />
-              <line x1="17" y1="16" x2="23" y2="16" />
-            </svg>
+            {TAB_ICONS[activeTab] ? (
+              <img
+                src={TAB_ICONS[activeTab]}
+                alt=""
+                width={16}
+                height={16}
+                style={{ opacity: 0.6 }}
+              />
+            ) : (
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ opacity: 0.6, color: 'var(--mi-ink)' }}
+              >
+                <line x1="4" y1="21" x2="4" y2="14" />
+                <line x1="4" y1="10" x2="4" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12" y2="3" />
+                <line x1="20" y1="21" x2="20" y2="16" />
+                <line x1="20" y1="12" x2="20" y2="3" />
+                <line x1="1" y1="14" x2="7" y2="14" />
+                <line x1="9" y1="8" x2="15" y2="8" />
+                <line x1="17" y1="16" x2="23" y2="16" />
+              </svg>
+            )}
             <span id="rp-header-title">{TAB_TITLES[activeTab]}</span>
             <span
               className="mi-rp-filter-badge"
@@ -583,25 +608,12 @@ export function RightPanel({
             {saved}
           </div>
 
-          {/* Plugins and Help are text-only placeholders in the reference —
-              keep the empty-state copy and inline styling identical so the
-              type sits at the same tone and size. */}
           <div id="rp-tab-plugins" style={show('plugins')}>
-            <div className="mi-rp-section">
-              <span className="mi-rp-title">Plugins</span>
-              <p style={{ color: 'rgba(0, 0, 0, 0.5)', fontSize: 13, marginTop: 8 }}>
-                Plugins coming soon.
-              </p>
-            </div>
+            <PluginsGuide noun={noun} nounPlural={nounPlural} />
           </div>
 
           <div id="rp-tab-help" style={show('help')}>
-            <div className="mi-rp-section">
-              <span className="mi-rp-title">Help</span>
-              <p style={{ color: 'rgba(0, 0, 0, 0.5)', fontSize: 13, marginTop: 8 }}>
-                Help resources coming soon.
-              </p>
-            </div>
+            <HelpGuide noun={noun} nounPlural={nounPlural} />
           </div>
         </div>
       </div>

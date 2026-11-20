@@ -7,6 +7,8 @@
  * is no stroke control at all — logos aren't line art.
  */
 
+import { scopeSvgNames } from './scope';
+
 const SHAPE_TAGS = 'path|circle|rect|polygon|polyline|line|ellipse|g|use';
 
 const WHITE_PAINTS = new Set(['#fff', '#ffffff', '#ffff', '#ffffffff', 'white']);
@@ -133,10 +135,12 @@ export function renderLogoSvg(paths: string, opts: LogoRenderOptions = {}): stri
   // to be visible at all.
   const ink = opts.color;
   const colorAttr = ink && ink !== 'currentColor' ? ` color="${ink}"` : '';
-  const body =
+  // Scoped after recolouring, which matches the artwork's own class names.
+  const body = scopeSvgNames(
     ink && opts.repaint
       ? recolorMonochrome(paths, ink, { repaintWhite: whiteIsTheInk(paths) })
-      : paths;
+      : paths,
+  );
 
   const innerSvg = `<svg viewBox="${viewBox}" width="24" height="24" x="0" y="0" preserveAspectRatio="xMidYMid meet">${body}</svg>`;
 

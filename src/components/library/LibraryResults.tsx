@@ -6,12 +6,16 @@ import { useLibraryParams } from '@/hooks/useLibraryParams';
 import { useLibraryStats } from '@/hooks/useLibraryStats';
 import { useSavedCollections } from '@/hooks/useSavedCollections';
 import { AbortedError, loadItems } from '@/lib/api/load';
+import type { InitialLibrary } from '@/lib/api/initialLibrary';
+import { resultsKey } from '@/lib/api/libraryParams';
 import type { LibraryItem } from '@/lib/api/normalize';
 import { PAGE_SIZE, type CategoryConfig } from '@/lib/config/categories';
 import { editorFromGlobals, exportSvgFor } from '@/lib/render/editor';
 import { CompareModal } from './CompareModal';
 import { DetailModal } from './DetailModal';
 import { FiltersPanel } from './FiltersPanel';
+import { ConfirmHost } from '@/components/inspirations/ConfirmDialog';
+import { LibraryBuddy } from './LibraryBuddy';
 import { LibraryGrid } from './LibraryGrid';
 import { LocalFolderModal } from './LocalFolderModal';
 import { MultiActionsStrip } from './MultiActionsStrip';
@@ -40,22 +44,43 @@ type Props = {
   onSelectTab: (tab: SidebarTab) => void;
   panelOpen: boolean;
   onClosePanel: () => void;
+  /** The server render's first page and counts (lib/api/initialLibrary.ts). */
+  initial?: InitialLibrary | null;
 };
 
 type Results =
   | { status: 'loading' }
-  | { status: 'ready'; items: LibraryItem[]; total: number }
-  | { status: 'error'; message: string };
+  /** `key`: the resultsKey() these items were loaded for. */
+  | { status: 'ready'; items: LibraryItem[]; total: number; key: string }
+  | { status: 'error'; message: string; key?: string };
 
-export function LibraryResults({ config, sidebarTab, onSelectTab, panelOpen, onClosePanel }: Props) {
+export function LibraryResults({
+  config,
+  sidebarTab,
+  onSelectTab,
+  panelOpen,
+  onClosePanel,
+  initial = null,
+}: Props) {
   const { params, setParams } = useLibraryParams();
-  const stats = useLibraryStats(config.slug);
+  const stats = useLibraryStats(config.slug, initial?.stats);
   const display = useDisplaySettings(config);
   const saved = useSavedCollections(config);
 
+  // The server's first page, when it's for the results this URL asks for.
+  // It renders straight away (it's already in the HTML) instead of a skeleton.
+  const currentKey = resultsKey(config.slug, params);
+  const served = initial?.results && initial.key === currentKey ? initial.results : null;
+
   // One piece of state for the whole request, so loading and data can never
   // disagree.
-  const [results, setResults] = useState<Results>({ status: 'loading' });
+  const [results, setResults] = useState<Results>(
+    served ? { status: 'ready', items: served.items, total: served.total, key: currentKey } : { status: 'loading' },
+  );
+  // Which results the server page still stands for. Cleared once the URL moves
+  // on, so returning later fetches normally.
+  const servedKeyRef = useRef(served ? currentKey : null);
+  const servedCompleteRef = useRef(served?.complete ?? false);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const [detailId, setDetailId] = useState<string | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -71,6 +96,9 @@ export function LibraryResults({ config, sidebarTab, onSelectTab, panelOpen, onC
 
   // Guards against an older response landing after a newer one.
   const requestIdRef = useRef(0);
+  // Bumped to load the same search again (Buddy's "Try again" after a failed load).
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = useCallback(() => setReloadToken((token) => token + 1), []);
 
   // Serialised so the effect doesn't re-run just because the params object
   // holds fresh arrays on every render.
@@ -86,17 +114,27 @@ export function LibraryResults({ config, sidebarTab, onSelectTab, panelOpen, onC
   const savedKey = params.saved ? savedIdList.join(',') : '';
 
   useEffect(() => {
+    const showingServerPage = servedKeyRef.current === currentKey;
+    if (!showingServerPage) servedKeyRef.current = null;
+    // The server's page is already on screen and whole: nothing to fetch.
+    if (showingServerPage && servedCompleteRef.current) return;
+
     const requestId = ++requestIdRef.current;
+    const requestKey = currentKey;
     let cancelled = false;
 
-    // Reset to the loading state so the stale item cards don't linger while
-    // the new query is in flight — otherwise clicks on old cards can fire
-    // handlers bound to items that are about to be replaced, and the click
-    // hits the wrong card after search.
-    setResults({ status: 'loading' });
-    // Any pending selection was tied to the previous result set — clear it
-    // so the multi-actions strip doesn't shift the grid down mid-search.
-    setSelectedIds(new Set());
+    // A server page cut to its size budget stays up while the full page
+    // loads; the extra cards then appear after it, so nothing jumps.
+    if (!showingServerPage) {
+      // Reset to the loading state so the stale item cards don't linger while
+      // the new query is in flight — otherwise clicks on old cards can fire
+      // handlers bound to items that are about to be replaced, and the click
+      // hits the wrong card after search.
+      setResults({ status: 'loading' });
+      // Any pending selection was tied to the previous result set — clear it
+      // so the multi-actions strip doesn't shift the grid down mid-search.
+      setSelectedIds(new Set());
+    }
 
     loadItems({
       category: config.slug,
@@ -110,15 +148,19 @@ export function LibraryResults({ config, sidebarTab, onSelectTab, panelOpen, onC
     })
       .then((result) => {
         if (cancelled || requestId !== requestIdRef.current) return;
-        setResults({ status: 'ready', items: result.items, total: result.total });
+        setResults({ status: 'ready', items: result.items, total: result.total, key: requestKey });
       })
       .catch((err) => {
         if (cancelled || requestId !== requestIdRef.current) return;
         // A superseded search isn't a failure — the newer one owns the UI now.
         if (err instanceof AbortedError) return;
+        // Completing a server page that's already on screen: keep its cards
+        // rather than swap them for an error.
+        if (showingServerPage) return;
         setResults({
           status: 'error',
           message: err instanceof Error ? err.message : 'Failed to load',
+          key: requestKey,
         });
       });
 
@@ -127,7 +169,7 @@ export function LibraryResults({ config, sidebarTab, onSelectTab, panelOpen, onC
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- filterKey and
     // savedKey stand in for arrays that are new references every render.
-  }, [config.slug, params.query, params.page, filterKey, savedKey]);
+  }, [config.slug, params.query, params.page, filterKey, savedKey, reloadToken]);
 
   const loading = results.status === 'loading';
   const rawItems = results.status === 'ready' ? results.items : [];
@@ -228,6 +270,15 @@ export function LibraryResults({ config, sidebarTab, onSelectTab, panelOpen, onC
     [setParams],
   );
 
+  // Which search the grid is showing, so Buddy can tell its own results from the last ones.
+  const readyKey = results.status === 'ready' ? results.key : null;
+  // …and which search failed to load, so Buddy says so rather than wait on it.
+  const failedKey = results.status === 'error' ? (results.key ?? null) : null;
+  const buddyResults = useMemo(
+    () => ({ loading, total, items, key: readyKey, failedKey }),
+    [loading, total, items, readyKey, failedKey],
+  );
+
   const activeFilterCount =
     params.sources.length + params.styles.length + params.licenses.length +
     params.categories.length;
@@ -310,6 +361,8 @@ export function LibraryResults({ config, sidebarTab, onSelectTab, panelOpen, onC
       </main>
 
       <RightPanel
+        noun={config.noun}
+        nounPlural={config.nounPlural}
         activeTab={sidebarTab}
         onSelect={onSelectTab}
         open={panelOpen}
@@ -322,6 +375,7 @@ export function LibraryResults({ config, sidebarTab, onSelectTab, panelOpen, onC
         filters={
           <FiltersPanel
             config={config}
+            loading={stats.loading}
             collections={stats.collections}
             counts={stats.counts}
             totalItems={stats.total}
@@ -392,6 +446,20 @@ export function LibraryResults({ config, sidebarTab, onSelectTab, panelOpen, onC
           setDetailId(null);
           setParams({ query: tag, page: 1 }, { replace: true });
         }}
+      />
+
+      {/* The confirm box Buddy asks with ("Clear chat history?"), as on Inspirations. */}
+      <ConfirmHost />
+
+      <LibraryBuddy
+        config={config}
+        stats={stats}
+        params={params}
+        setParams={setParams}
+        results={buddyResults}
+        globals={globals}
+        onOpenItem={handleOpen}
+        onReload={reload}
       />
 
       <CompareModal

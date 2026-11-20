@@ -1,0 +1,93 @@
+// Copies the Inspirations Buddy's styles out of inspirations.css for the
+// library pages, which don't load that (very large) stylesheet:
+//
+//   node scripts/extract-buddy-css.mjs
+//
+// writes src/styles/buddy-guide.css. Re-run it after changing the Buddy in
+// inspirations.css, so both Buddies keep looking and moving the same.
+//
+// Kept: every rule for a Buddy piece (.ins-guide*, .ins-chat*, .ins-chip*,
+// .ins-dock-pill, the sheet, the confirm box) whose classes the library's own
+// components draw, the @media/@supports blocks around them, the @keyframes and
+// @property they use, and the --ins-* tokens they read, set on .mi-buddy-scope
+// (the wrapper LibraryBuddy renders) and .ins-portal (the confirm box).
+
+import { readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import postcss from 'postcss';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const source = join(root, 'src/styles/inspirations.css');
+const target = join(root, 'src/styles/buddy-guide.css');
+
+// The Buddy's pieces, and the confirm box it asks with ("Clear chat history?" — ConfirmDialog.tsx,
+// drawn as one of Inspirations' modals: search-overlay / search-modal / request-close).
+const PIECES = 'guide|chat|chip|dock-pill|sheet|confirm|search-overlay|search-modal\\b|request-close';
+const BUDDY = new RegExp(`\\.ins-(${PIECES})`);
+// Classes that belong to other parts of Inspirations; a selector naming one isn't the Buddy's.
+const OTHER = new RegExp(`\\.ins-(?!${PIECES}|root\\b|portal\\b)[a-z]`);
+const SCOPES = /(^|\s|,)\.ins-(root|portal)\b\s*/g;
+
+const css = postcss.parse(readFileSync(source, 'utf8'));
+const out = postcss.root();
+
+// Only the classes the library actually draws: read from the components that use these styles, so
+// the Inspirations-only pieces (the admin assistant, app comparisons, the search list, nudges) stay
+// out of every library page. `ins-chat-msg--${line.role}` is built at runtime: both roles count.
+const USERS = ['src/components/library/LibraryBuddy.tsx', 'src/components/inspirations/ConfirmDialog.tsx', 'src/components/inspirations/useSheet.tsx'];
+const used = new Set(['ins-chat-msg--user', 'ins-chat-msg--assistant', 'ins-portal', 'ins-root']);
+for (const file of USERS) for (const [name] of readFileSync(join(root, file), 'utf8').matchAll(/ins-[a-z0-9]+(?:-{1,2}[a-z0-9]+)*/g)) used.add(name);
+const drawn = (selector) => [...selector.matchAll(/\.(ins-[a-z0-9-]+)/g)].every(([, name]) => used.has(name));
+
+const isBuddy = (selector) => BUDDY.test(selector) && !OTHER.test(selector) && drawn(selector);
+
+// Rules, with their @media / @supports parents.
+function copy(container, into) {
+  container.each((node) => {
+    if (node.type === 'rule') {
+      // Each selector of a list stands on its own: keep the Buddy's ("… .ins-search-modal" shares a
+      // rule with a header one), drop the rest.
+      const selectors = node.selectors.filter(isBuddy);
+      if (!selectors.length) return;
+      const rule = node.clone({ selectors: selectors.map((s) => s.replace(SCOPES, '$1').trim()) });
+      into.append(rule);
+    } else if (node.type === 'atrule' && /^(media|supports)$/.test(node.name)) {
+      const block = node.clone({ nodes: [] });
+      copy(node, block);
+      if (block.nodes.length) into.append(block);
+    }
+  });
+}
+copy(css, out);
+
+// Keyframes the kept rules animate with, and the custom properties they animate.
+const text = out.toString();
+css.walkAtRules('keyframes', (node) => {
+  if (new RegExp(`\\b${node.params}\\b`).test(text)) out.prepend(node.clone());
+});
+css.walkAtRules('property', (node) => {
+  if (text.includes(node.params)) out.prepend(node.clone());
+});
+
+// The design tokens, from the app shell's own declarations (first one wins).
+const tokens = new Map();
+css.walkRules((rule) => {
+  if (!/^(:root|\.ins-root|\.ins-portal)$/.test(rule.selector) || rule.parent.type !== 'root') return;
+  rule.walkDecls(/^--ins-/, (decl) => {
+    if (!tokens.has(decl.prop)) tokens.set(decl.prop, decl.value);
+  });
+});
+// The Buddy's wrapper, and .ins-portal — the confirm box renders straight on <body>, outside it.
+const scope = postcss.rule({ selector: '.mi-buddy-scope, .ins-portal' });
+for (const [prop, value] of tokens) scope.append({ prop, value });
+// Manrope, as the site sets it everywhere (global.css) — the Buddy on Inspirations shows it too.
+scope.append({ prop: 'font-family', value: "var(--font-manrope), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" });
+scope.append({ prop: '-webkit-font-smoothing', value: 'antialiased' });
+out.prepend(postcss.rule({ selector: '.mi-buddy-scope *, .mi-buddy-scope *::before, .mi-buddy-scope *::after, .ins-portal, .ins-portal *, .ins-portal *::before, .ins-portal *::after', nodes: [postcss.decl({ prop: 'box-sizing', value: 'border-box' })] }));
+out.prepend(scope);
+
+const header = `/* GENERATED by scripts/extract-buddy-css.mjs from inspirations.css — do not edit.
+   The Inspirations Buddy's styles, for the library pages' Buddy (LibraryBuddy.tsx). */\n\n`;
+writeFileSync(target, header + out.toString().replace(/\n{3,}/g, '\n\n') + '\n');
+console.log(`buddy-guide.css: ${out.nodes.length} blocks, ${tokens.size} tokens`);

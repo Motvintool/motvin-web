@@ -2,6 +2,11 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import type { CategoryConfig } from '@/lib/config/categories';
+import type { InitialLibrary } from '@/lib/api/initialLibrary';
+import { getApiClient } from '@/lib/api/client';
+import { MobileMenuPanel } from '@/components/landing/MobileMenu';
+import { COMMUNITY_URL } from './LibraryTopHeader';
+import { LibraryPreload } from './LibraryPreload';
 import { LibraryResults } from './LibraryResults';
 import { LibrarySidebar, type SidebarTab } from './LibrarySidebar';
 import { ProductBanner } from './ProductBanner';
@@ -49,9 +54,11 @@ function isMobilePanelLayout() {
 
 type Props = {
   config: CategoryConfig;
+  /** First page and counts from the server render; null when it gave up. */
+  initial?: InitialLibrary | null;
 };
 
-export function LibraryView({ config }: Props) {
+export function LibraryView({ config, initial = null }: Props) {
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('filters');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // Below the panel's breakpoint the right panel slides over the grid; above
@@ -59,6 +66,28 @@ export function LibraryView({ config }: Props) {
   const [panelOpen, setPanelOpen] = useState(false);
 
   const closePanel = useCallback(() => setPanelOpen(false), []);
+  const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
+
+  // The hamburger opens the same full-screen menu as the landing pages. Same
+  // body class, so mobile-menu.css locks the page scroll behind it; Escape
+  // closes it, and so does growing past the 1300px breakpoint where it hides.
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    document.body.classList.add('mi-nav-mobile-open');
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeMobileMenu();
+    };
+    const onResize = () => {
+      if (!isMobilePanelLayout()) closeMobileMenu();
+    };
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onResize);
+    return () => {
+      document.body.classList.remove('mi-nav-mobile-open');
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [mobileMenuOpen, closeMobileMenu]);
 
   // body.mi-mobile-panel-open locks page scroll behind the drawer; matches
   // openMobileFilterPanel/closeMobileFilterPanel in icons.html:1748–1760.
@@ -93,6 +122,16 @@ export function LibraryView({ config }: Props) {
   return (
     <ToastProvider>
       <>
+      {/* Preload only what the server didn't put in the page: everything when
+          it gave up, the rest of a page it cut to its size budget, else nothing. */}
+      {!initial ? (
+        <LibraryPreload category={config.slug} />
+      ) : initial.results?.fullPageUrl ? (
+        <LibraryPreload
+          category={config.slug}
+          only={[getApiClient(config.slug).collectionsUrl(), initial.results.fullPageUrl]}
+        />
+      ) : null}
       <ProductBanner />
 
       <div
@@ -115,6 +154,7 @@ export function LibraryView({ config }: Props) {
         <Suspense fallback={null}>
           <LibraryResults
             config={config}
+            initial={initial}
             sidebarTab={sidebarTab}
             onSelectTab={setSidebarTab}
             panelOpen={panelOpen}
@@ -123,15 +163,13 @@ export function LibraryView({ config }: Props) {
         </Suspense>
       </div>
 
-      <div
-        className="mi-mobile-menu-panel"
-        id="mobile-menu-panel"
-        style={{ display: mobileMenuOpen ? undefined : 'none' }}
-      >
-        <div className="mi-mobile-menu-nav" id="mobile-menu-nav-slot" />
-        <div className="mi-mobile-menu-divider" />
-        <div className="mi-mobile-menu-sidebar" id="mobile-menu-sidebar-slot" />
-      </div>
+      <MobileMenuPanel
+        open={mobileMenuOpen}
+        onClose={closeMobileMenu}
+        // The desktop header's links: Community is the library's own; its
+        // Release Notes is the menu's Updates.
+        extraResources={[{ label: 'Community', href: COMMUNITY_URL, external: true }]}
+      />
 
       <AllModalShells />
       <Toast />

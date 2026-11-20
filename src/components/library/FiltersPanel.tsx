@@ -144,10 +144,17 @@ type Props = {
   onSizeChange: (size: number) => void;
   stroke: number;
   onStrokeChange: (stroke: number) => void;
+  /** Stats still loading: sources, styles and the total show placeholders. */
+  loading?: boolean;
 };
+
+// Placeholder rows while the stats load; label widths vary like real names.
+const SOURCE_SKELETON_WIDTHS = [92, 116, 84, 104, 72];
+const STYLE_SKELETON_WIDTHS = [64, 48, 72, 44, 80];
 
 export function FiltersPanel({
   config,
+  loading = false,
   collections,
   counts,
   totalItems,
@@ -271,7 +278,11 @@ export function FiltersPanel({
                   'All Sources'
                 )}
               </span>
-              <span className="mi-rp-badge-lg">{badgeCount.toLocaleString()}</span>
+              {loading ? (
+                <span className="mi-rp-badge-lg mi-skel" aria-hidden="true" />
+              ) : (
+                <span className="mi-rp-badge-lg">{badgeCount.toLocaleString()}</span>
+              )}
             </div>
           );
         })()}
@@ -320,6 +331,18 @@ export function FiltersPanel({
           className={`mi-rp-list${expanded && filteredSources.length > SOURCES_COLLAPSED_COUNT ? ' is-scrollable' : ''}`}
           id="filter-source"
         >
+          {loading &&
+            visibleSources.length === 0 &&
+            SOURCE_SKELETON_WIDTHS.map((width, index) => (
+              <div className="mi-rp-item is-skeleton" key={`source-skeleton-${index}`} aria-hidden="true">
+                <span className="mi-skel mi-skel--check" />
+                <div className="mi-rp-item-label">
+                  <span className="mi-skel mi-skel--logo" />
+                  <span className="mi-skel mi-skel--label" style={{ width }} />
+                </div>
+                <span className="mi-skel mi-skel--badge" />
+              </div>
+            ))}
           {visibleSources.map((collection) => (
             <div
               key={collection.id}
@@ -368,6 +391,16 @@ export function FiltersPanel({
       <div className="mi-rp-section">
         <span className="mi-rp-title">Styles</span>
         <div className="mi-rp-list mi-rp-list-gap4" id="filter-style">
+          {loading &&
+            config.styles.map((value, index) => (
+              <div className="mi-rp-style-item is-skeleton" key={`style-skeleton-${value}`} aria-hidden="true">
+                <span className="mi-skel mi-skel--dot" />
+                <span
+                  className="mi-skel mi-skel--label"
+                  style={{ width: STYLE_SKELETON_WIDTHS[index % STYLE_SKELETON_WIDTHS.length] }}
+                />
+              </div>
+            ))}
           {config.styles
             // Hide a style the library has none of, unless it's already picked.
             .filter((value) => (counts.style[value] ?? 0) > 0 || selectedStyles.has(value))

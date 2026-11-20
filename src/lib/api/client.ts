@@ -56,6 +56,8 @@ export class LibraryApiClient {
   private readonly pending = new Map<string, Promise<unknown>>();
   /** Aborts the previous search when a newer one starts. */
   private searchController: AbortController | null = null;
+  /** Cache key of the search that controller belongs to. */
+  private searchKey: string | null = null;
 
   constructor(category: Category) {
     this.category = category;
@@ -98,8 +100,36 @@ export class LibraryApiClient {
     return promise;
   }
 
+  // URL builders, shared with LibraryPreload: a preload only helps when its
+  // URL is byte-for-byte the one fetched here.
+  statsUrl(): string {
+    return `${this.baseUrl}/stats`;
+  }
+
+  collectionsUrl(): string {
+    return `${this.baseUrl}/collections`;
+  }
+
+  searchUrl(query: string, options: SearchOptions = {}): string {
+    const { limit = 40, offset = 0, collection, category, style, license, ids } = options;
+    const params = new URLSearchParams({
+      q: query,
+      limit: String(limit),
+      offset: String(offset),
+    });
+    const appendList = (name: string, values?: string[]) => {
+      if (values?.length) params.append(name, values.join(','));
+    };
+    appendList('collection', collection);
+    appendList('style', style);
+    appendList('category', category);
+    appendList('license', license);
+    appendList('ids', ids);
+    return `${this.baseUrl}/search?${params}`;
+  }
+
   getStats(): Promise<Stats> {
-    return this.request<Stats>(`${this.baseUrl}/stats`, 'stats', TTL.stats);
+    return this.request<Stats>(this.statsUrl(), 'stats', TTL.stats);
   }
 
   /**
@@ -109,7 +139,7 @@ export class LibraryApiClient {
    */
   async getCollections(): Promise<Collection[]> {
     const data = await this.request<CollectionsResponse>(
-      `${this.baseUrl}/collections`,
+      this.collectionsUrl(),
       'collections',
       TTL.collections,
     );
@@ -124,30 +154,23 @@ export class LibraryApiClient {
    * AbortError; callers should treat that as "ignore me", not as a failure.
    */
   async search(query: string, options: SearchOptions = {}): Promise<SearchResult> {
-    const { limit = 40, offset = 0, collection, category, style, license, ids } = options;
+    const url = this.searchUrl(query, options);
+    const cacheKey = `search:${url.slice(url.indexOf('?') + 1)}`;
 
-    const params = new URLSearchParams({
-      q: query,
-      limit: String(limit),
-      offset: String(offset),
-    });
-    const appendList = (name: string, values?: string[]) => {
-      if (values?.length) params.append(name, values.join(','));
-    };
-    appendList('collection', collection);
-    appendList('style', style);
-    appendList('category', category);
-    appendList('license', license);
-    appendList('ids', ids);
-
-    const cacheKey = `search:${params.toString()}`;
+    // The same search asked for again while it's still in flight shares that
+    // request instead of aborting and refetching it. React runs effects twice
+    // in development, and the refetch also threw away the response the page
+    // preloaded (LibraryPreload).
+    const inFlight = this.pending.get(`${CACHE_VERSION}:${cacheKey}`);
+    if (inFlight && this.searchKey === cacheKey) return inFlight as Promise<SearchResult>;
 
     this.searchController?.abort();
     this.pending.delete(`${CACHE_VERSION}:${cacheKey}`);
     this.searchController = new AbortController();
+    this.searchKey = cacheKey;
 
     return this.request<SearchResult>(
-      `${this.baseUrl}/search?${params}`,
+      url,
       cacheKey,
       TTL.search,
       this.searchController.signal,

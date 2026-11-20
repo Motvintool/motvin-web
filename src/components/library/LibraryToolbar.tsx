@@ -1,8 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 import { NO_RECOLOR } from '@/hooks/useDisplaySettings';
 import type { CategoryConfig } from '@/lib/config/categories';
+import { ModalPortal } from './ModalPortal';
 
 /**
  * Search pill, category dropdown and the global recolor control — port of
@@ -87,6 +95,7 @@ export function LibraryToolbar({
   const [draft, setDraft] = useState(query);
   const [catMenuOpen, setCatMenuOpen] = useState(false);
   const [recolorOpen, setRecolorOpen] = useState(false);
+  const [recolorPos, setRecolorPos] = useState<{ top: number; left: number } | null>(null);
   const [hexDraft, setHexDraft] = useState(color === NO_RECOLOR ? '' : color);
   // Starts compact so the server render doesn't assume a width; the effect
   // below corrects it before paint on wider viewports.
@@ -94,6 +103,7 @@ export function LibraryToolbar({
 
   const catRef = useRef<HTMLDivElement>(null);
   const recolorRef = useRef<HTMLDivElement>(null);
+  const recolorMenuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pillRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -186,11 +196,46 @@ export function LibraryToolbar({
     const onClick = (e: MouseEvent) => {
       const target = e.target as Node;
       if (!catRef.current?.contains(target)) setCatMenuOpen(false);
-      if (!recolorRef.current?.contains(target)) setRecolorOpen(false);
+      // The menu is portalled out of the wrap, so it needs its own check.
+      if (!recolorRef.current?.contains(target) && !recolorMenuRef.current?.contains(target)) {
+        setRecolorOpen(false);
+      }
     };
     document.addEventListener('click', onClick);
     return () => document.removeEventListener('click', onClick);
   }, []);
+
+  /**
+   * The menu is portalled to <body> and placed against the button: inside the
+   * toolbar, `.mi-main { overflow: hidden }` cut off its shadow, and the
+   * toolbar's backdrop-filter traps fixed children, so it can't escape from
+   * there. Right edges line up with the button, as the menu always sat on
+   * desktop; where that would run off the left edge (phones, where Recolor
+   * starts its own row) the left edges line up instead.
+   */
+  useLayoutEffect(() => {
+    if (!recolorOpen) return;
+    const place = () => {
+      const wrap = recolorRef.current;
+      const menu = recolorMenuRef.current;
+      if (!wrap || !menu) return;
+      const button = wrap.getBoundingClientRect();
+      const width = menu.offsetWidth;
+      const gutter = 12;
+      let left = button.right - width;
+      if (left < gutter) left = button.left;
+      left = Math.max(gutter, Math.min(left, document.documentElement.clientWidth - gutter - width));
+      setRecolorPos({ top: button.bottom + 14, left });
+    };
+    place();
+    // Capture catches .mi-main's own scrolling as well as the page's.
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [recolorOpen]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -248,7 +293,8 @@ export function LibraryToolbar({
           >
             <span className="mi-cat-dropdown-label">Category:</span>
             <span className="mi-cat-dropdown-val" id="cat-dropdown-val">
-              {activeCategory ?? `All ${capitalizedNoun}`}
+              {/* "All", not "All Logos": the box is a fixed width, and the page already names the library. */}
+              {activeCategory ?? 'All'}
             </span>
             <img src="/ASSET/Icons/icon-down-arrow.svg" className="mi-cat-icon" alt="" />
           </div>
@@ -423,7 +469,21 @@ export function LibraryToolbar({
             />
           </div>
 
-          <div className="mi-recolor-dropdown" id="recolor-dropdown" hidden={!recolorOpen}>
+          <ModalPortal>
+          <div
+            className="mi-recolor-dropdown"
+            id="recolor-dropdown"
+            ref={recolorMenuRef}
+            hidden={!recolorOpen}
+            style={{
+              position: 'fixed',
+              top: recolorPos?.top ?? 0,
+              left: recolorPos?.left ?? 0,
+              right: 'auto',
+              // Measured before it is placed; don't flash at the corner.
+              visibility: recolorPos ? undefined : 'hidden',
+            }}
+          >
             <div className="mi-recolor-color-input">
               <input
                 type="color"
@@ -464,6 +524,7 @@ export function LibraryToolbar({
               ))}
             </div>
           </div>
+          </ModalPortal>
         </div>
       </div>
     </div>

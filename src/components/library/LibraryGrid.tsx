@@ -57,9 +57,20 @@ export function LibraryGrid({
       >
         {Array.from({ length: SKELETON_COUNT }, (_, index) => (
           <div className="mi-card is-skeleton" key={`skeleton-${index}`} aria-hidden="true">
-            <div className="mi-card-preview" />
-            <div className="mi-card-name" />
-            <div className="mi-card-source" />
+            {/* The real card's slots, holding shimmer shapes (library.css
+                .mi-skel): the icon at the size it will draw at, its name, its source. */}
+            <div className="mi-card-preview">
+              <span
+                className="mi-skel mi-skel--icon"
+                style={{ width: globals.size, height: globals.size }}
+              />
+            </div>
+            <div className="mi-card-name">
+              <span className="mi-skel mi-skel--name" />
+            </div>
+            <div className="mi-card-source">
+              <span className="mi-skel mi-skel--tag" />
+            </div>
           </div>
         ))}
       </div>

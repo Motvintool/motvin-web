@@ -1,5 +1,5 @@
 import { PAGE_SIZE, type Category } from '@/lib/config/categories';
-import { getApiClient } from './client';
+import { getApiClient, type LibraryApiClient } from './client';
 import { HIDDEN_SOURCES, normalizeItems, type LibraryItem } from './normalize';
 
 /**
@@ -17,6 +17,13 @@ export type LoadParams = {
   licenses: string[];
   /** When set, only these ids are fetched — the saved-collections view. */
   savedIds?: string[];
+  /**
+   * The server render passes a client of its own per request: the shared one
+   * aborts "older" searches, and two visitors must never cancel each other.
+   */
+  client?: LibraryApiClient;
+  /** Server render: one attempt, no waiting out a cold index. */
+  noRetry?: boolean;
 };
 
 export type LoadResult = {
@@ -48,7 +55,7 @@ export async function loadItems(params: LoadParams): Promise<LoadResult> {
   const { category, query, page, sources, styles, categories, licenses, savedIds } =
     params;
 
-  const client = getApiClient(category);
+  const client = params.client ?? getApiClient(category);
   const limit = PAGE_SIZE;
   const offset = (page - 1) * limit;
 
@@ -58,7 +65,9 @@ export async function loadItems(params: LoadParams): Promise<LoadResult> {
     return { items: [], total: 0 };
   }
 
-  const collections = await client.getCollections().catch(() => []);
+  // Started now, awaited after the search: the two used to run back to back,
+  // costing a full extra round trip before the first icons.
+  const collectionsRequest = client.getCollections().catch(() => []);
 
   const hasFilters =
     sources.length > 0 ||
@@ -84,6 +93,7 @@ export async function loadItems(params: LoadParams): Promise<LoadResult> {
       if (isAbortError(error)) throw new AbortedError();
       throw error;
     }
+    const collections = await collectionsRequest;
 
     // The API's total counts every collection it indexed, including the ones
     // we hide (see HIDDEN_SOURCES in normalize.ts). Deduct those from the
@@ -107,7 +117,7 @@ export async function loadItems(params: LoadParams): Promise<LoadResult> {
     const looksLikeColdIndex =
       !query.trim() && !hasFilters && !savedIds && total === 0;
 
-    if (looksLikeColdIndex && attempt < INDEX_BUILD_MAX_RETRIES) {
+    if (looksLikeColdIndex && !params.noRetry && attempt < INDEX_BUILD_MAX_RETRIES) {
       const delay = Math.min(
         INDEX_BUILD_RETRY_STEP_MS * (attempt + 1),
         INDEX_BUILD_RETRY_CAP_MS,

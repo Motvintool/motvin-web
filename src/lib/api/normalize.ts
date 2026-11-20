@@ -28,6 +28,8 @@ export type LibraryItem = {
   sourceStyle: string;
   /** Whether the stroke-width control applies. Icons only; false elsewhere. */
   isEditableStroke: boolean;
+  /** Thin icons: 0 hairline, 1 heavier light weight. 0 for everything else. */
+  weightBand: number;
   /** Intrinsic size. Logos are not square, so the grid can't assume 1:1. */
   width: number | null;
   height: number | null;
@@ -111,6 +113,7 @@ export function normalizeItems(
         style,
         sourceStyle: item.sourceStyle || style,
         isEditableStroke: item.isEditableStroke ?? false,
+        weightBand: item.weightBand ?? 0,
         width: item.width ?? null,
         height: item.height ?? null,
         imageUrl: item.imageUrl ?? null,
