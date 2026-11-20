@@ -11,6 +11,8 @@ import { useApps } from './useApps';
 import { CloseIcon } from './Icons';
 import { ProfileMenu } from './ProfileMenu';
 import { AudioMenu } from './AudioMenu';
+import { mcpTodayLabel, useMcpToday } from '@/lib/mcp/useMcpToday';
+import { SHOW_MCP_IN_NAV } from '@/lib/mcp/visibility';
 
 /**
  * Compact sticky header: wordmark · Apps / Webs tabs · search · Save ·
@@ -105,6 +107,8 @@ export function Header() {
   };
 
   const onSettings = pathname.startsWith(INSPIRATIONS_ROUTES.settings);
+  // Signed in: whether they've connected an AI tool, and if so today's calls.
+  const mcp = useMcpToday();
 
   // The settings page is a quiet, personal page: the top bar shows the logo and nothing else.
   if (onSettings) {
@@ -157,6 +161,32 @@ export function Header() {
             </Link>
             <AudioMenu />
           </div>
+          {/* Signed in: "Get MCP" until a tool is connected (only once MCP is in the nav), then today's calls against the limit. */}
+          {mcp && (mcp.connected || SHOW_MCP_IN_NAV) && (
+            <div className="ins-header-mcp-slot">
+              {mcp.connected ? (
+                <Link href={INSPIRATIONS_ROUTES.settingsTools} className="ins-header-mcp" aria-label={`AI tools: ${mcpTodayLabel(mcp)}`}>
+                  <span className="ins-header-mcp-icon" aria-hidden />
+                  <span className="ins-header-mcp-count">
+                    <b>{mcp.used.toLocaleString()}</b>
+                    {mcp.limit ? `/${mcp.limit.toLocaleString()}` : ''}
+                  </span>
+                  {mcp.limit ? (
+                    <span className="ins-header-mcp-track" aria-hidden>
+                      <span style={{ width: `${Math.min(100, (mcp.used / mcp.limit) * 100)}%` }} />
+                    </span>
+                  ) : null}
+                  <span className="ins-header-tip" aria-hidden>
+                    AI tools · {mcpTodayLabel(mcp)}
+                  </span>
+                </Link>
+              ) : (
+                <Link href="/mcp/clients" className="ins-profile-login-btn ins-header-connect">
+                  Get MCP
+                </Link>
+              )}
+            </div>
+          )}
           <div className="ins-header-profile">
             <ProfileMenu />
           </div>
