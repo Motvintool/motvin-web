@@ -51,8 +51,8 @@ export function AnalyticsPanel({
   state: AdminState;
   busy: boolean;
   run: (action: () => Promise<unknown>, onDone?: () => void) => Promise<boolean>;
-  /** Opens the Screens tab, where held-back screens are listed. */
-  onHeld: () => void;
+  /** Opens the Screens tab, where held-back screens are listed (none where that tab isn't offered). */
+  onHeld?: () => void;
 }) {
   const [sort, setSort] = useState<{ by: Sort; desc: boolean }>({ by: 'screens', desc: true });
   const [query, setQuery] = useState('');

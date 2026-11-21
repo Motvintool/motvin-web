@@ -2,18 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import { authHeaders } from '@/lib/inspirations/admin-chatbot/ingestJobs';
+import { hasLocalTools } from '@/lib/inspirations/localTools';
 import { useIsLibraryAdmin } from '../useIsLibraryAdmin';
 
 /**
  * For admins only: a small "Not reviewed" label on an app version Claude has
  * not reviewed yet, so an upload left half-done is noticed. Visitors never see
- * it, and a reviewed version shows nothing.
+ * it, and a reviewed version shows nothing. Only on the admin's own computer, where
+ * the reviews and their list are: motvin.com can't read them, and would mark every
+ * version unreviewed.
  */
 export function ReviewBadge({ appId, platform, version }: { appId: string; platform: string; version: string | null | undefined }) {
   const admin = useIsLibraryAdmin();
   const [reviewed, setReviewed] = useState<boolean | null>(null);
   useEffect(() => {
-    if (admin.status !== 'admin' || !version) return;
+    if (admin.status !== 'admin' || !version || !hasLocalTools()) return;
     let live = true;
     void (async () => {
       try {

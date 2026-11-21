@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { hasLocalTools } from '@/lib/inspirations/localTools';
 import { CloseIcon } from '../Icons';
 import { AddScreensPanel } from './AddScreensPanel';
 import { AnalyticsPanel } from './AnalyticsPanel';
@@ -32,24 +33,31 @@ import { useAdminState } from './useAdminState';
 
 type Tab = 'analytics' | 'add' | 'batch' | 'protect' | 'weekly' | 'screens' | 'apps' | 'flows' | 'requests' | 'mcp' | 'settings';
 
-const TABS: { id: Tab; label: string }[] = [
+/**
+ * `local`: offered on the admin's own computer only (see hasLocalTools). On motvin.com
+ * Agent Upload and Protect screens have no tools to run, and what the others change
+ * the next deploy erases; Week's new apps and Settings are kept through deploys.
+ */
+const TABS: { id: Tab; label: string; local?: boolean }[] = [
   { id: 'analytics', label: 'Analytics' },
-  { id: 'add', label: 'Manual Upload' },
-  { id: 'batch', label: 'Agent Upload' },
-  { id: 'protect', label: 'Protect screens' },
+  { id: 'add', label: 'Manual Upload', local: true },
+  { id: 'batch', label: 'Agent Upload', local: true },
+  { id: 'protect', label: 'Protect screens', local: true },
   { id: 'weekly', label: 'Week’s new apps' },
-  { id: 'screens', label: 'Screens' },
-  { id: 'apps', label: 'Apps' },
-  { id: 'flows', label: 'Flows' },
+  { id: 'screens', label: 'Screens', local: true },
+  { id: 'apps', label: 'Apps', local: true },
+  { id: 'flows', label: 'Flows', local: true },
   { id: 'requests', label: 'Requests' },
   { id: 'mcp', label: 'MCP usage' },
   { id: 'settings', label: 'Settings' },
 ];
 
 export function AdminView() {
+  const [local] = useState(hasLocalTools);
+  const tabs = TABS.filter((t) => local || !t.local);
   // Opened for a recording dropped on the Motvin agent: straight to Agent Upload, where it waits.
-  const [tab, setTab] = useState<Tab>(() => (hasRecordings() ? 'batch' : 'analytics'));
-  useEffect(() => onRecordings(() => setTab('batch')), []);
+  const [tab, setTab] = useState<Tab>(() => (local && hasRecordings() ? 'batch' : 'analytics'));
+  useEffect(() => (local ? onRecordings(() => setTab('batch')) : undefined), [local]);
   const { state, loading, busy, error, report, refresh, run, setError } = useAdminState();
 
   const held = state?.files.filter((f) => !f.published).length ?? 0;
@@ -78,7 +86,7 @@ export function AdminView() {
       {/* Settings-style: the sections as a side tree; on a narrow screen, a pill switch above the content. */}
       <aside className="ins-admin-side">
         <nav className="ins-admin-tree" aria-label="Admin sections">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button key={t.id} type="button" className={`ins-admin-tree-item ${tab === t.id ? 'is-active' : ''}`} aria-current={tab === t.id ? 'page' : undefined} onClick={() => setTab(t.id)}>
               {t.label}
               {t.id === 'screens' && held > 0 && <span className="ins-admin-tree-count">{held}</span>}
@@ -88,9 +96,9 @@ export function AdminView() {
       </aside>
 
       <div className="ins-admin-content">
-      <h1 className="ins-admin-content-title">{TABS.find((t) => t.id === tab)?.label}</h1>
+      <h1 className="ins-admin-content-title">{tabs.find((t) => t.id === tab)?.label}</h1>
       <div className="ins-admin-pills" role="tablist" aria-label="Admin sections">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'is-active' : ''} onClick={(e) => { setTab(t.id); e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); }}>
             {t.label}
           </button>
@@ -126,7 +134,7 @@ export function AdminView() {
 
       {state && (
         <section className="ins-tabpanel" role="tabpanel">
-          {tab === 'analytics' && <AnalyticsPanel state={state} busy={busy} run={run} onHeld={() => setTab('screens')} />}
+          {tab === 'analytics' && <AnalyticsPanel state={state} busy={busy} run={run} onHeld={local ? () => setTab('screens') : undefined} />}
           {tab === 'add' && <AddScreensPanel state={state} busy={busy} run={run} onUploaded={refresh} />}
           {tab === 'batch' && <BatchPanel state={state} onChanged={refresh} />}
           {tab === 'protect' && <ProtectPanel />}
