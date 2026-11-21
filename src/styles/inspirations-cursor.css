@@ -38,8 +38,11 @@ body .lpi-footer a[href][target='_blank'] {
   cursor: var(--ins-cursor-external-light);
 }
 
-/* The navbar's small social icons are too small for the circle-arrow: plain hand. */
-body a[href][target='_blank'].nav-social-link {
+/* The navbar's small social icons are too small for the circle-arrow: plain hand. So is the
+   Resources menu, whose tiles already show their own ↗ on hover: Updates keeps the hand its
+   neighbours use. */
+body a[href][target='_blank'].nav-social-link,
+body a[href][target='_blank'].company-link {
   cursor: var(--ins-cursor-hand);
 }
 

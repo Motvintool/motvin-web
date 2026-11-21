@@ -316,16 +316,19 @@
   .mh-title { font-size: clamp(40px, 8.4vw, 64px); }
   .mh-tool { opacity: 0.85; scale: 1; }
   .mh-row { flex-wrap: wrap; gap: 28px 18px; }
-  .mh-orb { order: -1; flex-basis: 100%; margin: 0 auto; }
+  /* The core on a row of its own above the tools, at a fixed size: the side margins
+     fill the rest of the row (flex-basis: 100% made the core as wide as the screen). */
+  .mh-orb { --mh-orb: 210px; order: -1; width: var(--mh-orb); margin: 0 calc((100% - var(--mh-orb)) / 2); }
   .mh-tools { gap: 14px 18px; }
 }
 
 @media (max-width: 640px) {
+  .mh-card { padding-top: 112px; }
   .mh-title { font-size: clamp(38px, 11vw, 46px); }
   .mh-lead { font-size: 15px; }
   .mh-lead-break { display: none; }
   .mh-actions { flex-direction: column; gap: 16px; }
-  .mh-orb { width: 180px; }
+  .mh-orb { --mh-orb: 160px; }
   .mh-tool button { width: 42px; height: 42px; }
   .mh-tool svg { width: 24px; height: 24px; }
 }
