@@ -3364,12 +3364,49 @@ html.lpi-at-footer body {
   color: #6b6b70;
 }
 
+/* "New" beside a name: the same tag as "Try Icons" in the library's top bar (grey, with a
+   light sweeping across now and then), a little smaller to suit the menu's type. */
+.company-link-text b .company-link-badge {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  margin-left: 8px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  background: #e9e9e9;
+  color: #767676;
+  font-family: var(--font-inter), sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+/* The title and its tag share one centred line, so the row keeps its height. */
+.company-link-text b:has(.company-link-badge) { display: flex; align-items: center; }
+.company-link-text b .company-link-badge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.85) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: company-badge-skim 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes company-badge-skim {
+  0%, 55% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+@media (prefers-reduced-motion: reduce) { .company-link-text b .company-link-badge::after { display: none; } }
+
+/* The tool marks on the Motvin MCP tile and the hover arrows: desktop's bento grid only. */
+.company-link-tools,
+.company-link-arrow { display: none; }
+
 /* Desktop: the same layered card as the other menus, sized for four links. */
 @media (min-width: 1301px) {
   .landing-root .company-dropdown {
     top: calc(100% - 10px);
     left: 50%;
-    width: min(560px, calc(100vw - 48px));
+    width: min(680px, calc(100vw - 48px));
     padding: 10px;
     border-radius: 48px;
     background: #eeeef1;
@@ -3385,9 +3422,66 @@ html.lpi-at-footer body {
   }
 
   .landing-root .company-dropdown .dropdown-heading {
-    margin: 0 0 10px;
-    padding: 0 12px;
+    margin: 0 0 14px;
+    padding: 0 6px;
   }
+
+  /* Bento: Motvin MCP is the tall tile on the left (icon, words, then the tools it works with
+     at its foot); Updates and Request apps stack beside it, About us and Copyrights share the
+     last row. The small tiles keep the icon left of the words, so none of them sit half empty.
+     On hover a tile darkens a touch and shows an arrow in its corner. */
+  .landing-root .company-links { gap: 16px; }
+  .landing-root .company-link {
+    position: relative;
+    gap: 14px;
+    padding: 14px 16px;
+    border-radius: 22px;
+    background: #f6f6f8;
+  }
+  .landing-root .company-link:hover { background: #efeff2; }
+  .landing-root .company-link-icon,
+  .landing-root .company-link:hover .company-link-icon { width: 40px; height: 40px; background: #fff; }
+  .landing-root .company-link-arrow {
+    display: block;
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 16px;
+    height: 16px;
+    opacity: 0;
+    translate: -3px 3px;
+    transition: opacity 0.18s, translate 0.18s;
+  }
+  .landing-root .company-link:hover .company-link-arrow { opacity: 1; translate: 0 0; }
+  .landing-root .company-link.is-feature {
+    grid-row: span 2;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 18px;
+  }
+  .landing-root .company-link.is-feature .company-link-text b { font-size: 16px; }
+  /* The tools as a row of small white discs, overlapping like a stack of avatars. */
+  .landing-root .company-link-tools {
+    display: flex;
+    align-items: center;
+    margin-top: auto;
+    color: #55555b;
+  }
+  .landing-root .company-link-tools > span {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #fff;
+    /* A hairline keeps each disc crisp; the tile-coloured ring parts it from its neighbour. */
+    box-shadow: inset 0 0 0 1px rgba(11, 13, 24, 0.06), 0 0 0 2px #f6f6f8;
+    transition: box-shadow 0.18s;
+  }
+  /* Just enough overlap to read as a stack, never enough to cover the logo underneath. */
+  .landing-root .company-link-tools > span + span { margin-left: -4px; }
+  .landing-root .company-link.is-feature:hover .company-link-tools > span { box-shadow: inset 0 0 0 1px rgba(11, 13, 24, 0.06), 0 0 0 2px #efeff2; }
 
   .landing-root .navbar .company-desktop-arrow {
     width: 16px !important;

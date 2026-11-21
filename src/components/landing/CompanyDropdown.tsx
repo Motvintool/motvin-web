@@ -1,35 +1,44 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
+import { McpIcon } from '@/components/mcp/McpShared';
 
-/** Small line icons in the text colour (the menu icons in /ASSET are white, for dark menus). */
-const icon = (paths: ReactNode) => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    {paths}
-  </svg>
+/** One of the library's own icons (the Settings set), drawn in the menu's text colour. */
+const libraryIcon = (file: string) => (
+  <span
+    aria-hidden="true"
+    style={{ display: 'block', width: 20, height: 20, background: 'currentColor', WebkitMask: `url(${file}) center / contain no-repeat`, mask: `url(${file}) center / contain no-repeat` }}
+  />
 );
 
-type Entry = { title: string; text: string; href: string; icon: ReactNode; newTab?: boolean; opensRequest?: boolean };
+/** The tools shown on the Motvin MCP tile, each in its brand colour (as on its setup guide; Figma keeps its own). */
+const FEATURE_TOOLS = [
+  { id: 'claude', color: '#D97757' },
+  { id: 'openai', color: '#10A37F' },
+  { id: 'cursor', color: '#141414' },
+  { id: 'vscode', color: '#007ACC' },
+  { id: 'figma', color: undefined },
+] as const;
+
+type Entry = { title: string; text: string; href: string; icon: ReactNode; newTab?: boolean; opensRequest?: boolean; badge?: string; feature?: boolean };
 
 const ENTRIES: Entry[] = [
+  {
+    title: 'Motvin MCP',
+    text: 'Connect your AI tools',
+    badge: 'New',
+    feature: true,
+    href: '/mcp',
+    // The plug used for AI tools in Settings and the top bar.
+    icon: libraryIcon('/ASSET/Icons/ai-tools.svg'),
+  },
   {
     title: 'Updates',
     text: "See what's new in Motvin",
     href: '/updates/',
     newTab: true,
-    icon: icon(<><path d="M11 3l1.8 4.7 4.7 1.8-4.7 1.8L11 16l-1.8-4.7L4.5 9.5l4.7-1.8z" /><path d="M18.5 14.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" /></>),
-  },
-  {
-    title: 'Motvin MCP',
-    text: 'Connect Claude, Cursor or ChatGPT to the library',
-    href: '/mcp',
-    icon: icon(<><rect x="4" y="4" width="16" height="16" rx="4" /><path d="M9 12h6M12 9v6" /></>),
-  },
-  {
-    title: 'About us',
-    text: 'Our story and the founder',
-    href: '/about',
-    icon: icon(<><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" /></>),
+    // The same party popper as "Week's new apps" in the library's profile menu.
+    icon: libraryIcon('/ASSET/Icons/Motvin/week-app-release.svg'),
   },
   {
     // Opens the library's request form right over the page (onRequestApp);
@@ -41,15 +50,23 @@ const ENTRIES: Entry[] = [
     icon: <img src="/ASSET/Icons/Motvin/app-request.svg" alt="" width={20} height={20} />,
   },
   {
+    title: 'About us',
+    text: 'Our story and the founder',
+    href: '/about',
+    // The person icon from Settings → Account.
+    icon: libraryIcon('/ASSET/Icons/user-account.svg'),
+  },
+  {
     title: 'Copyrights',
     text: 'Credits and removal requests',
     href: '/copyrights',
-    icon: icon(<><circle cx="12" cy="12" r="9" /><path d="M15 9.5a4 4 0 1 0 0 5" /></>),
+    icon: libraryIcon('/ASSET/Icons/copyrights.svg'),
   },
 ];
 
 /**
- * Resources menu: Updates, About us, Request apps and Copyrights. The same layered
+ * Resources menu, as a bento grid on desktop: a wide Motvin MCP tile on top, then Updates,
+ * Request apps, About us and Copyrights. The same layered
  * card as the Products and Community menus on desktop, and an accordion in
  * the hamburger panel. `onNavigate` closes the menu (and the panel) on a pick.
  */
@@ -73,9 +90,23 @@ export function CompanyDropdown({
               <>
                 <span className="company-link-icon">{entry.icon}</span>
                 <span className="company-link-text">
-                  <b>{entry.title}</b>
+                  <b>
+                    {entry.title}
+                    {entry.badge && <span className="product-soon company-link-badge">{entry.badge}</span>}
+                  </b>
                   <span>{entry.text}</span>
                 </span>
+                {entry.feature && (
+                  <span className="company-link-tools" aria-hidden="true">
+                    {FEATURE_TOOLS.map((tool) => (
+                      <span key={tool.id} style={tool.color ? { color: tool.color } : undefined}>
+                        <McpIcon id={tool.id} size={14} />
+                      </span>
+                    ))}
+                  </span>
+                )}
+                {/* Shown on hover: the home page cards' corner arrow. */}
+                <img className="company-link-arrow" src="/ASSET/Icons/Motvin/view-apps.svg" alt="" width={16} height={16} aria-hidden="true" />
               </>
             );
             if (entry.opensRequest && onRequestApp) {
@@ -83,7 +114,7 @@ export function CompanyDropdown({
                 <a
                   key={entry.title}
                   href={entry.href}
-                  className="company-link"
+                  className={`company-link${entry.feature ? ' is-feature' : ''}`}
                   onClick={(e) => {
                     // A plain click opens the form here; a modified click still opens the page in a new tab.
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
@@ -97,14 +128,14 @@ export function CompanyDropdown({
               );
             }
             return entry.href.startsWith('/') && !entry.newTab ? (
-              <Link key={entry.title} href={entry.href} className="company-link" onClick={onNavigate}>
+              <Link key={entry.title} href={entry.href} className={`company-link${entry.feature ? ' is-feature' : ''}`} onClick={onNavigate}>
                 {body}
               </Link>
             ) : (
               <a
                 key={entry.title}
                 href={entry.href}
-                className="company-link"
+                className={`company-link${entry.feature ? ' is-feature' : ''}`}
                 onClick={onNavigate}
                 {...(entry.newTab ? { target: '_blank', rel: 'noopener' } : {})}
               >
