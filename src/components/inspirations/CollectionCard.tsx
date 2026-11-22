@@ -39,13 +39,14 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
   const coverAppsByPosition = new Map(coverPositions.map((position, index) => [position, coverApps[index]]));
   const counts = items.reduce<Record<SavedItemType, number>>(
     (total, item) => ({ ...total, [item.type]: total[item.type] + 1 }),
-    { screen: 0, app: 0, flow: 0, pattern: 0, component: 0, icon: 0 },
+    { screen: 0, app: 0, flow: 0, pattern: 0, component: 0, icon: 0, storeShots: 0 },
   );
-  // Apps, Screens and Flows always; UI elements and patterns once there are
-  // some, so nothing saved goes uncounted.
+  // Apps, Screens and Flows always; screenshot sets, UI elements and patterns
+  // once there are some, so nothing saved goes uncounted.
   const details = [
     `${counts.app} ${counts.app === 1 ? 'App' : 'Apps'}`,
     `${counts.screen} ${counts.screen === 1 ? 'Screen' : 'Screens'}`,
+    ...(counts.storeShots ? [`${counts.storeShots} ${counts.storeShots === 1 ? 'Screenshot set' : 'Screenshot sets'}`] : []),
     `${counts.flow} ${counts.flow === 1 ? 'Flow' : 'Flows'}`,
     ...(counts.component ? [`${counts.component} ${counts.component === 1 ? 'UI element' : 'UI elements'}`] : []),
     ...(counts.pattern ? [`${counts.pattern} ${counts.pattern === 1 ? 'Pattern' : 'Patterns'}`] : []),

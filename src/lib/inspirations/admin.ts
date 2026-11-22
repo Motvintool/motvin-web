@@ -147,12 +147,20 @@ export type AdminFlowRecord = {
   parentId?: string | null;
 };
 
+/** An app's newest store screenshots on one platform, as the admin tabs list them. */
+export type AdminStoreSet = { date: string; label: string; count: number; source: 'appstore' | 'manual'; urls: string[] };
+
+/** What fetching one app's App Store screenshots did. */
+export type StoreFetchResult = { status: 'added' | 'updated' | 'unchanged'; date: string; count: number; matched?: { trackId: number; name: string } };
+
 export type AdminState = {
   apps: AdminAppRecord[];
   sources: Record<string, AdminSourceRecord>;
   flows: AdminFlowRecord[];
   files: AdminScreenFile[];
   logos: string[];
+  /** Each app's newest store screenshot set per platform; absent from a backend that predates them. */
+  store?: Record<string, Partial<Record<Platform, AdminStoreSet>>>;
   counts: Record<string, number>;
   /** Absent from a backend that predates settings. */
   settings?: LibrarySettings;
@@ -259,6 +267,51 @@ export const adminApi = {
       method: 'POST',
       headers: await authHeaders({ 'Content-Type': contentTypeFor(name) }),
       body: file,
+    });
+    return unwrap(res);
+  },
+
+  /**
+   * One image of a store screenshot set, saved as `<index>.webp` under the
+   * day's folder. `start` clears that day's set first; `last` rebuilds.
+   */
+  async uploadStoreShot(
+    platform: Platform,
+    appId: string,
+    index: number,
+    file: Blob,
+    options: { start?: boolean; last?: boolean } = {},
+  ): Promise<{ file: string; date: string; width: number; height: number }> {
+    const params = new URLSearchParams();
+    if (options.start) params.set('start', '1');
+    if (options.last) params.set('last', '1');
+    // The server converts to webp itself, so any type it doesn't parse by name travels as plain bytes.
+    const type = Object.values(CONTENT_TYPES).includes(file.type) && file.type !== 'image/svg+xml' ? file.type : 'application/octet-stream';
+    const res = await fetch(`${baseUrl()}/store/${platform}/${appId}/${index}?${params}`, {
+      method: 'POST',
+      headers: await authHeaders({ 'Content-Type': type }),
+      body: file,
+    });
+    return unwrap(res);
+  },
+
+  async deleteStoreShots(platform: Platform, appId: string, date: string): Promise<{ report: BuildReport }> {
+    const res = await fetch(`${baseUrl()}/store/${platform}/${appId}/${date}`, { method: 'DELETE', headers: await authHeaders() });
+    return unwrap(res);
+  },
+
+  /** Removes one image of a store set; those after it move up a place, and the last one takes the set with it. */
+  async deleteStoreShot(platform: Platform, appId: string, date: string, index: number): Promise<{ report: BuildReport }> {
+    const res = await fetch(`${baseUrl()}/store/${platform}/${appId}/${date}/${index}`, { method: 'DELETE', headers: await authHeaders() });
+    return unwrap(res);
+  },
+
+  /** Takes an iOS app's iPhone screenshots from its App Store page (see the backend's `fetchStoreShots`). */
+  async fetchStoreShots(appId: string, options: { country: string; replace: boolean }): Promise<StoreFetchResult> {
+    const res = await fetch(`${baseUrl()}/store-fetch/${appId}`, {
+      method: 'POST',
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(options),
     });
     return unwrap(res);
   },

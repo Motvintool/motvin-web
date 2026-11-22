@@ -18,11 +18,11 @@ export function readSavedAppId(id: string): { appId: string; platform: Platform 
 /**
  * The platforms a saved item is of, so a collection shows each section's own items (Apps: iOS; Webs: the
  * web). Screens, flows, UI elements and pattern screens carry it in their id ("<app>-<platform>-…"); an
- * app saved on a platform is of that one, an older save of an app on several is of each it is on. A
+ * app (or its store screenshots) saved on a platform is of that one, an older save of an app on several is of each it is on. A
  * pattern saved from its page, or an icon, is of none in particular and shows in every section.
  */
 export function itemPlatforms(item: { type: string; id: string }, appPlatforms: Map<string, readonly Platform[]>): Platform[] | 'any' {
-  if (item.type === 'app') {
+  if (item.type === 'app' || item.type === 'storeShots') {
     const { appId, platform } = readSavedAppId(item.id);
     return platform ? [platform] : [...(appPlatforms.get(appId) ?? [])];
   }
