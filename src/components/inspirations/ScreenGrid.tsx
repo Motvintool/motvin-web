@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { App, SavedItemType, Screen } from '@/lib/inspirations/types';
+import type { App, Platform, SavedItemType, Screen, StoreShotSet } from '@/lib/inspirations/types';
 import { FloatCollectionBar } from './FloatCollectionBar';
 import { registerSaveAs, unregisterSaveAs } from './previewSaveAs';
 import { ScreenCard } from './ScreenCard';
+import { StoreShotsCard } from './StoreShotsCard';
 import { WebScreenCard } from './WebScreenCard';
 
 import { useApps } from './useApps';
@@ -37,6 +38,7 @@ export function ScreenGrid({
   webGrid = false,
   saveItem,
   prototype,
+  storeShots,
 }: {
   screens: Screen[];
   /** Overrides the shared app lookup; omit and the grid fetches it itself. */
@@ -65,6 +67,8 @@ export function ScreenGrid({
    * at `href`. That screen still has its own card right after it.
    */
   prototype?: { screenId: string; href: string; label: string; screens?: Screen[] };
+  /** The app's store screenshots on the platform shown: a "Screenshots" card after the prototype (StoreShotsCard). */
+  storeShots?: { set: StoreShotSet; app: App; platform: Platform; downloadable?: boolean };
 }) {
   const fetchedApps = useApps();
   const apps = appsOverride ?? fetchedApps;
@@ -131,6 +135,7 @@ export function ScreenGrid({
             prototype={prototype}
           />
         )}
+        {storeShots && <StoreShotsCard set={storeShots.set} app={storeShots.app} platform={storeShots.platform} downloadable={storeShots.downloadable} />}
         {screens.map((screen, index) => (
           webLayout ? <WebScreenCard
             key={screen.id}

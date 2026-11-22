@@ -22,6 +22,7 @@ import { BookmarkIcon, CloseIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
 import { PatternCard } from '../PatternCard';
 import { ScreenGrid } from '../ScreenGrid';
+import { StoreShotsCard } from '../StoreShotsCard';
 import { useApps } from '../useApps';
 import { useAsync } from '../useAsync';
 import { useToast } from '../Toast';
@@ -32,11 +33,12 @@ import { useScreensByIds } from '../useScreensByIds';
 
 const noSubscribe = () => () => {};
 
-type SavedTab = 'apps' | 'screens' | 'flows' | 'patterns' | 'components';
+type SavedTab = 'apps' | 'screens' | 'storeShots' | 'flows' | 'patterns' | 'components';
 
 const COLLECTION_TABS: { id: SavedTab; label: string }[] = [
   { id: 'apps', label: 'Apps' },
   { id: 'screens', label: 'Screens' },
+  { id: 'storeShots', label: 'Screenshots' },
   { id: 'components', label: 'UI Elements' },
   { id: 'flows', label: 'Flows' },
   { id: 'patterns', label: 'Patterns' },
@@ -171,9 +173,21 @@ export function SavedView() {
     // previews must load again once it does.
   }, `saved-app-previews:${savedApps.map((entry) => entry.savedId).join(',')}`);
 
+  // Store screenshot sets, each on the platform it was saved on ("udemy@ios"). One whose set has since left the
+  // library keeps a plain card with its ×, so it can still be taken out (and is still counted until it is).
+  const savedShotIds = items.filter((i) => i.type === 'storeShots').map((i) => i.id);
+  const savedShots = savedShotIds.map((savedId) => {
+    const { appId, platform } = readSavedAppId(savedId);
+    const app = apps.get(appId);
+    const set = app && platform ? app.storeShots?.[platform] : undefined;
+    return { savedId, appId, app, platform, set };
+  });
+
   const count = (t: SavedTab) =>
     t === 'apps'
       ? savedAppIds.length
+      : t === 'storeShots'
+        ? savedShotIds.length
       : t === 'screens'
         ? screenIds.length
         : t === 'flows'
@@ -428,6 +442,47 @@ export function SavedView() {
                     action={{ label: 'Explore screens', href: inSectionHref(INSPIRATIONS_ROUTES.screens) }}
                   />}
               />
+            </section>
+          )}
+
+          {tab === 'storeShots' && (
+            <section className="ins-result-section ins-shot-panel">
+              {savedShots.length === 0 ? (
+                <EmptyState
+                  play
+                  title="No saved screenshots"
+                  description="Open an app's Screenshots card and press Save to keep its App Store screenshots here."
+                  action={{ label: 'Explore apps', href: inSectionHref(INSPIRATIONS_ROUTES.apps) }}
+                />
+              ) : (
+                // The app page's own Screenshots card, opening the same preview; its link names the set, as a
+                // collection holds several.
+                <div className={`ins-grid ${webSection ? 'ins-web-grid' : ''}`} role="list">
+                  {savedShots.map(({ savedId, appId, app, platform, set }) => {
+                    const name = app?.name ?? appId;
+                    const remove = () => {
+                      void askConfirm({ title: `Remove ${name}'s screenshots?`, description: `They will be removed from “${collection.name}”.` }).then((ok) => {
+                        if (ok) removeItem(collection.id, { type: 'storeShots', id: savedId });
+                      });
+                    };
+                    return app && platform && set ? (
+                      <StoreShotsCard key={savedId} set={set} app={app} platform={platform} keyed onRemove={remove} />
+                    ) : (
+                      <article key={savedId} className="ins-card ins-store-card" role="listitem">
+                        <div className="ins-card-shot ins-store-card-shot is-missing">
+                          <span className="ins-store-card-cap">
+                            {name}
+                            <span className="ins-store-card-sub">No longer in the library</span>
+                          </span>
+                        </div>
+                        <button type="button" className="ins-card-remove-btn" aria-label={`Remove ${name}'s screenshots`} onClick={remove}>
+                          <CloseIcon size={14} />
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           )}
 

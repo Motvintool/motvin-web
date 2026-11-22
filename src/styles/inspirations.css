@@ -6955,6 +6955,26 @@ select.ins-input {
   animation: insFloatCollectionIn 220ms var(--ins-ease);
 }
 
+/* Over a preview (a screen's, or a set of store screenshots), the collection picker takes the footer's place:
+   the tags and buttons fade out and the bar sits centred in the footer — the screen view's own width, not the
+   window's (Details can take the sheet's right side) — instead of straddling the buttons and the sheet's bottom
+   edge. It is drawn inside the footer (SaveButton's own float), so it is placed on the footer directly: its
+   bottom 39px (half its closed height) below the footer's middle, so a list opening from it grows upward.
+   A phone's sheet keeps the bar where it is. */
+@media (min-width: 760px) {
+  .ins-screen-preview-foot .ins-float-collection:not(.ins-toast-deck) {
+    position: absolute;
+    left: 50%;
+    bottom: calc(50% - 39px);
+  }
+  .ins-screen-preview-foot-tags,
+  .ins-screen-preview-foot-secondary,
+  .ins-screen-preview-foot-primary > :not(.ins-float-collection) { transition: opacity 160ms var(--ins-ease); }
+  .ins-screen-preview-foot:has(.ins-float-collection-bar) .ins-screen-preview-foot-tags,
+  .ins-screen-preview-foot:has(.ins-float-collection-bar) .ins-screen-preview-foot-secondary,
+  .ins-screen-preview-foot-primary:has(.ins-float-collection-bar) > :not(.ins-float-collection) { opacity: 0; pointer-events: none; }
+}
+
 @keyframes insFloatCollectionIn {
   from { opacity: 0; transform: translateY(24px); }
   to { opacity: 1; transform: translateY(0); }
@@ -21465,3 +21485,217 @@ body:has(aside.ins-guide) .ins-assist-switch {
 .ins-week-add-item .ins-app-option-text .ins-muted { font-size: 12px; }
 .ins-week-add-menu .ins-flowtree-menu-footer { margin: 6px -8px -8px; }
 .ins-week-add-menu .ins-flowtree-apply:disabled { opacity: 0.4; cursor: default; }
+
+/* ─── Store screenshots ─────────────────────────────────────────────────────
+   The app page's "Screenshots" card (StoreShotsCard), right after the
+   prototype: the first three store images fanned out on white, wider
+   on hover; a click opens the whole set in a row. */
+.ins-store-card-shot {
+  display: block;
+  width: 100%;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ins-shot-panel .ins-store-card .ins-store-card-shot { background: #fff; }
+.ins-store-card-badge {
+  position: absolute;
+  top: clamp(8px, 2.6%, 14px);
+  left: clamp(8px, 4.6%, 14px);
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  /* The header's "New" tag colours (.ins-try-icons-badge). */
+  border-radius: 8px;
+  background: #e9e9e9;
+  color: #767676;
+  font: 600 13px/1 var(--font-inter), sans-serif;
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* And its shine, the same skim that runs across the "New" tag. */
+.ins-store-card-badge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.85) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: ins-pmenu-skim 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-store-card-badge::after { animation: none; display: none; }
+}
+.ins-store-fan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ins-store-fan-card {
+  position: absolute;
+  /* Centred both ways with `translate`, which stays apart from the fan's
+     `transform`; the image's own shape sets the height. */
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: 54%;
+  height: auto;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #f6f7f9;
+  /* No shadow, only a light grey ring, so a white store image keeps its edge on the white card. */
+  box-shadow: 0 0 0 1px rgba(17, 18, 20, 0.09);
+  transform-origin: 50% 50%;
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.ins-store-fan.is-3 > .ins-store-fan-card:nth-child(1),
+.ins-store-fan.is-2 > .ins-store-fan-card:nth-child(1) { transform: translateX(-42%) rotate(-8deg) scale(0.86); }
+.ins-store-fan.is-3 > .ins-store-fan-card:nth-child(2) { transform: translateX(42%) rotate(8deg) scale(0.86); }
+/* Hovered, the hand opens: the back two swing out, a beat apart, and the
+   front one lifts toward the viewer. */
+.ins-store-card-shot:is(:hover, :focus-visible) .ins-store-fan.is-3 > .ins-store-fan-card:nth-child(1),
+.ins-store-card-shot:is(:hover, :focus-visible) .ins-store-fan.is-2 > .ins-store-fan-card:nth-child(1) { transform: translateX(-50%) rotate(-11deg) scale(0.88); }
+.ins-store-card-shot:is(:hover, :focus-visible) .ins-store-fan.is-3 > .ins-store-fan-card:nth-child(2) { transform: translateX(50%) rotate(11deg) scale(0.88); transition-delay: 40ms; }
+.ins-store-card-shot:is(:hover, :focus-visible) .ins-store-fan-card:last-child {
+  transform: translateY(-3%) scale(1.05);
+}
+.ins-store-fan-card img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* A shine that keeps sweeping across the screens, front one first, then a
+   rest — a light band over the picture, clipped by the card's own corners. */
+.ins-store-fan-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    115deg,
+    transparent 32%,
+    rgba(255, 255, 255, 0.24) 42%,
+    rgba(255, 255, 255, 0.75) 50%,
+    rgba(255, 255, 255, 0.24) 58%,
+    transparent 68%
+  );
+  translate: -120% 0;
+  pointer-events: none;
+  animation: insStoreShine 3200ms cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+.ins-store-fan-card:not(:last-child)::before { animation-delay: 160ms; }
+/* The sweep takes the first 40% of the loop; the rest is a pause before the next. */
+@keyframes insStoreShine {
+  0% { translate: -120% 0; }
+  40%, 100% { translate: 120% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-store-fan-card { transition: none; }
+  .ins-store-card-shot .ins-store-fan-card::before { animation: none !important; }
+}
+.ins-store-card-cap {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 5%;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: #141414;
+  font: 500 15px/1.3 var(--font-outfit), var(--font-inter), sans-serif;
+  text-align: center;
+}
+/* The count, and in its place on hover a black "View all" pill, like the page's Save button. */
+.ins-store-card-cap .ins-store-card-title { color: inherit; font-size: inherit; font-weight: inherit; }
+.ins-store-card-title.is-short { display: none; }
+@media (max-width: 759px) {
+  .ins-store-card-cap { font-size: 13px; }
+  .ins-store-card-title:not(.is-short) { display: none; }
+  .ins-store-card-title.is-short { display: inline; }
+}
+.ins-store-card-sub { display: grid; place-items: start center; color: #6b6f76; font-size: 13px; font-weight: 400; }
+.ins-store-card-sub > span { grid-area: 1 / 1; }
+/* A hand-off, never a cross-fade: on hover the count leaves first, quickly,
+   and the pill follows a beat later, rising and settling; moving away plays
+   it the other way round. Each state carries the timing of its way in. */
+.ins-store-card-sub > span:first-child {
+  transition:
+    opacity 320ms ease 140ms,
+    translate 480ms cubic-bezier(0.22, 1, 0.36, 1) 140ms,
+    filter 320ms ease 140ms;
+}
+.ins-store-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* Clear of the title above; the count, at rest, stays tucked under it. */
+  margin-top: 10px;
+  padding: 10px 14px 10px 16px;
+  border-radius: 999px;
+  background: #141414;
+  color: #fff;
+  font: 600 13px/1 var(--font-inter), sans-serif;
+  opacity: 0;
+  translate: 0 8px;
+  scale: 0.94;
+  filter: blur(3px);
+  transition:
+    opacity 180ms ease,
+    translate 220ms ease,
+    scale 220ms ease,
+    filter 180ms ease;
+}
+.ins-store-card-shot:is(:hover, :focus-visible) .ins-store-card-sub > span:first-child {
+  opacity: 0;
+  translate: 0 -6px;
+  filter: blur(2px);
+  transition:
+    opacity 180ms ease,
+    translate 240ms ease,
+    filter 180ms ease;
+}
+.ins-store-card-shot:is(:hover, :focus-visible) .ins-store-card-cta {
+  opacity: 1;
+  translate: 0 0;
+  scale: 1;
+  filter: blur(0);
+  transition:
+    opacity 360ms ease 100ms,
+    translate 560ms cubic-bezier(0.22, 1, 0.36, 1) 100ms,
+    scale 560ms cubic-bezier(0.22, 1, 0.36, 1) 100ms,
+    filter 360ms ease 100ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins-store-card-sub > span { transition: opacity 150ms linear !important; translate: none !important; scale: none !important; filter: none !important; }
+}
+/* A saved set that has left the library (a collection's Screenshots): a plain card holding its name and ×. */
+.ins-store-card-shot.is-missing { cursor: default; }
+.ins-store-card-shot.is-missing .ins-store-card-cap { bottom: auto; top: 50%; translate: 0 -50%; }
+
+/* A web app's wide cards: a narrower fan, a little above the middle, so wide images stay clear of the caption. */
+.ins-web-grid .ins-store-fan-card { top: 45%; width: 42%; border-radius: 8px; }
+
+/* The set in the screen preview's frame (StoreShotsModal): a store image's own shape, with a gentler corner than
+   a phone screen's; a click shows it full size (ScreenLightbox). */
+.ins-screen-preview-shot--store {
+  border-radius: 6% / 2.8%;
+  clip-path: inset(0 round 6% / 2.8%);
+}
+.ins-screen-preview-shot--store img { width: 100%; height: 100%; object-fit: cover; }
+/* A wide (web) image takes the gentle corner wide screens use, not a phone's deep one. */
+.ins-screen-preview-shot--store.is-wide { border-radius: 1% / 1.75%; clip-path: inset(0 round 1% / 1.75%); }
+
+/* Agent Screenshots: one row per app while the agent works through them. */
+.ins-store-jobs { display: flex; flex-direction: column; margin: 0; padding: 0; border: 1px solid #ececec; border-radius: 14px; list-style: none; }
+.ins-store-job { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 12px 16px; }
+.ins-store-job + .ins-store-job { border-top: 1px solid #ececec; }
+.ins-store-job-name { font-weight: 500; }
+.ins-store-job-stage { color: #6b6f76; }
+.ins-store-job-note { grid-column: 1 / -1; color: #6b6f76; font-size: 13px; }
+.ins-store-job.is-added .ins-store-job-stage,
+.ins-store-job.is-updated .ins-store-job-stage { color: #15803d; }
+.ins-store-job.is-failed .ins-store-job-stage,
+.ins-store-job.is-failed .ins-store-job-note { color: #c62828; }

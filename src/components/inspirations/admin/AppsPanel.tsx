@@ -10,6 +10,7 @@ import { AppCardScreens } from './AppCardScreens';
 import { AppVersionScreens } from './AppVersionScreens';
 import { FlowsPanel } from './FlowsPanel';
 import { AppSourcePanel } from './AppSourcePanel';
+import { AppStoreShots } from './StoreShotsPanels';
 
 /**
  * App records: the products screenshots belong to.
@@ -23,7 +24,7 @@ import { AppSourcePanel } from './AppSourcePanel';
  * to this app) and its source & licence entry, one tab each, so the whole of an app is managed in one place.
  */
 
-type EditorSection = 'details' | 'screens' | 'card' | 'flows' | 'source';
+type EditorSection = 'details' | 'screens' | 'card' | 'storeShots' | 'flows' | 'source';
 
 // A new app starts with no category chosen (not SaaS): the form will not save until
 // somebody picks one, so a category is never an accident of the default.
@@ -339,6 +340,7 @@ export function AppsPanel({
       { id: 'details', label: 'Details' },
       { id: 'screens', label: 'Screens', count: String(screens.length) },
       { id: 'card', label: 'Card screens', count: cardCount > 0 ? `${cardCount}/4` : 'Auto' },
+      { id: 'storeShots', label: 'Screenshots', count: String(state.store?.[editing.id]?.[platform]?.count ?? 0) },
       { id: 'flows', label: 'Flows', count: String(flows.length) },
       { id: 'source', label: 'Source & licence', count: state.sources[editing.id]?.status === 'approved' ? 'Approved' : state.sources[editing.id]?.status ?? 'Not set' },
     ];
@@ -425,6 +427,7 @@ export function AppsPanel({
           <AppVersionScreens app={editing} files={screens} flows={flows} screenTypes={state.vocabulary.screenTypes} busy={busy} run={run} state={state} />
         )}
         {section === 'card' && <AppCardScreens key={`${editing.id}:${platform}:${(editing.cardScreens ?? []).join(',')}`} app={editing} files={screens} busy={busy} run={run} />}
+        {section === 'storeShots' && <AppStoreShots app={editing} platform={platform} state={state} busy={busy} run={run} />}
         {section === 'source' && <AppSourcePanel key={`${editing.id}:${JSON.stringify(state.sources[editing.id] ?? {})}`} app={editing} state={state} busy={busy} run={run} />}
         {section === 'flows' && <FlowsPanel key={`${editing.id}:${platform}`} state={state} busy={busy} run={run} appOnly={editing.id} platformOnly={platform} />}
 

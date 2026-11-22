@@ -167,6 +167,25 @@ export type App = {
    * chooses for itself (see coverScreen).
    */
   cardScreens: string[];
+  /**
+   * The newest store screenshots per platform — its App Store gallery, or
+   * images the admin uploaded — shown as the "Screenshots" card on the app
+   * page. A platform without any is absent; older backends omit the field.
+   */
+  storeShots?: Partial<Record<Platform, StoreShotSet>>;
+};
+
+/** One dated set of an app's store screenshots, in the order the store shows them. */
+export type StoreShotSet = {
+  /** `YYYY-MM-DD`, the day they were taken. */
+  date: string;
+  /** "22 Nov 2026". */
+  label: string;
+  source: 'appstore' | 'manual';
+  /** Whether the app's licence lets visitors download them (absent from an older backend: no). */
+  downloadable?: boolean;
+  /** API-relative image URLs (resolve with inspirationsApi.mediaUrl). */
+  images: { file: string; url: string; width: number; height: number }[];
 };
 
 export type ScreenCapture = {
@@ -317,7 +336,8 @@ export type Pattern = {
   screenIds: string[];
 };
 
-export type SavedItemType = 'screen' | 'app' | 'flow' | 'pattern' | 'component' | 'icon';
+/** `storeShots`: an app's store screenshot set on one platform, saved as "<app>@<platform>". */
+export type SavedItemType = 'screen' | 'app' | 'flow' | 'pattern' | 'component' | 'icon' | 'storeShots';
 
 export type CollectionItem = {
   type: SavedItemType;

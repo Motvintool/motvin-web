@@ -7,6 +7,7 @@ import { AddScreensPanel } from './AddScreensPanel';
 import { AnalyticsPanel } from './AnalyticsPanel';
 import { AppsPanel } from './AppsPanel';
 import { BatchPanel } from './BatchPanel';
+import { AgentScreenshotsPanel, ManualScreenshotsPanel } from './StoreShotsPanels';
 import { ProtectPanel } from './ProtectPanel';
 import { hasRecordings, onRecordings } from './recordingHandoff';
 import { FlowsPanel } from './FlowsPanel';
@@ -31,7 +32,7 @@ import { useAdminState } from './useAdminState';
  * recordings go through Agent Upload.
  */
 
-type Tab = 'analytics' | 'add' | 'batch' | 'protect' | 'weekly' | 'screens' | 'apps' | 'flows' | 'requests' | 'mcp' | 'settings';
+type Tab = 'analytics' | 'add' | 'batch' | 'store-manual' | 'store-agent' | 'protect' | 'weekly' | 'screens' | 'apps' | 'flows' | 'requests' | 'mcp' | 'settings';
 
 /**
  * `local`: offered on the admin's own computer only (see hasLocalTools). On motvin.com
@@ -42,6 +43,8 @@ const TABS: { id: Tab; label: string; local?: boolean }[] = [
   { id: 'analytics', label: 'Analytics' },
   { id: 'add', label: 'Manual Upload', local: true },
   { id: 'batch', label: 'Agent Upload', local: true },
+  { id: 'store-manual', label: 'Manual Screenshots', local: true },
+  { id: 'store-agent', label: 'Agent Screenshots', local: true },
   { id: 'protect', label: 'Protect screens', local: true },
   { id: 'weekly', label: 'Week’s new apps' },
   { id: 'screens', label: 'Screens', local: true },
@@ -137,6 +140,8 @@ export function AdminView() {
           {tab === 'analytics' && <AnalyticsPanel state={state} busy={busy} run={run} onHeld={local ? () => setTab('screens') : undefined} />}
           {tab === 'add' && <AddScreensPanel state={state} busy={busy} run={run} onUploaded={refresh} />}
           {tab === 'batch' && <BatchPanel state={state} onChanged={refresh} />}
+          {tab === 'store-manual' && <ManualScreenshotsPanel state={state} onChanged={refresh} />}
+          {tab === 'store-agent' && <AgentScreenshotsPanel state={state} onChanged={refresh} onManual={() => setTab('store-manual')} />}
           {tab === 'protect' && <ProtectPanel />}
           {tab === 'weekly' && <WeeklyAppsPanel state={state} busy={busy} run={run} />}
           {tab === 'screens' && <ScreensPanel state={state} busy={busy} run={run} />}

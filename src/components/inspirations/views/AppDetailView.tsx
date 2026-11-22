@@ -552,6 +552,8 @@ function AppDetailBody({
 
   // "View in App Store" for a phone app, "Visit website" for a Web one.
   const store = storeAction(appPlatform(app), app.website);
+  // This platform's store screenshots, never another platform's.
+  const storeShots = app.storeShots?.[appPlatform(app)];
   // The logo view, opened by the masthead logo itself or from the "…" menu,
   // or by `?logo=1` (back from signing in to copy or download a logo). That
   // param is dropped once read, so a reload doesn't reopen it. The view is
@@ -989,6 +991,12 @@ function AppDetailBody({
                 // Not over a narrowed grid: it plays every screen, so it would be the one card off the filter.
                 prototypeHref && sortedScreens[0] && !textActive && !selectedFlowScreenIds
                   ? { screenId: sortedScreens[0].id, href: prototypeHref, label: `Prototype: play all of ${app.name}'s screens`, screens: versionScreens }
+                  : undefined
+              }
+              storeShots={
+                // Beside the prototype, under the same rule: it belongs to the whole app, not to a filtered grid.
+                storeShots && !textActive && !selectedFlowScreenIds
+                  ? { set: storeShots, app, platform: appPlatform(app), downloadable: versionScreens.some((s) => s.downloadable) }
                   : undefined
               }
               empty={

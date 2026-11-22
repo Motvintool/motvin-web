@@ -196,7 +196,7 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
       e?.preventDefault();
       e?.stopPropagation();
       setPosition(null);
-      if (!allow()) return;
+      if (!screen?.downloadable || !allow()) return;
       show('Preparing download…', { tone: 'progress' });
       try {
         const blobUrl = URL.createObjectURL(await watermarked());
@@ -254,14 +254,17 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
                   <p className="ins-context-menu-text">Copy PNG</p>
                 </div>
               </button>
-              <button type="button" className="ins-context-menu-btn" onClick={downloadPng}>
-                <div className="ins-context-menu-btn-content">
-                  <div className="ins-context-menu-icon">
-                    <img alt="" src={ICON_DOWNLOAD_PNG} />
+              {/* Only where the licence allows it, as the preview's More menu does: view-only material isn't handed over. */}
+              {screen?.downloadable && (
+                <button type="button" className="ins-context-menu-btn" onClick={downloadPng}>
+                  <div className="ins-context-menu-btn-content">
+                    <div className="ins-context-menu-icon">
+                      <img alt="" src={ICON_DOWNLOAD_PNG} />
+                    </div>
+                    <p className="ins-context-menu-text">Download PNG</p>
                   </div>
-                  <p className="ins-context-menu-text">Download PNG</p>
-                </div>
-              </button>
+                </button>
+              )}
             </div>
             <div className="ins-context-menu-divider" />
             <button type="button" className="ins-context-menu-btn" onClick={copyLink}>
