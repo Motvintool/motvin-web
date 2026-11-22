@@ -1,5 +1,5 @@
 import { execFile, execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statfsSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { activeJob, dismissJob, getJob, killTree, resumeJob, startJob, stopJob } from '@/lib/server/ingestJobs';
@@ -13,7 +13,7 @@ import { fillScreenGaps } from '@/lib/server/screenGaps';
  * A batch is a queue of recordings and the admin's settings for all of them.
  * The server works through it on its own: each recording is uploaded the way
  * the Motvin agent uploads one, cleaned up, reviewed by the Claude Code
- * command-line tool following docs/review-motvin.md, checked, and cleaned up —
+ * command-line tool following motvin-web/docs/review-motvin.md, checked, and cleaned up —
  * one upload at a time, with the next upload running while the last one is
  * reviewed. The queue is kept on disk, so it carries on after a restart.
  *
@@ -123,27 +123,10 @@ const GEMINI_MODEL = process.env.MOTVIN_GEMINI_MODEL || 'gemini-3.1-pro';
 const batchesDir = () => join(inspirationsDataDir(), '..', 'batches');
 export const batchFilesDir = () => join(batchesDir(), 'files');
 const storeFile = () => join(batchesDir(), 'batches.json');
-/** The plugin folder, where docs/review-motvin.md is — the review runs from there. */
+/** The plugin folder, holding motvin-web and motvin-backend — the review runs from there. */
 const pluginRoot = () => resolve(process.cwd(), '..');
-
-/**
- * The review steps live in this repo's docs folder, kept in git; the plugin folder's docs is a
- * link to it. A link deleted by mistake is put back. False when the steps can't be found at all.
- */
-function restoreReviewDocs(): boolean {
-  const linked = join(pluginRoot(), 'docs');
-  if (existsSync(join(linked, 'review-motvin.md'))) return true;
-  const kept = join(process.cwd(), 'docs');
-  if (!existsSync(join(kept, 'review-motvin.md'))) return false;
-  try {
-    rmSync(linked, { force: true });
-    symlinkSync(kept, linked);
-    logLine(`put back the review steps: ${linked} → ${kept}`);
-  } catch {
-    return false;
-  }
-  return existsSync(join(linked, 'review-motvin.md'));
-}
+/** The review steps, kept in git in this repo's docs folder. */
+const reviewSteps = () => join(process.cwd(), 'docs', 'review-motvin.md');
 /** Recordings and logos the admin keeps on this machine. */
 const settingsFile = () => join(batchesDir(), 'settings.json');
 
@@ -587,9 +570,9 @@ function startNextReview(batch: Batch): boolean {
     return true;
   }
   // Without the review steps every run only stops and asks for them: say so instead of spending the tries.
-  if (!restoreReviewDocs()) {
+  if (!existsSync(reviewSteps())) {
     item.stage = 'needs-you';
-    item.note = `The review steps are missing: put docs/review-motvin.md back in ${pluginRoot()}, then click Retry`;
+    item.note = `The review steps are missing: get ${reviewSteps()} back from git, then click Retry`;
     item.finishedAt = new Date().toISOString();
     return true;
   }
@@ -597,14 +580,14 @@ function startNextReview(batch: Batch): boolean {
   // Already reviewed (the admin did it meanwhile): straight to the end.
   if (reviewState(item.appId, platform, item.version).reviewed && !reviewState(item.appId, platform, item.version).problems.length) return finishReview(batch, item);
   const prompt = [
-    `Follow docs/review-motvin.md to review ${item.appId} ${platform} ${item.version}.`,
+    `Follow motvin-web/docs/review-motvin.md to review ${item.appId} ${platform} ${item.version}.`,
     'You are running unattended, started by the Motvin batch queue: nobody will answer questions, so make every decision the steps describe yourself.',
     // Unattended, the run ends when this reply ends — agents still working would be lost.
     reviewer === 'gemini'
       ? 'If you cannot start separate agents, do the four parts yourself one after another; never stop before every part is done.'
       : 'Start all four agents of a pass together, in one single message (four agent calls at once, never two and then two), and wait until every one of them has returned before going on; never end your reply while any agent is still working.',
     ...(batch.settings.reviewModel === 'sonnet' && reviewer === 'claude'
-      ? ['This review runs strict: give every screen its own verdict ("checked" with what it shows) — verdicts per sheet are not counted; open the frame strip frames/<n>.png of every finding and missed moment before deciding it; group task flows under the app\'s areas, the way Mobbin does: the areas are the app\'s own tabs and menu sections (Home, Projects, Artifacts, Code, Settings…), every section the recording opens is an area of its own even with one to three screens, and no task walks through several sections. After the second check, do the look-again pass (docs/review-motvin.md step 7b): one fresh agent opens the pictures of every item in look-again.json and decides it, keep or fixed, with a reason.']
+      ? ['This review runs strict: give every screen its own verdict ("checked" with what it shows) — verdicts per sheet are not counted; open the frame strip frames/<n>.png of every finding and missed moment before deciding it; group task flows under the app\'s areas, the way Mobbin does: the areas are the app\'s own tabs and menu sections (Home, Projects, Artifacts, Code, Settings…), every section the recording opens is an area of its own even with one to three screens, and no task walks through several sections. After the second check, do the look-again pass (motvin-web/docs/review-motvin.md step 7b): one fresh agent opens the pictures of every item in look-again.json and decides it, keep or fixed, with a reason.']
       : []),
     'Finish only when apply-review says "review check: no problems left".',
   ].join(' ');

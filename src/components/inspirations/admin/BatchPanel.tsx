@@ -344,7 +344,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
                     <Link className="ins-btn ins-btn--ghost ins-btn--sm ins-batch-rowbtn" href={`/inspirations/app/${item.appId}`}>Open <ExternalIcon size={11} /></Link>
                   )}
                   {item.stage === 'review-ready' && item.appId && item.version && (
-                    <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm ins-batch-rowbtn" onClick={() => void navigator.clipboard.writeText(`Follow docs/review-motvin.md to review ${item.appId} ${last.settings.platform} ${item.version}`)}>
+                    <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm ins-batch-rowbtn" onClick={() => void navigator.clipboard.writeText(`Follow motvin-web/docs/review-motvin.md to review ${item.appId} ${last.settings.platform} ${item.version}`)}>
                       <CopyIcon size={11} /> Copy review request
                     </button>
                   )}

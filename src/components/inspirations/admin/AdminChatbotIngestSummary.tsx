@@ -20,11 +20,11 @@ import { useToast } from '../Toast';
 
 /**
  * Claude's review of this upload. The button copies the one line to paste
- * into Claude (or any AI tool) — it names docs/review-motvin.md, which checks every screen from
+ * into Claude (or any AI tool) — it names motvin-web/docs/review-motvin.md, which checks every screen from
  * the review package and applies its corrections; once it has, this shows
  * "Reviewed by Claude" with the number of fixes.
  */
-/** The steps a review goes through, as docs/review-motvin.md numbers them for `crawl.js review-progress`. */
+/** The steps a review goes through, as motvin-web/docs/review-motvin.md numbers them for `crawl.js review-progress`. */
 const REVIEW_STEPS = [
   'Read the review steps',
   'Build the review package',
@@ -42,7 +42,7 @@ export function ClaudeReview({ appId, appName, platform, version }: { appId: str
   const [status, setStatus] = useState<{ reviewed: boolean; reviewing?: boolean; startedAt?: string | null; step?: number; detail?: string | null; preparing?: boolean; fixes?: number; problems?: string[]; hasBackup?: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
   // Names the steps file, so any AI tool opens it from the message alone.
-  const request = `Follow docs/review-motvin.md to review ${appId} ${platform} ${version}`;
+  const request = `Follow motvin-web/docs/review-motvin.md to review ${appId} ${platform} ${version}`;
   useEffect(() => {
     let live = true;
     const check = async () => {

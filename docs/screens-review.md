@@ -1,4 +1,4 @@
-<!-- The screen-picking half of a Motvin review — which screens to keep and the best picture of each. docs/review-motvin.md sends the reviewer here first, then on to names, types, flows and patterns. -->
+<!-- The screen-picking half of a Motvin review — which screens to keep and the best picture of each. motvin-web/docs/review-motvin.md sends the reviewer here first, then on to names, types, flows and patterns. -->
 
 # Review a Motvin upload's screens (screens-review)
 

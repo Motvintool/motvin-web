@@ -1,8 +1,8 @@
-<!-- The Motvin review steps — the only copy. The Motvin agent's "Ask agent to review" button copies "Follow docs/review-motvin.md to review <app> <platform> <version>", so any AI tool (Claude Code, Cursor, Antigravity…) opens this file from that message. -->
+<!-- The Motvin review steps — the only copy. The Motvin agent's "Ask agent to review" button copies "Follow motvin-web/docs/review-motvin.md to review <app> <platform> <version>", so any AI tool (Claude Code, Cursor, Antigravity…) opens this file from that message. -->
 
 # Review a Motvin upload (review-motvin)
 
-The admin pasted `Follow docs/review-motvin.md to review <app> <platform> <version>` from the Motvin agent's "Ask agent to review" button (for example `… to review claude webapp 2026-10-24`). Check every screen of that version against its screenshot, fix what is wrong in one corrections file, apply it, and report. Work on that app and version only.
+The admin pasted `Follow motvin-web/docs/review-motvin.md to review <app> <platform> <version>` from the Motvin agent's "Ask agent to review" button (for example `… to review claude webapp 2026-10-24`). Check every screen of that version against its screenshot, fix what is wrong in one corrections file, apply it, and report. Work on that app and version only.
 
 Paths (from the `Plugin` folder):
 - Crawler: `motvin-web/tools/ios-crawler/crawl.js` — run it from `motvin-web/tools`.
