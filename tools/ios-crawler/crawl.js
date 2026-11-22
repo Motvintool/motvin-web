@@ -783,7 +783,7 @@ async function runReview(command, flags) {
     // The review reached a step: the Motvin agent's card ticks off the ones before it.
     const step = Number(flags.step);
     if (!Number.isInteger(step) || step < 1 || step > 8) {
-      log.error('--step must be 1–8 (see docs/review-motvin.md).');
+      log.error('--step must be 1–8 (see motvin-web/docs/review-motvin.md).');
       return 1;
     }
     const dir = reviewDir(flags.dataDir, flags.appId, flags.platform || 'ios', flags.version);
