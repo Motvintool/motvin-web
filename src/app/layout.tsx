@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { pageMetadata, SITE_URL } from '@/lib/config/share';
-import { Inter, Outfit, Pacifico, Manrope, Sora, Plus_Jakarta_Sans } from 'next/font/google';
+import localFont from 'next/font/local';
 import { AuthModalProvider } from '@/components/shared/AuthModal';
 import { AuthProvider } from '@/components/shared/AuthProvider';
 import { DevPerformanceGuard } from '@/components/shared/DevPerformanceGuard';
@@ -16,47 +16,50 @@ import '@/styles/inspirations-cursor.css';
 // Matches the weights the static site requested from Google Fonts. Exposed as
 // CSS variables because the ported stylesheets reference them by variable
 // (--font-outfit / --font-inter) rather than by literal family name.
-const outfit = Outfit({
+/*
+ * The fonts ship with the site (src/app/fonts: Google Fonts' own Latin files, each one variable file covering
+ * the weights below) rather than being fetched from Google during the build: the deploy server can't always
+ * reach Google Fonts, and a build that can't fetch them fails.
+ */
+const outfit = localFont({
+  src: './fonts/outfit-latin.woff2',
   variable: '--font-outfit',
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
+  weight: '300 700',
   display: 'swap',
 });
 
-const inter = Inter({
+const inter = localFont({
+  src: './fonts/inter-latin.woff2',
   variable: '--font-inter',
-  subsets: ['latin'],
-  weight: ['200', '300', '400', '500', '700'],
+  weight: '200 700',
   display: 'swap',
 });
 
-const pacifico = Pacifico({
+const pacifico = localFont({
+  src: './fonts/pacifico-latin.woff2',
   variable: '--font-pacifico',
-  subsets: ['latin'],
   weight: '400',
   display: 'swap',
 });
 
-const manrope = Manrope({
+const manrope = localFont({
+  src: './fonts/manrope-latin.woff2',
   variable: '--font-manrope',
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: '400 700',
   display: 'swap',
 });
 
-// Page headings (.ins-title): Sora, for the big titles only.
-const heading = Sora({
+const heading = localFont({
+  src: './fonts/sora-latin.woff2',
   variable: '--font-heading',
-  subsets: ['latin'],
-  weight: ['600'],
+  weight: '600',
   display: 'swap',
 });
 
-// The landing hero's headline: Plus Jakarta Sans.
-const hero = Plus_Jakarta_Sans({
+const hero = localFont({
+  src: './fonts/plus-jakarta-sans-latin.woff2',
   variable: '--font-hero',
-  subsets: ['latin'],
-  weight: ['600'],
+  weight: '600',
   display: 'swap',
 });
 
