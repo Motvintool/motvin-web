@@ -148,7 +148,7 @@ function matchHeldVersion(versions: { id: string; label: string; isLatest: boole
 }
 
 /** Apps that already have at least one screen filed under the given platform — an app's platform isn't a field on AdminAppRecord itself, only on its screen files. */
-function appsOnPlatform(state: AdminState, platform: 'ios' | 'webapp' | 'web'): AdminAppRecord[] {
+function appsOnPlatform(state: AdminState, platform: 'ios' | 'webapp' | 'site'): AdminAppRecord[] {
   const ids = new Set(state.files.filter((file) => file.platform === platform).map((file) => file.appId));
   // An app with no screens anywhere yet (one just created empty) belongs to no
   // platform so far: it can take its first screens on any of them.
@@ -452,7 +452,7 @@ export function AdminChatbot() {
       }
       const app = state.apps.find((entry) => entry.id === target.appId);
       if (app) {
-        const platform = (target.platform as 'ios' | 'webapp' | 'web' | undefined) ?? 'ios';
+        const platform = (target.platform as 'ios' | 'webapp' | 'site' | undefined) ?? 'ios';
         if (images.length) {
           holdUpload('screens', images);
           adminSays(`${images.length} screenshot${images.length === 1 ? '' : 's'} for ${app.name}`);
@@ -468,7 +468,7 @@ export function AdminChatbot() {
         // straight on to its versions.
         if (!target.platform) {
           setUploadPlan({ step: 'platform', appId: app.id, appName: app.name });
-          assistantSays(`Which platform is it from — iOS, Web Apps or Webs?`, [...PLATFORM_CHOICES.map((choice) => chip(choice.label)), chip('Cancel')]);
+          assistantSays(`Which platform is it from — iOS, Web Apps or Sites?`, [...PLATFORM_CHOICES.map((choice) => chip(choice.label)), chip('Cancel')]);
           return;
         }
         askVersion({ step: 'platform', platform }, app);
@@ -529,7 +529,7 @@ export function AdminChatbot() {
    * as any other change — nothing is sent until it is pressed (or a typed
    * yes). The files themselves stay held by the chat store until then.
    */
-  const offerHeld = (opts: { platform: 'ios' | 'webapp' | 'web'; appId?: string; version?: string; newApp?: { id: string; name: string }; logoName?: string }) => {
+  const offerHeld = (opts: { platform: 'ios' | 'webapp' | 'site'; appId?: string; version?: string; newApp?: { id: string; name: string }; logoName?: string }) => {
     const held = heldUpload;
     const files = heldUploadFilesNow();
     if (!held || !files.length || !user) return;
@@ -579,7 +579,7 @@ export function AdminChatbot() {
   };
 
   /**
-   * A new app — iOS, Web Apps or Webs — gets the chance of a logo straight
+   * A new app — iOS, Web Apps or Sites — gets the chance of a logo straight
    * after its platform: picked now, it is set the moment the app exists.
    */
   const askLogo = (plan: UploadPlan, afterLogo: 'name' | 'offer') => {
@@ -665,7 +665,7 @@ export function AdminChatbot() {
     if (plan.step === 'platform') {
       const platform = platformIn(text);
       if (!platform) {
-        assistantSays('Which platform — iOS, Web Apps or Webs?', [...PLATFORM_CHOICES.map((choice) => chip(choice.label)), chip('Cancel')]);
+        assistantSays('Which platform — iOS, Web Apps or Sites?', [...PLATFORM_CHOICES.map((choice) => chip(choice.label)), chip('Cancel')]);
         return;
       }
       // Opened for a named app: its versions next, no question about which app.
@@ -1111,7 +1111,7 @@ export function AdminChatbot() {
             )}{' '}
             —{' '}
             {heldUpload.plan.step === 'platform'
-              ? 'which platform? iOS, Web Apps or Webs.'
+              ? 'which platform? iOS, Web Apps or Sites.'
               : heldUpload.plan.step === 'app'
                 ? 'a new app, or which existing one?'
                 : heldUpload.plan.step === 'logo'

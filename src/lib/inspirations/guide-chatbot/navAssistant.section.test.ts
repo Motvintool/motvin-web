@@ -39,7 +39,7 @@ const onIos = { app: null, page: { pathname: '/inspirations/apps', search: '' } 
 
 describe('Motvin Buddy keeps to the section', () => {
   it('totals only the section', async () => {
-    expect((await resolveNavigation('how many apps are there', onWebs)).text).toBe('The library has 1 app, 33 screens and 13 flows.');
+    expect((await resolveNavigation('how many apps are there', onWebs)).text).toBe('The library has 1 web app, 33 screens and 13 flows.');
     expect((await resolveNavigation('how many apps are there', onIos)).text).toBe('The library has 2 apps, 348 screens and 70 flows.');
   });
 
@@ -77,9 +77,9 @@ describe('an app from the other section', () => {
 });
 
 describe('new questions', () => {
-  it('explains Apps and Webs', async () => {
-    for (const q of ['what is webs', 'what is the difference between apps and webs', 'apps vs webs']) {
-      expect((await resolveNavigation(q, onIos)).text).toContain('Webs is the web');
+  it('explains the three platforms: Apps, Web Apps and Webs', async () => {
+    for (const q of ['what is webs', 'what is the difference between apps and webs', 'apps vs webs', 'difference between web apps and webs', 'what is a web app']) {
+      expect((await resolveNavigation(q, onIos)).text).toContain('Motvin has three platforms');
     }
   });
 

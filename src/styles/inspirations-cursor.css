@@ -40,9 +40,10 @@ body .lpi-footer a[href][target='_blank'] {
 
 /* The navbar's small social icons are too small for the circle-arrow: plain hand. So is the
    Resources menu, whose tiles already show their own ↗ on hover: Updates keeps the hand its
-   neighbours use. */
+   neighbours use. The preview footer's store button (View in App Store, Visit website) already shows its ↗ too. */
 body a[href][target='_blank'].nav-social-link,
-body a[href][target='_blank'].company-link {
+body a[href][target='_blank'].company-link,
+body a[href][target='_blank'].ins-screen-preview-foot-btn {
   cursor: var(--ins-cursor-hand);
 }
 

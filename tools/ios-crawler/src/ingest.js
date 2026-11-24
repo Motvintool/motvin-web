@@ -641,7 +641,7 @@ async function finishIngest({ app, source, graph, visits, analyzer, duplicates, 
       }
     }
     if (options.platform) {
-      if (!['ios', 'webapp', 'web'].includes(options.platform)) throw new Error(`platform must be ios, webapp or web, not "${options.platform}"`);
+      if (!['ios', 'webapp', 'site'].includes(options.platform)) throw new Error(`platform must be ios, webapp or site, not "${options.platform}"`);
       resolvedApp = { ...resolvedApp, platform: options.platform };
     }
     if (!resolvedApp.platform) resolvedApp = { ...resolvedApp, platform: 'ios' };

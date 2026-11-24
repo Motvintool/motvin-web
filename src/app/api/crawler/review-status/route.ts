@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   const app = params.get('app') ?? '';
   const platform = params.get('platform') ?? 'ios';
   const version = params.get('version') ?? '';
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(app) || !['ios', 'webapp', 'web'].includes(platform) || !/^\d{4}-\d{2}-\d{2}$/.test(version)) return fail('app, platform and version are required.', 400);
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(app) || !['ios', 'webapp', 'site'].includes(platform) || !/^\d{4}-\d{2}-\d{2}$/.test(version)) return fail('app, platform and version are required.', 400);
   // The library's data folder, as the crawler finds it.
   const dataDir = process.env.INSPIRATIONS_DATA_DIR ? resolve(process.env.INSPIRATIONS_DATA_DIR) : resolve(process.cwd(), '..', 'motvin-backend', 'data', 'inspirations');
   const file = join(dataDir, '..', 'reviews', `${app}-${platform}-${version}`, 'reviewed.json');
@@ -90,7 +90,7 @@ export async function DELETE(request: Request) {
   const app = params.get('app') ?? '';
   const platform = params.get('platform') ?? 'ios';
   const version = params.get('version') ?? '';
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(app) || !['ios', 'webapp', 'web'].includes(platform) || !/^\d{4}-\d{2}-\d{2}$/.test(version)) return fail('app, platform and version are required.', 400);
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(app) || !['ios', 'webapp', 'site'].includes(platform) || !/^\d{4}-\d{2}-\d{2}$/.test(version)) return fail('app, platform and version are required.', 400);
   if (!clearReviewFolder(app, platform, version)) return fail('This upload has not been reviewed.', 400);
   const removed = 1;
   return Response.json({ success: true, removed }, { headers: { 'Cache-Control': 'no-store' } });

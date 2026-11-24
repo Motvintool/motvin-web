@@ -514,7 +514,7 @@ export async function identifyApp(imagePaths, options = {}) {
   }
 
   const sample = imagePaths.slice(0, 3);
-  const instruction = `These are ${sample.length} screen(s) from one ${options.platform === 'web' ? 'website' : options.platform === 'webapp' ? 'web app' : 'iOS app'}. Identify it.`;
+  const instruction = `These are ${sample.length} screen(s) from one ${options.platform === 'site' ? 'website' : options.platform === 'webapp' ? 'web app' : 'iOS app'}. Identify it.`;
 
   let reply;
   if (backend === 'ai') {

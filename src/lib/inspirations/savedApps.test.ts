@@ -15,7 +15,7 @@ describe('saved app ids', () => {
 });
 
 describe('saved items by section', () => {
-  const apps = new Map<string, readonly ('ios' | 'webapp' | 'web')[]>([['claude', ['ios', 'webapp']], ['meta-ai-new', ['ios']]]);
+  const apps = new Map<string, readonly ('ios' | 'webapp' | 'site')[]>([['claude', ['ios', 'webapp']], ['meta-ai-new', ['ios']]]);
   it('reads the platform of every kind of saved item', () => {
     expect(itemPlatforms({ type: 'screen', id: 'claude-webapp-versions-2026-10-27-chats-1' }, apps)).toEqual(['webapp']);
     expect(itemPlatforms({ type: 'flow', id: 'meta-ai-new-ios-versions-2026-10-24-onboarding' }, apps)).toEqual(['ios']);
@@ -26,7 +26,7 @@ describe('saved items by section', () => {
   });
   it('keeps each section to its own items', () => {
     expect(inSection({ type: 'screen', id: 'claude-webapp-versions-2026-10-27-chats-1' }, ['ios'], apps)).toBe(false);
-    expect(inSection({ type: 'screen', id: 'claude-webapp-versions-2026-10-27-chats-1' }, ['webapp', 'web'], apps)).toBe(true);
-    expect(inSection({ type: 'app', id: 'claude@ios' }, ['webapp', 'web'], apps)).toBe(false);
+    expect(inSection({ type: 'screen', id: 'claude-webapp-versions-2026-10-27-chats-1' }, ['webapp', 'site'], apps)).toBe(true);
+    expect(inSection({ type: 'app', id: 'claude@ios' }, ['webapp', 'site'], apps)).toBe(false);
   });
 });

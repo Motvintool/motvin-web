@@ -52,19 +52,22 @@ function parseList<T extends string>(raw: string | null, allowed: readonly T[]):
 }
 
 /**
- * "Webs" (the header's second tab) is websites and web apps together, one
- * section with no switch between them; "Apps" is iOS. A URL naming either web
- * platform browses both, and the URL writes the pair as plain `web`.
+ * "Webs" (the header's second tab) is web apps and sites together, one
+ * section with no switch between them; "Apps" is iOS. A URL naming either of
+ * them browses both, and the URL writes the section as plain `web`.
  */
-export const WEBS_PLATFORMS: readonly Platform[] = ['webapp', 'web'];
+export const WEBS_PLATFORMS: readonly Platform[] = ['webapp', 'site'];
+/** How a URL names the Webs section: `?platform=web`. */
+export const WEBS_PARAM = 'web';
 
-/** True when the platforms are the Webs section (web apps and/or websites, nothing else). */
+/** True when the platforms are the Webs section (web apps and/or sites, or the URL's own `web`; nothing else). */
 export function isWebsPlatforms(platforms: readonly string[]): boolean {
-  return platforms.length > 0 && platforms.every((p) => (WEBS_PLATFORMS as readonly string[]).includes(p));
+  return platforms.length > 0 && platforms.every((p) => p === WEBS_PARAM || (WEBS_PLATFORMS as readonly string[]).includes(p));
 }
 
 function parsePlatforms(raw: string | null): Platform[] {
-  const named = parseList(raw, PLATFORMS);
+  // `web` is the Webs section (web apps and sites), as every Webs link writes it.
+  const named = parseList(raw ? raw.replace(/\bweb\b/g, 'webapp') : raw, PLATFORMS);
   if (!named.some((p) => WEBS_PLATFORMS.includes(p))) return named;
   return [...named.filter((p) => !WEBS_PLATFORMS.includes(p)), ...WEBS_PLATFORMS];
 }

@@ -2686,13 +2686,15 @@ select.ins-input {
 
 /* Figma Web Screen Preview (1220:9209): web cards retain the shared grid
   layout while replacing only the mobile-screen card geometry. */
-.ins-grid.ins-web-grid {
+.ins-grid.ins-web-grid,
+.ins-grid.ins-site-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
 }
 
 @media (max-width: 1650px) {
-  .ins-grid.ins-web-grid {
+  .ins-grid.ins-web-grid,
+  .ins-grid.ins-site-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -2708,13 +2710,15 @@ select.ins-input {
   }
 }
 
-.ins-web-card {
+.ins-web-card,
+.ins-site-card {
   position: relative;
   width: 100%;
   min-width: 0;
 }
 
-.ins-web-card-shot {
+.ins-web-card-shot,
+.ins-site-card-shot {
   position: relative;
   padding: 32px;
   overflow: hidden;
@@ -2722,7 +2726,8 @@ select.ins-input {
   background: #f5f5f5;
 }
 
-.ins-web-card-inset {
+.ins-web-card-inset,
+.ins-site-card-inset {
   aspect-ratio: 420 / 260.19;
   overflow: hidden;
   border: 1px solid #eee;
@@ -2731,14 +2736,17 @@ select.ins-input {
   background: #e5e5e5;
 }
 
-.ins-web-card-link {
+.ins-web-card-link,
+.ins-site-card-link {
   display: block;
   width: 100%;
   height: 100%;
 }
 
 .ins-web-card-inset .ins-shot-img,
-.ins-web-card-inset .ins-shot-missing {
+.ins-web-card-inset .ins-shot-missing,
+.ins-site-card-inset .ins-shot-img,
+.ins-site-card-inset .ins-shot-missing {
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -2747,14 +2755,16 @@ select.ins-input {
   object-fit: cover;
 }
 
-.ins-web-card-inset .ins-app-logo {
+.ins-web-card-inset .ins-app-logo,
+.ins-site-card-inset .ins-app-logo {
   position: relative;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
 }
 
-.ins-web-card-meta {
+.ins-web-card-meta,
+.ins-site-card-meta {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -2763,7 +2773,8 @@ select.ins-input {
 
 .ins-web-card-logo { border-radius: 10.4px; }
 
-.ins-web-card-meta-text {
+.ins-web-card-meta-text,
+.ins-site-card-meta-text {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -2771,7 +2782,8 @@ select.ins-input {
 }
 
 .ins-web-card-app,
-.ins-web-card-name {
+.ins-web-card-name,
+.ins-site-card-name {
   overflow: hidden;
   color: #121212;
   font-size: 20px;
@@ -2782,7 +2794,8 @@ select.ins-input {
   white-space: nowrap;
 }
 
-.ins-web-card-tagline {
+.ins-web-card-tagline,
+.ins-site-card-tagline {
   margin: 0;
   overflow: hidden;
   color: #626262;
@@ -2797,7 +2810,8 @@ select.ins-input {
   background: linear-gradient(to bottom, transparent, #fafafa);
 }
 
-.ins-explore-view .ins-web-card .ins-card-select-ring {
+.ins-explore-view .ins-web-card .ins-card-select-ring,
+.ins-explore-view .ins-site-card .ins-card-select-ring {
   top: 32px;
   left: 32px;
 }
@@ -2809,10 +2823,14 @@ select.ins-input {
 .ins-web-card:hover .ins-card-select-ring,
 .ins-web-card:has(:focus-visible) .ins-card-select-ring,
 .ins-web-card:hover .ins-web-card-controls,
-.ins-web-card:has(:focus-visible) .ins-web-card-controls { opacity: 1; transform: translateY(0); }
+.ins-web-card:has(:focus-visible) .ins-web-card-controls,
+.ins-site-card:hover .ins-card-select-ring,
+.ins-site-card:has(:focus-visible) .ins-card-select-ring { opacity: 1; transform: translateY(0); }
 
 .ins-web-card:hover .ins-card-select-ring,
-.ins-web-card:has(:focus-visible) .ins-card-select-ring { pointer-events: auto; }
+.ins-web-card:has(:focus-visible) .ins-card-select-ring,
+.ins-site-card:hover .ins-card-select-ring,
+.ins-site-card:has(:focus-visible) .ins-card-select-ring { pointer-events: auto; }
 
 .ins-web-card:hover .ins-web-card-controls { background: linear-gradient(to bottom, rgba(245, 245, 245, 0), rgba(245, 245, 245, 0.98) 48%, #f5f5f5); }
 
@@ -2931,11 +2949,13 @@ select.ins-input {
   pointer-events: none;
 }
 
-.ins-shot-panel .ins-grid.ins-web-grid .ins-card-shot::before {
+.ins-shot-panel .ins-grid.ins-web-grid .ins-card-shot::before,
+.ins-shot-panel .ins-grid.ins-site-grid .ins-card-shot::before {
   display: none;
 }
 
-.ins-shot-panel .ins-grid.ins-web-grid .ins-card-shot {
+.ins-shot-panel .ins-grid.ins-web-grid .ins-card-shot,
+.ins-shot-panel .ins-grid.ins-site-grid .ins-card-shot {
   aspect-ratio: 420 / 260.19;
   border: 1px solid #eee;
   border-radius: 1.67% / 2.7%;
@@ -2945,7 +2965,8 @@ select.ins-input {
   grid-template-columns: repeat(5, minmax(0, 380px));
 }
 
-.ins-shot-panel .ins-grid.ins-web-grid {
+.ins-shot-panel .ins-grid.ins-web-grid,
+.ins-shot-panel .ins-grid.ins-site-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
 }
@@ -2954,26 +2975,27 @@ select.ins-input {
    1100px, three on a tablet, so a screen never shrinks to a sliver in a narrow window. The 380px cap stays.
    (A phone's two-up is set in its own block below.) */
 @media (min-width: 1600px) {
-  .ins-grid:not(.ins-web-grid):not(.ins-app-grid),
-  .ins-shot-panel .ins-grid:not(.ins-web-grid) {
+  .ins-grid:not(.ins-web-grid):not(.ins-site-grid):not(.ins-app-grid),
+  .ins-shot-panel .ins-grid:not(.ins-web-grid):not(.ins-site-grid) {
     grid-template-columns: repeat(5, minmax(0, 380px));
   }
 }
 @media (min-width: 1100px) and (max-width: 1599px) {
-  .ins-grid:not(.ins-web-grid):not(.ins-app-grid),
-  .ins-shot-panel .ins-grid:not(.ins-web-grid) {
+  .ins-grid:not(.ins-web-grid):not(.ins-site-grid):not(.ins-app-grid),
+  .ins-shot-panel .ins-grid:not(.ins-web-grid):not(.ins-site-grid) {
     grid-template-columns: repeat(4, minmax(0, 380px));
   }
 }
 @media (min-width: 760px) and (max-width: 1099px) {
-  .ins-grid:not(.ins-web-grid):not(.ins-app-grid),
-  .ins-shot-panel .ins-grid:not(.ins-web-grid) {
+  .ins-grid:not(.ins-web-grid):not(.ins-site-grid):not(.ins-app-grid),
+  .ins-shot-panel .ins-grid:not(.ins-web-grid):not(.ins-site-grid) {
     grid-template-columns: repeat(3, minmax(0, 380px));
   }
 }
 
 @media (max-width: 1650px) {
-  .ins-shot-panel .ins-grid.ins-web-grid {
+  .ins-shot-panel .ins-grid.ins-web-grid,
+  .ins-shot-panel .ins-grid.ins-site-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -2983,7 +3005,8 @@ select.ins-input {
   border-radius: 12.41% / 5.65%;
 }
 
-.ins-shot-panel .ins-grid.ins-web-grid .ins-card-inset {
+.ins-shot-panel .ins-grid.ins-web-grid .ins-card-inset,
+.ins-shot-panel .ins-grid.ins-site-grid .ins-card-inset {
   border: 0;
   height: 100%;
   border-radius: 1.67% / 2.7%;
@@ -2991,7 +3014,10 @@ select.ins-input {
 
 .ins-shot-panel .ins-grid.ins-web-grid .ins-card-link,
 .ins-shot-panel .ins-grid.ins-web-grid .ins-card-inset .ins-shot-img,
-.ins-shot-panel .ins-grid.ins-web-grid .ins-card-inset .ins-shot-missing {
+.ins-shot-panel .ins-grid.ins-web-grid .ins-card-inset .ins-shot-missing,
+.ins-shot-panel .ins-grid.ins-site-grid .ins-card-link,
+.ins-shot-panel .ins-grid.ins-site-grid .ins-card-inset .ins-shot-img,
+.ins-shot-panel .ins-grid.ins-site-grid .ins-card-inset .ins-shot-missing {
   display: block;
   height: 100%;
   border-radius: 1.67% / 2.7%;
@@ -3052,11 +3078,13 @@ select.ins-input {
    and a dragged image isn't picked up to drop elsewhere. */
 @media (max-width: 759px), (hover: none) {
   .ins-card-inset,
-  .ins-web-card-inset {
+  .ins-web-card-inset,
+  .ins-site-card-inset {
     touch-action: pan-y;
   }
   .ins-card-inset img,
-  .ins-web-card-inset img {
+  .ins-web-card-inset img,
+  .ins-site-card-inset img {
     -webkit-user-drag: none;
   }
 }
@@ -4800,13 +4828,14 @@ select.ins-input {
 }
 
 /* Initials stand in when an app has no stored logo. Neutral on purpose — an
-   invented brand colour would read as the real mark. */
+   invented brand colour would read as the real mark. Solid, as a real logo is:
+   the grey tint sits on the page colour, so a screenshot under it never shows through. */
 .ins-app-logo--initials {
   font-family: var(--font-outfit), var(--font-inter), sans-serif;
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1;
-  background: var(--ins-tag);
+  background: linear-gradient(var(--ins-tag), var(--ins-tag)), var(--ins-page, #fff);
   color: var(--ins-sub);
   border: 1px solid var(--ins-border);
 }
@@ -5680,6 +5709,8 @@ select.ins-input {
   gap: 32px;
 }
 
+.ins-collection-webs-switch { flex: none; }
+
 /* Active count badges are wider than inactive ones in the Figma states.
    Reserve that footprint for every collection tab so selecting a tab does not
    move neighbouring labels. */
@@ -5836,6 +5867,8 @@ select.ins-input {
   font-size: 14px;
   line-height: 1.4;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ins-collection-actions {
@@ -6661,7 +6694,8 @@ select.ins-input {
   border-radius: 12.41% / 5.65%;
 }
 
-.ins-shot-panel .ins-grid.ins-web-grid .ins-card--skeleton .ins-skel--shot {
+.ins-shot-panel .ins-grid.ins-web-grid .ins-card--skeleton .ins-skel--shot,
+.ins-shot-panel .ins-grid.ins-site-grid .ins-card--skeleton .ins-skel--shot {
   border-radius: 1.67% / 2.7%;
 }
 
@@ -9430,6 +9464,14 @@ select.ins-input {
   .ins-segmented.ins-segmented--toolbar .ins-segmented-item[data-platform='ios'] svg {
     top: -1px;
   }
+  /* A collection's Web Apps | Sites switch has no icons: its names stay, a little smaller. */
+  .ins-segmented.ins-segmented--toolbar.ins-collection-webs-switch .ins-segmented-label { display: inline; }
+  .ins-segmented.ins-segmented--toolbar.ins-collection-webs-switch .ins-segmented-item,
+  .ins-segmented.ins-segmented--toolbar.ins-collection-webs-switch .ins-segmented-item.is-active {
+    width: auto;
+    padding: 0 12px;
+    font-size: 14px;
+  }
 
   .ins-fpill,
   .ins-fsort {
@@ -9542,7 +9584,9 @@ select.ins-input {
 @media (max-width: 640px) {
   /* Web (landscape) shots are too wide to pair up on a phone. */
   .ins-grid.ins-web-grid,
-  .ins-shot-panel .ins-grid.ins-web-grid {
+  .ins-shot-panel .ins-grid.ins-web-grid,
+  .ins-grid.ins-site-grid,
+  .ins-shot-panel .ins-grid.ins-site-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -17618,13 +17662,15 @@ html.ins-bat-on .ins-search-bat { display: block; }
    Save / Copy buttons leaves the card still: only the screen link's press counts. Pointer devices only: on
    touch, :active flickers on while a finger scrolls past. */
 .ins-card-shot,
-.ins-web-card-shot {
+.ins-web-card-shot,
+.ins-site-card-shot {
   transition:
     scale 220ms cubic-bezier(0.22, 1, 0.36, 1),
     background var(--ins-fast) var(--ins-ease);
 }
 .ins-card-inset,
-.ins-web-card-inset {
+.ins-web-card-inset,
+.ins-site-card-inset {
   transition: scale 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 @media (hover: hover) {
@@ -17633,7 +17679,9 @@ html.ins-bat-on .ins-search-bat { display: block; }
   }
   .ins-card-shot:has(.ins-card-link:active),
   .ins-web-card-shot:has(.ins-web-card-link:active),
-  .ins-web-card-shot:has(.ins-web-card-inset > a:active) {
+  .ins-web-card-shot:has(.ins-web-card-inset > a:active),
+  .ins-site-card-shot:has(.ins-site-card-link:active),
+  .ins-site-card-shot:has(.ins-site-card-inset > a:active) {
     scale: 0.97;
     transition-duration: 90ms, 90ms;
   }
@@ -17642,7 +17690,9 @@ html.ins-bat-on .ins-search-bat { display: block; }
   .ins-app-grid:not(.ins-shot-panel *) .ins-card:has(.ins-card-link:active) .ins-card-shot,
   .ins-card-shot:not(.ins-shot-panel *):has(.ins-card-link:active),
   .ins-web-card-shot:has(.ins-web-card-link:active),
-  .ins-web-card-shot:has(.ins-web-card-inset > a:active) {
+  .ins-web-card-shot:has(.ins-web-card-inset > a:active),
+  .ins-site-card-shot:has(.ins-site-card-link:active),
+  .ins-site-card-shot:has(.ins-site-card-inset > a:active) {
     background: #e9e9e9;
   }
   /* The shot panel's frame is a hairline stroke (the frame's ::before and the screen's own border): on
@@ -17666,7 +17716,8 @@ html.ins-bat-on .ins-search-bat { display: block; }
      than its frame, so the frame reads as holding it. Not in the shot panel: there the screen fills its frame
      edge to edge, and shrinking it alone would open a pale ring of page between the two. */
   .ins-card-inset:not(.ins-shot-panel *):has(.ins-card-link:active),
-  .ins-web-card-inset:has(a:active) {
+  .ins-web-card-inset:has(a:active),
+  .ins-site-card-inset:has(a:active) {
     scale: 0.985;
     transition-duration: 90ms;
   }
@@ -17688,7 +17739,10 @@ html.ins-bat-on .ins-search-bat { display: block; }
   .ins-web-card-shot:has(.ins-web-card-link:active),
   .ins-web-card-shot:has(.ins-web-card-inset > a:active),
   .ins-card-inset:has(.ins-card-link:active),
-  .ins-web-card-inset:has(a:active) { scale: none; }
+  .ins-web-card-inset:has(a:active),
+  .ins-site-card-shot:has(.ins-site-card-link:active),
+  .ins-site-card-shot:has(.ins-site-card-inset > a:active),
+  .ins-site-card-inset:has(a:active) { scale: none; }
   .ins-card-select-check { animation: none; }
 }
 
@@ -19909,8 +19963,10 @@ div.ins-version { cursor: default; flex-wrap: wrap; }
 .ins-flows-row:has(.ins-flows-row-shot.is-web) { border-radius: 28px; }
 
 /* A saved web app's × (in a Webs collection): the select circle's spot over the web card, shown on hover. */
-.ins-web-card-shot > .ins-card-remove-btn { top: 32px; right: auto; left: 32px; }
-.ins-web-card:hover .ins-card-remove-btn { opacity: 1; transform: scale(1); }
+.ins-web-card-shot > .ins-card-remove-btn,
+.ins-site-card-shot > .ins-card-remove-btn { top: 32px; right: auto; left: 32px; }
+.ins-web-card:hover .ins-card-remove-btn,
+.ins-site-card:hover .ins-card-remove-btn { opacity: 1; transform: scale(1); }
 
 /* Admin › Apps: one platform at a time (iOS · Web Apps · Websites). */
 .ins-app-platform-tabs {
@@ -19971,7 +20027,8 @@ div.ins-version { cursor: default; flex-wrap: wrap; }
 
 /* The web card's "Latest" / "Updated" tag: the app cards' tag, over the screenshot's top-right corner
    (32px in, so the same few px over the corner as on the app cards). */
-.ins-web-card-shot > .ins-card-fresh-badge { top: 24px; right: 24px; }
+.ins-web-card-shot > .ins-card-fresh-badge,
+.ins-site-card-shot > .ins-card-fresh-badge { top: 24px; right: 24px; }
 
 /* Hovering the other platform's link on an app page ("Web Apps" on Claude's iOS page): a dark preview card
    below it — a few of that platform's screens over "Claude on Web Apps". */
@@ -20882,7 +20939,8 @@ body:has(aside.ins-guide) .ins-assist-switch {
    and play button in the top-right corner (CardCorner), the select circle across from them, and the same
    quieter name row. Pressed, only the page eases back. Phones keep their own card.
    ========================================================= */
-.ins-web-card-shot {
+.ins-web-card-shot,
+.ins-site-card-shot {
   --ins-card-frame: color-mix(in srgb, var(--ins-card-tint, #f4f4f4) 1.8%, #f8f8f8);
   background: var(--ins-card-frame);
 }
@@ -20893,24 +20951,31 @@ body:has(aside.ins-guide) .ins-assist-switch {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 44px 16px;
   }
-  .ins-web-card-shot {
+  .ins-web-card-shot,
+  .ins-site-card-shot {
     aspect-ratio: 1 / 0.6;
     padding: 12% 8% 0;
     border-radius: 28px;
   }
-  .ins-web-card-inset {
+  .ins-web-card-inset,
+  .ins-site-card-inset {
     border: 0;
     border-radius: 12px 12px 0 0;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
   }
-  .ins-web-card-shot > .ins-card-corner { top: 16px; right: 16px; }
+  .ins-web-card-shot > .ins-card-corner,
+  .ins-site-card-shot > .ins-card-corner { top: 16px; right: 16px; }
   .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-select-ring,
-  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-remove-btn {
+  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-remove-btn,
+  .ins-grid.ins-site-grid .ins-site-card-shot > .ins-card-select-ring,
+  .ins-grid.ins-site-grid .ins-site-card-shot > .ins-card-remove-btn {
     top: 14px;
     left: 14px;
   }
-  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-select-ring:not(.is-selected) { background: transparent; }
-  .ins-web-card-meta { padding: 18px 4px 0; gap: 12px; }
+  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-select-ring:not(.is-selected),
+  .ins-grid.ins-site-grid .ins-site-card-shot > .ins-card-select-ring:not(.is-selected) { background: transparent; }
+  .ins-web-card-meta,
+  .ins-site-card-meta { padding: 18px 4px 0; gap: 12px; }
   .ins-web-card-logo {
     width: 44px !important;
     height: 44px !important;
@@ -20918,17 +20983,21 @@ body:has(aside.ins-guide) .ins-assist-switch {
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.07);
   }
   .ins-web-card-app { font-size: 18px; line-height: 1.35; }
-  .ins-web-card-tagline { font-weight: 500; color: #7a7a7e; }
+  .ins-web-card-tagline,
+  .ins-site-card-tagline { font-weight: 500; color: #7a7a7e; }
 }
 @media (min-width: 760px) and (max-width: 1599px) {
   .ins-grid.ins-app-grid.ins-web-grid:not(.ins-shot-panel *) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (hover: hover) {
-  .ins-web-card-shot:active { scale: none; }
-  .ins-web-card:has(.ins-web-card-shot:active):not(:has(.ins-web-card-shot button:active)) .ins-web-card-inset { scale: 0.97; transition-duration: 90ms; }
+  .ins-web-card-shot:active,
+  .ins-site-card-shot:active { scale: none; }
+  .ins-web-card:has(.ins-web-card-shot:active):not(:has(.ins-web-card-shot button:active)) .ins-web-card-inset,
+  .ins-site-card:has(.ins-site-card-shot:active):not(:has(.ins-site-card-shot button:active)) .ins-site-card-inset { scale: 0.97; transition-duration: 90ms; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ins-web-card:has(.ins-web-card-shot:active):not(:has(.ins-web-card-shot button:active)) .ins-web-card-inset { scale: none; }
+  .ins-web-card:has(.ins-web-card-shot:active):not(:has(.ins-web-card-shot button:active)) .ins-web-card-inset,
+  .ins-site-card:has(.ins-site-card-shot:active):not(:has(.ins-site-card-shot button:active)) .ins-site-card-inset { scale: none; }
 }
 
 /* Loading app / web cards: the frame itself is the placeholder — the cards' own light grey with the page-wide
@@ -21306,13 +21375,18 @@ body:has(aside.ins-guide) .ins-assist-switch {
     aspect-ratio: 420 / 260.19;
     border-radius: 12px 12px 0 0;
   }
-  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-web-card-inset { position: relative; z-index: 1; }
-  .ins-grid.ins-web-grid .ins-web-card-inset.deal-next { animation: insDealFrontNext 520ms cubic-bezier(0.2, 0.9, 0.25, 1) both; }
-  .ins-grid.ins-web-grid .ins-web-card-inset.deal-prev { animation: insDealFrontPrev 520ms cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-web-card-inset,
+  .ins-grid.ins-site-grid .ins-site-card-shot > .ins-site-card-inset { position: relative; z-index: 1; }
+  .ins-grid.ins-web-grid .ins-web-card-inset.deal-next,
+  .ins-grid.ins-site-grid .ins-site-card-inset.deal-next { animation: insDealFrontNext 520ms cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+  .ins-grid.ins-web-grid .ins-web-card-inset.deal-prev,
+  .ins-grid.ins-site-grid .ins-site-card-inset.deal-prev { animation: insDealFrontPrev 520ms cubic-bezier(0.2, 0.9, 0.25, 1) both; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ins-grid.ins-web-grid .ins-web-card-stack { transition: none; transform: none; }
-  .ins-web-card-inset.deal-next, .ins-web-card-inset.deal-prev { animation: none !important; }
+  .ins-web-card-inset.deal-next, .ins-web-card-inset.deal-prev,
+  .ins-site-card-inset.deal-next,
+  .ins-site-card-inset.deal-prev { animation: none !important; }
 }
 
 /* A narrow window (a half-width browser) and a phone: the cards keep the new look — the screen
@@ -21348,14 +21422,16 @@ body:has(aside.ins-guide) .ins-assist-switch {
   }
   .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring { width: 28px; }
   .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-select-ring:not(.is-selected),
-  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-select-ring:not(.is-selected) {
+  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-select-ring:not(.is-selected),
+  .ins-grid.ins-site-grid .ins-site-card-shot > .ins-card-select-ring:not(.is-selected) {
     border: 1.5px solid rgba(0, 0, 0, 0.18);
     background: transparent;
   }
   .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-shot > .ins-card-corner { top: 13px; right: 12px; }
   .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-meta,
   .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card--skeleton .ins-card-meta,
-  .ins-web-card-meta { padding: 14px 4px 0; gap: 12px; }
+  .ins-web-card-meta,
+  .ins-site-card-meta { padding: 14px 4px 0; gap: 12px; }
   .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-meta .ins-app-logo,
   .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card--skeleton .ins-skel--app-icon,
   .ins-web-card-logo {
@@ -21367,21 +21443,27 @@ body:has(aside.ins-guide) .ins-assist-switch {
   .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-app,
   .ins-web-card-app { font-size: 16px; line-height: 1.3; }
   .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-tagline,
-  .ins-web-card-tagline { font-size: 13px; line-height: 1.4; font-weight: 500; color: #7a7a7e; }
+  .ins-web-card-tagline,
+  .ins-site-card-tagline { font-size: 13px; line-height: 1.4; font-weight: 500; color: #7a7a7e; }
   .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-select-ring,
-  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-remove-btn { top: 12px; left: 12px; width: 28px; }
+  .ins-grid.ins-web-grid .ins-web-card-shot > .ins-card-remove-btn,
+  .ins-grid.ins-site-grid .ins-site-card-shot > .ins-card-select-ring,
+  .ins-grid.ins-site-grid .ins-site-card-shot > .ins-card-remove-btn { top: 12px; left: 12px; width: 28px; }
 
-  .ins-web-card-shot {
+  .ins-web-card-shot,
+  .ins-site-card-shot {
     aspect-ratio: 1 / 0.6;
     padding: 12% 8% 0;
     border-radius: 24px;
   }
-  .ins-web-card-inset {
+  .ins-web-card-inset,
+  .ins-site-card-inset {
     border: 0;
     border-radius: 10px 10px 0 0;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
   }
-  .ins-web-card-shot > .ins-card-corner { top: 13px; right: 12px; }
+  .ins-web-card-shot > .ins-card-corner,
+  .ins-site-card-shot > .ins-card-corner { top: 13px; right: 12px; }
 }
 
 /* Dragged as a deck (useDeckSwipe: no hover, but room for the stack): the front screen follows the finger,
@@ -21411,7 +21493,8 @@ body:has(aside.ins-guide) .ins-assist-switch {
 @media (max-width: 640px) {
   .ins-web-card-logo { width: 44px !important; height: 44px !important; }
   .ins-web-card-app { font-size: 17px; }
-  .ins-web-card-tagline { font-size: 14px; }
+  .ins-web-card-tagline,
+  .ins-site-card-tagline { font-size: 14px; }
 }
 @media (max-width: 520px) {
   .ins-grid.ins-app-grid:not(.ins-shot-panel *) .ins-card-meta .ins-app-logo,
@@ -21445,7 +21528,8 @@ body:has(aside.ins-guide) .ins-assist-switch {
 }
 /* The frame opens the app too (useFrameOpen), so it shows the hand as the screen does. */
 .ins-app-grid:not(.ins-shot-panel *) .ins-card-shot,
-.ins-web-card-shot { cursor: var(--ins-cursor-hand, pointer); }
+.ins-web-card-shot,
+.ins-site-card-shot { cursor: var(--ins-cursor-hand, pointer); }
 
 /* The colour menu, lifted out of the phone's toolbar strip (MenuLayer): the layer places it. */
 .ins-menu-layer > .ins-colorf-pop,
@@ -21699,3 +21783,260 @@ body:has(aside.ins-guide) .ins-assist-switch {
 .ins-store-job.is-updated .ins-store-job-stage { color: #15803d; }
 .ins-store-job.is-failed .ins-store-job-stage,
 .ins-store-job.is-failed .ins-store-job-note { color: #c62828; }
+
+/* =========================================================
+   SITES — Full Page / Sections tabs on a website's app page, and the
+   whole-page viewer (SitePages.tsx). Web Apps and iOS never use these.
+   ========================================================= */
+
+/* A page card shows the top of the page, as Mobbin does; the whole of it is one click away. */
+.ins-site-card--full-page .ins-site-card-inset .ins-shot-img { object-position: top center; }
+
+/* A section card is one surface: the section, at the size a page card's preview has (the frame's 8% sides, and its
+   12% top shared equally above and below, so it sits in the middle), straight on the card's own grey — without the
+   inset card a whole page's preview sits in. */
+.ins-site-card.ins-site-card--sections .ins-site-card-shot { padding: 6% 8%; }
+.ins-site-card.ins-site-card--sections .ins-site-card-inset {
+  display: grid;
+  height: 100%;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+/* A tall section shrinks to fit the card; it never stretches the card to its own shape and gets cut off. */
+.ins-site-card--sections .ins-site-card-link { min-height: 0; height: 100%; }
+.ins-site-card--sections .ins-site-card-inset .ins-shot-img { height: 100%; aspect-ratio: auto; object-fit: contain; }
+
+.ins-site-viewer-mark {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(1200px, 100%);
+  border: 3px solid var(--ins-accent);
+  border-radius: 10px;
+  pointer-events: none;
+  animation: ins-site-mark 1.8s var(--ins-ease) forwards;
+}
+@keyframes ins-site-mark { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+
+.ins-shot-img.is-site-page { object-position: top center; }
+
+/* A page or section card's hover: a screen card's own footer (the app over a fade, Save and Copy), shown the same
+   way — only the buttons take the pointer, so the rest still opens the viewer. A phone saves from the viewer. */
+.ins-site-card:hover .ins-card-hover-footer,
+.ins-site-card:has(:focus-visible) .ins-card-hover-footer { opacity: 1; transform: translateY(0); }
+.ins-site-card:hover .ins-card-hover-footer :is(.ins-btn-save, .ins-btn-copy),
+.ins-site-card:has(:focus-visible) .ins-card-hover-footer :is(.ins-btn-save, .ins-btn-copy) { pointer-events: auto; }
+.ins-site-card.is-dark-shot .ins-card-hover-footer::before { background: linear-gradient(to bottom, #12121200 0%, #121212 75%, #121212 100%); }
+.ins-site-card.is-dark-shot .ins-card-hover-title { color: #fff; }
+.ins-site-card.is-dark-shot .ins-card-hover-tagline { color: rgba(255, 255, 255, 0.64); }
+.ins-site-card.is-dark-shot .ins-btn-save { background: #fff; color: #000; }
+.ins-site-card.is-dark-shot .ins-btn-save:hover { background: #e6e6e6; }
+.ins-site-card.is-dark-shot .ins-btn-copy { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.ins-site-card.is-dark-shot .ins-btn-copy:hover { background: rgba(255, 255, 255, 0.22); }
+@media (hover: none) {
+  .ins-site-card .ins-card-hover-footer { display: none; }
+}
+/* A picked page or section card keeps its circle on show, ticked. */
+.ins-site-card.is-selected .ins-card-select-ring { opacity: 1; pointer-events: auto; }
+.ins-site-grid .ins-site-card .ins-card-select-ring { top: 24px; left: 24px; }
+/* An open navigation menu over the page's top, as a visitor sees it; a click opens it enlarged. */
+.ins-site-viewer-menu {
+  position: absolute;
+  z-index: 2;
+  padding: 0;
+  border: 0;
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+  background: none;
+  box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.35);
+  cursor: var(--ins-cursor-zoom-in, zoom-in);
+}
+.ins-site-viewer-menu .ins-shot-img { display: block; width: 100%; height: auto; }
+
+
+/* A website page in the screen preview: where a screen's picture goes, the whole page scrolls top to bottom. */
+.ins-screen-preview-filmstrip--site { padding: 0; overflow: hidden; }
+.ins-site-shot {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.ins-site-shot-img {
+  display: block;
+  width: 100%;
+  max-width: 1200px;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 12px;
+  border: 1px solid var(--ins-border);
+  background: #fff;
+}
+/* Details: the page's sections, each a small picture and its name; a click shows it in the page. */
+/* One card per section, the panel's own card style (.ins-details-group); its name is the card's title. */
+.ins-site-section-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: background-color 160ms ease;
+}
+.ins-site-section-card .ins-shot-img {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 160px;
+  object-fit: cover;
+  object-position: top;
+  /* Sharp corners: a section is a strip of the page, not a card of its own. */
+  border-radius: 0;
+  border: 1px solid var(--ins-border, #ecedef);
+}
+/* Hover and the picked card: a slightly deeper grey, no outline. */
+.ins-screen-preview-details .ins-details-group.ins-site-section-card:hover { background-color: #eeeff2; }
+.ins-screen-preview-details .ins-details-group.ins-site-section-card.is-active { background-color: #dfe1e6; }
+/* The section's name darkens with the card, so a hovered or picked card reads clearly. */
+.ins-screen-preview-details .ins-site-section-card .ins-details-group-title { transition: none; }
+.ins-screen-preview-details .ins-site-section-card:hover .ins-details-group-title,
+.ins-screen-preview-details .ins-site-section-card.is-active .ins-details-group-title { color: #0b0c0e; }
+.ins-site-section-card:focus-visible { outline: 2px solid var(--ins-text, #0b0c0e); outline-offset: 2px; }
+.ins-site-page-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
+/* The footer's page picker: Compare's type picker and menu, but the button keeps its resting look while open. */
+.ins-site-page-pick[aria-expanded="true"] { border-color: #ccc; }
+.ins-site-page-pick[aria-expanded="true"] .ins-compare-title-chevron { rotate: 0deg; opacity: .4; }
+/* Names from the row's left edge, as in the More menu. */
+.ins-site-pages-menu .ins-context-menu-btn { justify-content: flex-start; text-align: left; }
+.ins-site-pages-menu .ins-context-menu-text { flex: 1; text-align: left; }
+
+/* The enlarged view of a website page: the page at a reading width, the overlay scrolling it top to bottom;
+   a click zooms it wider, as on a screen. */
+.ins-site-shot-img { cursor: var(--ins-cursor-zoom-in, zoom-in); }
+.ins-lightbox-shot.ins-lightbox-shot--site {
+  /* Sized from the window, not the dialog: the dialog itself is only as wide as what it holds. */
+  width: min(1200px, calc(100vw - 96px));
+  max-height: none;
+  border-radius: 10px;
+  transition: none;
+}
+.ins-lightbox-shot.ins-lightbox-shot--site img { width: 100%; max-height: none; }
+.ins-lightbox-shot.ins-lightbox-shot--site.is-zoomed { width: min(1800px, calc(140vw - 96px)); max-width: none; }
+
+/* A website section in the preview: the whole strip, as large as the stage allows in both directions — never cut
+   at the sides, top or bottom — and centred. */
+.ins-screen-preview-shot.ins-screen-preview-shot--section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  overflow: hidden;
+  clip-path: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.ins-screen-preview-shot.ins-screen-preview-shot--section img {
+  width: auto;
+  height: auto;
+  /* A little inside the stage, so the picture's own hover lift has room and never clips. */
+  max-width: 94%;
+  max-height: 94%;
+  object-fit: contain;
+  border-radius: 8px;
+  /* The site turns transitions off on every image (theme switching); this one is the screen's own smooth lift. */
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+/* Only the picture lifts, and only under the pointer: the stage around it (the shot box) stays still. */
+.ins-screen-preview-shot.ins-screen-preview-shot--section:hover { transform: none; }
+.ins-screen-preview-shot.ins-screen-preview-shot--section img:hover { transform: scale(1.02); }
+@media (prefers-reduced-motion: reduce) {
+  .ins-screen-preview-shot.ins-screen-preview-shot--section img { transition: none !important; }
+  .ins-screen-preview-shot.ins-screen-preview-shot--section img:hover { transform: none; }
+}
+
+/* A website's title holds the page picker: its menu drops below the title, over the picture, unclipped. */
+.ins-screen-preview-head-title.ins-site-crumbs { overflow: visible; }
+.ins-screen-preview-head-title.ins-site-crumbs .ins-compare-pick { display: inline-flex; }
+:is(.ins-screen-preview-head, .ins-flow-head, .ins-screen-preview-head-app):has(> * .ins-site-crumbs, > .ins-site-crumbs) { position: relative; z-index: 20; overflow: visible; }
+
+/* A website's view switch in the preview's footer: the Apps / Webs switch, with literal colours (the modal's
+   portal has no --ins tokens of its own). */
+.ins-site-view-switch { border: 1px solid var(--ins-border-strong, #ccc); background: var(--ins-card, #fff); }
+.ins-site-view-switch .ins-segmented-item { color: var(--ins-sub, #5c5f66); font-family: inherit; }
+.ins-site-view-switch .ins-segmented-item:hover:not(.is-active) { color: var(--ins-text, #0b0c0e); }
+.ins-site-view-switch .ins-segmented-item.is-active { background: var(--ins-text, #0b0c0e); color: var(--ins-on-accent, #fff); }
+/* As tall as the footer's other buttons (Save, Visit website). */
+.ins-segmented--toolbar.ins-site-view-switch { height: 52px; }
+.ins-segmented--toolbar.ins-site-view-switch .ins-segmented-item { height: 44px; padding: 0 20px; }
+/* In the preview's header: as tall as Shortcuts beside it, set a little apart from the icon buttons. */
+/* The header's middle, between the title and the buttons: the switch centred in it, so it never covers the
+   title; a title too long for its side ends in "…". */
+/* Three columns, the outer two equal: the switch at the header's true middle. A title longer than its half
+   takes the room it needs and the switch moves right just enough — the title is never cut or covered. */
+.ins-screen-preview-head:has(> .ins-site-view-slot .ins-site-view-switch) { display: grid; grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr); }
+.ins-screen-preview-head:has(> .ins-site-view-slot .ins-site-view-switch) > .ins-flow-head-actions { justify-self: end; }
+.ins-site-view-slot { display: flex; justify-content: center; padding: 0 16px; }
+.ins-site-view-slot:empty { display: none; }
+.ins-site-view-slot .ins-segmented--toolbar.ins-site-view-switch { height: 40px; margin: 0; }
+.ins-site-view-slot .ins-segmented--toolbar.ins-site-view-switch .ins-segmented-item { height: 32px; padding: 0 16px; font-size: 15px; }
+.ins-screen-preview-head:has(.ins-site-view-switch) .ins-screen-preview-head-app { min-width: 0; flex: 0 1 auto; }
+.ins-screen-preview-head-title.ins-site-crumbs { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
+.ins-screen-preview-head-title.ins-site-crumbs > * { flex: none; }
+.ins-screen-preview-head-title.ins-site-crumbs > span:last-child:not(.ins-screen-preview-head-sep) { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* A narrower window has no room for three equal columns: the switch takes the middle of the space between the
+   title and the buttons instead, so Shortcuts is never pushed off the edge. */
+@media (max-width: 1200px) {
+  .ins-screen-preview-head:has(> .ins-site-view-slot .ins-site-view-switch) { display: flex; }
+  .ins-screen-preview-head:has(> .ins-site-view-slot .ins-site-view-switch) > .ins-site-view-slot { flex: 1 1 auto; padding: 0 12px; }
+  .ins-screen-preview-head:has(> .ins-site-view-slot .ins-site-view-switch) > .ins-flow-head-actions { flex: none; }
+}
+/* Narrower still, the header's words make room for the switch: the app's name goes (its logo stays beside the
+   title) and Shortcuts keeps only its "?". */
+@media (max-width: 1200px) {
+  .ins-screen-preview-head:has(.ins-site-view-switch) .ins-site-crumbs > .ins-head-crumb-app { display: none; }
+  .ins-screen-preview-head:has(.ins-site-view-switch) .ins-flow-present-open > span:not(.ins-preview-keys-icon) { display: none; }
+}
+
+/* Full Page ⇄ Section: the new view fades in where the old one was — the sheet itself stays put. */
+@keyframes insSiteFade { from { opacity: 0; } to { opacity: 1; } }
+.ins-site-fade { animation: insSiteFade 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+@media (prefers-reduced-motion: reduce) { .ins-site-fade { animation: none; } }
+/* Buttons alone: a shorter fade behind them, so the picture above stays clear. */
+/* Above the page preview, which a whole page's card stacks over its frame. */
+.ins-site-card .ins-site-card-footer { z-index: 2; }
+.ins-site-card-footer::before { height: 150px; }
+/* Naming the site too (logo, name, tagline), it fades as a screen card's footer does on Screens. */
+.ins-site-card-footer--named::before { height: 330px; }
+/* A phone: the header has no room beside the title, so the switch takes its own row under it, full width, with
+   both names written out (the toolbar switch's phone rules draw bare icons, which this one has none of). */
+@media (max-width: 759px) {
+  .ins-screen-preview-head:has(> .ins-site-view-slot .ins-site-view-switch) { flex-wrap: wrap; height: auto; padding-top: 12px; padding-bottom: 12px; row-gap: 12px; }
+  .ins-screen-preview-head:has(> .ins-site-view-slot .ins-site-view-switch) > .ins-screen-preview-head-app { flex: 1 1 0; min-width: 0; }
+  .ins-screen-preview-head:has(> .ins-site-view-slot .ins-site-view-switch) > .ins-site-view-slot { order: 3; flex: 1 0 100%; padding: 0; }
+  .ins-site-view-slot .ins-segmented.ins-segmented--toolbar.ins-site-view-switch { width: 100%; height: 40px; gap: 0; }
+  .ins-site-view-slot .ins-segmented.ins-segmented--toolbar.ins-site-view-switch .ins-segmented-item,
+  .ins-site-view-slot .ins-segmented.ins-segmented--toolbar.ins-site-view-switch .ins-segmented-item.is-active { flex: 1; width: auto; height: 32px; padding: 0 12px; font-size: 15px; }
+}
+
+/* The content menu's two platforms in Webs (Web Apps ›, Webs ›): a row that opens its own list beside it, as
+   "Download all screens ›" opens the dated captures. */
+.ins-fmenu-parent { position: relative; width: 100%; }
+.ins-fmenu-more { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; }
+.ins-fmenu-more img { display: block; opacity: 0.55; }
+.ins-fmenu-item.is-open { background: rgba(0, 0, 0, 0.04); }
+.ins-fmenu-divider { flex: none; height: 1px; margin: 0 6px; background: #f0f0f0; }
+.ins-popover.ins-fmenu.ins-fmenu-sub { position: absolute; min-width: 200px; max-height: none; overflow: visible; animation: none; }
+/* Without hover (a phone): the list opens under its row, set in a little. */
+.ins-fmenu-inline { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; padding-left: 12px; }
+/* One grey row at a time: while a row's list is open, that row alone is marked; the current page's row
+   gets its mark back when the list closes. */
+.ins-fmenu:has(.ins-fmenu-item.is-open) .ins-fmenu-item.is-selected:not(.is-open) { background: transparent; }
+.ins-fmenu:has(.ins-fmenu-item.is-open) .ins-fmenu-item.is-selected:not(.is-open):hover { background: rgba(0, 0, 0, 0.04); }

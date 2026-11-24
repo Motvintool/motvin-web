@@ -156,3 +156,13 @@ describe('saved logos', () => {
     expect(read('data:image/svg+xml;base64,AAAA')).toBeUndefined();
   });
 });
+
+describe('a saved chat keeps its last question', () => {
+  it('round-trips what the chat was last about', () => {
+    const lines = [{ id: 1, role: 'user' as const, text: 'form' }, { id: 2, role: 'assistant' as const, text: 'Showing forms.' }];
+    const saved = upsertChat([], { id: 'c1', lines, appId: null, asked: 'form' }, 1);
+    expect(parseHistory(JSON.stringify(saved))[0].asked).toBe('form');
+    // An older chat, saved before this, has none.
+    expect(parseHistory(JSON.stringify([{ ...saved[0], asked: undefined }]))[0].asked).toBeNull();
+  });
+});

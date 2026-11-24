@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     cleanup: raw.cleanup === 'manual' ? 'manual' : 'automatic',
     review: raw.review === 'manual' ? 'manual' : 'auto',
     afterReview: raw.afterReview === 'keep' ? 'keep' : 'cleanup',
-    platform: raw.platform === 'web' || raw.platform === 'webapp' ? raw.platform : 'ios',
+    platform: raw.platform === 'site' || raw.platform === 'webapp' ? raw.platform : 'ios',
     version: typeof raw.version === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.version) ? raw.version : null,
     notify: raw.notify === 'summary' || raw.notify === 'off' ? raw.notify : 'each',
     appsAtOnce: raw.appsAtOnce === 1 || raw.appsAtOnce === 2 || raw.appsAtOnce === 4 ? raw.appsAtOnce : 3,

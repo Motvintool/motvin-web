@@ -75,7 +75,8 @@ export function StackedCompare() {
 function StackedCompareFor({ slug, type, withSlug }: { slug: string; type: string; withSlug: string | null }) {
   const { data } = useAsync(() => inspirationsApi.getApp(slug), `compare-of:${slug}`);
   if (!data) return null;
-  return <CompareModal app={data.app} screens={data.screens} type={type} withSlug={withSlug} stacked />;
+  // App screens only: a website's pages and sections are never compared as screens.
+  return <CompareModal app={data.app} screens={data.screens.filter((s) => !s.site)} type={type} withSlug={withSlug} stacked />;
 }
 
 function CompareModal({

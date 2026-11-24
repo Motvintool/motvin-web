@@ -11,12 +11,13 @@
  * The three places the library covers: iOS apps, online web applications ("Web Apps", `webapp`) and
  * websites ("Webs", `web`). Android is not part of the library.
  */
-export const PLATFORMS = ['ios', 'webapp', 'web'] as const;
+// Sites (websites, kept as whole pages and their sections) are 'site'; the Webs section is web apps and sites.
+export const PLATFORMS = ['ios', 'webapp', 'site'] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
 /** Web Apps and Webs are both seen in a browser, so their screens are wide and laid out alike. */
 export function isDesktopPlatform(platform: string | null | undefined): boolean {
-  return platform === 'web' || platform === 'webapp';
+  return platform === 'site' || platform === 'webapp';
 }
 
 export const SCREEN_TYPES = [
@@ -238,6 +239,28 @@ export type Screen = {
   /** Whether the recorded licence permits handing the file to a visitor. */
   downloadable: boolean;
   source: ScreenSource;
+  /** Web (sites) only: a whole page or one part of a page. Never set on Web Apps or iOS screens. */
+  site?: ScreenSite;
+};
+
+/**
+ * Websites are page based: a screen is a whole page, top to bottom (`kind: 'page'`), or one part of a page
+ * cut out of it (`kind: 'section'`), with its page in `parentId` and where it sits as shares of the page's height.
+ */
+export type ScreenSite = {
+  kind: 'page' | 'section';
+  /** landing, pricing, about… (PAGE_TYPE_LABEL); a section carries its page's type. */
+  pageType: string;
+  /** hero, pricing, faq, footer… (SECTION_TYPE_LABEL); null on a page. */
+  sectionType: string | null;
+  parentId: string | null;
+  top: number | null;
+  height: number | null;
+  pageUrl: string | null;
+  /** A section's own words: "Products menu" for a navigation menu, else its headline. */
+  heading?: string | null;
+  /** The page's own name, typed when no page type fitted ("Integrations Hub"); a section carries its page's. */
+  customName?: string | null;
 };
 
 /** The suggested categories. Free text is allowed, so this is not a closed set. */

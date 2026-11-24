@@ -75,7 +75,7 @@ export function FlowsPanel({
   const busiest = [...byPlatform].sort((a, b) => b.usable - a.usable || b.total - a.total)[0];
   const platform: Platform =
     platformOnly ??
-    platformChoice ?? (busiest && busiest.total > 0 ? busiest.platform : state.vocabulary.platforms[0] ?? 'web');
+    platformChoice ?? (busiest && busiest.total > 0 ? busiest.platform : state.vocabulary.platforms[0] ?? 'ios');
 
   const candidates = appFiles.filter((f) => f.platform === platform);
   const usable = candidates.filter((f) => f.published);

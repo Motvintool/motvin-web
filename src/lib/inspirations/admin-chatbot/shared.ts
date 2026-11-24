@@ -24,12 +24,12 @@ export function stageIndex(stage: string): number {
 }
 
 
-/** The platform a message names, if it names one: "iOS", "Web Apps" or "Webs". */
-export function platformIn(text: string): 'ios' | 'webapp' | 'web' | null {
+/** The platform a message names, if it names one: "iOS", "Web Apps" or "Sites" (websites). */
+export function platformIn(text: string): 'ios' | 'webapp' | 'site' | null {
   const t = text.toLowerCase();
   if (/\b(ios|iphone|ipad|apple)\b/.test(t)) return 'ios';
-  // "Web Apps" (online applications) before "Webs" (websites), since both start with "web".
+  // "Web Apps" (online applications) before "Sites" (websites, also said "web" / "webs"), since both start with "web".
   if (/\b(web ?apps?|web applications?|online apps?|saas)\b/.test(t)) return 'webapp';
-  if (/\b(webs|web|websites?|browser|desktop|chrome|safari)\b/.test(t)) return 'web';
+  if (/\b(sites?|web ?sites?|webs|web|browser|desktop|chrome|safari)\b/.test(t)) return 'site';
   return null;
 }

@@ -15,10 +15,63 @@ import type {
  * is written in the interface.
  */
 
+/**
+ * Web (sites): what a page is, and what a part of a page is, in the order the tag buttons show them. The same
+ * ids the Motvin Web Recorder writes (motvin-web-recorder/src/site/siteTypes.js). An id missing here is shown
+ * title-cased rather than dropped.
+ */
+export const PAGE_TYPE_LABEL: Record<string, string> = {
+  landing: 'Landing Page',
+  pricing: 'Pricing Page',
+  about: 'About Page',
+  features: 'Features Page',
+  product: 'Product Page',
+  solutions: 'Solutions Page',
+  customers: 'Customers Page',
+  blog: 'Blog Page',
+  'blog-post': 'Blog Post',
+  careers: 'Careers Page',
+  contact: 'Contact Page',
+  docs: 'Docs Page',
+  changelog: 'Changelog Page',
+  integrations: 'Integrations Page',
+  legal: 'Legal Page',
+  login: 'Login Page',
+  signup: 'Sign Up Page',
+  'not-found': '404 Page',
+  other: 'Other Page',
+};
+
+export const SECTION_TYPE_LABEL: Record<string, string> = {
+  navigation: 'Navigation',
+  'nav-menu': 'Navigation Menu',
+  hero: 'Hero',
+  logos: 'Logos',
+  features: 'Features',
+  'how-it-works': 'How It Works',
+  stats: 'Stats',
+  testimonials: 'Testimonials',
+  pricing: 'Pricing',
+  comparison: 'Comparison',
+  faq: 'FAQ',
+  team: 'Team',
+  blog: 'Blog',
+  cta: 'Call to Action',
+  contact: 'Contact',
+  footer: 'Footer',
+  content: 'Content',
+};
+
+const titleCase = (id: string) => id.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+export const pageTypeLabel = (id: string) => PAGE_TYPE_LABEL[id] ?? titleCase(id);
+/** What a site's page is called: its own name when it was given one ("Integrations Hub"), else its type's ("Pricing Page"). */
+export const sitePageName = (site?: { pageType?: string | null; customName?: string | null } | null) => site?.customName || pageTypeLabel(site?.pageType ?? 'other');
+export const sectionTypeLabel = (id: string) => SECTION_TYPE_LABEL[id] ?? titleCase(id);
+
 export const PLATFORM_LABEL: Record<Platform, string> = {
   ios: 'iOS',
   webapp: 'Web Apps',
-  web: 'Webs',
+  site: 'Sites',
 };
 
 export const SCREEN_TYPE_LABEL: Record<ScreenType, string> = {

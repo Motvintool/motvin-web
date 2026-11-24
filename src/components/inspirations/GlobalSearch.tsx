@@ -1183,7 +1183,7 @@ export function GlobalSearch({ autoFocus = false, className = '' }: { autoFocus?
                       href="#request-app"
                       onClick={(e) => {
                         e.preventDefault();
-                        setRequesting({ name: value.trim(), platform: modalScope === 'ios' ? 'ios' : modalScope === 'webs' ? (WEBS_PLATFORMS.includes(browsedPlatform) ? browsedPlatform : 'web') : browsedPlatform });
+                        setRequesting({ name: value.trim(), platform: modalScope === 'ios' ? 'ios' : modalScope === 'webs' ? (WEBS_PLATFORMS.includes(browsedPlatform) ? browsedPlatform : 'site') : browsedPlatform });
                         close();
                       }}
                     >

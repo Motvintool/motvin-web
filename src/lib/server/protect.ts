@@ -25,7 +25,7 @@ export const PROTECT_KINDS: ProtectKind[] = ['photo', 'phone', 'email', 'address
 export type ProtectBox = { kind: ProtectKind; x: number; y: number; w: number; h: number; text?: string };
 
 export type ProtectSettings = {
-  platform: 'ios' | 'webapp' | 'web';
+  platform: 'ios' | 'webapp' | 'site';
   kinds: ProtectKind[];
   mode: 'review' | 'auto';
   style: 'blur' | 'box';

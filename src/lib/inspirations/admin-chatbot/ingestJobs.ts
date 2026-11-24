@@ -115,7 +115,7 @@ export type IngestJob = {
   /** Reading a recording, or rewriting an app's names with the AI. */
   mode?: 'ingest' | 'research';
   /** The platform the recording was started for — decides whether its screens are shown as phone (portrait) or web (landscape) thumbnails. Absent on older runs and on research runs. */
-  platform?: 'ios' | 'webapp' | 'web';
+  platform?: 'ios' | 'webapp' | 'site';
   sizeBytes: number | null;
   startedBy: string;
   startedAt: string;
@@ -332,7 +332,7 @@ export function refreshIngestJobs(): Promise<void> {
 export type StartIngestOptions = {
   keepLoading?: boolean;
   fps?: number;
-  platform?: 'ios' | 'webapp' | 'web';
+  platform?: 'ios' | 'webapp' | 'site';
   /** Which dated capture to publish into; omit to use today's date. */
   version?: string;
   /** An app already in the library to add these screens to; omit to identify a new one from the screens. */
@@ -343,10 +343,10 @@ export type StartIngestOptions = {
   full?: boolean;
 };
 
-export const PLATFORM_CHOICES: { id: 'ios' | 'webapp' | 'web'; label: string }[] = [
+export const PLATFORM_CHOICES: { id: 'ios' | 'webapp' | 'site'; label: string }[] = [
   { id: 'ios', label: 'iOS' },
   { id: 'webapp', label: 'Web Apps' },
-  { id: 'web', label: 'Webs' },
+  { id: 'site', label: 'Sites' },
 ];
 
 /** The platform named in a message, if any. */
@@ -653,7 +653,7 @@ export type HeldKind = 'video' | 'screens';
  */
 export type UploadPlan = {
   step: 'platform' | 'app' | 'logo' | 'name' | 'version' | 'date' | 'confirm';
-  platform?: 'ios' | 'webapp' | 'web';
+  platform?: 'ios' | 'webapp' | 'site';
   appId?: string;
   appName?: string;
   newApp?: { id: string; name: string };

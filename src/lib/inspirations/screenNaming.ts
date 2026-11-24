@@ -1,4 +1,4 @@
-import { screenTypeLabel } from './taxonomy';
+import { pageTypeLabel, screenTypeLabel, sectionTypeLabel, sitePageName } from './taxonomy';
 
 /**
  * One rule for what a screen is called, wherever it is shown — the screen
@@ -8,10 +8,21 @@ import { screenTypeLabel } from './taxonomy';
  * ("Onboarding sharing"), which says more than "Other" does.
  */
 
-type Nameable = { name?: string | null; screenType?: string | null };
+type Nameable = {
+  name?: string | null;
+  screenType?: string | null;
+  site?: { kind: 'page' | 'section'; pageType?: string | null; sectionType?: string | null; heading?: string | null } | null;
+};
 
-/** What the screen is called: its type, or its own name when its type is "Other" or unknown. */
+/**
+ * What the screen is called: its type, or its own name when its type is "Other" or unknown. A website page is
+ * called by its page type ("Pricing Page") and a section by its own ("Hero", or "Products menu" for a menu) —
+ * never by the screen type its picture was classified as.
+ */
 export function screenTitle(screen: Nameable): string {
+  const site = screen.site;
+  if (site?.kind === 'page') return sitePageName(site);
+  if (site?.kind === 'section') return site.sectionType === 'nav-menu' && site.heading ? site.heading : sectionTypeLabel(site.sectionType ?? 'content');
   const type = String(screen.screenType ?? '').trim();
   const name = String(screen.name ?? '').trim();
   if (type && type !== 'other') return screenTypeLabel(type);

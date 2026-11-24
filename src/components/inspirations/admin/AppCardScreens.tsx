@@ -50,7 +50,7 @@ export function AppCardScreens({
   const byId = new Map(files.map((f) => [f.id, f]));
   // Card pictures are per platform: four for the iOS card, four for the web one. This tab edits the
   // platform on show and keeps the other platforms' picks as they are.
-  const onPlatform = (id: string) => (byId.get(id)?.platform ?? id.split('-').find((part) => part === 'ios' || part === 'webapp' || part === 'web')) === platform;
+  const onPlatform = (id: string) => (byId.get(id)?.platform ?? id.split('-').find((part) => part === 'ios' || part === 'webapp' || part === 'site')) === platform;
   const here = picked.filter(onPlatform);
   const setHere = (next: string[]) => setPicked((all) => [...all.filter((id) => !onPlatform(id)), ...next]);
   // Kept in the admin state's order, which is the public app page's order —

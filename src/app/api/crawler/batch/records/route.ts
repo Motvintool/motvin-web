@@ -2,23 +2,25 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import { fail, verifyAdmin } from '@/lib/server/adminAuth';
 import { pickFolder, recordsDir, setRecordsDir } from '@/lib/server/batch';
+import { isSiteCapture, siteCaptureFacts } from '@/lib/server/siteImport';
 
 /**
  * GET /api/crawler/batch/records — the recordings and logos kept on this
- * machine (the records folder: iOS/, Web Apps/, Webs/ and Logos/), for a batch
+ * machine (the records folder: iOS/, Web Apps/, Sites/ and Logos/), for a batch
  * to pick from without uploading anything.
  * GET ?logo=<file name> — that logo's bytes, for the browser to set it on the app.
  * POST — choose the records folder: { path } as typed, or { pick: true } for the
- * Mac's own folder picker (the server runs on this Mac). Either layout works:
- * iOS/, Web Apps/, Webs/ and Logos/ inside it, or the videos and logos loose.
+ * Mac's own folder picker (the server runs on this Mac). In Sites/, a website captured by the Motvin Web
+ * Recorder is a folder (its pages, not a video) and is listed by its folder name. Either layout works:
+ * iOS/, Web Apps/, Sites/ and Logos/ inside it, or the videos and logos loose.
  */
 
 const VIDEO_EXT = new Set(['.mov', '.mp4', '.m4v', '.avi', '.mkv']);
 const IMAGE_TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
-const FOLDERS: Array<{ folder: string; platform: 'ios' | 'webapp' | 'web' }> = [
+const FOLDERS: Array<{ folder: string; platform: 'ios' | 'webapp' | 'site' }> = [
   { folder: 'iOS', platform: 'ios' },
   { folder: 'Web Apps', platform: 'webapp' },
-  { folder: 'Webs', platform: 'web' },
+  { folder: 'Sites', platform: 'site' },
 ];
 
 export async function GET(request: Request) {
@@ -41,6 +43,11 @@ export async function GET(request: Request) {
     const dir = join(root, folder);
     if (!existsSync(dir)) continue;
     for (const file of readdirSync(dir)) {
+      if (platform === 'site' && isSiteCapture(join(dir, file))) {
+        const path = join(dir, file);
+        videos.push({ name: file, file, path, platform, sizeBytes: siteCaptureFacts(path).sizeBytes });
+        continue;
+      }
       if (!VIDEO_EXT.has(extname(file).toLowerCase())) continue;
       const path = join(dir, file);
       videos.push({ name: file.replace(/\.[^.]+$/, ''), file, path, platform, sizeBytes: statSync(path).size });

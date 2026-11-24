@@ -810,7 +810,7 @@ function writeLookAgain(dir, appId, screens, flows, grayOf, textOf) {
   // On the web (Web Apps, Webs) Mobbin shows Onboarding as one flow, the first run in order: flows kept
   // inside it are split pieces. On iOS, Onboarding stays an area with flows of its own.
   for (const area of flows) {
-    if (area.parentId || !['webapp', 'web'].includes(area.platform) || !/^(onboarding|welcome|getting started)$/i.test(area.name)) continue;
+    if (area.parentId || !['webapp', 'site'].includes(area.platform) || !/^(onboarding|welcome|getting started)$/i.test(area.name)) continue;
     const inside = flows.filter((flow) => flow.parentId === area.id);
     if (!inside.length) continue;
     items.push({ key: `split:${area.id}`, kind: 'split', hashes: [], flow: area.name, screens: [], flows: inside.map((flow) => flow.name), ask: `"${area.name}" holds flows of its own (${inside.map((flow) => `"${flow.name}"`).join(', ')}). Mobbin shows Onboarding as one flow: merge the first-run steps (signing up or logging in, codes, permissions, name, setup, a tour) into it with "merges", in the order the recording shows them ("order"). A second way of signing in recorded afterwards (logging in with a password, resetting a password) becomes a flow of its own at the top level ("parent": null), and so does a later task (managing cookies).` });

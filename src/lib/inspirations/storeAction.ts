@@ -14,10 +14,11 @@ export type StoreAction = { label: string; icon: string; href: string };
 export function storeAction(platform: Platform, website: string | null | undefined): StoreAction | null {
   const href = website?.trim() || '';
   switch (platform) {
-    case 'web':
-      return href ? { label: 'Visit website', icon: '/ASSET/Icons/Motvin/web.svg', href } : null;
+    case 'site':
+      // The App Store's ↗ arrow: it leaves for the site, and it is drawn dark for these white buttons and menus.
+      return href ? { label: 'Visit website', icon: '/ASSET/Icons/Motvin/view-apps.svg', href } : null;
     case 'webapp':
-      return href ? { label: 'Open web app', icon: '/ASSET/Icons/Motvin/web.svg', href } : null;
+      return href ? { label: 'Open web app', icon: '/ASSET/Icons/Motvin/view-apps.svg', href } : null;
     default:
       return { label: 'View in App Store', icon: '/ASSET/Icons/Motvin/view-apps.svg', href: href || '#' };
   }

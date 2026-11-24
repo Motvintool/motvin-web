@@ -1,6 +1,6 @@
 'use client';
 
-import { inSection, readSavedAppId } from '@/lib/inspirations/savedApps';
+import { inSection, isWebsiteItem, readSavedAppId } from '@/lib/inspirations/savedApps';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { browsedPlatforms } from '@/lib/inspirations/filters';
@@ -10,6 +10,8 @@ import { isDesktopPlatform, type App, type Collection, type SavedItemType } from
 import { AppLogo } from './AppLogo';
 import { askConfirm } from './ConfirmDialog';
 import { useToast } from './Toast';
+import { inspirationsApi } from '@/lib/inspirations/api';
+import { useAsync } from './useAsync';
 import { useDeleteCollection } from './useDeleteCollection';
 import { useLibrary } from './useLibrary';
 
@@ -37,20 +39,35 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
     .slice(-3);
   const coverPositions = ['back', 'middle', 'front'].slice(-coverApps.length);
   const coverAppsByPosition = new Map(coverPositions.map((position, index) => [position, coverApps[index]]));
+  // A site's saved full pages and sections are counted apart from app screens, each by its own name; which is
+  // which comes from the site sections list (the Sites page's own request, so it is read once).
+  const siteItems = items.filter((item) => isWebsiteItem(item, appPlatforms));
+  const { data: siteSections } = useAsync(
+    () => (siteItems.length ? inspirationsApi.listSiteScreens('section', '', 1000) : Promise.resolve([])),
+    siteItems.length ? 'sites:section' : 'sites:none',
+  );
+  const sectionIds = new Set((siteSections ?? []).map((s) => s.id));
+  const sectionCount = siteItems.filter((item) => sectionIds.has(item.id)).length;
+  const pageCount = siteSections ? siteItems.length - sectionCount : 0;
   const counts = items.reduce<Record<SavedItemType, number>>(
-    (total, item) => ({ ...total, [item.type]: total[item.type] + 1 }),
+    (total, item) => (isWebsiteItem(item, appPlatforms) ? total : { ...total, [item.type]: total[item.type] + 1 }),
     { screen: 0, app: 0, flow: 0, pattern: 0, component: 0, icon: 0, storeShots: 0 },
   );
-  // Apps, Screens and Flows always; screenshot sets, UI elements and patterns
-  // once there are some, so nothing saved goes uncounted.
-  const details = [
+  // Every kind saved, by count. An empty collection says so ("0 Apps · 0 Screens · 0 Flows"); otherwise the line
+  // keeps only what is there, and past three kinds ends in "+N more" so it fits one line (the full list on hover).
+  const parts = [
     `${counts.app} ${counts.app === 1 ? 'App' : 'Apps'}`,
     `${counts.screen} ${counts.screen === 1 ? 'Screen' : 'Screens'}`,
+    ...(pageCount ? [`${pageCount} ${pageCount === 1 ? 'Full Page' : 'Full Pages'}`] : []),
+    ...(sectionCount ? [`${sectionCount} ${sectionCount === 1 ? 'Section' : 'Sections'}`] : []),
     ...(counts.storeShots ? [`${counts.storeShots} ${counts.storeShots === 1 ? 'Screenshot set' : 'Screenshot sets'}`] : []),
     `${counts.flow} ${counts.flow === 1 ? 'Flow' : 'Flows'}`,
     ...(counts.component ? [`${counts.component} ${counts.component === 1 ? 'UI element' : 'UI elements'}`] : []),
     ...(counts.pattern ? [`${counts.pattern} ${counts.pattern === 1 ? 'Pattern' : 'Patterns'}`] : []),
   ];
+  const saved = parts.filter((part) => !part.startsWith('0 '));
+  const rest = saved.slice(3).reduce((sum, part) => sum + parseInt(part, 10), 0);
+  const details = !saved.length ? parts.filter((part) => /Apps|Screens|Flows/.test(part)) : rest ? [...saved.slice(0, 3), `+${rest} more`] : saved;
 
   const commit = () => {
     if (!editing) return;
@@ -119,7 +136,9 @@ export function CollectionCard({ collection, apps }: { collection: Collection; a
               </Link>
             </p>
           )}
-          <p className="ins-collection-sub">{details.join(' · ')}</p>
+          <p className="ins-collection-sub" title={saved.length > 3 ? saved.join(' · ') : undefined}>
+            {details.join(' · ')}
+          </p>
         </div>
         <div className="ins-collection-actions">
           <button type="button" className="ins-iconbtn ins-iconbtn--plain" aria-label="Rename collection" onClick={() => setEditing(true)}>

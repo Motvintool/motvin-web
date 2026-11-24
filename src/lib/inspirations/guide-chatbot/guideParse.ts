@@ -52,8 +52,9 @@ export function findStates(text: string): ScreenState[] {
 /* ----------------------------------------------------------------- styles */
 
 const STYLE_WORDS: [RegExp, Style][] = [
-  [/\bdark(?:[\s-]?(?:mode|theme|ui|style|screens?|design))\b/i, 'dark'],
-  [/\blight(?:[\s-]?(?:mode|theme))\b/i, 'light'],
+  // "dark mode", and "dark login screens" / "dark settings pages": a word or two may come between.
+  [/\bdark(?:[\s-]?(?:mode|theme|ui|style|screens?|design)|\s+(?:[a-z]+\s+){1,2}(?:screens?|pages?|ui|designs?))\b/i, 'dark'],
+  [/\blight(?:[\s-]?(?:mode|theme)|\s+(?:[a-z]+\s+){1,2}(?:screens?|pages?))\b/i, 'light'],
   [/\bminimal(?:ist|istic)?\b/i, 'minimal'],
   [/\beditorial\b/i, 'editorial'],
   [/\bbold (?:ui|style|design|screens?|typography)\b/i, 'bold'],

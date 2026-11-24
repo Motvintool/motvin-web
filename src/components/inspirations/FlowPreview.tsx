@@ -51,7 +51,8 @@ async function loadAppPrototype(flowId: string): Promise<{ flow: Flow; screens: 
   if (!res) return null;
   const { app } = res;
   // One platform's screens: Claude's iOS prototype never plays its web pages.
-  const all = platform ? res.screens.filter((s) => s.platform === platform) : res.screens;
+  // App screens only: a website's pages and sections are never played as a prototype.
+  const all = (platform ? res.screens.filter((s) => s.platform === platform) : res.screens).filter((s) => !s.site);
   // One capture's screens, not every dated version's copies of them: that platform's newest.
   const ownVersions = (app.versions ?? []).filter((v) => all.some((s) => s.version === v.id));
   const newest = platform ? ownVersions.reduce<(typeof ownVersions)[number] | null>((best, v) => (!best || v.capturedAt > best.capturedAt ? v : best), null)?.id ?? null : app.currentVersion;

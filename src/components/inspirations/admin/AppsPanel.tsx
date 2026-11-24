@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
-import { adminApi, type AdminAppRecord, type AdminState } from '@/lib/inspirations/admin';
+import { adminApi, type AdminAppRecord, type AdminScreenFile, type AdminState } from '@/lib/inspirations/admin';
 import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import { PICKABLE_INDUSTRIES, PLATFORMS, type Industry, type Platform } from '@/lib/inspirations/types';
 import { CheckIcon, ChevronRightIcon, CloseIcon, PencilIcon, PlusIcon, SearchIcon, TrashIcon, UploadIcon } from '../Icons';
@@ -34,7 +34,16 @@ const EMPTY: AdminAppRecord = { id: '', name: '', industry: 'unsorted', website:
 /** The longest "<name> — <tagline>" that fits the app page title in two lines. */
 const TITLE_MAX = 55;
 
-const PLATFORM_TAB: Record<Platform, string> = { ios: 'iOS', webapp: 'Web Apps', web: 'Websites' };
+const PLATFORM_TAB: Record<Platform, string> = { ios: 'iOS', webapp: 'Web Apps', site: 'Sites' };
+/** What a platform's list holds, one and many: "56 iOS apps", "24 web apps", "1 site". */
+const LIST_NOUN: Record<Platform, [string, string]> = { ios: ['iOS app', 'iOS apps'], webapp: ['web app', 'web apps'], site: ['site', 'sites'] };
+const listNoun = (platform: Platform, count: number) => LIST_NOUN[platform][count === 1 ? 0 : 1];
+/** A site's files are whole pages and their sections; an app's, screens ("2 pages · 29 sections"). */
+function siteParts(files: AdminScreenFile[]): string {
+  const pages = files.filter((f) => /\/pages\//.test(f.file)).length;
+  const sections = files.filter((f) => /\/sections\//.test(f.file)).length;
+  return `${pages} ${pages === 1 ? 'page' : 'pages'} · ${sections} ${sections === 1 ? 'section' : 'sections'}`;
+}
 
 function slugify(value: string): string {
   return value
@@ -392,7 +401,7 @@ export function AppsPanel({
               <span className="ins-admin-item-id">{editing.id}</span>
             </h2>
             <p className="ins-app-editor-meta">
-              {PLATFORM_TAB[platform]} · {editing.industry === 'unsorted' ? 'Needs category' : INDUSTRY_LABEL[editing.industry] ?? editing.industry} · {published} of {screens.length} screens published · {flows.length} {flows.length === 1 ? 'flow' : 'flows'}
+              {PLATFORM_TAB[platform]} · {editing.industry === 'unsorted' ? 'Needs category' : INDUSTRY_LABEL[editing.industry] ?? editing.industry} · {platform === 'site' ? siteParts(screens) : `${published} of ${screens.length} screens published · ${flows.length} ${flows.length === 1 ? 'flow' : 'flows'}`}
             </p>
             {otherPlatforms.length > 0 && (
               <p className="ins-app-editor-meta">
@@ -449,7 +458,7 @@ export function AppsPanel({
       <div className="ins-admin-toolbar">
         <label className="ins-toolbar-search">
           <SearchIcon size={14} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${state.apps.filter((app) => onPlatform(app, platform)).length} ${PLATFORM_TAB[platform]} apps`} aria-label="Search apps" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${state.apps.filter((app) => onPlatform(app, platform)).length} ${listNoun(platform, state.apps.filter((app) => onPlatform(app, platform)).length)}`} aria-label="Search apps" />
         </label>
         <span className="ins-toolbar-note">Edit an app to manage its details, screens, card and flows.</span>
         {!adding && (
@@ -466,7 +475,7 @@ export function AppsPanel({
       {adding && !editingId && renderForm()}
 
       <div className="ins-admin-list">
-        {!state.apps.some((app) => onPlatform(app, platform)) && <p className="ins-muted">No {PLATFORM_TAB[platform]} apps yet.</p>}
+        {!state.apps.some((app) => onPlatform(app, platform)) && <p className="ins-muted">No {listNoun(platform, 0)} yet.</p>}
         {state.apps.filter((app) => onPlatform(app, platform)).filter((app) => !query.trim() || app.name.toLowerCase().includes(query.trim().toLowerCase()) || app.id.includes(query.trim().toLowerCase())).map((app) => {
           const logo = state.logos.find((f) => f.startsWith(`${app.id}.`));
           const logoUrl = logo ? inspirationsApi.mediaUrl(`/api/inspirations/logos/${logo}`) : null;
@@ -500,7 +509,7 @@ export function AppsPanel({
                         {app.industrySource === 'ai' && <span className="ins-admin-source" title="Chosen by the model, not confirmed by the store"> · AI-suggested</span>}
                       </>
                     )}{' '}
-                    · {published} of {screens.length} screens published
+                    · {platform === 'site' ? siteParts(screens) : `${published} of ${screens.length} screens published`}
                     {elsewhere.length > 0 && <span className="ins-admin-also"> · also on {elsewhere.map((p) => PLATFORM_TAB[p]).join(', ')}</span>}
                   </p>
                   {app.tagline && <p className="ins-admin-item-sub">{app.tagline}</p>}

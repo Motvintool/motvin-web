@@ -42,9 +42,9 @@ export type AdminOp =
   | { kind: 'set-screen-details'; platform: string; appId: string; file: string; version?: string; flow?: string; name: string; capturedAt?: string; elements?: string[]; style?: string[] }
   /** A dropped recording, every question answered — the run starts on Confirm. The file itself is held by the dock. */
   /** newApp: made first, so the run files under the name the admin gave it. */
-  | { kind: 'start-ingest'; fileName: string; platform: 'ios' | 'webapp' | 'web'; appId?: string; appName?: string; version?: string; versionLabel?: string; startedBy: string; logoName?: string; newApp?: { id: string; name: string; industry?: string }; full?: boolean }
+  | { kind: 'start-ingest'; fileName: string; platform: 'ios' | 'webapp' | 'site'; appId?: string; appName?: string; version?: string; versionLabel?: string; startedBy: string; logoName?: string; newApp?: { id: string; name: string; industry?: string }; full?: boolean }
   /** Dropped screenshots, every question answered — uploaded on Confirm, creating the app first when it is new. */
-  | { kind: 'upload-screens'; count: number; platform: 'ios' | 'webapp' | 'web'; appId: string; appName: string; version: string; versionLabel: string; newApp?: { id: string; name: string; industry?: string }; logoName?: string }
+  | { kind: 'upload-screens'; count: number; platform: 'ios' | 'webapp' | 'site'; appId: string; appName: string; version: string; versionLabel: string; newApp?: { id: string; name: string; industry?: string }; logoName?: string }
   | { kind: 'set-flow-parent'; flowId: string; name: string; parentId: string | null; parentName: string | null }
   | { kind: 'set-source-status'; appId: string; name: string; status: 'pending' | 'review' | 'approved' | 'rejected'; permission?: string }
   | { kind: 'delete-app-version'; appId: string; name: string; versionId: string; versionLabel: string; screens: number }
@@ -87,7 +87,7 @@ export function isDestructive(op: AdminOp): boolean {
 
 const list = (names: string[]) => (names.length <= 3 ? names.map((name) => `“${name}”`).join(', ') : `${names.length} screens`);
 
-const PLATFORM_NAME: Record<string, string> = { ios: 'iOS', webapp: 'Web Apps', web: 'Webs' };
+const PLATFORM_NAME: Record<string, string> = { ios: 'iOS', webapp: 'Web Apps', web: 'Sites' };
 const platformName = (id: string) => PLATFORM_NAME[id] ?? id;
 
 /** The button text for an operation. */

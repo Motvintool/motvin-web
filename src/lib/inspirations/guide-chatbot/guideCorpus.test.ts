@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../api', () => {
   const apps = [
     { id: 'a1', name: 'Swiggy', slug: 'swiggy', screenCount: 262, flowCount: 39, logo: null, industry: 'food', rating: 5, ratingCount: 1, platforms: ['ios', 'webapp'] },
-    { id: 'a2', name: 'Zomato', slug: 'zomato', screenCount: 140, flowCount: 85, logo: null, industry: 'food', rating: 4.5, ratingCount: 12, platforms: ['ios', 'web'] },
-    { id: 'a3', name: 'LinkedIn', slug: 'linkedin', screenCount: 28, flowCount: 4, logo: null, industry: 'social', rating: null, ratingCount: null, platforms: ['web'] },
+    { id: 'a2', name: 'Zomato', slug: 'zomato', screenCount: 140, flowCount: 85, logo: null, industry: 'food', rating: 4.5, ratingCount: 12, platforms: ['ios', 'site'] },
+    { id: 'a3', name: 'LinkedIn', slug: 'linkedin', screenCount: 28, flowCount: 4, logo: null, industry: 'social', rating: null, ratingCount: null, platforms: ['site'] },
     { id: 'a4', name: 'Groww', slug: 'groww', screenCount: 90, flowCount: 20, logo: null, industry: 'fintech', rating: 4.2, ratingCount: 3, platforms: ['ios', 'webapp'] },
   ];
   return {

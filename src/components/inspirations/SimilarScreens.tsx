@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { EMPTY_FILTERS } from '@/lib/inspirations/filters';
 import { rankSimilar } from '@/lib/inspirations/similarScreens';
-import { screenTypeLabel } from '@/lib/inspirations/taxonomy';
+import { pageTypeLabel, screenTypeLabel, sectionTypeLabel } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type App, type Flow, type Screen, type ScreenType } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { FloatCollectionBar } from './FloatCollectionBar';
@@ -13,7 +13,7 @@ import { useApps } from './useApps';
 import { useScreenContextMenu } from './useScreenContextMenu';
 
 /** The section a screen's similar screens come from: Webs (web apps and websites) or iOS. */
-const sectionOf = (screen: Screen): Screen['platform'][] => (isDesktopPlatform(screen.platform) ? ['webapp', 'web'] : ['ios']);
+const sectionOf = (screen: Screen): Screen['platform'][] => (isDesktopPlatform(screen.platform) ? ['webapp', 'site'] : ['ios']);
 
 /** How many the grid holds: a 3 × 3 grid of wide web pages, 5 × 3 of phones, this screen in the middle. */
 const cellsOf = (screen: Screen) => (isDesktopPlatform(screen.platform) ? 9 : 15);
@@ -23,17 +23,24 @@ const cellsOf = (screen: Screen) => (isDesktopPlatform(screen.platform) ? 9 : 15
 // too, so a grid whose data is in can draw it at once — no empty first frame, no reshuffle when flows land.
 const candidateLoads = new Map<string, Promise<Screen[]>>();
 const candidatesIn = new Map<string, Screen[]>();
-const candidateKey = (screen: Screen) => `${screen.screenType}:${sectionOf(screen).join(',')}`;
+/** A website page or section's own type ("pricing" page, "hero" section): what its Z grid matches on. */
+const siteTypeOf = (screen: Screen) => (screen.site?.kind === 'section' ? screen.site.sectionType : screen.site?.pageType) ?? 'other';
+const candidateKey = (screen: Screen) =>
+  screen.site ? `site:${screen.site.kind}:${siteTypeOf(screen)}` : `${screen.screenType}:${sectionOf(screen).join(',')}`;
 export function similarCandidates(screen: Screen): Promise<Screen[]> {
   const key = candidateKey(screen);
   let load = candidateLoads.get(key);
   if (!load) {
-    load = inspirationsApi
-      .listScreens({ ...EMPTY_FILTERS, platforms: sectionOf(screen), screenTypes: [screen.screenType as ScreenType] }, 0, 'curated', { limit: 80 })
-      .then((page) => {
-        candidatesIn.set(key, page.items);
-        return page.items;
-      });
+    // A website's page or section meets the same kind on other websites only — never a web app's screens.
+    load = (screen.site
+      ? inspirationsApi.listSiteScreens(screen.site.kind, siteTypeOf(screen))
+      : inspirationsApi
+          .listScreens({ ...EMPTY_FILTERS, platforms: sectionOf(screen), screenTypes: [screen.screenType as ScreenType] }, 0, 'curated', { limit: 80 })
+          .then((page) => page.items)
+    ).then((items) => {
+      candidatesIn.set(key, items);
+      return items;
+    });
     // A failed load isn't kept, so the next ask tries again.
     load.catch(() => candidateLoads.delete(key));
     candidateLoads.set(key, load);
@@ -177,13 +184,21 @@ export function SimilarScreens({
   const waiting = !ready;
   const blanks = (n: number, side: string) => Array.from({ length: n }, (_, i) => <span key={`${side}-${i}`} className="ins-similar-blank" aria-hidden />);
 
-  const typeLabel = screenTypeLabel(current.screenType).toLowerCase();
-  const title = waiting ? 'Finding similar screens…' : others.length ? `${screenTypeLabel(current.screenType)} screens in other apps` : `No other app has ${typeLabel} screens yet`;
+  // A website says pages / sections and websites ("Pricing Pages on other websites"), never screens and apps.
+  const site = current.site;
+  const kindLabel = site ? (site.kind === 'section' ? sectionTypeLabel(siteTypeOf(current)) : pageTypeLabel(siteTypeOf(current))) : screenTypeLabel(current.screenType);
+  const typeLabel = kindLabel.toLowerCase();
+  const plural = site ? `${kindLabel}${site.kind === 'section' ? ' sections' : 's'}` : `${kindLabel} screens`;
+  const title = waiting
+    ? site ? 'Finding similar sites…' : 'Finding similar screens…'
+    : others.length
+      ? `${plural} on other ${site ? 'sites' : 'apps'}`.replace(' on other apps', ' in other apps')
+      : site ? `No other site has ${plural.toLowerCase()} yet` : `No other app has ${typeLabel} screens yet`;
   useEffect(() => {
     onSummary?.({ title });
   }, [onSummary, title]);
   return (
-    <div className={`ins-similar ${web ? 'is-web' : ''}`} role="region" aria-label={`${screenTypeLabel(current.screenType)} screens in other apps`}>
+    <div className={`ins-similar ${web ? 'is-web' : ''}`} role="region" aria-label={title}>
       <div className="ins-similar-grid" role="list">
         {/* While the others load, their places hold soft blanks round this screen, so the grid doesn't jump. */}
         {waiting && blanks(Math.floor(cells / 2), 'before')}
@@ -194,7 +209,7 @@ export function SimilarScreens({
             app={apps.get(screen.appId)}
             isCurrent={isCurrent}
             step={Math.abs(i - middle)}
-            label={isCurrent ? 'Back to this screen' : `Open ${apps.get(screen.appId)?.name ?? 'this app'}'s ${typeLabel} screen`}
+            label={isCurrent ? `Back to this ${site ? site.kind : 'screen'}` : `Open ${apps.get(screen.appId)?.name ?? 'this app'}'s ${typeLabel}${site ? '' : ' screen'}`}
             onOpen={() => (isCurrent ? onBack() : onPick(screen))}
             selected={selectedIds.has(screen.id)}
             onToggleSelect={() => toggleSelection(screen.id)}

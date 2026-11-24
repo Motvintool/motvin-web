@@ -34,6 +34,16 @@ export function itemPlatforms(item: { type: string; id: string }, appPlatforms: 
   return (PLATFORMS as readonly string[]).includes(platform) ? [platform as Platform] : 'any';
 }
 
+/**
+ * Whether a saved screen is a website's page or section (Sites, kept on the "site" platform): it is
+ * listed apart from app screens, never counted or shown as one.
+ */
+export const isWebsiteItem = (item: { type: string; id: string }, appPlatforms: Map<string, readonly Platform[]>) => {
+  if (item.type !== 'screen') return false;
+  const of = itemPlatforms(item, appPlatforms);
+  return of !== 'any' && of.length === 1 && of[0] === 'site';
+};
+
 /** Whether a saved item belongs to the section being browsed. */
 export const inSection = (item: { type: string; id: string }, section: readonly Platform[], appPlatforms: Map<string, readonly Platform[]>) => {
   const of = itemPlatforms(item, appPlatforms);

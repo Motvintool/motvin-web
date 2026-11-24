@@ -6,6 +6,8 @@ export const INSPIRATIONS_ROUTES = {
   apps: '/inspirations/apps',
   /** The apps the admin picks each week (Library admin → Week’s new apps). */
   newThisWeek: '/inspirations/new',
+  /** Every site's full pages and sections (Sites, in Webs). */
+  sites: '/inspirations/sites',
   screens: '/inspirations/screens',
   uiElements: '/inspirations/ui-elements',
   flows: '/inspirations/flows',
