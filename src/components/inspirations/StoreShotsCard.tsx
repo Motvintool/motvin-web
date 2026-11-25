@@ -3,7 +3,7 @@
 import JSZip from 'jszip';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
@@ -165,7 +165,8 @@ export function StoreShotsCard({
         <span className={`ins-store-fan is-${order.length}`} aria-hidden>
           {/* Each image moves inside its own span: the site's theme switches transitions off on every <img>. */}
           {order.map((image) => (
-            <span key={image.file} className="ins-store-fan-card" style={{ aspectRatio: `${image.width} / ${image.height}` }}>
+            // Its shape twice: as the box's ratio, and as a number the stylesheet caps its width with (see .ins-store-fan-card).
+            <span key={image.file} className="ins-store-fan-card" style={{ aspectRatio: `${image.width} / ${image.height}`, '--ar': image.width / image.height } as CSSProperties}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={inspirationsApi.mediaUrl(image.url) ?? undefined} alt="" loading="lazy" decoding="async" />
             </span>
@@ -430,10 +431,11 @@ function StoreShotsModal({
     const restore = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    closeRef.current?.focus();
+    closeRef.current?.focus({ preventScroll: true });
     return () => {
       document.body.style.overflow = previousOverflow;
-      restore?.focus?.();
+      // Back on the card without moving the page: a plain focus() scrolls it to the card as the popup closes.
+      restore?.focus?.({ preventScroll: true });
     };
   }, []);
 

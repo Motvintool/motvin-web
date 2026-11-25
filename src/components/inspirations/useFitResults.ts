@@ -2,11 +2,11 @@ import { useEffect, useRef } from 'react';
 
 /**
  * Address parts that only open something over the page — a screen, a flow,
- * a compare view, the logo view, the admin drawer, the assistant — and do
- * not change the page's content. A fit key leaves them out, so opening or
- * closing one never scrolls the page behind it.
+ * a compare view, the logo view, the admin drawer, the assistant, a set of
+ * store screenshots — and do not change the page's content. A fit key leaves
+ * them out, so opening or closing one never scrolls the page behind it.
  */
-const OVERLAY_PARAMS = ['screen', 'logo', 'flow', 'step', 'play', 'compare', 'with', 'admin', 'buddy'];
+const OVERLAY_PARAMS = ['screen', 'logo', 'flow', 'step', 'play', 'compare', 'with', 'admin', 'buddy', 'shots'];
 
 /**
  * Whether going to `href` from the page at `pathname` only opens or closes
