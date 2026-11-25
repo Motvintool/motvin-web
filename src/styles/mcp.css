@@ -480,8 +480,18 @@
 
 @media (max-width: 640px) {
   .mcl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  .mcl-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 132px; gap: 12px; }
+  .mcl-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(132px, auto); gap: 12px; }
   .mcl-bento > li.is-xl { grid-row: span 2; }
+  /* Two columns leave ChatGPT's wide tile no room beside Codex, so on phones it's a small tile like
+     its neighbours and the grid has no hole; "See all" stays wide at the foot. */
+  .mcl-bento > li.is-wide:not(:last-child) { grid-column: auto; }
+  .mcl-bento > li.is-wide:not(:last-child) .mcl-tile { flex-direction: column; justify-content: center; gap: 14px; padding: 22px; }
+  .mcl-bento > li.is-wide:not(:last-child) .mcl-tile-text { align-items: center; text-align: center; max-width: none; }
+  .mcl-bento > li.is-wide:not(:last-child) .mcl-tile-text span { display: none; }
+  .mcl-bento > li.is-wide:not(:last-child) .mcl-tile-icon { width: auto; height: auto; border-radius: 0; background: none; }
+  /* "See all": its marks above the text, so the list of names gets the tile's full width. */
+  .mcl-bento > li.is-wide:last-child .mcl-tile { flex-direction: column; align-items: flex-start; justify-content: center; gap: 14px; }
+  .mcl-bento > li.is-wide:last-child .mcl-tile-text { max-width: none; }
   .mcl-card { height: 120px; }
   .mcpp-faq-q { font-size: 16px; }
 }

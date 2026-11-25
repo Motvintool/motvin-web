@@ -311,7 +311,7 @@ export function Navbar({ compactAfter = COMPACT_AFTER }: { compactAfter?: number
         onPointerEnter={onMenuEnter}
         onPointerLeave={onMenuLeave}
       >
-        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>Explore tools</span>
+        <span style={{ '--item-offset': '13px' } as React.CSSProperties}>All tools</span>
         <img
           src="/ASSET/Icons/desktop-arrow.svg"
           alt=""
@@ -357,10 +357,11 @@ export function Navbar({ compactAfter = COMPACT_AFTER }: { compactAfter?: number
           style={{ width: '14px', height: '14px', opacity: '0.5' }}
         />
       </a>
-      {/* A plain link to the MCP page (it replaced the "Join us" community menu); hidden while MCP is tested privately. */}
+      {/* A plain link to the MCP page (it replaced the "Join us" community menu), tagged New; hidden while MCP is tested privately. */}
       {SHOW_MCP_IN_NAV && (
         <Link href="/mcp" className="nav-item" id="mcp-nav-link" onClick={closeMenus}>
           <span style={{ '--item-offset': '13px' } as React.CSSProperties}>MCP</span>
+          <span className="mi-nav-badge">New</span>
         </Link>
       )}
       <div

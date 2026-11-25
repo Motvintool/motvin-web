@@ -153,13 +153,43 @@
   }
   .mi-mm-link:active { opacity: 0.6; }
   .mi-mm-link.is-soon { color: #a1a1a6; }
+  /* A just-launched tool: the Resources menu's "New" tag, grey with a light sweeping across. */
+  .mi-mm-new {
+    position: relative;
+    overflow: hidden;
+    padding: 4px 7px;
+    border-radius: 7px;
+    background: #e9e9e9;
+    color: #555;
+    font-family: var(--font-inter), sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0;
+  }
+  .mi-mm-new::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.85) 50%, transparent 70%);
+    transform: translateX(-120%);
+    animation: mi-mm-skim 3.2s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes mi-mm-skim {
+    0%, 55% { transform: translateX(-120%); }
+    100% { transform: translateX(120%); }
+  }
+  /* Same shape as the "New" tag, in quieter colours. */
   .mi-mm-soon {
-    padding: 3px 8px;
-    border-radius: 999px;
+    padding: 4px 7px;
+    border-radius: 7px;
     background: #f1f1f3;
     color: #8a8a8f;
-    font-size: 11px;
+    font-family: var(--font-inter), sans-serif;
+    font-size: 12px;
     font-weight: 600;
+    line-height: 1;
     letter-spacing: 0;
   }
 
@@ -213,3 +243,5 @@
   .mi-nav-mobile-panel-header { align-items: center; }
   .mi-nav-mobile-panel-header .mi-nav-mobile-panel-logo { margin-top: 0; }
 }
+
+@media (prefers-reduced-motion: reduce) { .mi-mm-new::after { display: none; } }

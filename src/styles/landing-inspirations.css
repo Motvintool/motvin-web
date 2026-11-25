@@ -2901,6 +2901,30 @@ html.lpi-at-footer body {
     font-weight: 500;
     color: #141414;
   }
+  /* "New" beside MCP: the Resources menu's tag (grey, with its sweep), a shade darker for the grey bar
+     and with dark text so it reads at a glance. */
+  .landing-root .navbar .nav-item span.mi-nav-badge {
+    position: relative;
+    overflow: hidden;
+    margin-left: 0;
+    padding: 4px 7px;
+    border-radius: 7px;
+    background: #e3e3e6;
+    color: #555;
+    font-family: var(--font-inter), sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .landing-root .navbar .nav-item span.mi-nav-badge::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.85) 50%, transparent 70%);
+    transform: translateX(-120%);
+    animation: company-badge-skim 3.2s ease-in-out infinite;
+    pointer-events: none;
+  }
 
   .landing-root .navbar .nav-item:hover {
     opacity: 0.5;
@@ -3395,7 +3419,7 @@ html.lpi-at-footer body {
   0%, 55% { transform: translateX(-120%); }
   100% { transform: translateX(120%); }
 }
-@media (prefers-reduced-motion: reduce) { .company-link-text b .company-link-badge::after { display: none; } }
+@media (prefers-reduced-motion: reduce) { .company-link-text b .company-link-badge::after, .landing-root .navbar .nav-item span.mi-nav-badge::after { display: none; } }
 
 /* The tool marks on the Motvin MCP tile and the hover arrows: desktop's bento grid only. */
 .company-link-tools,
@@ -3496,7 +3520,7 @@ html.lpi-at-footer body {
 @media (max-width: 1300px) {
   .landing-root #nav-mobile-links-slot .company-desktop-arrow { display: none; }
   .landing-root #nav-mobile-links-slot .company-mobile-arrow { display: block; }
-  /* Menu order in the panel, as on desktop: Explore tools, Resources, Join us. */
+  /* Menu order in the panel, as on desktop: All tools, Resources, Join us. */
   .landing-root #nav-mobile-links-slot #company-dropdown-trigger { order: 3; }
   .landing-root #nav-mobile-links-slot #community-dropdown-trigger { order: 6; }
   .landing-root #nav-mobile-links-slot .mi-nav-community-accordion { order: 7; }

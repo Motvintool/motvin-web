@@ -15,7 +15,7 @@ export const LINKEDIN_URL = 'https://www.linkedin.com/company/motvin/home';
  * live yet are plain rows with a "Soon" tag, as in the desktop Products menu.
  */
 
-export type MobileMenuItem = { label: string; href?: string; external?: boolean; soon?: boolean; onClick?: () => void };
+export type MobileMenuItem = { label: string; href?: string; external?: boolean; soon?: boolean; fresh?: boolean; onClick?: () => void };
 type Item = MobileMenuItem;
 
 export function MobileMenu({
@@ -42,7 +42,7 @@ export function MobileMenu({
         { label: 'Logos', href: '/logos', external: true },
         { label: 'Illustrations', href: '/illustrations', external: true },
         // The desktop navbar's "MCP" link (it replaced the "Join us" community menu); hidden while MCP is tested privately.
-        ...(SHOW_MCP_IN_NAV ? [{ label: 'MCP', href: '/mcp' }] : []),
+        ...(SHOW_MCP_IN_NAV ? [{ label: 'MCP', href: '/mcp', fresh: true }] : []),
         { label: 'Convert', soon: true },
         { label: 'Extension', soon: true },
         { label: 'Typescales', soon: true },
@@ -73,6 +73,7 @@ export function MobileMenu({
       <>
         <span className="mi-mm-label">{item.label}</span>
         {item.soon && <span className="mi-mm-soon">Soon</span>}
+        {item.fresh && <span className="mi-mm-new">New</span>}
       </>
     );
     if (item.soon || !item.href) {

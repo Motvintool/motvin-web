@@ -17773,7 +17773,18 @@ html.ins-bat-on .ins-search-bat { display: block; }
    today's calls against the daily limit and a thin bar; the full figure in a dark tip below on hover
    (the landing navbar's tip, which this page doesn't load). */
 .ins-header-mcp-slot { display: flex; align-items: center; flex: none; }
-.ins-header .ins-header-connect { display: inline-flex; align-items: center; text-decoration: none; white-space: nowrap; }
+.ins-header .ins-header-connect { position: relative; overflow: hidden; display: inline-flex; align-items: center; text-decoration: none; white-space: nowrap; }
+/* The "New" tag's skim, softer on the black pill. */
+.ins-header-connect::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.32) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: ins-pmenu-skim 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) { .ins-header-connect::after { animation: none; display: none; } }
 .ins-header-mcp { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 12px; border-radius: 100px; background: #f3f3f2; color: #141414; font: 500 14px/1 var(--font-manrope), Inter, sans-serif; font-variant-numeric: tabular-nums; text-decoration: none; transition: background var(--ins-fast) var(--ins-ease), scale 160ms var(--ins-ease); }
 .ins-header-mcp:hover { background: #ebebea; }
 .ins-header-mcp:active { scale: 0.95; transition-duration: 80ms; }
