@@ -7,7 +7,8 @@ import type { NavCard, NavTarget } from './navAssistant';
  */
 
 export type SavedLine = { id: number; role: 'user' | 'assistant'; text: string; targets?: NavTarget[]; card?: NavCard; opened?: NavTarget; error?: boolean };
-export type SavedChat = { id: string; title: string; updatedAt: number; appId: string | null; lines: SavedLine[] };
+/** `asked`: the last question as Buddy read it, so "web" or "site" in a reopened chat moves that question. */
+export type SavedChat = { id: string; title: string; updatedAt: number; appId: string | null; lines: SavedLine[]; asked?: string | null };
 
 export const HISTORY_KEY = 'motvin-guide-history';
 export const MAX_CHATS = 20;
@@ -24,11 +25,11 @@ export function titleOf(lines: SavedLine[]): string {
 }
 
 /** Adds or updates a chat and moves it to the front. A chat with nothing new keeps its place. */
-export function upsertChat(history: SavedChat[], chat: { id: string; lines: SavedLine[]; appId: string | null }, now: number): SavedChat[] {
+export function upsertChat(history: SavedChat[], chat: { id: string; lines: SavedLine[]; appId: string | null; asked?: string | null }, now: number): SavedChat[] {
   const existing = history.find((candidate) => candidate.id === chat.id);
   const lines = chat.lines.slice(-MAX_LINES);
-  if (existing && existing.lines.length === lines.length && existing.appId === chat.appId) return history;
-  const next: SavedChat = { id: chat.id, title: existing?.title ?? titleOf(lines), updatedAt: now, appId: chat.appId, lines };
+  if (existing && existing.lines.length === lines.length && existing.appId === chat.appId && (existing.asked ?? null) === (chat.asked ?? null)) return history;
+  const next: SavedChat = { id: chat.id, title: existing?.title ?? titleOf(lines), updatedAt: now, appId: chat.appId, lines, asked: chat.asked ?? null };
   return [next, ...history.filter((candidate) => candidate.id !== chat.id)].slice(0, MAX_CHATS);
 }
 
@@ -91,7 +92,7 @@ export function parseHistory(raw: string | null): SavedChat[] {
       if (typeof chat.id !== 'string' || typeof chat.title !== 'string' || typeof chat.updatedAt !== 'number' || !Array.isArray(chat.lines)) continue;
       const lines = chat.lines.map(cleanLine).filter((line): line is SavedLine => line !== null).slice(-MAX_LINES);
       if (lines.length === 0) continue;
-      chats.push({ id: chat.id, title: chat.title.slice(0, 80), updatedAt: chat.updatedAt, appId: typeof chat.appId === 'string' ? chat.appId : null, lines });
+      chats.push({ id: chat.id, title: chat.title.slice(0, 80), updatedAt: chat.updatedAt, appId: typeof chat.appId === 'string' ? chat.appId : null, lines, asked: typeof chat.asked === 'string' ? chat.asked.slice(0, 240) : null });
     }
     return chats.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_CHATS);
   } catch {

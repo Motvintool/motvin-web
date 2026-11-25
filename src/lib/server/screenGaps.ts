@@ -20,7 +20,7 @@ const MODEL = 'claude-sonnet-5-5';
 const BATCH = 8;
 const CALL_TIMEOUT_MS = 6 * 60_000;
 
-type ManifestScreen = { id: string; file: string; screenType?: string; elements?: string[] };
+type ManifestScreen = { id: string; file: string; screenType?: string; elements?: string[]; site?: unknown };
 
 let running: Promise<void> | null = null;
 let again = false;
@@ -74,7 +74,8 @@ async function fillOnce() {
   const types = (manifest.taxonomy?.screenTypes ?? []).filter((type) => type !== 'other');
   const checked = readChecked();
   const todo = (manifest.screens ?? []).filter(
-    (screen) => !checked.has(screen.id) && (!(screen.elements ?? []).length || !screen.screenType || screen.screenType === 'other'),
+    // A website's pages and sections are named by the Web review, and have no UI elements to find.
+    (screen) => !screen.site && !checked.has(screen.id) && (!(screen.elements ?? []).length || !screen.screenType || screen.screenType === 'other'),
   );
   if (!todo.length) return;
 

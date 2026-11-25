@@ -16,7 +16,7 @@ import { ChoiceCards, Summary, Wizard } from './Wizard';
  * Protect or Skip; boxes can be removed, or drawn by hand.
  */
 
-type Platform = 'ios' | 'webapp' | 'web';
+type Platform = 'ios' | 'webapp' | 'site';
 type Kind = 'photo' | 'phone' | 'email' | 'address' | 'name' | 'card';
 type Box = { kind: Kind; x: number; y: number; w: number; h: number; text?: string };
 type Stage = 'queued' | 'checking' | 'clean' | 'found' | 'applied' | 'skipped' | 'failed';
@@ -44,7 +44,7 @@ const STEPS = [
   { id: 'start', label: 'Check & start' },
 ];
 
-const PLATFORM_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web App', web: 'Web' };
+const PLATFORM_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web App', site: 'Sites' };
 const KINDS: Array<{ id: Kind; title: string; desc: string }> = [
   { id: 'photo', title: 'Personal photos and faces', desc: 'Real people’s photos in galleries, pickers and profiles.' },
   { id: 'phone', title: 'Phone numbers', desc: 'Any real phone number on the screen.' },
@@ -258,7 +258,7 @@ export function ProtectPanel() {
             <Choice
               label="Platform"
               value={settings.platform}
-              options={[['ios', 'iOS'], ['webapp', 'Web App'], ['web', 'Web']]}
+              options={[['ios', 'iOS'], ['webapp', 'Web App'], ['site', 'Sites']]}
               onChange={(next) => {
                 set('platform', next);
                 setPicked(new Set());

@@ -1,0 +1,151 @@
+{
+  "note": "Sites page and section types. Same ids as motvin-web-recorder/src/site/siteTypes.js and PAGE_TYPE_LABEL / SECTION_TYPE_LABEL in motvin-web/src/lib/inspirations/taxonomy.ts.",
+  "pages": [
+    {
+      "id": "landing",
+      "label": "Landing Page"
+    },
+    {
+      "id": "pricing",
+      "label": "Pricing Page"
+    },
+    {
+      "id": "about",
+      "label": "About Page"
+    },
+    {
+      "id": "features",
+      "label": "Features Page"
+    },
+    {
+      "id": "product",
+      "label": "Product Page"
+    },
+    {
+      "id": "solutions",
+      "label": "Solutions Page"
+    },
+    {
+      "id": "customers",
+      "label": "Customers Page"
+    },
+    {
+      "id": "blog",
+      "label": "Blog Page"
+    },
+    {
+      "id": "blog-post",
+      "label": "Blog Post"
+    },
+    {
+      "id": "careers",
+      "label": "Careers Page"
+    },
+    {
+      "id": "contact",
+      "label": "Contact Page"
+    },
+    {
+      "id": "docs",
+      "label": "Docs Page"
+    },
+    {
+      "id": "changelog",
+      "label": "Changelog Page"
+    },
+    {
+      "id": "integrations",
+      "label": "Integrations Page"
+    },
+    {
+      "id": "legal",
+      "label": "Legal Page"
+    },
+    {
+      "id": "login",
+      "label": "Login Page"
+    },
+    {
+      "id": "signup",
+      "label": "Sign Up Page"
+    },
+    {
+      "id": "not-found",
+      "label": "404 Page"
+    },
+    {
+      "id": "other",
+      "label": "Other Page"
+    }
+  ],
+  "sections": [
+    {
+      "id": "navigation",
+      "label": "Navigation"
+    },
+    {
+      "id": "nav-menu",
+      "label": "Navigation Menu"
+    },
+    {
+      "id": "hero",
+      "label": "Hero"
+    },
+    {
+      "id": "logos",
+      "label": "Logos"
+    },
+    {
+      "id": "features",
+      "label": "Features"
+    },
+    {
+      "id": "how-it-works",
+      "label": "How It Works"
+    },
+    {
+      "id": "stats",
+      "label": "Stats"
+    },
+    {
+      "id": "testimonials",
+      "label": "Testimonials"
+    },
+    {
+      "id": "pricing",
+      "label": "Pricing"
+    },
+    {
+      "id": "comparison",
+      "label": "Comparison"
+    },
+    {
+      "id": "faq",
+      "label": "FAQ"
+    },
+    {
+      "id": "team",
+      "label": "Team"
+    },
+    {
+      "id": "blog",
+      "label": "Blog"
+    },
+    {
+      "id": "cta",
+      "label": "Call to Action"
+    },
+    {
+      "id": "contact",
+      "label": "Contact"
+    },
+    {
+      "id": "footer",
+      "label": "Footer"
+    },
+    {
+      "id": "content",
+      "label": "Content"
+    }
+  ]
+}

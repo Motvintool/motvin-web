@@ -35,6 +35,7 @@ export function AppMenu({
   onDownloadAll,
   onDownloadVersion,
   linkLabel = 'Copy app link',
+  downloadLabel = 'Download all screens',
   link,
   triggerClassName = 'ins-iconbtn',
   opensUp = false,
@@ -49,6 +50,8 @@ export function AppMenu({
   versions: AppVersion[];
   /** "Copy app link" by default; a flow's menu says "Copy flow link". */
   linkLabel?: string;
+  /** "Download all screens" by default; a website's says "Download whole site". */
+  downloadLabel?: string;
   /** What Copy link copies; the current page's address by default. */
   link?: () => string;
   /** The "…" button's look; the masthead's icon button by default. */
@@ -185,7 +188,7 @@ export function AppMenu({
                     <div className="ins-context-menu-icon">
                       <img alt="" src={ICON_DOWNLOAD} />
                     </div>
-                    <p className="ins-context-menu-text">Download all screens</p>
+                    <p className="ins-context-menu-text">{downloadLabel}</p>
                   </div>
                   {hasVersions && (
                     <div className="ins-context-menu-icon-right">

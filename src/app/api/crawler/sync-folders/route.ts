@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const appId = String(body.appId ?? '').trim();
   if (!/^[a-z0-9][a-z0-9-]*$/.test(appId)) return fail('appId must be a slug.', 400);
   const platform = String(body.platform ?? 'ios').trim();
-  if (!['ios', 'webapp', 'web'].includes(platform)) return fail('platform must be ios, webapp or web.', 400);
+  if (!['ios', 'webapp', 'site'].includes(platform)) return fail('platform must be ios, webapp or site.', 400);
   const version = String(body.version ?? '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(version)) return fail('version must be a date, YYYY-MM-DD.', 400);
   const job = startJob({

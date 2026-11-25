@@ -80,7 +80,12 @@ export function Screenshot({
   // need the loaded state; keeping the image visible avoids a blank handoff
   // when a page skeleton gives way to its real preview cards.
   const [loaded, setLoaded] = useState(false);
-  const src = inspirationsApi.mediaUrl(screen.url);
+  // A website's whole page in a card: only its top (the server cuts it once). Resizing alone keeps a 16,000px page
+  // ~9,000px tall at card width, and a few of those make the grid lag.
+  const pageCover = Boolean(sizes) && screen.site?.kind === 'page';
+  const full = inspirationsApi.mediaUrl(screen.url);
+  const src = full && pageCover ? `${full}${full.includes('?') ? '&' : '?'}cover=1` : full;
+  const shotHeight = pageCover && screen.width ? Math.min(screen.height || Infinity, Math.round(screen.width * 0.8)) : screen.height;
   const deferred = Boolean(sizes) && !priority && !(src && shown.has(src));
   const [near, setNear] = useState(!deferred);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -90,7 +95,7 @@ export function Screenshot({
     return whenNear(el, () => setNear(true));
   }, [near]);
   const resized = src && sizes && attempt === 0
-    ? getImageProps({ src, alt: '', width: screen.width || 1200, height: screen.height || 900, sizes, quality: 75 }).props
+    ? getImageProps({ src, alt: '', width: screen.width || 1200, height: shotHeight || 900, sizes, quality: 75 }).props
     : null;
   const ratio = screen.width && screen.height ? `${screen.width} / ${screen.height}` : '4 / 3';
 
@@ -111,7 +116,8 @@ export function Screenshot({
       srcSet={near ? resized?.srcSet : undefined}
       sizes={near && resized ? sizes : undefined}
       alt={`${screenTitle(screen)} screen`}
-      className={`ins-shot-img ${deferred ? 'is-deferred' : ''} ${loaded ? 'is-loaded' : ''} ${className}`}
+      // A website page is far taller than any frame: cropped, it shows its top, as a visitor first sees it.
+      className={`ins-shot-img ${deferred ? 'is-deferred' : ''} ${loaded ? 'is-loaded' : ''} ${screen.site?.kind === 'page' ? 'is-site-page' : ''} ${className}`}
       style={{ aspectRatio: ratio }}
       width={screen.width || undefined}
       height={screen.height || undefined}

@@ -10,6 +10,7 @@ import { elementLabel, INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations
 import { isDesktopPlatform, PLATFORMS, type App, type ElementKind, type Flow, type Pattern, type Platform, type Screen } from '@/lib/inspirations/types';
 import { appPlatform, storeAction } from '@/lib/inspirations/storeAction';
 import { savedAppId } from '@/lib/inspirations/savedApps';
+import { WEBS_PARAM, WEBS_PLATFORMS } from '@/lib/inspirations/filters';
 import { AppLogo } from '../AppLogo';
 import { MastheadLogo } from '../MastheadLogo';
 import { PlatformPeek } from '../PlatformPeek';
@@ -40,6 +41,7 @@ import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, CloseIcon, ExternalIcon, Sea
 
 
 import { ScreenGrid } from '../ScreenGrid';
+import { SITE_TABS, SITE_TYPE_PARAM, SiteGrid, siteTabContent, type SiteTab } from '../SitePages';
 import { ScreenGridSkeleton } from '../Skeletons';
 import { contentKey, useFitResults } from '../useFitResults';
 import { useAsync } from '../useAsync';
@@ -419,7 +421,9 @@ export function AppDetailView({ app, screens, flows, patterns }: { app: App; scr
   const present = PLATFORMS.filter((p) => screens.some((s) => s.platform === p));
   if (present.length < 2) return <AppDetailBody app={app} screens={screens} flows={flows} patterns={patterns} />;
 
-  const asked = params.get('platform') as Platform | null;
+  // `web` is the Webs section: the app's web app or site, whichever it has first.
+  const askedParam = params.get('platform');
+  const asked = askedParam === WEBS_PARAM ? present.find((p) => WEBS_PLATFORMS.includes(p)) ?? null : (askedParam as Platform | null);
   const platform = asked && present.includes(asked) ? asked : present[0];
   const onPlatform = screens.filter((s) => s.platform === platform);
   const onPlatformIds = new Set(onPlatform.map((s) => s.id));
@@ -540,6 +544,21 @@ function AppDetailBody({
 
   const rawTab = params.get('tab');
   const tab: AppTab = TABS.some((t) => t.id === rawTab) ? (rawTab as AppTab) : 'screens';
+  // A website (Web, not Web Apps) is page based: Full Page and Sections tabs with page-type tag buttons,
+  // in place of Screens / UI Elements / Patterns / Flows.
+  const siteMode = app.platforms.length === 1 && app.platforms[0] === 'site';
+  const siteTab: SiteTab = rawTab === 'sections' ? 'sections' : 'full-page';
+  // The types picked in the tab bar's Pages / Sections pill (several at once, as the UI Elements pill allows).
+  const siteTypes = (params.get(SITE_TYPE_PARAM) ?? '').split(',').filter(Boolean);
+  const setSiteView = (t: SiteTab, types: string[]) => {
+    const sp = new URLSearchParams();
+    const platform = params.get('platform');
+    if (platform) sp.set('platform', platform);
+    if (t !== 'full-page') sp.set('tab', t);
+    if (types.length) sp.set(SITE_TYPE_PARAM, types.join(','));
+    const query = sp.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
   // The tab is in the address; so is the platform on an app that has several, and switching tabs keeps it.
   const setTab = (t: AppTab) => {
     const sp = new URLSearchParams();
@@ -579,6 +598,10 @@ function AppDetailBody({
   // flow, text) then narrow further, so switching versions never has to
   // reset those other picks.
   const versionScreens = version ? screens.filter((s) => s.version === version) : screens;
+  const site = siteMode ? siteTabContent(versionScreens, siteTab) : null;
+  const siteShown = site ? site.list.filter((s) => !siteTypes.length || siteTypes.includes((siteTab === 'sections' ? s.site?.sectionType : s.site?.pageType) ?? '')) : [];
+  const sitePages = siteMode ? siteTabContent(versionScreens, 'full-page').list.length : 0;
+  const siteSections = siteMode ? siteTabContent(versionScreens, 'sections').list.length : 0;
   const versionFlows = version ? flows.filter((f) => !f.version || f.version === version) : flows;
   // The prototype on the Screens grid's first card (its "Prototype" badge):
   // every screen of the app, played in the flow player from the first.
@@ -700,6 +723,26 @@ function AppDetailBody({
           clipped/overlapped by that element's implied overflow-y. Keeping
           the scroll container to just the tab buttons lets the popover
           render unclipped while the tabs still scroll on narrow widths. */}
+      {siteMode ? (
+        <div className="ins-tabbar ins-tabbar--counted" role="tablist" aria-label="Site content">
+          {SITE_TABS.map((t) => {
+            const count = t.id === 'sections' ? siteSections : sitePages;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={siteTab === t.id}
+                className={`ins-tab ${siteTab === t.id ? 'is-active' : ''}`}
+                onClick={() => setSiteView(t.id, [])}
+              >
+                {t.label}
+                {siteTab === t.id && count > 0 && <span className="ins-tab-count">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
       <div className="ins-tabbar ins-tabbar--counted" role="tablist" aria-label="App content">
         {TABS.map((t) => {
           const count =
@@ -727,11 +770,26 @@ function AppDetailBody({
           );
         })}
       </div>
+      )}
 
       {/* Lets the Screens tab be narrowed to one flow's screens — the exact
           same tree (buildTree/prune, .ins-flowtree markup) the Flows tab's
           own "ins-flows-nav" sidebar uses, reused inside a popover. */}
-      {tab === 'screens' && versionFlows.length > 0 && (
+      {/* A website's tabs narrow by type from one pill, the way a Web App's Screens tab narrows by flow. */}
+      {siteMode && site && site.types.length > 0 && (
+        <>
+          <span className="ins-ftoolbar-divider" aria-hidden="true" />
+          <CheckboxFilterPill
+            label={siteTab === 'sections' ? 'Sections' : 'Pages'}
+            options={site.types.map((t) => ({ value: t.type, label: t.label, count: t.count }))}
+            selected={siteTypes}
+            onToggle={(v) => setSiteView(siteTab, siteTypes.includes(v) ? siteTypes.filter((x) => x !== v) : [...siteTypes, v])}
+            onClear={() => setSiteView(siteTab, [])}
+          />
+        </>
+      )}
+
+      {!siteMode && tab === 'screens' && versionFlows.length > 0 && (
         <>
           <span className="ins-ftoolbar-divider" aria-hidden="true" />
           <FlowTreePill flows={versionFlows} screenById={screenById} selected={flowFilter} onApply={setFlowFilter} />
@@ -742,7 +800,7 @@ function AppDetailBody({
           kinds (Nav Bar, List, Search Bar, …) without leaving the tab row —
           checkbox multi-select with its own search, per Figma's
           "ui-elements-menu". */}
-      {tab === 'ui-elements' && elementCounts.size > 0 && (
+      {!siteMode && tab === 'ui-elements' && elementCounts.size > 0 && (
         <>
           <span className="ins-ftoolbar-divider" aria-hidden="true" />
           <CheckboxFilterPill
@@ -761,7 +819,7 @@ function AppDetailBody({
 
       {/* Same checkbox multi-select, narrowing the pattern grid by category
           (Navigation, Search, Cards, …) instead of element kind. */}
-      {tab === 'patterns' && patternCounts.size > 0 && (
+      {!siteMode && tab === 'patterns' && patternCounts.size > 0 && (
         <>
           <span className="ins-ftoolbar-divider" aria-hidden="true" />
           <CheckboxFilterPill
@@ -785,7 +843,7 @@ function AppDetailBody({
           doesn't apply there — but the version picker still does, the same
           control in the same spot on every tab. */}
       <div className="ins-ftoolbar-right">
-        {tab !== 'flows' && (
+        {!siteMode && tab !== 'flows' && (
           <>
             <div className="ins-text-search-wrap" ref={textSearchRef}>
             {textSearchOpen ? (
@@ -945,7 +1003,9 @@ function AppDetailBody({
             busy={dl.busy}
             versions={app.versions ?? []}
             store={store ? { name: app.name, platform: appPlatform(app), action: store } : undefined}
-            compareHref={compareType ? `${pathname}?${COMPARE_PARAM}=${encodeURIComponent(compareType)}` : undefined}
+            // A website's pages are not compared side by side as screens are.
+            compareHref={compareType && !siteMode ? `${pathname}?${COMPARE_PARAM}=${encodeURIComponent(compareType)}` : undefined}
+            downloadLabel={siteMode ? 'Download whole site' : undefined}
             onDownloadAll={() => void dl.downloadAll()}
             onDownloadVersion={(id) => void dl.downloadVersion(id)}
             onOpenLogo={hasLogo ? () => setLogoOpen(true) : undefined}
@@ -953,7 +1013,8 @@ function AppDetailBody({
         </div>
       </header>
 
-      <CompareScreens app={app} screens={versionScreens} />
+      {/* A website has no Compare: its pages are not screens. */}
+      {!siteMode && <CompareScreens app={app} screens={versionScreens} />}
 
       <StoreStrip
         name={app.name}
@@ -974,7 +1035,18 @@ function AppDetailBody({
         {(docked || leaving) && headerContent && createPortal(renderTabbarRow(true), headerContent)}
       </div>
 
-      {tab === 'screens' && (
+      {siteMode && site && (
+        <section className="ins-tabpanel ins-shot-panel ins-site-panel">
+          <SiteGrid
+            screens={siteShown}
+            app={app}
+            tab={siteTab}
+            empty={<EmptyState title={siteTab === 'sections' ? 'No sections stored for this site yet' : 'No pages stored for this site yet'} />}
+          />
+        </section>
+      )}
+
+      {!siteMode && tab === 'screens' && (
         <section className="ins-tabpanel ins-shot-panel">
           {textLoading ? (
             <ScreenGridSkeleton count={versionScreens.length || 8} meta={false} />
@@ -1010,7 +1082,7 @@ function AppDetailBody({
         </section>
       )}
 
-      {tab === 'flows' && (
+      {!siteMode && tab === 'flows' && (
         <section className="ins-tabpanel">
           {versionFlows.length === 0 ? (
             <EmptyState title="No flows stored for this app yet" />
@@ -1029,7 +1101,7 @@ function AppDetailBody({
         </section>
       )}
 
-      {tab === 'ui-elements' && (
+      {!siteMode && tab === 'ui-elements' && (
         <section className="ins-tabpanel ins-shot-panel">
           {elementCounts.size === 0 ? (
             <EmptyState title="No components recorded for this app's screens yet" />
@@ -1055,7 +1127,7 @@ function AppDetailBody({
         </section>
       )}
 
-      {tab === 'patterns' && (
+      {!siteMode && tab === 'patterns' && (
         <section className="ins-tabpanel ins-shot-panel">
           {versionPatternCount === 0 ? (
             <EmptyState title="No patterns matched this app's screens yet" />

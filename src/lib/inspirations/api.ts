@@ -205,6 +205,13 @@ export const inspirationsApi = {
     return request(`/screens?${params}`, TTL.list, EMPTY_PAGE as Page<Screen>);
   },
 
+  /** Every website's pages (or sections) of one type — a website's Z grid. Websites only, never web apps or iOS. */
+  listSiteScreens(kind: 'page' | 'section', type = '', limit = 80): Promise<Screen[]> {
+    const params = new URLSearchParams({ kind, limit: String(limit) });
+    if (type) params.set('type', type);
+    return request(`/site-screens?${params}`, TTL.list, [] as Screen[]);
+  },
+
   /** Every screen of one type, across all apps, in one go (the compare view groups them by app). */
   async listScreensOfType(type: string): Promise<Screen[]> {
     const params = new URLSearchParams({ type, sort: 'curated', limit: '1000', offset: '0' });

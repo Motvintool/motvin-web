@@ -52,7 +52,7 @@ export function WebCard({
   const openFromFrame = useFrameOpen(href);
 
   // "Latest" or "Updated", as on the app cards, from this web part's own uploads.
-  const freshness = appFreshness(app, useLibrarySettings().freshness, undefined, ['webapp', 'web']);
+  const freshness = appFreshness(app, useLibrarySettings().freshness, undefined, ['webapp', 'site']);
   const tint = useLogoTint(app);
 
   return (

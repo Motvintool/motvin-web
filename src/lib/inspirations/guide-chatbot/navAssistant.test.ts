@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../api', () => {
   const apps = [
     { id: 'a1', name: 'Swiggy', slug: 'swiggy', screenCount: 262, flowCount: 39, logo: null, industry: 'food', rating: 5, ratingCount: 1, platforms: ['ios', 'webapp'] },
-    { id: 'a2', name: 'Zomato', slug: 'zomato', screenCount: 140, flowCount: 85, logo: null, industry: 'food', rating: 4.5, ratingCount: 12, platforms: ['ios', 'web'] },
-    { id: 'a3', name: 'Zoho Corporation', slug: 'zoho', screenCount: 12, flowCount: 3, logo: null, industry: 'saas', rating: null, ratingCount: null, platforms: ['web'] },
+    { id: 'a2', name: 'Zomato', slug: 'zomato', screenCount: 140, flowCount: 85, logo: null, industry: 'food', rating: 4.5, ratingCount: 12, platforms: ['ios', 'site'] },
+    { id: 'a3', name: 'Zoho Corporation', slug: 'zoho', screenCount: 12, flowCount: 3, logo: null, industry: 'saas', rating: null, ratingCount: null, platforms: ['site'] },
     { id: 'a4', name: 'Groww', slug: 'groww', screenCount: 90, flowCount: 20, logo: null, industry: 'fintech', rating: 4.2, ratingCount: 3, platforms: ['ios', 'webapp'] },
   ];
   const flows = [
@@ -299,7 +299,7 @@ describe('ranking the apps', () => {
   });
 
   it('finds the smallest', async () => {
-    expect((await ask('which app has the fewest flows')).text).toBe('Zoho Corporation has the fewest flows (3), followed by Groww (20).');
+    expect((await ask('which app has the fewest flows')).text).toBe('Groww has the fewest flows (20), followed by Swiggy (39).');
   });
 
   it('lists the top rated, leaving out unrated apps', async () => {
@@ -345,25 +345,32 @@ describe('asking which app', () => {
 });
 
 describe('the conversation from the screenshot', () => {
-  it('treats "i want app" and "i want apps" the same: name the apps and open the Apps page', async () => {
+  // Plain "apps" is Apps (iOS): Zoho Corporation, a website, is not among them.
+  it('treats "i want app" and "i want apps" the same: name the iOS apps and open the Apps page', async () => {
     for (const text of ['i want app', 'i want apps', 'apps', 'show me apps']) {
       const reply = await ask(text);
-      expect(reply.text).toBe('The library has 4 apps — Swiggy, Zomato, Groww and Zoho Corporation. Opening Apps.');
+      expect(reply.text).toBe('The library has 3 apps — Swiggy, Zomato and Groww. Opening Apps.');
       expect(reply.go?.href).toBe('/inspirations/apps');
-      expect(reply.targets.map((t) => t.label)).toEqual(['Swiggy', 'Zomato', 'Groww', 'Zoho Corporation']);
+      expect(reply.targets.map((t) => t.label)).toEqual(['Swiggy', 'Zomato', 'Groww']);
     }
   });
 
-  it('reads "sorry web" as websites', async () => {
+  it('plain "app" is iOS Apps even from Webs', async () => {
+    const reply = await ask('app', { app: null, page: { pathname: '/inspirations/sites', search: '?platform=web' } });
+    expect(reply.go?.href).toBe('/inspirations/apps');
+    expect(reply.text).not.toContain('Zoho');
+  });
+
+  it('reads "sorry web" as Webs: web apps and websites', async () => {
     const reply = await ask('sorry web');
     expect(reply.go?.href).toBe('/inspirations/apps?platform=web');
-    expect(reply.text).toBe('Showing website apps.');
-    expect(reply.targets.map((t) => t.label)).toEqual(['Zomato', 'Zoho Corporation']);
+    expect(reply.text).toBe('Showing web apps and sites.');
+    expect(reply.results?.map((t) => t.label).sort()).toEqual(['Groww', 'Swiggy', 'Zoho Corporation', 'Zomato']);
   });
 
   it('reads "i mean web application" as web apps', async () => {
     const reply = await ask('i mean web application');
-    expect(reply.go?.href).toBe('/inspirations/apps?platform=webapp');
+    expect(reply.go?.href).toBe('/inspirations/apps?show=webapps&platform=web');
     expect(reply.text).toBe('Showing web apps.');
   });
 });
@@ -372,24 +379,24 @@ describe('where an app runs', () => {
   it.each([
     ['ios apps', '/inspirations/apps?platform=ios'],
     ['iphone apps', '/inspirations/apps?platform=ios'],
-    ['webapp', '/inspirations/apps?platform=webapp'],
-    ['web apps', '/inspirations/apps?platform=webapp'],
-    ['web applications', '/inspirations/apps?platform=webapp'],
-    ['websites', '/inspirations/apps?platform=web'],
-    ['website apps', '/inspirations/apps?platform=web'],
+    ['webapp', '/inspirations/apps?show=webapps&platform=web'],
+    ['web apps', '/inspirations/apps?show=webapps&platform=web'],
+    ['web applications', '/inspirations/apps?show=webapps&platform=web'],
+    ['websites', '/inspirations/apps?show=sites&platform=web'],
+    ['website apps', '/inspirations/apps?show=sites&platform=web'],
   ])('%s', async (text, href) => {
     expect((await ask(text)).go?.href).toBe(href);
   });
 
   it('counts them from the library', async () => {
     expect((await ask('how many web apps are there')).text).toBe('There are 2 web apps — Swiggy and Groww.');
-    expect((await ask('how many website apps are there')).text).toBe('There are 2 website apps — Zomato and Zoho Corporation.');
+    expect((await ask('how many website apps are there')).text).toBe('There are 2 sites — Zomato and Zoho Corporation.');
   });
 
   it('combines with a kind of app', async () => {
     const reply = await ask('food website apps');
-    expect(reply.go?.href).toBe('/inspirations/apps?platform=web&industry=food');
-    expect(reply.text).toBe('Showing Food & drink website apps.');
+    expect(reply.go?.href).toBe('/inspirations/apps?show=sites&platform=web&industry=food');
+    expect(reply.text).toBe('Showing Food & drink sites.');
     expect(reply.targets.map((t) => t.label)).toEqual(['Zomato']);
   });
 
@@ -398,7 +405,7 @@ describe('where an app runs', () => {
   });
 
   it('reads a misspelt platform', async () => {
-    expect((await ask('webaps')).go?.href).toBe('/inspirations/apps?platform=webapp');
+    expect((await ask('webaps')).go?.href).toBe('/inspirations/apps?show=webapps&platform=web');
   });
 
   it('does not treat the word web in other text as a platform', async () => {
@@ -455,7 +462,7 @@ describe('the second conversation from the screenshot', () => {
 
 describe('questions about where an app runs', () => {
   const swiggy = { app: { id: 'a1', name: 'Swiggy', slug: 'swiggy', screenCount: 262, flowCount: 39, logo: null, industry: 'food', rating: 5, ratingCount: 1, platforms: ['ios', 'webapp'] } as never };
-  const zoho = { app: { id: 'a3', name: 'Zoho Corporation', slug: 'zoho', screenCount: 12, flowCount: 3, logo: null, industry: 'saas', rating: null, ratingCount: null, platforms: ['web'] } as never };
+  const zoho = { app: { id: 'a3', name: 'Zoho Corporation', slug: 'zoho', screenCount: 12, flowCount: 3, logo: null, industry: 'saas', rating: null, ratingCount: null, platforms: ['site'] } as never };
 
   it.each([
     ['is it on ios', 'Yes — Swiggy is on iOS and Web Apps.'],
@@ -463,7 +470,7 @@ describe('questions about where an app runs', () => {
     // "The web" is Webs: a web app answers it. Only "website" asks for a website.
     ['is it on web', 'Yes — Swiggy is on iOS and Web Apps.'],
     ['is it available on the web?', 'Yes — Swiggy is on iOS and Web Apps.'],
-    ['is it on websites?', 'No — Swiggy has no website here. It’s on iOS and Web Apps.'],
+    ['is it on websites?', 'No — Swiggy has no site here. It’s on iOS and Web Apps.'],
     ['what platform is it on', 'Swiggy is on iOS and Web Apps.'],
     ['where does it run', 'Swiggy is on iOS and Web Apps.'],
     ['is it on ios or web apps', 'Swiggy is on iOS and Web Apps.'],
@@ -475,13 +482,13 @@ describe('questions about where an app runs', () => {
   });
 
   it('works with the app named', async () => {
-    expect((await ask('is zomato on the web')).text).toBe('Yes — Zomato is on iOS and the web.');
+    expect((await ask('is zomato on the web')).text).toBe('Yes — Zomato is on iOS and Sites.');
     expect((await ask('what platforms is groww on')).text).toBe('Groww is on iOS and Web Apps.');
     expect((await ask('does swiggy work on web?')).text).toBe('Yes — Swiggy is on iOS and Web Apps.');
   });
 
   it('knows a web-only app is not on mobile', async () => {
-    expect((await ask('is it on mobile', zoho)).text).toBe('No — Zoho Corporation isn’t on mobile. It’s on the web.');
+    expect((await ask('is it on mobile', zoho)).text).toBe('No — Zoho Corporation isn’t on mobile. It’s on Sites.');
   });
 
   it('still opens the app for a command, when the app is on that platform', async () => {
@@ -495,7 +502,7 @@ describe('questions about where an app runs', () => {
   it('does not open the app for a command naming a platform it is not on', async () => {
     const reply = await ask('swiggy on websites');
     expect(reply.go).toBeUndefined();
-    expect(reply.text).toBe('Swiggy has no website here. It’s on iOS and Web Apps.');
+    expect(reply.text).toBe('Swiggy has no site here. It’s on iOS and Web Apps.');
   });
 
   it('asks which app when nothing has been shown yet', async () => {
@@ -553,9 +560,9 @@ describe('does it have…', () => {
 describe('tell me about…', () => {
   it('describes the app without opening it', async () => {
     const reply = await ask('tell me about zomato');
-    expect(reply.text).toBe('Zomato is a Food & drink app on iOS and the web, with 140 screens and 85 flows.');
+    expect(reply.text).toBe('Zomato is a Food & drink app on iOS and Sites, with 140 screens and 85 flows.');
     expect(reply.go).toBeUndefined();
-    expect(reply.card?.facts).toEqual(['Food & drink', 'iOS · Webs', '140 screens', '85 flows']);
+    expect(reply.card?.facts).toEqual(['Food & drink', 'iOS · Sites', '140 screens', '85 flows']);
     expect(reply.card?.href).toBe('/inspirations/app/zomato');
   });
 
@@ -605,7 +612,7 @@ describe('the whole library', () => {
 describe('an app whose name sounds like a platform', () => {
   it('is not read as a platform question', async () => {
     vi.mocked(inspirationsApi.listApps).mockResolvedValueOnce([
-      { id: 'x1', name: 'Apple Music', slug: 'apple-music', screenCount: 50, flowCount: 5, logo: null, industry: 'entertainment', rating: null, ratingCount: null, platforms: ['ios', 'web'] },
+      { id: 'x1', name: 'Apple Music', slug: 'apple-music', screenCount: 50, flowCount: 5, logo: null, industry: 'entertainment', rating: null, ratingCount: null, platforms: ['ios', 'site'] },
     ] as never);
     const reply = await ask('open apple music');
     expect(reply.go?.href).toBe('/inspirations/app/apple-music');
@@ -642,21 +649,22 @@ describe('the third conversation from the screenshot: follow-ups with no pronoun
 
   it('widening words go back to the whole library', async () => {
     const swiggy = (await ask('open swiggy')).app ?? null;
-    expect((await ask('how many screens in the whole library', { app: swiggy })).text).toBe('The library has 504 screens, 4 apps and 147 flows.'.replace('504 screens, 4 apps', '4 apps, 504 screens'));
-    expect((await ask('how many screens in total', { app: swiggy })).text).toMatch(/^The library has 4 apps/);
+    // Zoho Corporation is on Webs alone: a website, counted in pages apart from the apps.
+    expect((await ask('how many screens in the whole library', { app: swiggy })).text).toBe('The library has 3 apps, 492 screens and 144 flows, and 1 site with 12 pages.');
+    expect((await ask('how many screens in total', { app: swiggy })).text).toMatch(/^The library has 3 apps/);
   });
 
   it('questions about other apps are never pulled onto the current one', async () => {
     const swiggy = (await ask('open swiggy')).app ?? null;
     expect((await ask('which app has the most flows', { app: swiggy })).text).toBe('Zomato has the most flows (85), followed by Swiggy (39).');
     expect((await ask('how many food apps are there', { app: swiggy })).text).toBe('There are 2 Food & drink apps — Swiggy and Zomato.');
-    expect((await ask('web apps', { app: swiggy })).go?.href).toBe('/inspirations/apps?platform=webapp');
+    expect((await ask('web apps', { app: swiggy })).go?.href).toBe('/inspirations/apps?show=webapps&platform=web');
     expect((await ask('compare swiggy and zomato', { app: swiggy })).go).toBeUndefined();
     expect((await ask('flows', { app: swiggy })).go?.href).toBe('/inspirations/flows');
   });
 
   it('with nothing shown yet, a bare count is the whole library', async () => {
-    expect((await ask('how much screens have?')).text).toMatch(/^The library has 4 apps/);
+    expect((await ask('how much screens have?')).text).toMatch(/^The library has 3 apps/);
   });
 });
 
@@ -787,7 +795,7 @@ describe('negation', () => {
 
   it('combines with a kind of app', async () => {
     const reply = await ask('websites other than zomato');
-    expect(reply.text).toBe('Showing website apps (leaving out Zomato).');
+    expect(reply.text).toBe('Showing sites (leaving out Zomato).');
     expect(reply.targets.map((t) => t.label)).toEqual(['Zoho Corporation']);
   });
 
@@ -832,13 +840,14 @@ describe('picking from what was listed', () => {
   it('"the second one", "both", "all of them", "the other one"', async () => {
     const ranked = await ask('which app has the most screens');
     const results = ranked.results;
-    expect(results?.map((t) => t.label)).toEqual(['Swiggy', 'Zomato', 'Groww', 'Zoho Corporation']);
+    // A site (Zoho Corporation) has pages, not screens: no part of an app ranking.
+    expect(results?.map((t) => t.label)).toEqual(['Swiggy', 'Zomato', 'Groww']);
     expect((await ask('the second one', ctx(ranked.app, { results }))).go?.href).toBe('/inspirations/app/zomato');
-    expect((await ask('open the last one', ctx(ranked.app, { results }))).go?.href).toBe('/inspirations/app/zoho');
+    expect((await ask('open the last one', ctx(ranked.app, { results }))).go?.href).toBe('/inspirations/app/groww');
     const both = await ask('both', ctx(ranked.app, { results }));
     expect(both.card?.columns).toEqual(['Swiggy', 'Zomato']);
     expect(both.card?.rows?.[0]).toEqual({ label: 'Screens', values: ['262', '140'], lead: 0 });
-    expect((await ask('all of them', ctx(ranked.app, { results }))).text).toBe('Here they all are — Swiggy, Zomato, Groww and Zoho Corporation.');
+    expect((await ask('all of them', ctx(ranked.app, { results }))).text).toBe('Here they all are — Swiggy, Zomato and Groww.');
     const compared = await ask('compare swiggy and zomato');
     expect((await ask('the other one', ctx(SWIGGY, { results: compared.results }))).go?.href).toBe('/inspirations/app/zomato');
   });
@@ -872,12 +881,12 @@ describe('knowing the page', () => {
   it('uses the app page as the subject', async () => {
     const page = { pathname: '/inspirations/app/zomato' };
     expect((await ask('how many screens?', ctx(null, { page }))).text).toBe('Zomato has 140 screens.');
-    expect((await ask('is it on web', ctx(null, { page }))).text).toBe('Yes — Zomato is on iOS and the web.');
+    expect((await ask('is it on web', ctx(null, { page }))).text).toBe('Yes — Zomato is on iOS and Sites.');
   });
 
   it('answers "which app is this"', async () => {
     const reply = await ask('which app is this', ctx(null, { page: { pathname: '/inspirations/app/zomato' } }));
-    expect(reply.text).toBe('You’re looking at Zomato. Zomato is a Food & drink app on iOS and the web, with 140 screens and 85 flows.');
+    expect(reply.text).toBe('You’re looking at Zomato. Zomato is a Food & drink app on iOS and Sites, with 140 screens and 85 flows.');
     expect(reply.go).toBeUndefined();
     expect((await ask('where am i', ctx(null, { page: { pathname: '/inspirations/flows' } }))).text).toBe('You’re on the Flows page.');
   });
@@ -1017,16 +1026,16 @@ describe('going back and returning', () => {
 describe('same question, another platform', () => {
   it('answers for the app being talked about', async () => {
     expect((await ask('what about web apps', ctx(SWIGGY))).text).toBe('Yes — Swiggy is on iOS and Web Apps.');
-    expect((await ask('and web?', ctx(SWIGGY))).text).toBe('Swiggy isn’t on the web. It’s on iOS and Web Apps.');
+    expect((await ask('and web?', ctx(SWIGGY))).text).toBe('Swiggy isn’t on Sites. It’s on iOS and Web Apps.');
     expect((await ask('only ios ones', ctx(SWIGGY))).text).toBe('Yes — Swiggy is on iOS and Web Apps.');
   });
 
   it('filters what was just listed', async () => {
     const ranked = await ask('which app has the most screens');
     const reply = await ask('what about web', ctx(ranked.app, { results: ranked.results }));
-    expect(reply.text).toBe('Of those, Zomato and Zoho Corporation are on the web.');
-    expect(reply.results?.map((t) => t.label)).toEqual(['Zomato', 'Zoho Corporation']);
-    expect((await ask('and ios?', ctx(ranked.app, { results: [ranked.results![3]] }))).text).not.toMatch(/Of those/);
+    expect(reply.text).toBe('Of those, Zomato is on Sites.');
+    expect(reply.results?.map((t) => t.label)).toEqual(['Zomato']);
+    expect((await ask('and ios?', ctx(ranked.app, { results: [{ label: 'Zoho Corporation', hint: 'App', href: '/inspirations/app/zoho' }] }))).text).not.toMatch(/Of those/);
   });
 
   it('lists that platform’s apps when there is nothing to refer to', async () => {
@@ -1036,7 +1045,7 @@ describe('same question, another platform', () => {
 
   it('is not hijacked by a request for web apps', async () => {
     const ranked = await ask('which app has the most screens');
-    expect((await ask('show web apps', ctx(ranked.app, { results: ranked.results }))).go?.href).toBe('/inspirations/apps?platform=webapp');
+    expect((await ask('show web apps', ctx(ranked.app, { results: ranked.results }))).go?.href).toBe('/inspirations/apps?show=webapps&platform=web');
   });
 });
 
@@ -1105,7 +1114,9 @@ describe('what a sentence is about', () => {
     expect((await ask('empty states from food apps')).go?.href).toBe('/inspirations/screens?state=empty&industry=food');
     expect((await ask('show me how food apps handle login')).go?.href).toBe('/inspirations/screens?type=login&industry=food');
     expect((await ask('ios login screens')).go?.href).toBe('/inspirations/screens?type=login&platform=ios');
+    // "web" is Webs: web apps and websites together; "web apps" is Web Apps alone.
     expect((await ask('login screens on web')).go?.href).toBe('/inspirations/screens?type=login&platform=web');
+    expect((await ask('login screens on web apps')).go?.href).toBe('/inspirations/screens?type=login&platform=webapp');
     expect((await ask('show me how food apps handle login')).text).toBe('Showing login screens from Food & drink apps.'.replace('Food & drink', 'food & drink'));
   });
 
@@ -1143,7 +1154,7 @@ describe('round four: the next batch of unseen phrasing', () => {
   });
 
   it('ranks apps without being told the word "app"', async () => {
-    expect((await ask('least flows')).text).toBe('Zoho Corporation has the fewest flows (3), followed by Groww (20).');
+    expect((await ask('least flows')).text).toBe('Groww has the fewest flows (20), followed by Swiggy (39).');
     expect((await ask('which has the most screens')).text).toBe('Swiggy has the most screens (262), followed by Zomato (140).');
     expect((await ask('highest rated')).text).toMatch(/^The top rated apps are Swiggy \(5\.0\)/);
   });

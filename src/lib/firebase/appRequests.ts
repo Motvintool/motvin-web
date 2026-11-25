@@ -29,7 +29,7 @@ import { track } from '@/lib/analytics';
 import type { Platform } from '@/lib/inspirations/types';
 
 const COLLECTION = 'appRequests';
-const PLATFORMS: Platform[] = ['ios', 'webapp', 'web'];
+const PLATFORMS: Platform[] = ['ios', 'webapp', 'site'];
 
 /** How many requests one person may have at a time. */
 export const MAX_REQUESTS_PER_USER = 5;
@@ -58,7 +58,7 @@ export type RequestFields = {
 function validate(input: RequestFields) {
   const appName = clean(input.appName, 80);
   if (appName.length < 2) throw new Error('Tell us the app’s name.');
-  if (!PLATFORMS.includes(input.platform)) throw new Error('Pick iOS, Web Apps or Webs.');
+  if (!PLATFORMS.includes(input.platform)) throw new Error('Pick iOS, Web Apps or Sites.');
   const link = clean(input.link, 300);
   if (link && !/^https?:\/\/[^\s]+$/i.test(link)) throw new Error('The link should start with http:// or https://');
   const email = clean(input.email, 120);

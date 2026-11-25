@@ -2,7 +2,7 @@
 
 # Review a Motvin upload (review-motvin)
 
-The admin pasted `Follow motvin-web/docs/review-motvin.md to review <app> <platform> <version>` from the Motvin agent's "Ask agent to review" button (for example `… to review claude webapp 2026-10-24`). Check every screen of that version against its screenshot, fix what is wrong in one corrections file, apply it, and report. Work on that app and version only.
+The admin pasted `Follow motvin-web/docs/review-motvin.md to review <app> <platform> <version>` from the Motvin agent's "Ask agent to review" button (for example `… to review claude webapp 2026-10-24`). Check every screen of that version against its screenshot, fix what is wrong in one corrections file, apply it, and report. Work on that app and version only. Any helper script or scratch file you write goes in that review's own folder (`motvin-backend/data/reviews/<app>-<platform>-<version>/`), which is cleared after the review — never in `motvin-web` or `motvin-backend` themselves.
 
 Paths (from the `Plugin` folder):
 - Crawler: `motvin-web/tools/ios-crawler/crawl.js` — run it from `motvin-web/tools`.

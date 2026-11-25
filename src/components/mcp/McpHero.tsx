@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState, type CSSProperties } from 'react';
 import type { LibraryCounts } from '@/lib/inspirations/types';
 import { TOOL_ICONS } from './toolIcons';
@@ -12,9 +13,22 @@ import { TOOL_ICONS } from './toolIcons';
  * person uses. Tools further from the core sit smaller and fainter, for depth.
  *
  * Pure CSS motion apart from the active index; still under reduced motion.
+ * The core links to the lit tool's setup guide.
  */
 
 const CYCLE_MS = 2200;
+
+/** Each hero mark's setup guide under /mcp/clients. */
+const GUIDE: Record<string, string> = {
+  claude: 'claude',
+  cursor: 'cursor',
+  openai: 'chatgpt',
+  antigravity: 'antigravity-ide',
+  githubcopilot: 'github-copilot-cli',
+  visualstudiocode: 'vscode',
+  devin: 'windsurf',
+  replit: 'replit',
+};
 
 function formatCount(value: number): string {
   return value >= 1000 ? `${Math.floor(value / 1000)},${String(value % 1000).padStart(3, '0')}` : String(value);
@@ -85,20 +99,20 @@ export function McpHero({ counts }: { counts: LibraryCounts | null }) {
               {left.map(([item, i], n) => toolButton(item, i, left.length - n))}
             </ul>
 
-            <div className="mh-orb" aria-hidden="true">
+            <Link href={`/mcp/clients/${GUIDE[tool.id] ?? ''}`} className="mh-orb" aria-label={`Set up ${tool.name}`}>
               {/* Light spreading out from the core in rings, like ripples on water. */}
-              <span className="mh-ripple" />
-              <span className="mh-ripple" />
-              <span className="mh-ripple" />
-              <span className="mh-ripple" />
-              <span className="mh-orb-halo" />
-              <span className="mh-orb-ring" />
-              <span className="mh-orb-core">
+              <span className="mh-ripple" aria-hidden="true" />
+              <span className="mh-ripple" aria-hidden="true" />
+              <span className="mh-ripple" aria-hidden="true" />
+              <span className="mh-ripple" aria-hidden="true" />
+              <span className="mh-orb-halo" aria-hidden="true" />
+              <span className="mh-orb-ring" aria-hidden="true" />
+              <span className="mh-orb-core" aria-hidden="true">
                 <svg key={tool.id} className="mh-orb-mark" viewBox="0 0 24 24" fill="currentColor">
                   <path d={tool.path} />
                 </svg>
               </span>
-            </div>
+            </Link>
 
             <ul className="mh-tools" aria-label="Works with">
               {right.map(([item, i], n) => toolButton(item, i, n + 1))}

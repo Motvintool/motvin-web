@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, typ
 import { createPortal } from 'react-dom';
 import { browsedPlatforms, isWebsPlatforms, type ScreenFilters } from '@/lib/inspirations/filters';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import { CONTENT_KINDS, WEBS_APPS_LABEL, elementLabel, formatCount, INDUSTRY_LABEL, screenStateLabel, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
+import { CONTENT_KINDS, elementLabel, formatCount, INDUSTRY_LABEL, screenStateLabel, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
 import {
   type Industry,
   type LibraryCounts,
@@ -16,6 +16,9 @@ import {
 } from '@/lib/inspirations/types';
 import { APPLIED_PILLS_MAX, AppliedFilterPills, FiltersPill, type FilterSection } from './FiltersPanel';
 import { useMeta } from './useMeta';
+import { useApps } from './useApps';
+import { useAsync } from './useAsync';
+import { inspirationsApi } from '@/lib/inspirations/api';
 import { AppleIcon, CheckIcon, CloseIcon, WebIcon } from './Icons';
 
 /**
@@ -287,35 +290,185 @@ export function FilterPill({
  * filter whose meaning carries across content types — and drops the rest,
  * which are dimension-specific.
  */
+type NavEntry = { key: string; label: string; href: string; count?: number; sub?: NavEntry[] };
+
+/** One href with the section's `platform` kept, merged into any query the href already has. */
+function withPlatform(href: string, platform: string | null): string {
+  if (!platform) return href;
+  const [path, query = ''] = href.split('?');
+  const sp = new URLSearchParams(query);
+  sp.set('platform', platform);
+  return `${path}?${sp.toString()}`;
+}
+
+const SUBMENU_CLOSE_MS = 150;
+
 export function NavPill({ counts, activeCount = null }: { counts: LibraryCounts | null; activeCount?: number | null }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   useDismiss(open, () => setOpen(false), ref);
   useAutoFocusMenu(open, ref);
   const webs = isWebsPlatforms(browsedPlatforms(searchParams));
+  // A website's pages and sections, counted for the Webs submenu (asked for only in Webs).
+  const { data: sitePages } = useAsync(() => (webs ? inspirationsApi.listSiteScreens('page', '', 1000) : Promise.resolve([])), `navpill-site-pages:${webs}`);
+  const { data: siteSections } = useAsync(() => (webs ? inspirationsApi.listSiteScreens('section', '', 1000) : Promise.resolve([])), `navpill-site-sections:${webs}`);
 
-  // "Explore" is a real destination (the app-browsing home), not just the
-  // pill's fallback label when nothing else matches — so it's reachable from
-  // every other browse page's menu, the same as the other five.
-  const items: { key: string; label: string; href: string; count: number | undefined }[] = [
-    { key: 'explore', label: 'Explore', href: INSPIRATIONS_ROUTES.explore, count: undefined },
-    // The apps the admin picked this week; no count (it changes through the week).
-    { key: 'new', label: 'New this week', href: INSPIRATIONS_ROUTES.newThisWeek, count: undefined },
-    ...CONTENT_KINDS.map((k) => ({
-      key: k.kind,
-      // In Webs, "Apps" lists web apps and websites, and says so.
-      label: k.kind === 'apps' && webs ? WEBS_APPS_LABEL : k.label,
-      href: k.href,
-      count: counts?.[k.kind],
-    })),
-  ];
-  const active =
-    items.find((i) => i.key !== 'explore' && (pathname === i.href || pathname.startsWith(`${i.href}/`))) ??
-    (pathname === INSPIRATIONS_ROUTES.explore ? items[0] : undefined);
+  const kinds = CONTENT_KINDS.filter((k) => k.kind !== 'apps').map((k): NavEntry => ({ key: k.kind, label: k.label, href: k.href, count: counts?.[k.kind] }));
+  // Each platform's own list of apps leads its submenu, so it is in reach without knowing the row is a link too
+  // (and on a phone, where a tap on the row only opens its list).
+  const allApps = [...useApps().values()];
+  const webAppsCount = allApps.length ? allApps.filter((app) => app.platforms.includes('webapp')).length : undefined;
+  const websitesCount = allApps.length ? allApps.filter((app) => app.platforms.includes('site')).length : undefined;
+  const webAppsList = `${INSPIRATIONS_ROUTES.apps}?show=webapps`;
+  const websitesList = `${INSPIRATIONS_ROUTES.apps}?show=sites`;
+  // Webs has two platforms, each with what it is browsed by: Web Apps (screens, UI elements, flows, patterns) and
+  // Webs, websites (their full pages and sections). Apps (iOS) has the one, Apps.
+  const entries: (NavEntry | 'divider')[] = webs
+    ? [
+        { key: 'explore', label: 'Explore', href: INSPIRATIONS_ROUTES.explore },
+        // No count of its own: the Webs apps count holds the websites too; its list's items have theirs.
+        { key: 'apps', label: 'Web Apps', href: webAppsList, sub: [{ key: 'apps-list', label: 'All web apps', href: webAppsList, count: webAppsCount }, ...kinds] },
+        {
+          key: 'sites',
+          label: 'Sites',
+          // The websites themselves; their full pages and sections are in its list.
+          href: websitesList,
+          sub: [
+            { key: 'sites-list', label: 'All sites', href: websitesList, count: websitesCount },
+            { key: 'full-pages', label: 'Full Pages', href: INSPIRATIONS_ROUTES.sites, count: sitePages?.length },
+            { key: 'sections', label: 'Sections', href: `${INSPIRATIONS_ROUTES.sites}?tab=sections`, count: siteSections?.length },
+          ],
+        },
+        'divider',
+        // The apps the admin picked this week; no count (it changes through the week).
+        { key: 'new', label: 'New this week', href: INSPIRATIONS_ROUTES.newThisWeek },
+      ]
+    : [
+        // Apps (iOS), laid out as Webs is: Apps › (its list, then its kinds), and New this week set apart.
+        { key: 'explore', label: 'Explore', href: INSPIRATIONS_ROUTES.explore },
+        { key: 'apps', label: 'Apps', href: INSPIRATIONS_ROUTES.apps, sub: [{ key: 'apps-list', label: 'All apps', href: INSPIRATIONS_ROUTES.apps, count: counts?.apps }, ...kinds] },
+        'divider',
+        { key: 'new', label: 'New this week', href: INSPIRATIONS_ROUTES.newThisWeek },
+      ];
+
+  // The page on show: a submenu's item ("Sections" on the website pages' Sections tab), else a top item.
+  const onPage = (entry: NavEntry) => {
+    const [path, query] = entry.href.split('?');
+    if (entry.key === 'explore') return pathname === path;
+    if (!(pathname === path || pathname.startsWith(`${path}/`))) return false;
+    if (path === INSPIRATIONS_ROUTES.sites) return (searchParams.get('tab') === 'sections') === Boolean(query?.includes('tab=sections'));
+    // The apps page in Webs: Web Apps or Webs, whichever it lists (both, with neither picked, is neither).
+    if (path === INSPIRATIONS_ROUTES.apps && webs) return Boolean(query) && new URLSearchParams(query).get('show') === searchParams.get('show');
+    return true;
+  };
+  const flat = entries.flatMap((e) => (e === 'divider' ? [] : [...(e.sub ?? []), e]));
+  const found = flat.find(onPage);
+  // On a platform's own list the pill names the platform ("Web Apps"), not the submenu's "All web apps".
+  const owner = found && entries.find((e): e is NavEntry => e !== 'divider' && Boolean(e.sub?.some((c) => c.key === found.key)) && e.href === found.href);
+  const active = owner || found;
   const platform = searchParams.get('platform');
-  const hrefFor = (href: string) => (platform ? `${href}?platform=${platform}` : href);
+  const hrefFor = (href: string) => withPlatform(href, platform);
+
+  // A submenu opens beside its row on hover (or Right arrow), and closes a moment after the pointer leaves both.
+  // Without hover (a phone), a tap on the row opens it in place, under the row.
+  const canHover = useSyncExternalStore(subscribePhone, () => window.matchMedia('(hover: hover)').matches, () => true);
+  const [sub, setSub] = useState<{ key: string; top: number; left: number } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const keepSub = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  };
+  const dropSub = () => {
+    keepSub();
+    closeTimer.current = setTimeout(() => setSub(null), SUBMENU_CLOSE_MS);
+  };
+  const openSub = (key: string, row: HTMLElement) => {
+    keepSub();
+    const menu = menuRef.current;
+    if (!menu) return;
+    setSub({ key, top: menu.offsetTop + row.offsetTop - 13, left: menu.offsetLeft + menu.offsetWidth + 8 });
+  };
+  useEffect(() => () => keepSub(), []);
+  const shownSub = open ? sub : null;
+
+  const close = () => {
+    setOpen(false);
+    setSub(null);
+  };
+  const item = (entry: NavEntry, inSub = false) => {
+    const on = (inSub ? found : active)?.key === entry.key;
+    const content = (
+      <>
+        {entry.label}
+        {entry.count !== undefined && <span className="ins-fmenu-count">{formatCount(entry.count)}</span>}
+      </>
+    );
+    // The page you're already on isn't a navigation target — closing the menu is the whole action.
+    if (on) {
+      return (
+        <button key={entry.key} type="button" role="menuitem" aria-current="page" className="ins-fmenu-item is-selected" onClick={close}>
+          {content}
+        </button>
+      );
+    }
+    return (
+      <Link
+        key={entry.key}
+        href={hrefFor(entry.href)}
+        // A real navigation that should still read as updating the current view: no scroll reset.
+        scroll={false}
+        role="menuitem"
+        className={`ins-fmenu-item ${inSub ? 'ins-fmenu-subitem' : ''}`}
+        onClick={close}
+      >
+        {content}
+      </Link>
+    );
+  };
+  const parent = (entry: NavEntry) => {
+    const childOn = entry.sub?.some((c) => c.key === found?.key);
+    const here = active?.key === entry.key;
+    const expanded = shownSub?.key === entry.key;
+    return (
+      <div key={entry.key} className="ins-fmenu-parent" onMouseEnter={(e) => canHover && openSub(entry.key, e.currentTarget)} onMouseLeave={() => canHover && dropSub()}>
+        <Link
+          href={hrefFor(entry.href)}
+          scroll={false}
+          role="menuitem"
+          aria-haspopup="menu"
+          aria-expanded={expanded}
+          // The page on show is its list, or one of its kinds: the keyboard lands on it as the menu opens.
+          aria-current={here || childOn ? 'page' : undefined}
+          className={`ins-fmenu-item ${childOn || here ? 'is-selected' : ''} ${expanded ? 'is-open' : ''}`}
+          onClick={(e) => {
+            // Without hover, the first tap opens the submenu; with hover, the row goes to its own page.
+            if (!canHover && !expanded) {
+              e.preventDefault();
+              setSub({ key: entry.key, top: 0, left: 0 });
+              return;
+            }
+            close();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowRight') {
+              e.preventDefault();
+              openSub(entry.key, e.currentTarget.parentElement as HTMLElement);
+              requestAnimationFrame(() => document.querySelector<HTMLElement>('.ins-fmenu-sub [role="menuitem"]')?.focus({ preventScroll: true }));
+            }
+          }}
+        >
+          {entry.label}
+          <span className="ins-fmenu-more" aria-hidden>
+            {entry.count !== undefined && <span className="ins-fmenu-count">{formatCount(entry.count)}</span>}
+            <img src="/ASSET/Icons/Motvin/right-arrow-small.svg" alt="" width={16} height={16} />
+          </span>
+        </Link>
+        {!canHover && expanded && <div className="ins-fmenu-inline" role="menu" aria-label={entry.label}>{entry.sub!.map((c) => item(c, true))}</div>}
+      </div>
+    );
+  };
 
   return (
     <div className="ins-popwrap" ref={ref}>
@@ -325,58 +478,46 @@ export function NavPill({ counts, activeCount = null }: { counts: LibraryCounts 
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Browse content type"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setSub(null);
+          setOpen((o) => !o);
+        }}
         onKeyDown={(e) => onTriggerKeyDown(e, open, setOpen)}
       >
-        {active?.label ?? 'Explore'}
+        {active?.label ?? (webs && pathname === INSPIRATIONS_ROUTES.apps && !searchParams.get('week') ? 'Web Apps & Sites' : 'Explore')}
         {/* How many results the page is showing, right on the pill that names it. */}
         {activeCount !== null && <span className="ins-fpill-count">{formatCount(activeCount)}</span>}
         <span className="ins-fpill-chev" aria-hidden />
       </button>
       {open && (
         <MenuLayer anchor={ref}>
-        <div className="ins-popover ins-fmenu" role="menu" aria-label="Content type" onKeyDown={onMenuKeyDown}>
-          {items.map((item) => {
-            const on = item.key === active?.key;
-
-            // The page you're already on isn't a navigation target — closing
-            // the menu is the whole action, so it stays on this page instead
-            // of round-tripping through the router for a same-route no-op.
-            if (on) {
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  role="menuitem"
-                  aria-current="page"
-                  className="ins-fmenu-item is-selected"
-                  onClick={() => setOpen(false)}
-                >
-                  {item.label}
-                  {item.count !== undefined && <span className="ins-fmenu-count">{formatCount(item.count)}</span>}
-                </button>
-              );
-            }
-            return (
-              <Link
-                key={item.key}
-                href={hrefFor(item.href)}
-                // Switching content type is a real navigation (different
-                // route, different data) but should still read as updating
-                // the current view, not leaving it — Next's default scroll
-                // reset would otherwise snap the page to the top and undock
-                // the toolbar the instant you pick something.
-                scroll={false}
-                role="menuitem"
-                className="ins-fmenu-item"
-                onClick={() => setOpen(false)}
-              >
-                {item.label}
-                {item.count !== undefined && <span className="ins-fmenu-count">{formatCount(item.count)}</span>}
-              </Link>
-            );
-          })}
-        </div>
+          <div ref={menuRef} className="ins-popover ins-fmenu" role="menu" aria-label="Content type" onKeyDown={onMenuKeyDown}>
+            {entries.map((entry, index) =>
+              entry === 'divider' ? <div key={`divider-${index}`} className="ins-fmenu-divider" role="separator" /> : entry.sub ? parent(entry) : item(entry),
+            )}
+          </div>
+          {canHover && shownSub && (
+            <div
+              className="ins-popover ins-fmenu ins-fmenu-sub"
+              role="menu"
+              aria-label={flat.find((e) => e.key === shownSub.key)?.label}
+              style={{ top: shownSub.top, left: shownSub.left }}
+              onMouseEnter={keepSub}
+              onMouseLeave={dropSub}
+              onKeyDown={(e) => {
+                onMenuKeyDown(e);
+                if (e.key === 'ArrowLeft' || e.key === 'Escape') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const back = menuRef.current?.querySelector<HTMLElement>('[aria-expanded="true"]');
+                  setSub(null);
+                  back?.focus({ preventScroll: true });
+                }
+              }}
+            >
+              {(entries.find((e) => e !== 'divider' && e.key === shownSub.key) as NavEntry | undefined)?.sub?.map((c) => item(c, true))}
+            </div>
+          )}
         </MenuLayer>
       )}
     </div>

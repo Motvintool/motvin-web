@@ -6,6 +6,7 @@ import { activeJob, dismissJob, getJob, killTree, resumeJob, startJob, stopJob }
 import { clearReviewFolder, inspirationsDataDir, reviewFolder, reviewState } from '@/lib/server/reviews';
 import { tagUntaggedFlows } from '@/lib/server/flowKinds';
 import { fillScreenGaps } from '@/lib/server/screenGaps';
+import { importSiteCapture, isSiteCapture } from '@/lib/server/siteImport';
 
 /**
  * Adding many apps at once, with nobody watching.
@@ -29,7 +30,7 @@ export type BatchSettings = {
   review: 'auto' | 'manual';
   /** Once a review is clean: remove its working files, or keep them for the admin to look at. */
   afterReview: 'cleanup' | 'keep';
-  platform: 'ios' | 'webapp' | 'web';
+  platform: 'ios' | 'webapp' | 'site';
   /** The version every upload goes into (YYYY-MM-DD); null for each upload's own day. */
   version: string | null;
   /** A system notification for each app and the summary, the summary only, or none. */
@@ -79,7 +80,8 @@ export type BatchItem = {
   uploadedAt: string | null;
   reviewStartedAt: string | null;
   finishedAt: string | null;
-  result: { appName: string; screens: number; flows: number; problems: number } | null;
+  /** A site's `screens` are its whole pages, with its `sections` beside them; it has no flows. */
+  result: { appName: string; screens: number; flows: number; problems: number; sections?: number } | null;
   /** AI usage of this app's reviews (all tries added up), from Claude Code's own figures. */
   usage?: { tokens: number; outputTokens: number; cachedTokens: number; turns: number; costUsd: number; reviews: number };
   /** The model its last review ran on. */
@@ -127,6 +129,10 @@ const storeFile = () => join(batchesDir(), 'batches.json');
 const pluginRoot = () => resolve(process.cwd(), '..');
 /** The review steps, kept in git in this repo's docs folder. */
 const reviewSteps = () => join(process.cwd(), 'docs', 'review-motvin.md');
+/** Websites (Web) have their own steps: pages and sections to name, no flows or frames. */
+const siteReviewSteps = () => join(process.cwd(), 'docs', 'review-motvin-site.md');
+/** A Web upload from the Motvin Web Recorder: its review package is site-review.json. */
+const isSiteReview = (appId: string, platform: string, version: string) => platform === 'site' && existsSync(join(reviewFolder(appId, platform, version), 'site-review.json'));
 /** Recordings and logos the admin keeps on this machine. */
 const settingsFile = () => join(batchesDir(), 'settings.json');
 
@@ -437,6 +443,8 @@ function startNextUpload(batch: Batch): boolean {
     }
     item.replacePlatform = false;
   }
+  // A website captured by the Motvin Web Recorder: its pages are copied in as they are (see siteImport).
+  if (settings.platform === 'site' && isSiteCapture(item.video)) return startSiteImport(batch, item);
   // An upload adds to its day's folder: a version of that day already there (an earlier upload,
   // or this one's own failed try) is taken out first, so the new one replaces it, never mixes in.
   if (item.appId && !item.detectIndustry && settings.version && existsSync(join(inspirationsDataDir(), 'screens', settings.platform, item.appId, 'versions', settings.version))) {
@@ -485,8 +493,80 @@ function startNextUpload(batch: Batch): boolean {
   return true;
 }
 
+/** Web (sites) imports under way, by item id: they run in this server, not as a crawler job. */
+const siteImports = new Map<string, { status: 'running' | 'done' | 'failed'; result?: { pages: number; sections: number }; error?: string }>();
+const SITE_JOB = 'site:';
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+function startSiteImport(batch: Batch, item: BatchItem): boolean {
+  if (!item.appId) {
+    item.stage = 'needs-you';
+    item.note = 'A website needs its app named before it is added';
+    item.finishedAt = new Date().toISOString();
+    return true;
+  }
+  const version = batch.settings.version ?? today();
+  const entry: { status: 'running' | 'done' | 'failed'; result?: { pages: number; sections: number }; error?: string } = { status: 'running' };
+  siteImports.set(item.id, entry);
+  importSiteCapture(item.video, item.appId, version).then(
+    (result) => Object.assign(entry, { status: 'done', result }),
+    (error: Error) => Object.assign(entry, { status: 'failed', error: error.message }),
+  );
+  item.jobId = `${SITE_JOB}${item.id}`;
+  item.version = version;
+  item.stage = 'uploading';
+  item.note = 'Adding the website’s pages';
+  item.waitUntil = null;
+  item.uploadTries += 1;
+  item.startedAt = item.startedAt ?? new Date().toISOString();
+  return true;
+}
+
+/** A website import's end: done straight away — its pages need no clean-up and no review. */
+function followSiteImport(batch: Batch, item: BatchItem): boolean {
+  const entry = siteImports.get(item.id);
+  if (!entry) {
+    // The server restarted mid-import: add it again.
+    item.stage = 'queued';
+    item.jobId = null;
+    item.note = 'Adding it again after a restart';
+    return true;
+  }
+  if (entry.status === 'running') return false;
+  siteImports.delete(item.id);
+  item.jobId = null;
+  if (entry.status === 'done' && entry.result) {
+    item.result = { appName: item.title, screens: entry.result.pages, sections: entry.result.sections, flows: 0, problems: 0 };
+    item.uploadedAt = new Date().toISOString();
+    logLine(`${item.title}: website added — ${entry.result.pages} pages and ${entry.result.sections} sections`);
+    // Reviewed like every upload, with the Web steps (review-motvin-site.md): each page's and section's name.
+    if (batch.settings.review === 'auto') {
+      item.stage = 'review-queued';
+      item.note = 'Waiting for its review';
+    } else {
+      item.stage = 'review-ready';
+      item.note = 'Added — ask the agent to review it';
+      item.finishedAt = new Date().toISOString();
+    }
+    return true;
+  }
+  if (item.uploadTries < TRIES) {
+    item.stage = 'queued';
+    item.note = `Adding failed (${entry.error ?? 'unknown'}) — trying again`;
+  } else {
+    item.stage = 'needs-you';
+    item.note = `Adding failed: ${entry.error ?? 'unknown'}`;
+    item.finishedAt = new Date().toISOString();
+  }
+  return true;
+}
+
 function followUpload(batch: Batch, item: BatchItem): boolean {
   if (item.stage !== 'uploading' && item.stage !== 'choose') return false;
+  if (item.jobId?.startsWith(SITE_JOB)) return followSiteImport(batch, item);
   const job = item.jobId ? getJob(item.jobId) : null;
   if (!job) return false;
   if (job.status === 'awaiting-review') {
@@ -569,17 +649,26 @@ function startNextReview(batch: Batch): boolean {
     item.finishedAt = new Date().toISOString();
     return true;
   }
+  const site = isSiteReview(item.appId, batch.settings.platform, item.version);
+  const steps = site ? siteReviewSteps() : reviewSteps();
   // Without the review steps every run only stops and asks for them: say so instead of spending the tries.
-  if (!existsSync(reviewSteps())) {
+  if (!existsSync(steps)) {
     item.stage = 'needs-you';
-    item.note = `The review steps are missing: get ${reviewSteps()} back from git, then click Retry`;
+    item.note = `The review steps are missing: get ${steps} back from git, then click Retry`;
     item.finishedAt = new Date().toISOString();
     return true;
   }
   const { platform } = batch.settings;
   // Already reviewed (the admin did it meanwhile): straight to the end.
   if (reviewState(item.appId, platform, item.version).reviewed && !reviewState(item.appId, platform, item.version).problems.length) return finishReview(batch, item);
-  const prompt = [
+  const prompt = site ? [
+    `Follow motvin-web/docs/review-motvin-site.md to review ${item.appId} site ${item.version}.`,
+    'You are running unattended, started by the Motvin batch queue: nobody will answer questions, so make every decision the steps describe yourself.',
+    'Open every page and section picture in the review package before deciding it. If you start agents, start them all in one single message and wait until every one has returned; never end your reply while any agent is still working.',
+    'When the check lists "look again" items, start one fresh agent for them (step 6b): it opens each listed picture, decides keep or fixed with a reason, and writes "lookAgain" in corrections.json.',
+    `Write any helper script or scratch file in the review folder ${reviewFolder(item.appId, platform, item.version)}, never in motvin-web or motvin-backend themselves.`,
+    'Finish only when apply-site-review says "review check: no problems left".',
+  ].join(' ') : [
     `Follow motvin-web/docs/review-motvin.md to review ${item.appId} ${platform} ${item.version}.`,
     'You are running unattended, started by the Motvin batch queue: nobody will answer questions, so make every decision the steps describe yourself.',
     // Unattended, the run ends when this reply ends — agents still working would be lost.
@@ -589,13 +678,15 @@ function startNextReview(batch: Batch): boolean {
     ...(batch.settings.reviewModel === 'sonnet' && reviewer === 'claude'
       ? ['This review runs strict: give every screen its own verdict ("checked" with what it shows) — verdicts per sheet are not counted; open the frame strip frames/<n>.png of every finding and missed moment before deciding it; group task flows under the app\'s areas, the way Mobbin does: the areas are the app\'s own tabs and menu sections (Home, Projects, Artifacts, Code, Settings…), every section the recording opens is an area of its own even with one to three screens, and no task walks through several sections. After the second check, do the look-again pass (motvin-web/docs/review-motvin.md step 7b): one fresh agent opens the pictures of every item in look-again.json and decides it, keep or fixed, with a reason.']
       : []),
+    `Write any helper script or scratch file in the review folder ${reviewFolder(item.appId, platform, item.version)}, never in motvin-web or motvin-backend themselves.`,
     'Finish only when apply-review says "review check: no problems left".',
   ].join(' ');
   const tools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Agent', 'Task', 'Bash(cd:*)', 'Bash(node:*)', 'Bash(npm run build:inspirations)', 'Bash(npm run --silent build:inspirations)', 'Bash(cp:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'Bash(mkdir:*)', 'Bash(python3:*)', 'Bash(echo:*)', 'Bash(grep:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(sort:*)', 'Bash(uniq:*)', 'Bash(find:*)', 'Bash(sed:*)', 'Bash(awk:*)', 'Bash(date:*)', 'Bash(pwd)', 'Bash(jq:*)'];
   // The review's model is fixed here, not left to whatever the terminal last picked.
   const claudeModel = batch.settings.reviewModel === 'sonnet' ? SONNET_MODEL : REVIEW_MODEL;
   // A Sonnet review runs strict: the crawler adds its extra checks and wants a verdict per screen.
-  const strict = reviewer === 'claude' && batch.settings.reviewModel === 'sonnet';
+  // (The Web steps have their own check in apply-site-review, so the crawler's strict mode is not for them.)
+  const strict = !site && reviewer === 'claude' && batch.settings.reviewModel === 'sonnet';
   const strictFile = join(reviewFolder(item.appId, platform, item.version), 'strict.json');
   if (strict) {
     mkdirSync(dirname(strictFile), { recursive: true });
@@ -705,7 +796,7 @@ function finishReview(batch: Batch, item: BatchItem): boolean {
   item.note = batch.settings.afterReview === 'cleanup' ? 'Reviewed and cleaned up' : 'Reviewed — files kept for you to check';
   item.finishedAt = new Date().toISOString();
   if (item.result && item.appId) item.result = { ...item.result, ...countScreens(item.appId, platform, item.version) };
-  if (batch.settings.notify === 'each') notify(item.result?.appName ?? item.title, `Reviewed — ${item.result?.screens ?? '?'} screens in ${item.result?.flows ?? '?'} flows`);
+  if (batch.settings.notify === 'each') notify(item.result?.appName ?? item.title, platform === 'site' ? `Reviewed — ${item.result?.screens ?? '?'} pages and ${item.result?.sections ?? '?'} sections` : `Reviewed — ${item.result?.screens ?? '?'} screens in ${item.result?.flows ?? '?'} flows`);
   // Its new flows join the search's Flows groups (each gets its standard kind), and any screen left with no UI
   // elements or no type gets them, in the background, so it shows in the Screens and UI Elements tabs too.
   void tagUntaggedFlows().then(fillScreenGaps);
@@ -713,11 +804,13 @@ function finishReview(batch: Batch, item: BatchItem): boolean {
 }
 
 /** The reviewed version's screens and flows, as the library now holds them. */
-function countScreens(appId: string, platform: string, version: string | null): { screens: number; flows: number } | Record<string, never> {
+function countScreens(appId: string, platform: string, version: string | null): { screens: number; flows: number; sections?: number } | Record<string, never> {
   if (!version) return {};
   try {
     const dir = join(inspirationsDataDir(), 'screens', platform, appId, 'versions', version);
     const walk = (path: string): number => readdirSync(path, { withFileTypes: true }).reduce((n, entry) => n + (entry.isDirectory() ? walk(join(path, entry.name)) : /\.(webp|png|jpe?g)$/i.test(entry.name) ? 1 : 0), 0);
+    // A website counts its pages; its sections are parts of them.
+    if (platform === 'site' && existsSync(join(dir, 'pages'))) return { screens: walk(join(dir, 'pages')), sections: existsSync(join(dir, 'sections')) ? walk(join(dir, 'sections')) : 0, flows: 0 };
     const flows = (JSON.parse(readFileSync(join(inspirationsDataDir(), 'flows.json'), 'utf-8')) as { flows: Array<{ appId: string; screenIds?: string[] }> }).flows.filter((flow) => flow.appId === appId && (flow.screenIds ?? []).some((sid) => sid.includes(`-versions-${version}-`))).length;
     return { screens: walk(dir), flows };
   } catch {

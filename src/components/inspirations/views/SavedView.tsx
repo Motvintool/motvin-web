@@ -8,7 +8,7 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { splitScreenItemId } from '@/lib/inspirations/savedItems';
 import { isDesktopPlatform, type App, type CollectionItem, type Platform, type Screen } from '@/lib/inspirations/types';
-import { inSection, readSavedAppId } from '@/lib/inspirations/savedApps';
+import { inSection, isWebsiteItem, itemPlatforms, readSavedAppId } from '@/lib/inspirations/savedApps';
 import { browsedPlatforms } from '@/lib/inspirations/filters';
 import { AppCard } from '../AppCard';
 import { CollectionCard } from '../CollectionCard';
@@ -22,6 +22,7 @@ import { BookmarkIcon, CloseIcon } from '../Icons';
 import { PageHeading } from '../PageHeading';
 import { PatternCard } from '../PatternCard';
 import { ScreenGrid } from '../ScreenGrid';
+import { isSitePage, isSiteSection, SiteGrid } from '../SitePages';
 import { StoreShotsCard } from '../StoreShotsCard';
 import { useApps } from '../useApps';
 import { useAsync } from '../useAsync';
@@ -33,8 +34,9 @@ import { useScreensByIds } from '../useScreensByIds';
 
 const noSubscribe = () => () => {};
 
-type SavedTab = 'apps' | 'screens' | 'storeShots' | 'flows' | 'patterns' | 'components';
+type SavedTab = 'apps' | 'screens' | 'pages' | 'sections' | 'storeShots' | 'flows' | 'patterns' | 'components';
 
+/** iOS, and Web Apps: an app's saved things. */
 const COLLECTION_TABS: { id: SavedTab; label: string }[] = [
   { id: 'apps', label: 'Apps' },
   { id: 'screens', label: 'Screens' },
@@ -42,6 +44,19 @@ const COLLECTION_TABS: { id: SavedTab; label: string }[] = [
   { id: 'components', label: 'UI Elements' },
   { id: 'flows', label: 'Flows' },
   { id: 'patterns', label: 'Patterns' },
+];
+/** Sites: the sites saved, and their whole pages and sections — as a site's own page has them. */
+const SITE_TABS: { id: SavedTab; label: string }[] = [
+  { id: 'apps', label: 'Sites' },
+  { id: 'pages', label: 'Full Pages' },
+  { id: 'sections', label: 'Sections' },
+];
+
+/** Webs holds two kinds of thing, never mixed in a collection: Web Apps' and Sites'. */
+type WebsShow = 'webapps' | 'sites';
+const WEBS_SHOW: { id: WebsShow; label: string }[] = [
+  { id: 'webapps', label: 'Web Apps' },
+  { id: 'sites', label: 'Sites' },
 ];
 
 /**
@@ -106,11 +121,30 @@ export function SavedView() {
   const platformSwitch = <PlatformSwitch platform={webSection ? 'web' : 'ios'} onPick={(value) => setParam('platform', value)} />;
   const inSectionHref = (href: string) => (webSection ? `${href}${href.includes('?') ? '&' : '?'}platform=web` : href);
   const appPlatforms = new Map([...apps.values()].map((app) => [app.id, app.platforms]));
-  const items: CollectionItem[] = collection
+  const sectionItems: CollectionItem[] = collection
     ? collection.items.filter((item) => inSection(item, section, appPlatforms)).sort((a, b) => b.addedAt.localeCompare(a.addedAt))
     : [];
+  // Webs: Web Apps' things or Sites', picked by the switch (`?show=`, as on the apps page) — never the two together.
+  // Untold, the side that has something, Web Apps first. Anything not a site's (a pattern saved from its page) is Web Apps'.
+  const isSiteItem = (item: CollectionItem) => {
+    const of = itemPlatforms(item, appPlatforms);
+    return of !== 'any' && of.includes('site');
+  };
+  // `type=sites` (and its older `websites`) was the Sites tab before the switch: it opens the Sites side.
+  const askedShow = params.get('show') ?? (rawTab === 'sites' || rawTab === 'websites' ? 'sites' : null);
+  const websShow: WebsShow | null = !webSection
+    ? null
+    : askedShow === 'webapps' || askedShow === 'sites'
+      ? askedShow
+      : sectionItems.some(isSiteItem) && sectionItems.every(isSiteItem)
+        ? 'sites'
+        : 'webapps';
+  const items = websShow ? sectionItems.filter((item) => isSiteItem(item) === (websShow === 'sites')) : sectionItems;
+  const tabs = websShow === 'sites' ? SITE_TABS : COLLECTION_TABS;
 
-  const screenIds = items.filter((i) => i.type === 'screen').map((i) => i.id);
+  // App screens, and a website's pages and sections apart from them (their own tab, never "screens").
+  const screenIds = items.filter((i) => i.type === 'screen' && !isWebsiteItem(i, appPlatforms)).map((i) => i.id);
+  const websiteIds = items.filter((i) => isWebsiteItem(i, appPlatforms)).map((i) => i.id);
   // UI elements, and patterns saved from the Patterns page, are screens too
   // (`<screenId>:<tag>`): shown as screen cards, each screen once.
   const screensOf = (type: 'component' | 'pattern') => [
@@ -118,9 +152,12 @@ export function SavedView() {
   ];
   const componentScreenIds = screensOf('component');
   const patternScreenIds = screensOf('pattern');
-  const { screens: screenMap, loading: screensLoading } = useScreensByIds([...new Set([...screenIds, ...componentScreenIds, ...patternScreenIds])]);
+  const { screens: screenMap, loading: screensLoading } = useScreensByIds([...new Set([...screenIds, ...websiteIds, ...componentScreenIds, ...patternScreenIds])]);
   const toScreens = (ids: string[]) => ids.map((id) => screenMap.get(id)).filter((s): s is Screen => Boolean(s));
   const screens = toScreens(screenIds);
+  const websiteScreens = toScreens(websiteIds);
+  const sitePages = websiteScreens.filter(isSitePage);
+  const siteSections = websiteScreens.filter(isSiteSection);
   const componentScreens = toScreens(componentScreenIds);
   const patternScreens = toScreens(patternScreenIds);
   // Takes out every item of that type saved from this screen.
@@ -190,6 +227,10 @@ export function SavedView() {
         ? savedShotIds.length
       : t === 'screens'
         ? screenIds.length
+      : t === 'pages'
+        ? sitePages.length
+      : t === 'sections'
+        ? siteSections.length
         : t === 'flows'
           ? flowIds.length
           : t === 'patterns'
@@ -198,9 +239,16 @@ export function SavedView() {
 
   const total = items.length;
   // No tab in the URL: the first one with something in it.
-  const tab: SavedTab = COLLECTION_TABS.some((t) => t.id === rawTab)
+  const tab: SavedTab = tabs.some((t) => t.id === rawTab)
     ? (rawTab as SavedTab)
-    : (COLLECTION_TABS.find((t) => count(t.id) > 0)?.id ?? 'apps');
+    : (tabs.find((t) => count(t.id) > 0)?.id ?? 'apps');
+  // Switching between Web Apps and Sites starts on the new side's first tab with something in it.
+  const pickShow = (show: WebsShow) => {
+    const sp = new URLSearchParams(params.toString());
+    sp.set('show', show);
+    sp.delete('type');
+    router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
+  };
 
   // Renaming in place: Enter or leaving saves a real change; a blank name
   // keeps the old one.
@@ -365,16 +413,33 @@ export function SavedView() {
             collection, after asking. */}
         <div className="ins-masthead-actions">
           {platformSwitch}
+          {/* Webs: Web Apps' things or Sites', beside the bin — the tabs under the title are that side's own. */}
+          {websShow && (
+            <div className="ins-segmented ins-segmented--toolbar ins-collection-webs-switch" role="radiogroup" aria-label="Web Apps or Sites">
+              {WEBS_SHOW.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={websShow === option.id}
+                  className={`ins-segmented-item ${websShow === option.id ? 'is-active' : ''}`}
+                  onClick={() => websShow !== option.id && pickShow(option.id)}
+                >
+                  <span className="ins-segmented-label">{option.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <button
             type="button"
             className="ins-iconbtn ins-collection-remove"
-            aria-label="Remove collection"
-            title="Remove collection"
+            aria-label="Delete collection"
+            title="Delete collection"
             onClick={() => {
               void askConfirm({
-                title: `Remove “${collection.name}”?`,
+                title: `Delete “${collection.name}”?`,
                 description: 'This will delete the collection and everything saved in it.',
-                confirmLabel: 'Remove collection',
+                confirmLabel: 'Delete collection',
               }).then((ok) => {
                 if (!ok) return;
                 deleteWithUndo(collection.id);
@@ -396,7 +461,7 @@ export function SavedView() {
       </header>
 
       <div className="ins-tabbar ins-collection-detail-tabs" role="tablist" aria-label="Item type">
-        {COLLECTION_TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -442,6 +507,28 @@ export function SavedView() {
                     action={{ label: 'Explore screens', href: inSectionHref(INSPIRATIONS_ROUTES.screens) }}
                   />}
               />
+            </section>
+          )}
+
+          {(tab === 'pages' || tab === 'sections') && (
+            // A site's own cards, as on its pages: its whole pages, or its sections.
+            <section className="ins-result-section">
+              {screensLoading && !websiteScreens.length ? null : <SiteGrid
+                screens={tab === 'pages' ? sitePages : siteSections}
+                tab={tab === 'pages' ? 'full-page' : 'sections'}
+                apps={apps}
+                onRemoveItem={(id) => {
+                  void askConfirm({ title: tab === 'pages' ? 'Remove this page?' : 'Remove this section?', description: `It will be removed from “${collection.name}”.` }).then((ok) => {
+                    if (ok) removeItem(collection.id, { type: 'screen', id });
+                  });
+                }}
+                empty={<EmptyState
+                    play
+                    title={tab === 'pages' ? 'No saved full pages' : 'No saved sections'}
+                    description={`Open a site's ${tab === 'pages' ? 'page' : 'section'} and press Save to keep it here.`}
+                    action={{ label: tab === 'pages' ? 'Explore full pages' : 'Explore sections', href: inSectionHref(`${INSPIRATIONS_ROUTES.sites}${tab === 'sections' ? '?tab=sections' : ''}`) }}
+                  />}
+              />}
             </section>
           )}
 
@@ -589,12 +676,21 @@ export function SavedView() {
           {tab === 'apps' && (
             <section className="ins-result-section">
               {savedApps.length === 0 ? (
-                <EmptyState
-                  play
-                  title="No saved apps"
-                  description="Hover any app and press Save to keep it here."
-                  action={{ label: 'Explore apps', href: inSectionHref(INSPIRATIONS_ROUTES.apps) }}
-                />
+                websShow === 'sites' ? (
+                  <EmptyState
+                    play
+                    title="No saved sites"
+                    description="Hover any site and press Save to keep it here."
+                    action={{ label: 'Explore sites', href: `${INSPIRATIONS_ROUTES.apps}?show=sites&platform=web` }}
+                  />
+                ) : (
+                  <EmptyState
+                    play
+                    title="No saved apps"
+                    description="Hover any app and press Save to keep it here."
+                    action={{ label: 'Explore apps', href: inSectionHref(webSection ? `${INSPIRATIONS_ROUTES.apps}?show=webapps` : INSPIRATIONS_ROUTES.apps) }}
+                  />
+                )
               ) : appPreviewsLoading ? (
                 <div className="ins-grid" aria-busy="true" />
               ) : (

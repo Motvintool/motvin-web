@@ -18,7 +18,7 @@ import { withLibraryLock } from './lock.js';
 import { log } from './log.js';
 import { rebuildManifest, resolveDataDir, VERSIONS_DIR_NAME } from './publish.js';
 
-const PLATFORMS = ['ios', 'web', 'webapp'];
+const PLATFORMS = ['ios', 'site', 'webapp'];
 const LOGO_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.svg'];
 
 const readJson = (file, fallback) => {

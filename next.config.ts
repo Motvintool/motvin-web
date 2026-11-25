@@ -46,6 +46,8 @@ const LEGACY_PATHS = [
 const OLD_SITE_REDIRECTS = LEGACY_ORIGIN
   ? []
   : [
+      // The Sites pages' first address.
+      { source: '/inspirations/website-pages', destination: '/inspirations/sites?platform=web', permanent: true },
       { source: '/index.html', destination: '/', permanent: true },
       { source: '/about-me', destination: '/about', permanent: true },
       { source: '/about-me.html', destination: '/about', permanent: true },

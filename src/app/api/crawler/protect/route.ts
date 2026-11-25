@@ -11,7 +11,7 @@ import { PROTECT_KINDS, controlProtectJob, createProtectJob, listProtectJobs, pr
  * PATCH  ?id=&action=pause|resume|stop|clear|approve|skip|approve-all|boxes|recheck|recheck-all[&screen=]; boxes sends { boxes }.
  */
 
-const PLATFORMS = ['ios', 'webapp', 'web'] as const;
+const PLATFORMS = ['ios', 'webapp', 'site'] as const;
 const ACTIONS: ProtectAction[] = ['pause', 'resume', 'stop', 'clear', 'approve', 'skip', 'approve-all', 'boxes', 'recheck', 'recheck-all'];
 const denied = () => fail('This account may not administer the library.', 403);
 const platformOf = (value: unknown): ProtectSettings['platform'] => (PLATFORMS.includes(value as ProtectSettings['platform']) ? (value as ProtectSettings['platform']) : 'ios');

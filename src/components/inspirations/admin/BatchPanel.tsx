@@ -11,6 +11,8 @@ import { CheckIcon, ChevronDownIcon, CloseIcon, CloudUploadIcon, CopyIcon, Exter
 import { Summary, Wizard } from './Wizard';
 import { onRecordings, takeRecordings } from './recordingHandoff';
 
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+
 /**
  * Agent Upload — many apps at once, with nobody watching.
  *
@@ -22,7 +24,7 @@ import { onRecordings, takeRecordings } from './recordingHandoff';
  * shows where each app is. Closing the page does not stop it.
  */
 
-type Platform = 'ios' | 'webapp' | 'web';
+type Platform = 'ios' | 'webapp' | 'site';
 type Settings = {
   cleanup: 'automatic' | 'manual';
   review: 'auto' | 'manual';
@@ -47,7 +49,7 @@ type BatchItem = {
   startedAt: string | null;
   finishedAt: string | null;
   waitUntil: string | null;
-  result: { appName: string; screens: number; flows: number } | null;
+  result: { appName: string; screens: number; flows: number; sections?: number } | null;
   workMs?: number;
   usage?: { tokens: number; reviews: number };
   model?: string;
@@ -74,7 +76,7 @@ const STEPS = [
 ];
 
 const DEFAULTS: Settings = { cleanup: 'automatic', review: 'auto', afterReview: 'cleanup', existing: 'skip', platform: 'ios', version: null, notify: 'each', appsAtOnce: 3, reviewer: 'claude', reviewModel: 'sonnet' };
-const PLATFORM_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web App', web: 'Web' };
+const PLATFORM_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web App', site: 'Sites' };
 
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
 const plainName = (file: string) => file.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
@@ -333,7 +335,16 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
                 </div>
                 <div className="ins-batch-item-sub">
                   {item.note && <span>{item.note}</span>}
-                  {item.result && <span>{item.result.screens} screens · {item.result.flows} flows</span>}
+                  {/* A site is pages and sections; an app, screens and flows. */}
+                  {item.result &&
+                    (last.settings.platform === 'site' ? (
+                      <span>
+                        {plural(item.result.screens, 'page')}
+                        {item.result.sections !== undefined && ` · ${plural(item.result.sections, 'section')}`}
+                      </span>
+                    ) : (
+                      <span>{item.result.screens} screens · {item.result.flows} flows</span>
+                    ))}
                   {/* Working time only — waits for a turn, for AI usage or for you are left out. */}
                   {item.model && <span>{item.model.includes('sonnet') ? 'Sonnet 5.5' : item.model.includes('opus') ? 'Opus 5.5' : item.model}</span>}
                   {item.usage && <span title={`${item.usage.reviews} review run(s)`}>AI {item.usage.tokens >= 1_000_000 ? `${(item.usage.tokens / 1_000_000).toFixed(1)}M` : `${Math.round(item.usage.tokens / 1000)}k`} tokens</span>}
@@ -344,7 +355,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
                     <Link className="ins-btn ins-btn--ghost ins-btn--sm ins-batch-rowbtn" href={`/inspirations/app/${item.appId}`}>Open <ExternalIcon size={11} /></Link>
                   )}
                   {item.stage === 'review-ready' && item.appId && item.version && (
-                    <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm ins-batch-rowbtn" onClick={() => void navigator.clipboard.writeText(`Follow motvin-web/docs/review-motvin.md to review ${item.appId} ${last.settings.platform} ${item.version}`)}>
+                    <button type="button" className="ins-btn ins-btn--ghost ins-btn--sm ins-batch-rowbtn" onClick={() => void navigator.clipboard.writeText(`Follow motvin-web/docs/${last.settings.platform === 'site' ? 'review-motvin-site.md' : 'review-motvin.md'} to review ${item.appId} ${last.settings.platform} ${item.version}`)}>
                       <CopyIcon size={11} /> Copy review request
                     </button>
                   )}
@@ -391,7 +402,9 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
           'Each recording becomes one app, or a new version of an app already in the library.',
           'The name is taken from the file; change it if you like, and add a logo. A logo in the records folder with the same name is picked up by itself.',
           'The usual choices are already set. Change only what you need.',
-          'Nothing has started yet. After Start, each app is uploaded, cleaned up and reviewed by the agent on its own.',
+          settings.platform === 'site'
+            ? 'Nothing has started yet. After Start, each website’s pages and sections are added, then the agent checks every page’s and section’s name.'
+            : 'Nothing has started yet. After Start, each app is uploaded, cleaned up and reviewed by the agent on its own.',
         ][step]}
         canNext={step === 3 ? rows.length > 0 && !active && !allSkipped : rows.length > 0}
         busy={Boolean(starting)}
@@ -403,7 +416,7 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
           <div className="ins-wizard-stack">
             <div className="ins-rec-bar">
               <div className="ins-segmented" role="radiogroup" aria-label="Platform">
-                {([['ios', 'iOS'], ['webapp', 'Web App'], ['web', 'Web']] as const).map(([id, text]) => (
+                {([['ios', 'iOS'], ['webapp', 'Web App'], ['site', 'Sites']] as const).map(([id, text]) => (
                   <button key={id} type="button" role="radio" aria-checked={settings.platform === id} className={`ins-segmented-item ${settings.platform === id ? 'is-active' : ''}`} onClick={() => set('platform', id)}>
                     {text}
                   </button>
@@ -543,7 +556,8 @@ export function BatchPanel({ state, onChanged }: { state: AdminState; onChanged:
                   return [fresh ? `${fresh} new app${fresh === 1 ? '' : 's'}` : '', adding ? `${adding} in the library on another platform — added on ${PLATFORM_LABEL[settings.platform]}` : '', known ? `${known} already in the library — ${settings.existing === 'skip' ? 'skipped' : settings.existing === 'version' ? 'added as a new version' : 'replaced'}` : ''].filter(Boolean).join(' · ');
                 })()],
                 ['Version', settings.version ? dayLabel(settings.version) : 'Today'],
-                ['Review', settings.review === 'auto' ? `By the agent (${settings.reviewer === 'gemini' ? 'Gemini' : 'Sonnet'}), then checked` : 'You ask for it when each app is in'],
+                // A website is pages already cut: its review checks their names (review-motvin-site.md), no clean-up.
+                ['Review', settings.platform === 'site' ? (settings.review === 'auto' ? `By the agent (${settings.reviewer === 'gemini' ? 'Gemini' : 'Sonnet'}): every page and section name checked` : 'You ask for it when each website is in') : settings.review === 'auto' ? `By the agent (${settings.reviewer === 'gemini' ? 'Gemini' : 'Sonnet'}), then checked` : 'You ask for it when each app is in'],
                 ['At the same time', `${settings.appsAtOnce} app${settings.appsAtOnce === 1 ? '' : 's'}`],
               ]}
             />

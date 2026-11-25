@@ -119,8 +119,8 @@ describe('findPlatform', () => {
     ['web application', 'webapp'],
     ['webapp', 'webapp'],
     ['how many web apps are there', 'webapp'],
-    ['web', 'web'],
-    ['websites', 'web'],
+    ['web', 'site'],
+    ['websites', 'site'],
     ['ios apps', 'ios'],
     ['iphone', 'ios'],
   ])('%s → %s', (input, expected) => {

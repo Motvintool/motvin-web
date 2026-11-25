@@ -170,7 +170,7 @@ export function useAppFilters(apps: App[]) {
       show: webs,
       options: [
         { value: 'webapp', label: 'Web Apps', test: (a) => a.platforms.includes('webapp') },
-        { value: 'web', label: 'Websites', test: (a) => a.platforms.includes('web') },
+        { value: 'site', label: 'Sites', test: (a) => a.platforms.includes('site') },
       ],
     },
     { key: 'screens', label: 'Screens', show: true, options: facetOptions('screens', screenTypeLabel) },

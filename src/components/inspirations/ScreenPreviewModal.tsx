@@ -9,13 +9,14 @@ import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
 import { StoreLinkButton } from './StoreMenuItem';
-import { INDUSTRY_LABEL, PLATFORM_LABEL, SCREEN_STATE_LABEL, SCREEN_TYPE_LABEL, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
+import { INDUSTRY_LABEL, pageTypeLabel, PLATFORM_LABEL, sitePageName, SCREEN_STATE_LABEL, SCREEN_TYPE_LABEL, screenTypeLabel, sectionTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
 import { isDesktopPlatform, type Flow, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { CompareShortcut, ScreenColours } from './ScreenDetailsExtras';
 import { CloseIcon } from './Icons';
 import { ExpandButton, useExpandedPreview } from './PreviewExpand';
 import { SaveButton } from './SaveButton';
+import { SITE_AT_PARAM, SitePageShot, SiteSectionsList, siteSectionName, type ZoomAt } from './SitePages';
 import { saveItemFor } from './previewSaveAs';
 import { Screenshot } from './Screenshot';
 import { ScreenLightbox } from './ScreenLightbox';
@@ -32,6 +33,22 @@ export const SCREEN_PARAM = 'screen';
 // On a screen's history entry: it was zoomed out when another app's screen was picked, so going back returns
 // to the grid rather than the one screen.
 const SIMILAR_PARAM = 'similar';
+
+/**
+ * Whether this visit began on a preview (a shared link, a reload): the entry before it is then another page or
+ * another site, not the grid under the preview, so closing replaces the address instead of going back. Read once,
+ * when the page first loads; a preview opened from a card afterwards pushes its own entry, and goes back.
+ */
+let landedOnPreview = (() => {
+  if (typeof window === 'undefined') return false;
+  // The address the page was loaded with, not today's: this file may load after a card has already opened one.
+  const loaded = (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.name ?? window.location.href;
+  try {
+    return new URL(loaded).searchParams.has(SCREEN_PARAM);
+  } catch {
+    return false;
+  }
+})();
 const DETAILS_HIDDEN_KEY = 'motvin:details-hidden';
 /** A compare view opened from this preview (CompareScreens' ?compare=&of=, written out: it imports this file)
  *  sits on top and takes the keyboard while it's open. */
@@ -79,7 +96,7 @@ function tagHref(tag: string, section: string): string {
   if (Object.hasOwn(SCREEN_TYPE_LABEL, tag)) return `${screens}?type=${tag}&platform=${section}`;
   if (Object.hasOwn(SCREEN_STATE_LABEL, tag)) return `${screens}?state=${tag}&platform=${section}`;
   if (Object.hasOwn(INDUSTRY_LABEL, tag)) return `${screens}?industry=${tag}&platform=${section}`;
-  if (tag === 'ios' || tag === 'webapp' || tag === 'web') return `${screens}?platform=${section}`;
+  if (tag === 'ios' || tag === 'webapp' || tag === 'site' || tag === 'web') return `${screens}?platform=${section}`;
   return `${INSPIRATIONS_ROUTES.searchFor(tag.replace(/-/g, ' '))}&platform=${section}`;
 }
 
@@ -101,16 +118,42 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const { show } = useToast();
 
   const { data, loading } = useAsync(() => inspirationsApi.getScreen(screenId), `screen-preview:${screenId}`);
-  const screen = data?.screen ?? null;
-  const app = data?.app ?? null;
-  const openedPatterns = data?.patterns ?? [];
+  // A website page: the section to show in it (from `?at=`, or picked in Details), with a counter so picking the
+  // same one again shows it again.
+  const atParam = params.get(SITE_AT_PARAM);
+  const [siteFocus, setSiteFocus] = useState<{ id: string; n: number } | null>(atParam ? { id: atParam, n: 0 } : null);
+  const [seenAt, setSeenAt] = useState(atParam);
+  if (seenAt !== atParam) {
+    setSeenAt(atParam);
+    setSiteFocus(atParam ? { id: atParam, n: (siteFocus?.n ?? 0) + 1 } : null);
+  }
 
   const [siblingScreens, setSiblingScreens] = useState<Screen[]>([]);
+  // Moving within one website (Full Page ⇄ Section, a page from the title) opens another screen of an app already
+  // here: its copy in the app's list stands in while its own details load, so the preview never drops back to
+  // the empty loading frame between the two.
+  const [held, setHeld] = useState(data);
+  if (data && data !== held) setHeld(data);
+  const standIn = loading && held?.app && held.screen.site ? siblingScreens.find((s) => s.id === screenId && s.appId === held.app?.id) : undefined;
+  const screen = data?.screen ?? standIn ?? null;
+  const app = data?.app ?? (standIn ? held?.app : null) ?? null;
+  const openedPatterns = data?.patterns ?? [];
   // The app's flows, from the same getApp call, for the foot's Flow button.
   const [appFlows, setAppFlows] = useState<Flow[]>([]);
   const [atStart, setAtStart] = useState(true);
   const [atEnd, setAtEnd] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
+  // A website: the title's page picker (Remote / Landing Page ⌄), open or not.
+  const [titleOpen, setTitleOpen] = useState(false);
+  const titleRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!titleOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (!titleRef.current?.contains(e.target as Node)) setTitleOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [titleOpen]);
   // Figma's two states for this area (node 1163:53073): "single-screen" (one
   // screenshot, centered) is the default; "Nearby screens" switches to
   // "multi-screen" (the full filmstrip) without leaving the modal, and the
@@ -127,6 +170,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const [similarFor, setSimilarFor] = useState<{ id: string; has: boolean } | null>(null);
   const [activeId, setActiveId] = useState(screenId);
   const [zoomScreen, setZoomScreen] = useState<Screen | null>(null);
+  // A website page opens enlarged at the spot clicked on it, not at its top.
+  const [zoomAt, setZoomAt] = useState<ZoomAt | undefined>(undefined);
   const [contextScreenId, setContextScreenId] = useState<string | null>(null);
   // The keyboard shortcuts card (? or the header's Shortcuts button).
   const [showKeys, setShowKeys] = useState(false);
@@ -171,7 +216,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const [seenId, setSeenId] = useState(screenId);
   if (seenId !== screenId) {
     setSeenId(screenId);
-    setSiblingScreens([]);
+    // Another screen of the same website keeps its list (its pages, its sections) rather than starting empty.
+    if (!siblingScreens.some((s) => s.id === screenId && s.site)) setSiblingScreens([]);
     setActiveId(screenId);
     setMultiScreen(false);
     setZoomedOut(params.get(SIMILAR_PARAM) === '1');
@@ -190,7 +236,10 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   // Only the opened screen's platform: Claude's web screen steps through Claude's web screens, never
   // on into its iOS ones (the app's list holds every platform it is on).
   const screens = useMemo(() => {
-    const onPlatform = screen ? siblingScreens.filter((s) => s.platform === screen.platform) : siblingScreens;
+    // A website page steps through its site's other pages of the same capture, a section through its sections.
+    const onPlatform = screen?.site
+      ? siblingScreens.filter((s) => s.platform === screen.platform && s.site?.kind === screen.site?.kind && s.version === screen.version)
+      : screen ? siblingScreens.filter((s) => s.platform === screen.platform) : siblingScreens;
     return screen && onPlatform.length === 0 ? [screen] : onPlatform;
   }, [screen, siblingScreens]);
   const activeIndex = Math.max(0, screens.findIndex((s) => s.id === activeId));
@@ -203,7 +252,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   );
   const shownScreen = screens[activeIndex];
   useEffect(() => {
-    if (!shownScreen?.screenType || shownScreen.screenType === 'other') return;
+    // A website page or section is matched by its own type (SimilarScreens), so "other" screen type doesn't stop it.
+    if (!shownScreen || (!shownScreen.site && (!shownScreen.screenType || shownScreen.screenType === 'other'))) return;
     let cancelled = false;
     hasSimilar(shownScreen)
       .then((has) => !cancelled && setSimilarFor({ id: shownScreen.id, has }))
@@ -230,10 +280,11 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     sp.delete(SCREEN_PARAM);
     sp.delete(SIMILAR_PARAM);
     const qs = sp.toString();
-    // back() keeps history tidy when the overlay was opened from this page;
-    // replace() covers arriving here from a shared link.
-    if (window.history.length > 1) router.back();
+    // back() keeps history tidy when the overlay was opened from this page; replace() covers arriving here on a
+    // preview (a shared link, a reload), where going back would leave for whatever was open before.
+    if (!landedOnPreview && window.history.length > 1) router.back();
     else router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    landedOnPreview = false;
   }, [params, pathname, router]);
 
   // Zooming out shrinks the screen into its place in the grid as Details folds away; zooming back grows it
@@ -264,7 +315,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
     wheelIdle.current = window.setTimeout(() => (wheelSum.current = 0), 180);
     wheelSum.current += e.deltaY;
     const shown = screens.find((s) => s.id === activeId) ?? screens[0];
-    const zoomable = Boolean(shown?.screenType && shown.screenType !== 'other') && !noSimilar(shown?.id);
+    // A website page scrolls itself: a wheel there never zooms out.
+    const zoomable = !shown?.site && Boolean(shown?.screenType && shown.screenType !== 'other') && !noSimilar(shown?.id);
     // The first scroll down starts fetching the grid's screenshots, so they're in as it opens.
     if (!zoomedOut && zoomable && e.deltaY > 0) warmSimilar(shown);
     if (!zoomedOut && zoomable && wheelSum.current > 60) {
@@ -329,7 +381,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
       // Z zooms out to the same screen in other apps, and back.
       if ((e.key === 'z' || e.key === 'Z') && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const shown = screens.find((s) => s.id === activeId) ?? screens[0];
-        if (zoomedOut || (shown && shown.screenType && shown.screenType !== 'other' && !noSimilar(shown.id))) {
+        // A website page or section: the same kind on other websites (never other apps' screens).
+        if (zoomedOut || (shown && (shown.site || (shown.screenType && shown.screenType !== 'other')) && !noSimilar(shown.id))) {
           e.preventDefault();
           zoom(!zoomedOut);
         }
@@ -457,10 +510,10 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const phone = useMediaQuery(SHEET_QUERY);
   if (!mounted) return null;
 
-  if (loading || !screen) {
+  if ((loading && !standIn) || !screen) {
     // The placeholder's screenshot shape, guessed from the id until the screen
-    // itself loads ("…-web-…" / "…-webapp-…" ids are website captures).
-    const skeletonIsWeb = /-(web|webapp)-/.test(screenId);
+    // itself loads ("…-site-…" / "…-webapp-…" ids are wide, browser captures).
+    const skeletonIsWeb = /-(site|webapp)-/.test(screenId);
     // Not found (or the request failed): don't leave a dead spinner up.
     if (!loading && !screen) {
       close();
@@ -561,7 +614,22 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
   const showAllTypes = typesOpenFor === view.id;
   // Zoom out needs a real screen type to find the same screen in other apps by.
   // (And another app must have one: with none, there's nothing to zoom out to.)
-  const canZoom = Boolean(view.screenType && view.screenType !== 'other') && !noSimilar(view.id);
+  // A website's page or section zooms out to the same kind on other websites (SimilarScreens keeps them apart).
+  const canZoom = (Boolean(view.site) || Boolean(view.screenType && view.screenType !== 'other')) && !noSimilar(view.id);
+  // A website (Web, not Web Apps): a page is shown whole to scroll, with its sections listed beside it; a section
+  // is shown as a screen is, with the page it is from in its details. Neither has the screen-only extras.
+  const isWeb = Boolean(view.site);
+  const isSite = view.site?.kind === 'page';
+  const isSection = view.site?.kind === 'section';
+  // What a website page or section is called: "Pricing Page"; "Products menu" for a navigation menu, else "Hero"…
+  const siteName = (s: Screen) =>
+    s.site?.kind === 'section' ? siteSectionName(s, siblingScreens) : sitePageName(s.site);
+  const sectionName = isSection ? siteName(view) : '';
+  const sectionPage = isSection ? siblingScreens.find((s) => s.id === view.site?.parentId) : undefined;
+  // The site's pages of this capture (the title's picker), and the one on show — this page, or this section's page.
+  const sitePages = isWeb ? siblingScreens.filter((s) => s.site?.kind === 'page' && s.version === view.version) : [];
+  const shownPage = isSite ? view : sectionPage;
+  const siteSections = isSite ? siblingScreens.filter((s) => s.site?.kind === 'section' && s.site.parentId === view.id) : [];
   // The section this screen is in — iOS, or Webs (web apps and websites) —
   // so a tag or type opened from it stays in that section.
   const viewSection = isDesktopPlatform(view.platform) ? 'web' : view.platform;
@@ -602,7 +670,9 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
         aria-label="More actions"
         aria-expanded={moreOpen}
         aria-haspopup="menu"
-        onClick={() => setMoreOpen((o) => !o)}
+        onClick={() => {
+          setMoreOpen((o) => !o);
+        }}
       >
         <img src="/ASSET/Icons/Motvin/detail-menu.svg" alt="" width={16} height={16} />
       </button>
@@ -618,10 +688,10 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                 zoom(!zoomedOut);
               }}
             >
-              <ZoomOutIcon back={zoomedOut} /> <span>{zoomedOut ? 'Back to screen' : 'Similar screens'}</span>
+              <ZoomOutIcon back={zoomedOut} /> <span>{zoomedOut ? `Back to ${isSite ? 'page' : isSection ? 'section' : 'screen'}` : isWeb ? 'Other sites' : 'Similar screens'}</span>
             </button>
           )}
-          {phone && (flowHref && viewFlow || screens.length > 1) && (
+          {phone && !isWeb && (flowHref && viewFlow || screens.length > 1) && (
             <>
               {flowHref && viewFlow && (
                 <Link className="ins-popover-item" role="menuitem" href={flowHref} scroll={false} onClick={() => setMoreOpen(false)}>
@@ -679,7 +749,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
             <MenuIcon src={ICON_COPY_LINK} /> <span>Copy link</span>
           </button>
           {/* This screen's type, beside another app's (CompareScreens on the app page). */}
-          {app && view.screenType && view.screenType !== 'other' && (
+          {app && !isWeb && view.screenType && view.screenType !== 'other' && (
             <Link
               className="ins-popover-item"
               role="menuitem"
@@ -733,7 +803,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               <div className="ins-screen-preview-head-app">
                 {zoomedOut ? (
                   // Zoomed out, a back arrow in the logo's place returns to the screen (as Z and Esc do).
-                  <button type="button" className="ins-similar-head-back" aria-label="Back to screen (Z)" title="Back to screen (Z)" onClick={() => zoom(false)}>
+                  <button type="button" className="ins-similar-head-back" aria-label={`Back to ${isSite ? 'page' : isSection ? 'section' : 'screen'} (Z)`} title={`Back to ${isSite ? 'page' : isSection ? 'section' : 'screen'} (Z)`} onClick={() => zoom(false)}>
                     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                       <path d="M15 9H3M8 4 3 9l5 5" />
                     </svg>
@@ -752,17 +822,114 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   // Zoomed out, the header names the grid ("Login screens in other apps").
                   <p className="ins-similar-head-title">{similarSummary?.title ?? 'Finding similar screens…'}</p>
                 ) : (
-                <div className="ins-screen-preview-head-title">
-                  {app && <span>{app.name}</span>}
-                  {app && <span className="ins-screen-preview-head-sep">/</span>}
+                <div className={`ins-screen-preview-head-title ${isWeb && sitePages.length > 0 ? 'ins-site-crumbs' : ''}`}>
+                  {app && <span className="ins-head-crumb-app">{app.name}</span>}
+                  {app && <span className="ins-screen-preview-head-sep ins-head-crumb-app">/</span>}
                   {viewFlow && (
                     <>
                       <span>{viewFlow.name}</span>
                       <span className="ins-screen-preview-head-sep ins-flow-head-step-sep">/</span>
                     </>
                   )}
-                  <span className={viewFlow ? 'ins-flow-head-step' : undefined}>{screenTitleIn(viewFlow, view)}</span>
+                  {isWeb && sitePages.length > 0 ? (
+                    // A website: its page as Compare's title picker (Remote / Landing Page ⌄), the site's pages in it;
+                    // a section follows its page (Remote / Landing Page ⌄ / Products menu).
+                    <>
+                      <div className="ins-compare-pick" ref={titleRef}>
+                        <button
+                          type="button"
+                          className="ins-compare-title-pick"
+                          aria-haspopup="menu"
+                          aria-expanded={titleOpen}
+                          aria-label={`Page: ${shownPage ? sitePageName(shownPage.site) : ''}. Change`}
+                          onClick={() => {
+                            setMoreOpen(false);
+                            setTitleOpen((o) => !o);
+                          }}
+                        >
+                          {shownPage ? sitePageName(shownPage.site) : ''}
+                          <svg className="ins-compare-title-chevron" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden>
+                            <path d="M4.75 6.5L8 9.75l3.25-3.25" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                        {titleOpen && (
+                          <div className="ins-context-menu ins-compare-menu" role="menu">
+                            {sitePages.map((p) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                role="menuitemradio"
+                                aria-checked={p.id === shownPage?.id}
+                                className={`ins-context-menu-btn ${p.id === shownPage?.id ? 'is-active' : ''}`}
+                                onClick={() => {
+                                  setTitleOpen(false);
+                                  if (p.id === shownPage?.id) return;
+                                  if (isSite) setActiveId(p.id);
+                                  else {
+                                    // From a section: that page, whole, in this preview.
+                                    const sp = new URLSearchParams(params.toString());
+                                    sp.set(SCREEN_PARAM, p.id);
+                                    sp.delete(SITE_AT_PARAM);
+                                    router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
+                                  }
+                                }}
+                              >
+                                <span className="ins-context-menu-text">{sitePageName(p.site)}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {isSection && (
+                        <>
+                          <span className="ins-screen-preview-head-sep">/</span>
+                          <span title={sectionName}>{sectionName}</span>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    // A website page by its page type ("Pricing Page"), not the screen type it maps onto.
+                    <span className={viewFlow ? 'ins-flow-head-step' : undefined}>{isSite ? sitePageName(view.site) : isSection ? sectionName : screenTitleIn(viewFlow, view)}</span>
+                  )}
                 </div>
+                )}
+              </div>
+              <div className="ins-site-view-slot">
+                {/* A website: the view, as the Apps / Webs switch — the whole page, or one section on its own; the
+                    one on show filled. In the header's middle, ahead of everything under it, since all of it follows the view. */}
+                {isWeb && !zoomedOut && (isSection ? Boolean(sectionPage) : siteSections.length > 0) && (
+                  <div className="ins-segmented ins-segmented--toolbar ins-site-view-switch" role="radiogroup" aria-label="View">
+                    {(['page', 'section'] as const).map((kind) => {
+                      const on = kind === 'page' ? isSite : isSection;
+                      return (
+                        <button
+                          key={kind}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          className={`ins-segmented-item ${on ? 'is-active' : ''}`}
+                          onClick={() => {
+                            if (on) return;
+                            const sp = new URLSearchParams(params.toString());
+                            if (kind === 'page' && sectionPage) {
+                              // The page this section is from, scrolled to (or opened over, for a menu) the section.
+                              sp.set(SCREEN_PARAM, sectionPage.id);
+                              sp.set(SITE_AT_PARAM, view.id);
+                            } else {
+                              // The section last shown in the page, else its first.
+                              const pick = siteSections.find((x) => x.id === siteFocus?.id) ?? siteSections[0];
+                              if (!pick) return;
+                              sp.set(SCREEN_PARAM, pick.id);
+                              sp.delete(SITE_AT_PARAM);
+                            }
+                            router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
+                          }}
+                        >
+                          {kind === 'page' ? 'Full Page' : 'Section'}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
               <div className="ins-flow-head-actions">
@@ -797,9 +964,18 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               </div>
             </div>
 
-            <div className="ins-screen-preview-filmstrip-wrap" onWheel={onStageWheel}>
+            <div
+              // A website's view (the whole page, or one section) fades in as it changes, rather than snapping.
+              key={isWeb ? `site-${view.site?.kind}` : 'stage'}
+              className={`ins-screen-preview-filmstrip-wrap ${isWeb ? 'ins-site-fade' : ''}`}
+              onWheel={onStageWheel}
+            >
               {zoomedOut ? (
                 <SimilarScreens current={view} currentFlow={viewFlow} onPick={openSimilar} onBack={() => zoom(false)} onSummary={setSimilarSummary} />
+              ) : isSite ? (
+                <div className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--site">
+                  <SitePageShot page={view} sections={siteSections} focus={siteFocus} onContextMenu={onShotContextMenu(view)} onZoom={(shown, at) => { setZoomAt(at); setZoomScreen(shown ?? view); }} />
+                </div>
               ) : multiScreen ? (
                 <div className="ins-screen-preview-filmstrip" ref={filmRef} onScroll={updateScrollState}>
                   {screens.map((s) => (
@@ -820,7 +996,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                 <div className="ins-screen-preview-filmstrip ins-screen-preview-filmstrip--single" onContextMenu={onShotContextMenu(view)} {...shotSwipe}>
                   <div
                     ref={shotRef}
-                    className={`ins-screen-preview-shot ${isDesktopPlatform((screens[activeIndex] ?? screen).platform) ? 'ins-screen-preview-shot--web' : ''}`}
+                    // A website section is a wide strip of a page: fitted by width, never cut at the sides.
+                    className={`ins-screen-preview-shot ${isDesktopPlatform((screens[activeIndex] ?? screen).platform) ? 'ins-screen-preview-shot--web' : ''} ${isSection ? 'ins-screen-preview-shot--section' : ''}`}
                     data-screen-id={screens[activeIndex]?.id ?? view.id}
                     onClick={() => setZoomScreen(screens[activeIndex] ?? screen)}
                     onContextMenu={onShotContextMenu(screens[activeIndex] ?? screen)}
@@ -834,7 +1011,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   <button
                     type="button"
                     className="ins-card-control ins-card-control--prev ins-screen-preview-nav ins-screen-preview-nav--prev"
-                    aria-label="Previous screen"
+                    aria-label={isSite ? 'Previous page' : isSection ? 'Previous section' : 'Previous screen'}
                     onClick={() => (multiScreen ? scrollByStep(-1) : stepSingle(-1))}
                     disabled={multiScreen ? atStart : activeIndex === 0}
                   >
@@ -843,7 +1020,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   <button
                     type="button"
                     className="ins-card-control ins-screen-preview-nav ins-screen-preview-nav--next"
-                    aria-label="Next screen"
+                    aria-label={isSite ? 'Next page' : isSection ? 'Next section' : 'Next screen'}
                     onClick={() => (multiScreen ? scrollByStep(1) : stepSingle(1))}
                     disabled={multiScreen ? atEnd : activeIndex === screens.length - 1}
                   >
@@ -893,7 +1070,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                     </span>
                   </Link>
                 )}
-                {screens.length > 1 && !zoomedOut && (
+                {screens.length > 1 && !zoomedOut && !isWeb && (
                   <button
                     type="button"
                     className="ins-screen-preview-foot-btn"
@@ -920,7 +1097,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               <div ref={keysRef} className="ins-preview-keys" role="dialog" aria-label="Keyboard shortcuts" onClick={() => setShowKeys(false)}>
                 <p className="ins-preview-keys-title">Keyboard shortcuts</p>
                 <dl>
-                  {KEYS.map(([keys, label]) => (
+                  {keysFor(isSite ? 'page' : isSection ? 'section' : 'screen').map(([keys, label]) => (
                     <div key={label} className="ins-preview-keys-row">
                       <dt>
                         {keys.map((k) => (
@@ -939,16 +1116,21 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               other apps (as Z, or scrolling down on the screen, does). */}
           {canZoom && similarFor?.id === view.id && similarFor.has && !zoomedOut && !phone && (
             <button type="button" className="ins-similar-pill" onPointerEnter={() => warmSimilar(view)} onFocus={() => warmSimilar(view)} onClick={() => zoom(true)}>
-              Scroll to similar
+              {isWeb ? 'Other sites' : 'Scroll to similar'}
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M9 3v12M4 10l5 5 5-5" />
               </svg>
             </button>
           )}
           {/* Folded away, out of reach of Tab and screen readers too. */}
-          <div className="ins-screen-preview-details" inert={detailsHidden && sideBySide}>
+          <div
+            key={isWeb ? `site-${view.site?.kind}` : 'details'}
+            className={`ins-screen-preview-details ${isWeb ? 'ins-site-fade' : ''}`}
+            inert={detailsHidden && sideBySide}
+          >
             <div className="ins-screen-preview-details-head">
-              <h2>Details</h2>
+              {/* A website page leads with its sections, each in its own card; its details follow under them. */}
+              <h2>{isSite ? 'Sections' : 'Details'}</h2>
             </div>
             {/* The facts in small labelled groups: the linked ones (App, Type,
                 Platform, Industry) as the footer's grey pills; the screen's
@@ -958,9 +1140,17 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               // Scrolled down: a fade at the top too (straight on the element, no re-render).
               onScroll={(e) => e.currentTarget.classList.toggle('is-scrolled', e.currentTarget.scrollTop > 2)}
             >
+              {isSite && (
+                <SiteSectionsList
+                  sections={siteSections}
+                  active={siteFocus?.id ?? null}
+                  onPick={(id) => setSiteFocus((f) => ({ id, n: (f?.n ?? 0) + 1 }))}
+                />
+              )}
+
               <section className="ins-details-group" aria-labelledby="ins-details-screen">
                 <h3 id="ins-details-screen" className="ins-details-group-title">
-                  Screen
+                  {isSite ? 'Page' : isSection ? 'Section' : 'Screen'}
                 </h3>
                 <dl className="ins-details-list">
                   {app && (
@@ -979,7 +1169,17 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                     {/* Every type the screen is, the main one first; each opens its filter.
                         Two show; the rest wait behind "+N" until it is clicked. */}
                     <dd className="ins-screen-preview-details-value">
-                      {(() => {
+                      {isSite && app ? (
+                        // A website page's type is its page type, opening the site's pages of that type.
+                        <Link href={INSPIRATIONS_ROUTES.app(app, view.platform, { type: view.site?.pageType ?? 'other' })} className="ins-details-pill">
+                          {pageTypeLabel(view.site?.pageType ?? 'other')}
+                        </Link>
+                      ) : isSection && app ? (
+                        // A section's type opens the site's sections of that type.
+                        <Link href={INSPIRATIONS_ROUTES.app(app, view.platform, { tab: 'sections', type: view.site?.sectionType ?? 'content' })} className="ins-details-pill">
+                          {sectionTypeLabel(view.site?.sectionType ?? 'content')}
+                        </Link>
+                      ) : (() => {
                         const types = view.screenTypes?.length ? view.screenTypes : [view.screenType];
                         const shown = showAllTypes ? types : types.slice(0, 2);
                         return (
@@ -1005,6 +1205,26 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                       })()}
                     </dd>
                   </div>
+                  {isSection && sectionPage && (
+                    // The page this part is from: it opens in this preview, scrolled to the part.
+                    <div className="ins-screen-preview-details-row">
+                      <dt className="ins-screen-preview-details-term">Page</dt>
+                      <dd className="ins-screen-preview-details-value">
+                        <Link
+                          href={(() => {
+                            const sp = new URLSearchParams(params.toString());
+                            sp.set(SCREEN_PARAM, sectionPage.id);
+                            sp.set(SITE_AT_PARAM, view.id);
+                            return `${pathname}?${sp.toString()}`;
+                          })()}
+                          scroll={false}
+                          className="ins-details-pill"
+                        >
+                          {sitePageName(sectionPage.site)}
+                        </Link>
+                      </dd>
+                    </div>
+                  )}
                   <div className="ins-screen-preview-details-row">
                     <dt className="ins-screen-preview-details-term">Platform</dt>
                     <dd className="ins-screen-preview-details-value">
@@ -1047,7 +1267,7 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                 </section>
               )}
 
-              {app && <CompareShortcut app={app} screen={view} />}
+              {app && !isWeb && <CompareShortcut app={app} screen={view} />}
 
               {(credit || view.capturedAt) && (
                 <section className="ins-details-group" aria-labelledby="ins-details-source">
@@ -1059,6 +1279,23 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                       <div className="ins-screen-preview-details-row">
                         <dt className="ins-screen-preview-details-term">Credit</dt>
                         <dd className="ins-screen-preview-details-value">{credit}</dd>
+                      </div>
+                    )}
+                    {view.site?.pageUrl && (
+                      <div className="ins-screen-preview-details-row">
+                        <dt className="ins-screen-preview-details-term">Page</dt>
+                        <dd className="ins-screen-preview-details-value">
+                          <a href={view.site.pageUrl} target="_blank" rel="noopener noreferrer" className="ins-site-page-link">
+                            {(() => {
+                              try {
+                                const u = new URL(view.site.pageUrl);
+                                return `${u.host.replace(/^www\./, '')}${u.pathname.replace(/\/+$/, '')}`;
+                              } catch {
+                                return view.site.pageUrl;
+                              }
+                            })()}
+                          </a>
+                        </dd>
                       </div>
                     )}
                     {view.capturedAt && (
@@ -1099,7 +1336,8 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
           screen={zoomScreen}
           app={app}
           link={() => `${window.location.origin}${pathname}?${SCREEN_PARAM}=${zoomScreen.id}`}
-          onClose={() => setZoomScreen(null)}
+          startAt={zoomScreen.site?.kind === 'page' ? zoomAt : undefined}
+          onClose={() => { setZoomScreen(null); setZoomAt(undefined); }}
         />
       )}
       {shotMenu.menu}
@@ -1109,15 +1347,18 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
 }
 
 /** The shortcuts card's rows: keys, then what they do. */
-const KEYS: [string[], string][] = [
-  [['←', '→'], 'Previous / next screen'],
-  [['Z'], 'Similar screens in other apps'],
-  [['S'], 'Save'],
-  [['C'], 'Copy PNG'],
-  [['L'], 'Copy link'],
-  [['?'], 'Show these shortcuts'],
-  [['Esc'], 'Close'],
-];
+/** The keys that work on what is shown: a website page or section steps through its own kind and has no Z. */
+function keysFor(kind: 'screen' | 'page' | 'section'): [string[], string][] {
+  return [
+    [['←', '→'], `Previous / next ${kind}`],
+    [['Z'], kind === 'screen' ? 'Similar screens in other apps' : `The same ${kind} on other sites`],
+    [['S'], 'Save'],
+    [['C'], 'Copy PNG'],
+    [['L'], 'Copy link'],
+    [['?'], 'Show these shortcuts'],
+    [['Esc'], 'Close'],
+  ];
+}
 
 /** "2026-10-06…" → "6 Oct 2026" (the day as captured, not shifted by the viewer's time zone). */
 function formatDay(iso: string): string {

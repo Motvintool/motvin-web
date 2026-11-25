@@ -1,17 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { DEFAULT_PLATFORM } from '@/lib/inspirations/filters';
+import { browsedPlatforms } from '@/lib/inspirations/filters';
 import type { Platform } from '@/lib/inspirations/types';
 import { ArrowUpIcon, PlusIcon } from './Icons';
 import { RequestAppModal } from './RequestAppModal';
 
-const PLATFORMS: readonly Platform[] = ['ios', 'webapp', 'web'];
 
-/** The section being browsed (the URL's first platform), so a request starts on it. */
+/** The section being browsed (the URL's first platform; Webs' `web` starts on Web Apps), so a request starts on it. */
 function browsedPlatform(): Platform {
-  const first = new URLSearchParams(window.location.search).get('platform')?.split(',')[0];
-  return PLATFORMS.find((p) => p === first) ?? DEFAULT_PLATFORM;
+  return browsedPlatforms(new URLSearchParams(window.location.search))[0];
 }
 
 /** How close to the end of the page the button shows. */

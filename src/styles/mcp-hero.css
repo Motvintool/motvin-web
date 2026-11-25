@@ -148,10 +148,16 @@
 
 .mh-orb {
   position: relative;
+  display: block;
   flex: none;
   width: clamp(170px, 24vh, 300px);
   aspect-ratio: 1;
+  border-radius: 50%;
 }
+
+/* The orb opens the lit tool's guide: the core swells a touch under the pointer. */
+.mh-orb:focus-visible { outline: 2px solid #3550f5; outline-offset: 6px; }
+.mh-orb:hover .mh-orb-core { scale: 1.04; }
 
 /* The light round the core, as in the reference: a wide royal-blue bloom,
    strongest at the ring and fading far out, breathing slowly. */
@@ -234,6 +240,7 @@
     inset 0 0 0 1px rgba(255, 255, 255, 0.08),
     0 14px 40px -10px rgba(42, 62, 224, 0.4);
   color: #fff;
+  transition: scale 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* The active tool's mark in the core: about a third of the disc. */

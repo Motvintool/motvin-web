@@ -374,6 +374,9 @@ export function UserChatbot() {
   const lastSection = useRef<string | null>(null);
   // What the last answer listed, so "the second one" has something to point at.
   const lastResults = useRef<NavTarget[] | null>(null);
+  // The last question that was about something, so "for web" or "on ios" asks it again on that platform.
+  // Kept across a change of section: such a move often comes right after the answer opened another one.
+  const lastAsked = useRef<string | null>(null);
   const alive = useRef(true);
 
   useEffect(() => {
@@ -430,7 +433,7 @@ export function UserChatbot() {
     if (busy || lines.length === 0 || !id) return;
     const saved: SavedLine[] = lines.filter((line) => !line.pending).map(({ id: lineId, role, text, targets, card, opened, error }) => ({ id: lineId, role, text, targets, card, opened, error }));
     const appId = lastApp.current?.id ?? history.find((chat) => chat.id === id)?.appId ?? null;
-    const next = upsertChat(history, { id, lines: saved, appId }, Date.now());
+    const next = upsertChat(history, { id, lines: saved, appId, asked: lastAsked.current }, Date.now());
     if (next !== history) {
       setHistory(next);
       writeHistory(next);
@@ -615,12 +618,18 @@ export function UserChatbot() {
         lastApp.current = null;
         lastResults.current = null;
       }
-      const reply = await resolveNavigation(text, { app: lastApp.current, results: lastResults.current, page: { pathname, search: typeof window !== 'undefined' ? window.location.search : '' } });
+      const reply = await resolveNavigation(text, { app: lastApp.current, results: lastResults.current, previous: lastAsked.current, page: { pathname, search: typeof window !== 'undefined' ? window.location.search : '' } });
+      if (reply.kind !== 'smalltalk' && reply.kind !== 'fallback' && reply.kind !== 'error') lastAsked.current = reply.asked ?? text;
       if (reply.app) {
         lastApp.current = reply.app;
         // A list belongs to the answer that made it; one about a single app ends it.
         lastResults.current = reply.results ?? null;
-      } else if (reply.results) lastResults.current = reply.results;
+      } else if (reply.go || reply.results) {
+        // Somewhere else, or a list, with no one app: the talk has moved on from the app before ("food apps on web"
+        // after Swiggy), so a next "flows on web" is not about Swiggy.
+        lastApp.current = null;
+        lastResults.current = reply.results ?? null;
+      }
       if (reply.kind === 'fallback' || reply.kind === 'clarify' || reply.kind === 'error') recordMiss(text, reply.kind, reply.text);
       const calm = reducedMotion();
       if (!calm) await sleep(320 + Math.random() * 280);
@@ -675,6 +684,7 @@ export function UserChatbot() {
   const resetConversation = () => {
     chatId.current = null;
     lastApp.current = null;
+    lastAsked.current = null;
     lastResults.current = null;
     nextId.current = 1;
     setLines([]);
@@ -695,6 +705,8 @@ export function UserChatbot() {
     chatId.current = chat.id;
     nextId.current = Math.max(0, ...chat.lines.map((line) => line.id)) + 1;
     lastApp.current = null;
+    // The question it was last about, so a follow-up ("web", "site") moves it as it would have then.
+    lastAsked.current = chat.asked ?? null;
     setLines(chat.lines);
     setView('chat');
     // "it" and "its" in the next question mean the app that chat was last about.

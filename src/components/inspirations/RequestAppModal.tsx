@@ -24,7 +24,7 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 const PLATFORMS: { value: Platform; Icon: typeof AppleIcon }[] = [
   { value: 'ios', Icon: AppleIcon },
   { value: 'webapp', Icon: WebAppIcon },
-  { value: 'web', Icon: WebIcon },
+  { value: 'site', Icon: WebIcon },
 ];
 
 /**

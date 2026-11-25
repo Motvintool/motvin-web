@@ -8,7 +8,7 @@ import { browsedPlatforms, isWebsPlatforms } from '@/lib/inspirations/filters';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { INDUSTRY_LABEL, WEBS_APPS_LABEL } from '@/lib/inspirations/taxonomy';
 import { hueOf, type PaletteHue } from '@/lib/inspirations/hues';
-import { isDesktopPlatform, type Industry } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type Industry, type Platform } from '@/lib/inspirations/types';
 import { AppsGrid } from '../AppsGrid';
 import { FilterPill, NavPill, SortPill, ToolbarRow, type SortOption } from '../FilterToolbar';
 import { APPLIED_PILLS_MAX, AppliedFilterPills, FiltersPill } from '../FiltersPanel';
@@ -78,7 +78,11 @@ export function AppsView({ week = false }: { week?: boolean }) {
   // In the default order, newly added apps lead, then updated ones; a sort the visitor picks is kept as is.
   const settings = useLibrarySettings();
   const freshness = settings.freshness;
-  const inSection = (apps ?? []).filter((app) => app.platforms.some((p) => platforms.includes(p)));
+  // In Webs, the content menu's Web Apps (`?show=webapps`) and Webs (`?show=sites`, websites) each list their own;
+  // with neither, Webs lists both.
+  const show = isWebsPlatforms(platforms) ? params.get('show') : null;
+  const showOnly: Platform | null = show === 'webapps' ? 'webapp' : show === 'sites' || show === 'webs' ? 'site' : null;
+  const inSection = (apps ?? []).filter((app) => app.platforms.some((p) => platforms.includes(p) && (!showOnly || p === showOnly)));
   // New this week: only the apps the admin picked — in their order in the default sort, the list's own in any other.
   const weekApps = week ? newThisWeek(inSection, settings.newThisWeek, platforms) : [];
   const weekIds = new Set(weekApps.map((app) => app.id));
@@ -102,7 +106,7 @@ export function AppsView({ week = false }: { week?: boolean }) {
   return (
     <>
       <PageHeading
-        title={week ? 'New this week\u2004🎉' : isWebsPlatforms(platforms) ? WEBS_APPS_LABEL : 'Apps'}
+        title={week ? 'New this week\u2004🎉' : showOnly === 'webapp' ? 'Web Apps' : showOnly === 'site' ? 'Sites' : isWebsPlatforms(platforms) ? 'Web Apps & Sites' : 'Apps'}
         eyebrow={
           week && !loading
             ? `${visible.length} ${visible.length === 1 ? 'app' : 'apps'} added this week`

@@ -21,7 +21,7 @@ const TOOLS = [
   { name: 'Text on screens', text: 'Find screens by the words printed on them: button labels, microcopy, headlines.', ask: '"Which apps say “cancel anytime” near the price?"' },
   { name: 'Similar screens', text: 'Start from one screen and see how other apps solved the same thing.', ask: '"Find screens like this empty state"' },
   { name: 'Apps and patterns', text: 'Every app in the library, and curated patterns such as progress steppers or permission primers.', ask: '"What onboarding patterns does Duolingo use?"' },
-  { name: 'Platforms apart', text: 'iOS, Web Apps and Webs are separate libraries. Your AI compares them on purpose, never by accident.', ask: '"Compare the pricing page on web and iOS"' },
+  { name: 'Platforms apart', text: 'iOS, Web Apps and Sites are separate libraries. Your AI compares them on purpose, never by accident.', ask: '"Compare the pricing page on web and iOS"' },
 ];
 
 const PROMPTS = [

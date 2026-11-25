@@ -91,7 +91,7 @@ export function firstVersionDate(app: Pick<App, 'versions'>, platforms?: readonl
  * mixed), in the order they set — picks not placed yet follow in the order they were picked.
  */
 export function newThisWeek<T extends Pick<App, 'id'>>(apps: T[], settings?: LibrarySettings['newThisWeek'], platforms?: readonly Platform[]): T[] {
-  const section = platforms?.length && platforms.every((p) => p === 'web' || p === 'webapp') ? 'webs' : 'ios';
+  const section = platforms?.length && platforms.every((p) => p === 'site' || p === 'webapp') ? 'webs' : 'ios';
   const picks = settings?.added[section] ?? [];
   const order = settings?.order[section] ?? [];
   const placed = (id: string) => {

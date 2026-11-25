@@ -48,7 +48,8 @@ const INDUSTRY_WORDS: Record<Industry, RegExp> = {
  */
 export function findIndustry(text: string): Industry | null {
   const lower = text.toLowerCase();
-  const talksAboutApps = /\b(?:apps?|industr(?:y|ies)|categor(?:y|ies))\b/.test(lower);
+  // A platform said beside it counts too: "saas websites", "fintech on ios".
+  const talksAboutApps = /\b(?:apps?|industr(?:y|ies)|categor(?:y|ies)|websites?|webs?|ios)\b/.test(lower);
   const bare = lower.replace(/[^\p{L}\p{N}\s&-]/gu, ' ').replace(/\s+/g, ' ').trim();
   for (const [key, pattern] of Object.entries(INDUSTRY_WORDS) as [Industry, RegExp][]) {
     const match = pattern.exec(lower);
@@ -59,21 +60,21 @@ export function findIndustry(text: string): Industry | null {
 }
 
 /** Words for where an app runs. Matched on the visitor's own wording, before the synonyms above. */
-const PLATFORM_WORDS: Record<Platform, RegExp> = {
+export const PLATFORM_WORDS: Record<Platform, RegExp> = {
   ios: /\b(?:ios|iphone|ipad|apple)(?: ?(?:apps?|applications?))?\b/,
   // Online applications: "web apps", "web applications", "browser apps".
   webapp: /\b(?:web ?apps?|web applications?|browser apps?|online apps?)\b/,
   // Websites: "web", "webs", "websites", "desktop" — but not the "web" of "web apps".
-  web: /\b(?:websites?|web ?sites?|webs|desktop|web(?! ?apps?\b| applications?\b)(?: ?(?:sites?|platform))?)\b/,
+  site: /\b(?:websites?|web ?sites?|webs|desktop|web(?! ?apps?\b| applications?\b)(?: ?(?:sites?|platform))?)\b/,
 };
 
-export const PLATFORM_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web Apps', web: 'Webs' };
+export const PLATFORM_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web Apps', site: 'Sites' };
 
 /** The platform as a describing word before "apps": "Showing web apps", "Among website apps". */
-export const PLATFORM_ADJECTIVE: Record<Platform, string> = { ios: 'iOS', webapp: 'web', web: 'website' };
+export const PLATFORM_ADJECTIVE: Record<Platform, string> = { ios: 'iOS', webapp: 'web', site: 'website' };
 
 /** A phrase that reads back as that platform when the assistant re-asks itself. */
-export const PLATFORM_QUERY: Record<Platform, string> = { ios: 'ios apps', webapp: 'web apps', web: 'website apps' };
+export const PLATFORM_QUERY: Record<Platform, string> = { ios: 'ios apps', webapp: 'web apps', site: 'website apps' };
 
 /**
  * Where the apps they mean run — "web apps", "iOS", "websites" — or

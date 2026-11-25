@@ -1,7 +1,7 @@
 import type { App, Platform } from './types';
 
 /** One app's platform, said of that app ("iOS", "Web App", "Website") — not the library's section names. */
-export const PLATFORM_ONE: Record<Platform, string> = { ios: 'iOS', webapp: 'Web App', web: 'Website' };
+export const PLATFORM_ONE: Record<Platform, string> = { ios: 'iOS', webapp: 'Web App', site: 'Site' };
 
 /**
  * An app's screens and flows on the given platforms — the section it is seen in. Claude in Webs counts

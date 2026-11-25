@@ -4,7 +4,7 @@ import { newThisWeek } from './appFreshness';
 const apps = ['canva', 'notion', 'uber', 'calm'].map((id) => ({ id }));
 const none = { ios: [], webs: [] };
 const ids = (list: { id: string }[]) => list.map((a) => a.id);
-const WEBS = ['web', 'webapp'] as const;
+const WEBS = ['site', 'webapp'] as const;
 
 describe('New this week', () => {
   it('is empty until the admin picks apps', () => {

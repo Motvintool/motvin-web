@@ -6,8 +6,9 @@ import { countedPlatforms, countsOn, PLATFORM_ONE } from '../appCounts';
 import { INSPIRATIONS_ROUTES } from '../routes';
 import { suggestQueries, type SearchSuggestion } from '../search';
 import { browsedPlatforms, EMPTY_FILTERS, isWebsPlatforms, WEBS_PLATFORMS } from '../filters';
+import { isPlatformMove, readPlatformAsk, withoutPlatform, type PlatformAsk } from './platformAsk';
 import { applySynonyms, findIndustry, findPlatform, findPlatforms, PLATFORM_ADJECTIVE, PLATFORM_LABEL, PLATFORM_QUERY, stripChatter } from './synonyms';
-import { elementLabel, flowCategoryLabel, INDUSTRY_LABEL, SCREEN_TYPE_LABEL, screenStateLabel, styleLabel } from '../taxonomy';
+import { elementLabel, flowCategoryLabel, INDUSTRY_LABEL, pageTypeLabel, SCREEN_TYPE_LABEL, screenStateLabel, sectionTypeLabel, styleLabel } from '../taxonomy';
 import { FLOW_CATEGORY_PRESETS, isDesktopPlatform, type App, type Flow, type Pattern, type Platform, type ScreenState, type ScreenType, type Style } from '../types';
 
 /**
@@ -28,9 +29,14 @@ export type NavCard = { title: string; iconSrc?: string; facts: string[]; href?:
 /** The one thing Buddy does beyond showing: copy a link, after the visitor says yes. */
 export type GuideAction = { kind: 'copy'; href: string; label: string };
 export type ReplyKind = 'nav' | 'answer' | 'clarify' | 'fallback' | 'smalltalk' | 'error' | 'action';
-export type NavReply = { text: string; targets: NavTarget[]; go?: NavTarget; card?: NavCard; app?: App; error?: boolean; kind?: ReplyKind; action?: GuideAction; results?: NavTarget[] };
+/** `asked`: the question as it was answered — a platform move ("for web") joined to the question before it. */
+export type NavReply = { text: string; targets: NavTarget[]; go?: NavTarget; card?: NavCard; app?: App; error?: boolean; kind?: ReplyKind; action?: GuideAction; results?: NavTarget[]; asked?: string };
 /** What the guide knows going in: the app being talked about, what it last listed, and the page the visitor is on. */
-export type NavContext = { app: App | null; results?: NavTarget[] | null; page?: { pathname: string; search?: string } | null };
+/**
+ * `previous`: the last question that was about something (not a greeting), for a move like "for web"; `ask`: the
+ * platform the message names (platformAsk), worked out once for the whole message.
+ */
+export type NavContext = { app: App | null; results?: NavTarget[] | null; page?: { pathname: string; search?: string } | null; previous?: string | null; ask?: PlatformAsk | null };
 
 const PAGES: { keys: string[]; target: NavTarget }[] = [
   { keys: ['explore', 'home', 'inspirations', 'start'], target: { label: 'Explore', hint: 'Home', href: INSPIRATIONS_ROUTES.explore } },
@@ -113,12 +119,84 @@ function findApps(text: string, apps: App[]): App[] {
 
 const words = (text: string) => text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 
+// A website's page types by the words people use for them ("pricing", "prices", "home page", "jobs").
+const SITE_PAGE_WORDS: [string, RegExp][] = [
+  ['pricing', /\b(?:pricing|prices?|price|plans?)\b/],
+  ['landing', /\b(?:landing|home ?pages?|homepage|front ?page)\b/],
+  ['about', /\babout(?: us)? pages?\b|\babout us\b/],
+  ['features', /\bfeatures?\b/],
+  ['solutions', /\b(?:solutions?|use cases?)\b/],
+  ['customers', /\b(?:customers?|case stud(?:y|ies)|testimonials?)\b/],
+  ['careers', /\b(?:careers?|jobs?|hiring)\b/],
+  ['contact', /\b(?:contact(?: us)?|talk to sales)\b/],
+  ['blog-post', /\b(?:blog post|article)s?\b/],
+  ['blog', /\bblogs?\b/],
+  ['docs', /\b(?:docs|documentation|help cent(?:er|re))\b/],
+  ['changelog', /\b(?:changelog|release notes|what'?s new)\b/],
+  ['integrations', /\bintegrations?\b/],
+  ['legal', /\b(?:legal|privacy|terms)\b/],
+  ['login', /\b(?:log ?in|sign ?in)\b/],
+  ['signup', /\b(?:sign ?up|register)\b/],
+  ['not-found', /\b(?:404|not found)\b/],
+  ['product', /\bproducts?\b/],
+];
+/** "a Pricing Page", "an About Page". */
+const aOrAn = (word: string) => `${/^[aeiou]/i.test(word) ? 'an' : 'a'} ${word}`;
+const findSitePageType = (lower: string) => SITE_PAGE_WORDS.find(([, re]) => re.test(lower))?.[0] ?? null;
+// A website's sections by the words people use ("hero", "footer", "mega menu", "faq").
+const SITE_SECTION_WORDS: [string, RegExp][] = [
+  ['nav-menu', /\b(?:nav(?:igation)? menus?|mega ?menus?|drop ?down menus?|menus?)\b/],
+  ['navigation', /\b(?:nav ?bars?|navigation(?: bars?)?|headers?|top bars?)\b/],
+  ['hero', /\bheros?(?: sections?| banners?)?\b/],
+  ['logos', /\b(?:logos?(?: clouds?| walls?| strips?)?|trusted by)\b/],
+  ['how-it-works', /\bhow it works\b/],
+  ['testimonials', /\b(?:testimonials?|reviews?|quotes?)\b/],
+  ['stats', /\b(?:stats|statistics|numbers)\b/],
+  ['faq', /\b(?:faqs?|questions)\b/],
+  ['cta', /\b(?:ctas?|call to actions?|calls to action)\b/],
+  ['footer', /\bfooters?\b/],
+  ['comparison', /\b(?:comparisons?|compare tables?)\b/],
+  ['team', /\bteams?\b/],
+  ['features', /\bfeatures?\b/],
+  ['pricing', /\b(?:pricing(?: tables?)?|plans?)\b/],
+  ['blog', /\bblogs?\b/],
+  ['contact', /\bcontact\b/],
+];
+// Words that only ever mean a website's section, so they need no "section" beside them.
+const EXCLUSIVE_SECTION = /\b(?:heros?|footers?|mega ?menus?|faqs?|testimonials?|logo clouds?|call to actions?|ctas?|how it works)\b/;
+const findSiteSectionType = (lower: string) => SITE_SECTION_WORDS.find(([, re]) => re.test(lower))?.[0] ?? null;
+/**
+ * The three platforms, as people say them: Apps (iOS), Web Apps ("web apps") and Webs — websites ("web", "webs",
+ * "websites"). A website is an app captured on Webs alone: its pages are what is asked for, not screens.
+ */
+const isWebsite = (app: App | null | undefined): app is App => Boolean(app?.platforms?.length && app.platforms.every((platform) => platform === 'site'));
+
+// A website's pages, by app id: kept apart from screens (see withoutWebsitePages), said as pages.
+const websitePages = new Map<string, number>();
+
+/**
+ * An app as Buddy counts it: a website's pages taken out of its screens — they are pages, not screens, and
+ * never add into a screen total or ranking. Kept in websitePages for the app's own count ("2 pages").
+ */
+function withoutWebsitePages(app: App): App {
+  const pages = app.platformCounts?.site?.screens ?? 0;
+  if (!app.platformCounts?.site) return app;
+  websitePages.set(app.id, pages);
+  const platformCounts = { ...app.platformCounts };
+  delete platformCounts.site;
+  return { ...app, screenCount: Math.max(0, app.screenCount - pages), platformCounts };
+}
+
 /** An app on several platforms says its counts per platform ("117 screens on iOS and 33 screens on Web Apps"), never one added-up total. */
 function countPhrase(app: App, kind: 'screens' | 'flows'): string {
   const unit = kind === 'screens' ? 'screen' : 'flow';
   const on = countedPlatforms(app);
-  if (on.length < 2) return plural(kind === 'screens' ? app.screenCount : app.flowCount, unit);
-  return on.map((platform) => `${plural(app.platformCounts?.[platform]?.[kind] ?? 0, unit)} on ${PLATFORM_LABEL[platform]}`).join(' and ');
+  const pages = kind === 'screens' ? websitePages.get(app.id) ?? 0 : 0;
+  // A website alone: its pages. A website beside an app: the app's screens, and the website's pages.
+  if (pages && !on.length) return plural(pages, 'page');
+  const sitePart = pages ? ` and ${plural(pages, 'page')} on its site` : '';
+  if (on.length < 2) return `${plural(kind === 'screens' ? app.screenCount : app.flowCount, unit)}${sitePart}`;
+  return on.map((platform) => `${plural(app.platformCounts?.[platform]?.[kind] ?? 0, unit)} on ${PLATFORM_LABEL[platform]}`).join(' and ') + sitePart;
 }
 
 const appTarget = (app: App, tab?: Section['tab'], platform?: Platform): NavTarget => ({
@@ -151,6 +229,15 @@ function listNames(names: string[], show = 3): string {
 
 /** Likely next questions about an app, minus the one just answered. */
 function followUps(app: App, used: Section['tab'] | 'count' | null): NavTarget[] {
+  // A website has pages and sections, not screens and flows: what to ask next about it.
+  if (app.platforms?.length && app.platforms.every((platform) => platform === 'site')) {
+    const site: { key: Section['tab'] | 'count' | 'sections' | 'pricing'; target: NavTarget }[] = [
+      { key: 'sections', target: { label: `${app.name} sections`, hint: 'Ask', href: '', ask: `${app.name} sections` } },
+      { key: 'count', target: { label: 'How many pages?', hint: 'Ask', href: '', ask: `how many pages does ${app.name} have` } },
+      { key: 'pricing', target: { label: 'Pricing page', hint: 'Ask', href: '', ask: `${app.name} pricing page` } },
+    ];
+    return site.filter((entry) => entry.key !== used).slice(0, 3).map((entry) => entry.target);
+  }
   const all: { key: Section['tab'] | 'count'; target: NavTarget }[] = [
     { key: 'flows', target: { label: `${app.name} flows`, hint: 'Ask', href: '', ask: `${app.name} flows` } },
     { key: 'count', target: { label: 'How many screens?', hint: 'Ask', href: '', ask: `how many screens does ${app.name} have` } },
@@ -250,8 +337,15 @@ function findRanking(raw: string): Ranking | null {
 
 const latestOf = (app: App) => Math.max(0, ...(app.versions ?? []).map((version) => Date.parse(version.capturedAt) || 0));
 
-function answerRanking(list: App[], ranking: Ranking, scopeLabel: string | null, topN: number | null): NavReply {
-  const scope = scopeLabel ? `Among ${scopeLabel}, ` : '';
+function answerRanking(all: App[], ranking: Ranking, scopeLabel: string | null, topN: number | null): NavReply {
+  // Sites alone are ranked by their pages; they have no flows. Beside apps, a site (pages, no flows) is no part of
+  // a screens or flows ranking, and the apps ranked are said as what they are ("Among web apps").
+  const sitesOnly = all.length > 0 && all.every(isWebsite);
+  const counting = ranking.metric === 'screens' || ranking.metric === 'flows';
+  if (sitesOnly && ranking.metric === 'flows') return { text: 'Sites have pages and sections, not flows.', targets: [{ label: 'Sites', hint: 'Webs', href: WEBSITES_LIST }] };
+  const list: App[] = sitesOnly || !counting ? all : all.filter((app) => !isWebsite(app as App | null));
+  const label = scopeLabel && list.length < all.length ? scopeLabel.replace(/\bWebs\b/, 'web') : scopeLabel;
+  const scope = label ? `Among ${label}, ` : '';
   // After "Among … apps," a leading "The" drops to lower case; a brand name keeps its capital.
   const sentence = (text: string) => (scope ? `${scope}${text.startsWith('The ') ? `the${text.slice(3)}` : text}` : text);
   if (ranking.metric === 'rating') {
@@ -272,9 +366,9 @@ function answerRanking(list: App[], ranking: Ranking, scopeLabel: string | null,
     const when = new Date(latestOf(first)).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
     return { text: sentence(`The ${ranking.order === 'high' ? 'newest' : 'oldest'} app is ${first.name}, captured ${when}.`), targets: appResults(dated.slice(0, topN ?? 3)), app: first, results: appResults(dated) };
   }
-  const count = (app: App) => (ranking.metric === 'flows' ? app.flowCount : app.screenCount);
+  const count = (app: App) => (ranking.metric === 'flows' ? app.flowCount : sitesOnly ? websitePages.get(app.id) ?? app.screenCount : app.screenCount);
   const ordered = [...list].sort((a, b) => (ranking.order === 'high' ? count(b) - count(a) : count(a) - count(b)));
-  const noun = ranking.metric;
+  const noun = sitesOnly ? 'pages' : ranking.metric;
   if (topN && topN > 1) {
     const shown = ordered.slice(0, topN).map((app) => `${app.name} (${count(app).toLocaleString()})`);
     return { text: sentence(`The top ${Math.min(topN, ordered.length)} by ${noun}: ${listNames(shown, topN)}.`), targets: appResults(ordered.slice(0, topN)), app: ordered[0], results: appResults(ordered) };
@@ -291,6 +385,14 @@ function answerRanking(list: App[], ranking: Ranking, scopeLabel: string | null,
  * apps heading the columns and the numbers lined up under them.
  */
 function compareApps(list: App[]): NavReply {
+  // A site has pages, not screens or flows: it is said apart, never lined up against an app's numbers.
+  const sitesHere = list.slice(0, 3).filter(isWebsite);
+  if (sitesHere.length && sitesHere.length < Math.min(list.length, 3)) {
+    const appsHere: App[] = list.slice(0, 3).filter((app) => !isWebsite(app as App | null));
+    const siteText = sitesHere.map((app) => `${app.name} is a site, with ${plural(websitePages.get(app.id) ?? app.screenCount, 'page')}`).join('; ');
+    const appText = appsHere.length >= 2 ? compareApps(appsHere).text : `${appsHere[0].name} has ${countPhrase(appsHere[0], 'screens')} and ${countPhrase(appsHere[0], 'flows')}`;
+    return { text: `${siteText}. ${appText.replace(/\.$/, '')}. Sites and apps aren’t counted the same way.`, targets: appResults(list.slice(0, 3)), results: appResults(list.slice(0, 3)) };
+  }
   const shown = list.slice(0, 3);
   const kind = (app: App) => INDUSTRY_LABEL[app.industry] ?? app.industry;
   const where = (app: App) => (app.platforms?.length ? app.platforms.map((platform) => PLATFORM_LABEL[platform]).join(', ') : '—');
@@ -342,7 +444,46 @@ const BYE = /^(?:(?:ok(?:ay)?|alright|cool|thanks?|thank you)[\s,!.]*)?(?:bye+|g
 const HELP = /^(?:help|what can you do|what do you do|how (?:does this|do you) work|what is this|what can i (?:find|do|see|ask)(?: here| in here| on here)?|what(?:'s| is| are)? (?:in )?here|what do you have|what have you got|how can you help(?: me)?|what can you help (?:me )?with|how do i use (?:this|you|it)|how to use (?:this|you)|what is this for|what are you for)\b[\s!.?]*$/i;
 /** The guide only takes people around; it never changes the library. */
 /** "what is Webs", "difference between Apps and Webs". */
-const ABOUT_SECTIONS = /\bwhat(?:'s| is| are| does)? (?:the )?webs?\b(?! apps?\b)(?: (?:section|tab|mean))?\s*\??$|\bdifference between (?:the )?(?:apps? and webs?|webs? and apps?)\b|\b(?:apps? (?:vs\.?|versus|or) webs?|webs? (?:vs\.?|versus|or) apps?)\s*\??$/i;
+// The Webs section's two lists, as its content menu opens them: web apps alone, and websites alone.
+const WEB_APPS_LIST = `${INSPIRATIONS_ROUTES.apps}?show=webapps&platform=web`;
+const WEBSITES_LIST = `${INSPIRATIONS_ROUTES.apps}?show=sites&platform=web`;
+
+/** Motvin's three platforms, and the two sections they sit in. */
+function aboutPlatforms(apps: App[] = []): NavReply {
+  // Its examples are the library's own, biggest first, so they stay true as apps and websites come and go.
+  // An app on that platform alone first (so one name never stands for two platforms), and never the same name twice.
+  const used = new Set<string>();
+  const biggest = (platform: Platform) => {
+    const on = [...apps].filter((app) => app.platforms.includes(platform) && !used.has(app.name)).sort((a, b) => Number(b.platforms.length === 1) - Number(a.platforms.length === 1) || b.screenCount - a.screenCount);
+    const name = on[0]?.name;
+    if (name) used.add(name);
+    return name;
+  };
+  const iosApp = biggest('ios');
+  const webApp = biggest('webapp');
+  const website = biggest('site');
+  const like = (name: string | undefined) => (name ? `, like ${name}` : '');
+  return {
+    text: `Motvin has three platforms. Apps are iPhone apps (iOS)${like(iosApp)}. Web Apps are tools you use in a browser${like(webApp)}. Sites are websites${like(website)}, kept as whole pages and their sections. Apps has its own section at the top; Web Apps and Sites are together in Webs.`,
+    targets: [
+      { label: 'Apps', hint: 'iOS', href: INSPIRATIONS_ROUTES.apps },
+      { label: 'Web Apps', hint: 'Webs', href: WEB_APPS_LIST },
+      { label: 'Sites', hint: 'Webs', href: WEBSITES_LIST },
+    ],
+    kind: 'answer',
+  };
+}
+
+const PLATFORM_NAME = String.raw`(?:apps?|web ?apps?|webs?|web ?sites?|ios|iphone)`;
+const ABOUT_SECTIONS = new RegExp(
+  [
+    String.raw`\bwhat(?:'s| is| are| does)? (?:a |an |the )?(?:webs?|web ?apps?|web ?sites?)\b(?: (?:section|tab|mean|in motvin))?\s*\??$`,
+    String.raw`\bdifferences? between\b.*\b${PLATFORM_NAME}\b.*\b${PLATFORM_NAME}\b`,
+    String.raw`^\s*${PLATFORM_NAME}\s+(?:vs\.?|versus|or)\s+${PLATFORM_NAME}\s*\??$`,
+    String.raw`\bplatforms? (?:do you|does motvin) (?:have|support|cover)\b|^\s*(?:what|which) platforms?(?: are there| do you have| does motvin have)?\s*\??$`,
+  ].join('|'),
+  'i',
+);
 /** "how do I save", "how do collections work" — how saving works, not a request to save. */
 const HOW_SAVE = /\bhow (?:do|can|to|would|should) (?:i |you |we )?(?:save|bookmark|collect|add (?:\w+ )?to (?:a |my )?collection)|\bhow (?:do|does) (?:collections?|saving|bookmarks?) work\b|\bwhat (?:are|is) (?:a )?collections?\b/i;
 const CLEAR_HISTORY = /^(?:please\s+)?(?:clear|delete|erase|remove|wipe)\s+(?:all\s+)?(?:my\s+)?(?:chat\s+)?(?:history|chats?|conversations?|messages)\b/i;
@@ -405,7 +546,7 @@ const SIMILAR = /\b(?:similar(?: to)?|like|alternatives? (?:to|for)|competitors?
 const WHERE_AM_I = /\b(?:which app is this|what app is this|where am i|what page is this|what is this page|what am i looking at)\b/i;
 const RANDOM = /\b(?:random|surprise me|anything|pick one for me|something)\b/i;
 
-const ON_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web Apps', web: 'the web' };
+const ON_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web Apps', site: 'Sites' };
 const article = (word: string) => (/^[aeiou]/i.test(word) ? 'an' : 'a');
 const platformList = (app: App) => listNames((app.platforms ?? []).map((platform) => ON_LABEL[platform]));
 
@@ -424,10 +565,21 @@ function withoutNames(text: string, named: App[]): string {
 function describeApp(app: App): NavReply {
   const kind = INDUSTRY_LABEL[app.industry] ?? app.industry;
   const where = app.platforms?.length ? ` on ${platformList(app)}` : '';
+  // A website: "a SaaS website, with 2 pages" — never an app with screens and flows.
+  const site = Boolean(app.platforms?.length && app.platforms.every((platform) => platform === 'site'));
   return {
-    text: `${app.name} is ${article(kind)} ${kind} app${where}, with ${countPhrase(app, 'screens')} and ${countPhrase(app, 'flows')}.`,
+    text: site
+      ? `${app.name} is ${article(kind)} ${kind} site, with ${countPhrase(app, 'screens')}.`
+      : `${app.name} is ${article(kind)} ${kind} app${where}, with ${countPhrase(app, 'screens')} and ${countPhrase(app, 'flows')}.`,
     targets: [appTarget(app), ...followUps(app, 'count').slice(0, 2)],
-    card: { title: app.name, iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined, facts: [kind, ...(app.platforms?.length ? [app.platforms.map((platform) => PLATFORM_LABEL[platform]).join(' · ')] : []), countPhrase(app, 'screens'), countPhrase(app, 'flows')], href: INSPIRATIONS_ROUTES.app(app) },
+    card: {
+      title: app.name,
+      iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined,
+      facts: site
+        ? [kind, 'Site', countPhrase(app, 'screens')]
+        : [kind, ...(app.platforms?.length ? [app.platforms.map((platform) => PLATFORM_LABEL[platform]).join(' · ')] : []), countPhrase(app, 'screens'), countPhrase(app, 'flows')],
+      href: INSPIRATIONS_ROUTES.app(app),
+    },
     app,
   };
 }
@@ -469,10 +621,12 @@ async function answerAboutApp(app: App, text: string, question: boolean, yesNo: 
     if (platformsAsked.length === 1) {
       // "the web version of Claude": a web app and a website are both the web, so either one answers it.
       // "Website" asked by name stays a website.
-      const loose = platformsAsked[0] === 'web' && !/\b(?:web ?sites?|sites?)\b/.test(rest);
+      const loose = platformsAsked[0] === 'site' && !/\b(?:web ?sites?|sites?)\b/.test(rest);
       const asked = app.platforms.includes(platformsAsked[0]) ? platformsAsked[0] : (loose && app.platforms.find(isDesktopPlatform)) || platformsAsked[0];
       const on = app.platforms.includes(asked);
-      const text = on ? (yesNo ? `Yes — ${onAll}` : onAll) : `${yesNo ? 'No — ' : ''}${app.name} ${asked === 'web' ? 'has no website here' : `isn’t on ${ON_LABEL[asked]}`}. It’s on ${platformList(app)}.`;
+      // "canva login" then "web app": its login screens there, not where Canva runs.
+      if (on && !question && (screenType || section)) return null;
+      const text = on ? (yesNo ? `Yes — ${onAll}` : onAll) : `${yesNo ? 'No — ' : ''}${app.name} ${asked === 'site' ? (loose ? 'has no web app or site here' : 'has no site here') : `isn’t on ${ON_LABEL[asked]}`}. It’s on ${platformList(app)}.`;
       // "show Swiggy on iOS" still opens Swiggy when it is there; a question never navigates.
       // It opens on that platform: "Claude on web" from iOS goes to Claude's web screens.
       return { text: !question && on && app.platforms.length > 1 ? `Opening ${app.name} on ${PLATFORM_ONE[asked]}.` : text, targets: [appTarget(app, undefined, on ? asked : undefined), ...followUps(app, null).slice(0, 2)], go: !question && on ? appTarget(app, undefined, asked) : undefined, app };
@@ -527,13 +681,62 @@ function classify(reply: NavReply): NavReply {
   return { ...reply, kind: 'answer' };
 }
 
-export async function resolveNavigation(raw: string, context?: NavContext): Promise<NavReply> {
-  const trimmed = stripChatter(raw.trim().slice(0, 240));
+export async function resolveNavigation(raw: string, incoming?: NavContext): Promise<NavReply> {
+  // Short slips the spelling fixer leaves alone (it only guesses at words of five letters or more): the few
+  // that can only mean one thing — "logn" is login, "webb" is web, "aps" is apps.
+  let asked = stripChatter(raw.trim().slice(0, 240))
+    .replace(/\b(?:logn|lgin|lgon|loign)\b/gi, 'login')
+    .replace(/\b(?:webb|wbe)\b/gi, 'web')
+    .replace(/\baps\b/gi, 'apps');
+  // "what is the difference between web apps and webs": the three platforms, before any is read as a place.
+  if (ABOUT_SECTIONS.test(asked)) return classify({ ...aboutPlatforms((await loadIndex().catch(() => null))?.apps ?? []), asked });
+  // How people say pricing and full pages: "price page", "prices", "plans page" are the pricing screens or pages
+  // (the Price UI element only when its label or tag is meant); "full page" is a website's whole page.
+  asked = asked
+    .replace(/\bprices?\b(?!\s*(?:tags?|labels?|elements?|components?|texts?|fields?))/gi, 'pricing')
+    .replace(/\b(?:plans?|subscriptions?)\s+(?=pages?\b|screens?\b)/gi, 'pricing ')
+    .replace(/\bfull ?pages?\b/gi, 'site pages');
+  // "section", "pages", "screens": the last question again, as that kind — "pricing page web" then "sections"
+  // is the websites' pricing sections; then "screens", the Web App pricing screens.
+  const kindMove = /^\s*(?:(?:and|or|what about|how about|now|then|only|just|show(?: me)?|the|in|as|its)\s+)*(sections?|site pages|pages?|screens?)\s*\??\s*$/i.exec(asked);
+  if (incoming?.previous && kindMove) {
+    const kind = kindMove[1].toLowerCase();
+    const topic = incoming.previous.replace(/\b(?:full ?pages?|(?:web|site) pages|pages?|sections?|screens?)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+    const as = kind.startsWith('section') ? 'sections' : kind.startsWith('screen') ? 'screens' : 'site pages';
+    // Pages and sections are websites' alone: an earlier "web app" or "ios" goes; screens keep their platform.
+    const bare = as === 'screens' ? topic : withoutPlatform(topic);
+    // A topic that is no such kind ("hero" as a page, "login" as a section) opens all of that kind instead.
+    const lowTopic = bare.toLowerCase();
+    const fits = as === 'sections' ? Boolean(findSiteSectionType(lowTopic)) : as === 'site pages' ? Boolean(findSitePageType(lowTopic)) : true;
+    if (bare) asked = fits ? `${bare} ${as}` : as;
+  }
+  // "for web", "on ios", "what about websites": the last question again, on that platform. With an app being
+  // talked about and nothing else asked before, it is about that app instead ("on ios?" — is it on iOS?).
+  const previous = incoming?.previous ?? null;
+  const aboutTheAppOnly = (text: string) =>
+    Boolean(incoming?.app) && !text.toLowerCase().replace(incoming!.app!.name.toLowerCase(), ' ').replace(/\b(?:open|show|go to|take me to|tell me about|about|what is|me|the|app|please)\b/g, ' ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  if (previous && isPlatformMove(asked) && !aboutTheAppOnly(withoutPlatform(previous))) asked = `${withoutPlatform(previous)} ${asked}`;
+  // Plain "app" after a question moves it to Apps (iOS), as "web" and "site" do: "form page", then "app".
+  else if (previous && /^\s*(?:(?:and|or|what about|how about|now|then|only|just|for|on|in)\s+)*apps?\s*[?.!]?\s*$/i.test(asked) && withoutPlatform(previous).trim() && !aboutTheAppOnly(withoutPlatform(previous))) asked = `${withoutPlatform(previous)} on ios`;
+  const read = readPlatformAsk(asked, { asksCount: /\bhow (?:many|much)\b|\b(?:count|number of|total)\b/.test(asked.toLowerCase()) });
+  // Only a platform ("i want web", "give me ios"), with no app being talked about: that platform's apps.
+  const BARE: Record<PlatformAsk, string> = { ios: 'ios apps', webapp: 'web apps', webs: 'web', website: 'websites' };
+  const listAsked = /\b(?:show|list|open|give|browse|see|view|all|which|any)\b/i.test(asked) && !read.rest.replace(/\b(?:show|list|open|give|browse|see|view|all|which|any|me|the|please|i|want|need)\b/g, ' ').trim();
+  if (read.ask && read.text === asked && ((!incoming?.app && isPlatformMove(asked)) || listAsked)) read.text = BARE[read.ask];
+  // A list asked for ("show websites") is that list, not a question about the app talked about before.
+  // Plain "app" / "apps" ("app", "show apps", "i want apps") is Apps, iPhone apps — wherever the visitor is.
+  const bareApps = /^\s*(?:(?:show|list|open|give|browse|see|view|all|i want|i need|want|need|me|the|please|go to|take me to)\s+)*apps?\s*[?.!]?\s*$/i.test(asked);
+  const context: NavContext = { app: listAsked || bareApps ? null : incoming?.app ?? null, results: incoming?.results ?? null, page: incoming?.page ?? null, previous: incoming?.previous ?? null, ask: bareApps ? 'ios' : read.ask };
+  const answered = await resolveParts(read.text, context);
+  return { ...answered, asked };
+}
+
+async function resolveParts(trimmed: string, context: NavContext): Promise<NavReply> {
   const parts = splitIntents(trimmed);
   if (parts.length === 1) return classify(await resolveWithNotes(parts[0], context));
 
   // "open zomato and show its flows": each part in turn, each knowing what the one before found.
-  let working: NavContext = { app: context?.app ?? null, results: context?.results ?? null, page: context?.page ?? null };
+  let working: NavContext = { ...context };
   const texts: string[] = [];
   let last: NavReply | null = null;
   let go: NavTarget | undefined;
@@ -555,10 +758,14 @@ export async function resolveNavigation(raw: string, context?: NavContext): Prom
  * nothing. A platform the visitor names wins (its links say which), and so does a link that already does.
  */
 async function keepSection(reply: NavReply, text: string, context: NavContext | undefined): Promise<NavReply> {
-  if (!context?.page) return reply;
-  const section = browsedPlatforms(new URLSearchParams(context.page.search ?? ''));
+  // A platform the message named is where its links go, not the section on show: iOS (plain "apps" too) as they
+  // are; web, web apps or websites in Webs, so a link that names no platform ("nav bars") still opens Webs'.
+  if (context?.ask === 'ios') return reply;
+  const asksWebs = Boolean(context?.ask);
+  if (!context?.page && !asksWebs) return reply;
+  const section = asksWebs ? [...WEBS_PLATFORMS] : browsedPlatforms(new URLSearchParams(context?.page?.search ?? ''));
   const index = await loadIndex();
-  if (section.includes('ios') || findPlatforms(applySynonyms(text.toLowerCase())).length > 0) return reply;
+  if (!asksWebs && (section.includes('ios') || findPlatforms(applySynonyms(text.toLowerCase())).length > 0)) return reply;
   const fix = (href: string): string => {
     if (!href.startsWith('/inspirations') || /[?&]platform=/.test(href)) return href;
     const [path, query = ''] = href.split('?');
@@ -569,7 +776,7 @@ async function keepSection(reply: NavReply, text: string, context: NavContext | 
       const on = app?.platforms?.find((platform) => section.includes(platform));
       if (!app || !on || app.platforms.length < 2) return href;
       sp.set('platform', on);
-    } else if (/^\/inspirations(?:\/(?:apps|screens|flows|ui-elements|patterns|search))?\/?$/.test(path)) {
+    } else if (/^\/inspirations(?:\/(?:apps|new|screens|flows|ui-elements|patterns|search))?\/?$/.test(path)) {
       sp.set('platform', 'web');
     } else {
       return href;
@@ -593,9 +800,27 @@ async function keepSection(reply: NavReply, text: string, context: NavContext | 
   };
 }
 
+/**
+ * Websites are called Sites everywhere in Motvin ("website apps" are sites; Webs' apps are web apps and sites): said
+ * that way in every reply, whatever wording a branch used.
+ */
+function websiteWords(reply: NavReply): NavReply {
+  const say = (text: string) =>
+    text
+      .replace(/\bwebsite apps\b/g, 'sites')
+      .replace(/\bwebsite app\b/g, 'site')
+      .replace(/\bWebsite apps\b/g, 'Sites')
+      .replace(/\bWebs apps\b/g, 'web apps and sites')
+      .replace(/\bWebsites\b/g, 'Sites')
+      .replace(/\bwebsites\b/g, 'sites')
+      .replace(/\bWebsite\b/g, 'Site')
+      .replace(/\bwebsite\b/g, 'site');
+  return { ...reply, text: say(reply.text), targets: reply.targets.map((target) => ({ ...target, label: say(target.label) })), go: reply.go && { ...reply.go, label: say(reply.go.label) } };
+}
+
 async function resolveWithNotes(text: string, context: NavContext | undefined): Promise<NavReply> {
   const notes: string[] = [];
-  const reply = await keepSection(await resolveInner(text, context, notes), text, context);
+  const reply = websiteWords(await keepSection(await resolveInner(text, context, notes), text, context));
   // Say so when a misspelling was read as something, but only if the answer acted on it.
   if (notes.length > 0 && !reply.error && (reply.go || reply.card || reply.app)) {
     return { ...reply, text: `${reply.text} (I read ${listNames(notes, 3)}.)` };
@@ -617,13 +842,7 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   if (PLAN_Q.test(original)) return { text: 'I don’t know about plans or prices. I only take you around the library. Try asking me for an app or a page.', targets: QUICK_PAGES.slice(0, 4), kind: 'answer' };
   if (BYE.test(original)) return { text: pick(['Bye! I’m here whenever you need a hand.', 'See you! Come back any time.', 'Take care! Just open me when you need to find something.']), targets: [], kind: 'smalltalk' };
   if (GO_BACK.test(original)) return { text: 'Going back.', targets: [], go: { label: 'Back', hint: 'Back', href: '__back__' } };
-  if (ABOUT_SECTIONS.test(original)) {
-    return {
-      text: 'Motvin has two sections. Apps is iPhone apps. Webs is the web: web apps (like Claude in a browser) and websites. Each one shows only its own apps, screens, flows and counts. Switch between them at the top of the page.',
-      targets: [QUICK_PAGES[0], { ...QUICK_PAGES[0], label: 'Webs', hint: 'Section', href: `${INSPIRATIONS_ROUTES.apps}?platform=web` }],
-      kind: 'answer',
-    };
-  }
+  if (ABOUT_SECTIONS.test(original)) return aboutPlatforms((await loadIndex().catch(() => null))?.apps ?? []);
   if (HOW_SAVE.test(original)) {
     return {
       text: 'Tick the circle on screens and choose Save, or use Save on an open screen or flow. What you save goes into Collections (the bookmark at the top).',
@@ -656,12 +875,25 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   if (!query && !wantsApps) return { text: 'Tell me where to go — an app, a page like Flows or Screens, or something to search for.', targets: QUICK_PAGES, kind: 'fallback' };
 
   if (page && !isAppsPage) return { text: pick([`Opening ${page.target.label}.`, `Taking you to ${page.target.label}.`, `Here’s the ${page.target.label} page.`]), targets: [], go: page.target };
+  // "flows on web", "ios patterns": a page on a platform. iOS is the pages' default; Webs gets `web` from keepSection;
+  // Web Apps alone says so. Sites have no screens or flows, so "flows on sites" goes on to be answered below.
+  const platformPage = !page && context?.ask ? pageFor(clean(withoutPlatform(original).replace(/^(?:in|on|for|from|to)\s+(?:the\s+)?/, ''))) : null;
+  if (platformPage && platformPage.target.href !== QUICK_PAGES[0].href) {
+    if (context!.ask === 'website') {
+      const onWebs = { ...platformPage.target, label: `${platformPage.target.label} on Webs`, href: `${platformPage.target.href}${platformPage.target.href.includes('?') ? '&' : '?'}platform=web` };
+      return { text: `Sites have pages and sections, not ${platformPage.target.label.replace(/^(?!UI)\w/, (c) => c.toLowerCase())}. Web Apps have them.`, targets: [{ label: 'Sites', hint: 'Webs', href: WEBSITES_LIST }, onWebs] };
+    }
+    const where = context!.ask === 'ios' ? 'iOS' : context!.ask === 'webapp' ? 'Web Apps' : 'Webs';
+    const href = context!.ask === 'webapp' ? `${platformPage.target.href}${platformPage.target.href.includes('?') ? '&' : '?'}platform=webapp` : platformPage.target.href;
+    return { text: `Showing ${platformPage.target.label} on ${where}.`, targets: [], go: { ...platformPage.target, href } };
+  }
   // A style on its own: "dark", "minimal".
   const bareStyle = /^(dark|light|minimal|bold|playful|corporate|editorial|experimental)(?: (?:mode|theme|ui|style))?$/.exec(query);
   if (bareStyle) return { text: `Showing ${bareStyle[1]} screens.`, targets: [], go: { label: `${bareStyle[1][0].toUpperCase()}${bareStyle[1].slice(1)} screens`, hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}?style=${bareStyle[1]}` } };
 
   const fullIndex = await loadIndex();
-  const { apps: everyApp, patterns: allPatterns, meta } = fullIndex;
+  const { patterns: allPatterns, meta } = fullIndex;
+  const everyApp = fullIndex.apps.map(withoutWebsitePages);
   const unreachable = !fullIndex.reachable;
   const elementKinds = fullIndex.elements.map((element) => element.kind);
   const flowCategories = meta?.taxonomy.flowCategories ?? [];
@@ -683,9 +915,15 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   // The section the visitor is in (Webs on a web page, iOS otherwise): unless they name a platform, lists,
   // rankings and suggestions are of that section's apps only — never iOS apps offered on a web page. An app
   // named by name is still found wherever it is ("open Spotify" from Webs still opens Spotify).
-  const sectionPlatforms = context?.page ? browsedPlatforms(new URLSearchParams(context.page.search ?? '')) : null;
+  // An app's own page is in that app's section, whatever its address says: Remote's page (no ?platform) is Webs.
+  const pageSlug = /^\/inspirations\/app\/([^/?#]+)/.exec(context?.page?.pathname ?? '')?.[1];
+  const appOfPage = pageSlug ? everyApp.find((app) => app.slug === decodeURIComponent(pageSlug)) : undefined;
+  const pageOnlyWebs = Boolean(appOfPage && !appOfPage.platforms.includes('ios') && !new URLSearchParams(context?.page?.search ?? '').get('platform'));
+  const sectionPlatforms = context?.page ? (pageOnlyWebs ? (['webapp', 'site'] as Platform[]) : browsedPlatforms(new URLSearchParams(context.page.search ?? ''))) : null;
   const namesPlatform = findPlatforms(lower).length > 0 || negatedPlatforms.length > 0;
-  const scope = sectionPlatforms && !namesPlatform ? sectionPlatforms : null;
+  // A platform the message names is where it looks: iOS; Web Apps; Webs (web apps and websites); websites.
+  const ASKED_SCOPE: Record<PlatformAsk, Platform[]> = { ios: ['ios'], webapp: ['webapp'], webs: ['webapp', 'site'], website: ['site'] };
+  const scope = context?.ask ? ASKED_SCOPE[context.ask] : sectionPlatforms && !namesPlatform ? sectionPlatforms : null;
   // Each app counted on the section only: Claude in Webs has its web screens, so a ranking or a total is
   // never iOS and web added together. (Copies — compare apps by id, not by identity.)
   const apps = scope
@@ -735,11 +973,12 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
     if (states.length) params.set('state', states.join(','));
     if (styles.length) params.set('style', styles.join(','));
     if (industryHit) params.set('industry', industryHit);
-    if (platformHit) params.set('platform', platformHit);
+    // Web apps and sites are in the Webs section, which an address names `web` (Web Apps alone stay `webapp`).
+    if (platformHit) params.set('platform', platformHit === 'site' ? 'web' : platformHit);
     if (sort) params.set('sort', sort);
     return params;
   };
-  const screenScope = `${platformHit ? ` on ${PLATFORM_LABEL[platformHit]}` : ''}${industryHit ? ` from ${INDUSTRY_LABEL[industryHit].toLowerCase()} apps` : ''}`;
+  const screenScope = `${platformHit ? ` on ${context?.ask === 'webs' ? 'Webs' : PLATFORM_LABEL[platformHit]}` : ''}${industryHit ? ` from ${INDUSTRY_LABEL[industryHit].toLowerCase()} apps` : ''}`;
   const yesNo = YES_NO.test(original);
   const question = yesNo || WH.test(original) || /\?\s*$/.test(original);
   // Something about an app is being asked — enough to know "it" needs an app.
@@ -769,6 +1008,133 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   }
 
   if (wantsApps) return allApps(apps);
+
+  // Websites (Webs): their pages and sections, never app screens. "pricing page websites", "remote pricing",
+  // "hero section", "remote sections"; and "pricing page" on Webs, or "web pricing" (Webs = web apps and
+  // websites: the Web App screens, with the websites' own pages beside them).
+  const ask = context?.ask ?? null;
+  // An app being talked about ("show canva", then "pricing") keeps the question: its screens, not a website's page.
+  const carriedApp = !ask && context?.app && !isWebsite(context.app) && !findApps(lower, everyApp).length;
+  const inWebs = !ask && !carriedApp && Boolean(scope && isWebsPlatforms(scope));
+  const otherApps = findApps(lower, everyApp).filter((app) => !isWebsite(app));
+  const namedSite = findApps(lower, everyApp).find(isWebsite) ?? null;
+  const openSite = !otherApps.length && ask !== 'ios' && ask !== 'webapp' ? (isWebsite(pageApp) ? pageApp : isWebsite(context?.app) ? context?.app ?? null : null) : null;
+  const siteApp = namedSite ?? openSite;
+  const sitePageType = findSitePageType(lower);
+  const siteSectionType = findSiteSectionType(lower);
+  const saysSection = /\bsections?\b/.test(lower);
+  const saysPage = /\bpages?\b/.test(lower);
+  const appById = new Map(everyApp.map((app) => [app.id, app]));
+  // The Website pages grid (every website's pages, or sections), of a type: what Screens is for apps.
+  const siteGrid = (kind: 'page' | 'section', type: string | null, label: string): NavTarget => {
+    const sp = new URLSearchParams({ platform: 'web' });
+    if (kind === 'section') sp.set('tab', 'sections');
+    if (type) sp.set('type', type);
+    return { label, hint: 'Sites', href: `${INSPIRATIONS_ROUTES.sites}?${sp}` };
+  };
+  // On Webs (web apps and sites together), app screens and UI elements come from Web Apps alone: said so, with
+  // the sites' own pages and sections beside ("Showing profile screens on Webs, all from Web Apps.").
+  const websAppsOnly = Boolean(scope?.includes('webapp') && scope.includes('site') && everyApp.some(isWebsite));
+  const sitesNote = (what: string) => ` All from Web Apps. Sites have pages and sections, not ${what}.`;
+  const siteTargets = () => [siteGrid('page', null, 'Site pages'), siteGrid('section', null, 'Site sections')];
+  const sitesWith = async (kind: 'page' | 'section', type: string) =>
+    (await Promise.resolve().then(() => inspirationsApi.listSiteScreens(kind, type)).catch(() => [])).filter((s) => appById.has(s.appId));
+
+  // A site named on iOS or Web Apps ("remote pricing", then "app"): a site is on Sites alone.
+  if (namedSite && (ask === 'ios' || ask === 'webapp') && !(otherApps.length && COMPARE.test(lower))) {
+    return { text: `${namedSite.name} isn’t on ${ON_LABEL[ask]}. It’s on Sites.`, targets: [appTarget(namedSite)], app: namedSite };
+  }
+  // A site's page or section asked for on iOS or Web Apps ("about page" then "app"): only sites have them.
+  const onAppPlatform = ask === 'ios' || ask === 'webapp';
+  if (onAppPlatform && !screenType && !otherApps.length && !asksCount && (sitePageType || siteSectionType) && !namedElements.length) {
+    const kind = sitePageType && !(saysSection && siteSectionType) ? 'page' : 'section';
+    const type = kind === 'page' ? sitePageType! : siteSectionType!;
+    const label = kind === 'page' ? pageTypeLabel(type) : `${sectionTypeLabel(type)} section`;
+    const have = await sitesWith(kind, type);
+    const grid = siteGrid(kind, type, `${label}s`);
+    const sites = new Set(have.map((s) => s.appId)).size;
+    return sites
+      ? { text: `${label}s are only on Sites. Showing them from ${plural(sites, 'site')}.`, targets: [], go: grid }
+      : { text: `${label}s are only on Sites, and no site has ${aOrAn(label)} yet.`, targets: [{ label: 'Sites', hint: 'Webs', href: WEBSITES_LIST }] };
+  }
+
+  // Sections: one website's Sections tab (of a type, or all of them), or the websites that have that kind.
+  // A word that is also a page ("pricing", "features") is a page, unless "section" is said.
+  // "sections", "show me sections": the websites' Sections tabs.
+  if (saysSection && !siteApp && !siteSectionType && !asksCount && !otherApps.length && !screenType) {
+    if (everyApp.some(isWebsite)) return { text: 'Showing site sections.', targets: [siteGrid('page', null, 'Site pages')], go: siteGrid('section', null, 'Site sections') };
+  }
+  const sectionsWanted =
+    !asksCount &&
+    !otherApps.length &&
+    Boolean((saysSection && (siteApp || siteSectionType)) || (siteSectionType && EXCLUSIVE_SECTION.test(lower)) || (siteSectionType && !sitePageType && (siteApp || ask === 'website' || (ask === 'webs' && !namedElements.length))));
+  if (sectionsWanted) {
+    const sectionsOf = (app: App, type: string | null): NavTarget => ({
+      label: `${app.name} ${type ? `${sectionTypeLabel(type)} sections` : 'sections'}`,
+      hint: 'Site sections',
+      href: INSPIRATIONS_ROUTES.app(app, 'site', type ? { tab: 'sections', type } : { tab: 'sections' }),
+    });
+    if (siteApp && !siteSectionType) return { text: `Showing ${siteApp.name}’s sections.`, targets: [], go: sectionsOf(siteApp, null), app: siteApp };
+    if (siteSectionType) {
+      const label = sectionTypeLabel(siteSectionType);
+      const have = await sitesWith('section', siteSectionType);
+      if (siteApp) {
+        if (!have.some((s) => s.appId === siteApp.id)) return { text: `${siteApp.name} has no ${label} section yet.`, targets: [sectionsOf(siteApp, null)], app: siteApp };
+        return { text: `Showing ${siteApp.name}’s ${label} sections.`, targets: [sectionsOf(siteApp, null)], go: sectionsOf(siteApp, siteSectionType), app: siteApp };
+      }
+      const sites = [...new Set(have.map((s) => s.appId))].map((id) => appById.get(id)!).map((app) => sectionsOf(app, siteSectionType));
+      if (sites.length) return { text: `Showing ${label} sections from ${plural(sites.length, 'site')}.`, targets: sites.slice(0, 4), go: siteGrid('section', siteSectionType, `${label} sections`), results: sites };
+      if (saysSection || ask === 'website') return { text: `No site has ${aOrAn(label)} section yet.`, targets: [{ label: 'Sites', hint: 'Webs', href: WEBSITES_LIST }] };
+    }
+  }
+
+  // "web pages", "website pages": the Website pages grid.
+  // ("form page web" is the Form UI element on Webs, not a site page.)
+  if ((ask === 'website' || ask === 'webs') && saysPage && !sitePageType && !siteApp && !asksCount && !otherApps.length && !screenType && !namedElements.length && everyApp.some(isWebsite)) {
+    return { text: 'Showing site pages.', targets: [siteGrid('section', null, 'Site sections')], go: siteGrid('page', null, 'Site pages') };
+  }
+
+  // Pages: a website's own page of that type, or the websites that have one.
+  if (sitePageType && !asksCount && !otherApps.length && (ask === 'website' || ask === 'webs' || inWebs || siteApp)) {
+    const label = pageTypeLabel(sitePageType);
+    const pages = await sitesWith('page', sitePageType);
+    const pageTarget = (page: (typeof pages)[number]): NavTarget => {
+      const app = appById.get(page.appId)!;
+      return { label: `${app.name} ${label}`, hint: 'Site page', href: INSPIRATIONS_ROUTES.app(app, 'site', { screen: page.id }) };
+    };
+    const webAppScreens: NavTarget | null = screenType ? { label: `Web App ${screenType.label.toLowerCase()} screens`, hint: 'Web Apps', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}&platform=webapp` } : null;
+    if (siteApp) {
+      const own = pages.find((page) => page.appId === siteApp.id);
+      const onSite: NavTarget = { label: `${siteApp.name} pages`, hint: 'Site', href: INSPIRATIONS_ROUTES.app(siteApp, 'site') };
+      if (!own) return { text: `${siteApp.name} has no ${label} yet.`, targets: [onSite], app: siteApp };
+      return { text: `Opening ${siteApp.name}’s ${label}.`, targets: [onSite], go: pageTarget(own), app: siteApp };
+    }
+    const found = pages.map(pageTarget);
+    // Webs is Web Apps and Sites together: "web pricing page", or "pricing page" while on Webs, shows the Web App
+    // screens with the sites' pages beside them. Only "sites" asks for the sites' pages alone.
+    const bothSides = (ask === 'webs' || (inWebs && ask !== 'website')) && webAppScreens;
+    const grid = siteGrid('page', sitePageType, `Site ${label}s`);
+    if (bothSides && found.length) {
+      return { text: `Showing ${screenType!.label.toLowerCase()} screens from Web Apps. On Sites, ${found.length === 1 ? `${found[0].label.replace(` ${label}`, '')} has ${aOrAn(label)} too.` : `${plural(found.length, 'site')} have ${aOrAn(label)} too.`}`, targets: [grid], go: { ...webAppScreens, href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType!.key}&platform=web` } };
+    }
+    // Every website's page of that type, in one grid — as the Screens page shows every app's screens.
+    if (found.length) return { text: `Showing ${label}s from ${plural(found.length, 'site')}.`, targets: webAppScreens ? [webAppScreens] : [], go: grid, results: found };
+    // No website has it: say so when websites were asked for; Webs or a page on Webs goes on to the Web App screens.
+    if (ask === 'website' || ((ask === 'webs' || inWebs) && !webAppScreens)) return { text: `No site has ${aOrAn(label)} yet.`, targets: webAppScreens ? [webAppScreens] : [{ label: 'Sites', hint: 'Webs', href: WEBSITES_LIST }] };
+  }
+
+  // "onboarding on websites": websites are pages and sections, so what they don't have is shown from Web Apps.
+  if (ask === 'website' && screenType && !asksCount && !otherApps.length && !siteApp) {
+    const go: NavTarget = { label: `Web App ${screenType.label.toLowerCase()} screens`, hint: 'Web Apps', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}&platform=webapp` };
+    return { text: `Sites have pages and sections, not ${screenType.label.toLowerCase()} screens. Showing them from Web Apps.`, targets: [{ label: 'Sites', hint: 'Webs', href: WEBSITES_LIST }], go };
+  }
+  // "forms on sites": a UI element is in app screens, so it is shown from Web Apps, with the sites' own pages beside.
+  if (ask === 'website' && namedElements.length && !screenType && !siteSectionType && !sitePageType && !asksCount && !otherApps.length && !siteApp) {
+    const kind = namedElements[0];
+    const label = elementLabel(kind).toLowerCase();
+    const go: NavTarget = { label: `Web App ${label}s`, hint: 'UI elements', href: `${INSPIRATIONS_ROUTES.uiElements}?element=${encodeURIComponent(kind)}&platform=webapp` };
+    return { text: `Sites have pages and sections, not ${label}s. Showing ${label}s from Web Apps.`, targets: [siteGrid('page', null, 'Site pages'), siteGrid('section', null, 'Site sections')], go };
+  }
 
   // "the second one", "both", "all of them": picking from what was just listed.
   const ordinal = findOrdinal(lower);
@@ -817,7 +1183,8 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   // app being talked about is the subject of any question about app facts, unless
   // the question widens itself: "in the whole library", "all apps", "which app has…".
   // "how many patterns" (no "it" / "its") is the library's count, not the last app's.
-  const widened = LIBRARY_SCOPE.test(lower) || /\bapps\b/i.test(lower) || findRanking(lower) !== null || COMPARE.test(lower) || findIndustry(lower) !== null || WHICH_APPS.test(lower) || Boolean(adjective) || (asksCount && /\bpatterns?\b/.test(lower) && !REFERS_BACK.test(lower));
+  // "websites", "web apps" widen it too: a list of them, not a fact about the app on show.
+  const widened = LIBRARY_SCOPE.test(lower) || /\b(?:apps|websites|sites)\b/i.test(lower) || findRanking(lower) !== null || COMPARE.test(lower) || findIndustry(lower) !== null || WHICH_APPS.test(lower) || Boolean(adjective) || (asksCount && /\bpatterns?\b/.test(lower) && !REFERS_BACK.test(lower));
   // "what is this" carries to the app; "what is the meaning of life" does not — when the only
   // sign of an app question is a "what is / tell me about" opener, the rest must be nothing but a pronoun.
   const onlyInfo = INFO.test(lower) && !(section || asksCount || screenType || states.length || styles.length || findPlatform(lower) || PLATFORM_ASKED.test(lower) || INDUSTRY_ASKED.test(lower) || RATING_ASKED.test(lower) || SAVE.test(lower) || COPY.test(lower) || SIMILAR.test(lower));
@@ -971,11 +1338,13 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
       const saysFlows = hasWord(lower, 'flows') || hasWord(lower, 'flow');
       const saysScreens = hasWord(lower, 'screens') || hasWord(lower, 'screen');
       const neither = !saysFlows && !saysScreens;
-      const parts = [saysScreens || neither ? countPhrase(app, 'screens') : '', saysFlows || neither ? countPhrase(app, 'flows') : ''].filter(Boolean);
+      // A website has pages, and no flows to count.
+      const site = isWebsite(app);
+      const parts = [saysScreens || neither || site ? countPhrase(app, 'screens') : '', !site && (saysFlows || neither) ? countPhrase(app, 'flows') : ''].filter(Boolean);
       return {
         text: `${app.name} has ${parts.join(' and ')}.`,
         targets: [...wholeLibrary, appTarget(app), ...followUps(app, 'count').slice(0, 2)],
-        card: { title: app.name, iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined, facts: [countPhrase(app, 'screens'), countPhrase(app, 'flows')], href: INSPIRATIONS_ROUTES.app(app) },
+        card: { title: app.name, iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined, facts: site ? [countPhrase(app, 'screens')] : [countPhrase(app, 'screens'), countPhrase(app, 'flows')], href: INSPIRATIONS_ROUTES.app(app) },
         app,
       };
     }
@@ -983,7 +1352,9 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
       const search = `${app.name} ${screenType.label.toLowerCase()}`;
       const go: NavTarget = { label: `${app.name} ${screenType.label.toLowerCase()} screens`, hint: 'Search', href: appSearch(app, search, scopeOf(app)) };
       const allOfType: NavTarget[] = carried ? [{ label: `All ${screenType.label.toLowerCase()} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` }] : [];
-      return { text: `Showing ${app.name}’s ${screenType.label.toLowerCase()} screens.`, targets: [...allOfType, ...followUps(app, null).slice(0, 2)], go, app };
+      // A platform asked for ("canva login", then "web app") is said: an app's web side is its web app.
+      const appWhere = ask ? ` on ${ask === 'ios' ? 'iOS' : 'Web Apps'}` : '';
+      return { text: `Showing ${app.name}’s ${screenType.label.toLowerCase()} screens${appWhere}.`, targets: [...allOfType, ...followUps(app, null).slice(0, 2)], go, app };
     }
     if (section) {
       const go = { ...appTarget(app, section.tab), label: `${app.name} ${section.label}` };
@@ -1005,7 +1376,25 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
     return { text: pick([`Opening ${app.name}.`, `Taking you to ${app.name}.`, `Here’s ${app.name}.`]), targets: followUps(app, null), go: appTarget(app), app };
   }
 
-  if (mentioned.length > 1 && COMPARE.test(lower)) return compareApps(mentioned);
+  if (mentioned.length > 1 && COMPARE.test(lower)) {
+    // On one platform ("compare canva and coursera", then "app"): only what is on it, never one app's iOS beside
+    // another's web.
+    if (ask) {
+      const askedPlatforms = ASKED_SCOPE[ask];
+      const onIt = mentioned.filter((app) => app.platforms?.some((platform) => askedPlatforms.includes(platform)));
+      const off = mentioned.filter((app) => !onIt.includes(app));
+      const where = ask === 'webs' ? 'Webs' : ON_LABEL[ask === 'website' ? 'site' : ask];
+      const missing = off.length ? `${listNames(off.map((app) => app.name), 3)} ${off.length === 1 ? 'isn’t' : 'aren’t'} on ${where}.` : '';
+      if (onIt.length >= 2) {
+        const side = compareApps(onIt);
+        return { ...side, text: `On ${where}: ${side.text}${missing ? ` ${missing}` : ''}` };
+      }
+      const counts = (app: App) => (isWebsite(app) ? countPhrase(app, 'screens') : `${countPhrase(app, 'screens')} and ${countPhrase(app, 'flows')}`);
+      if (onIt.length === 1) return { text: `${missing} ${onIt[0].name} has ${counts(onIt[0])}${isWebsite(onIt[0]) ? '' : ` on ${where}`}.`, targets: [appTarget(onIt[0])], app: onIt[0] };
+      return { text: `Neither is on ${where}. ${mentioned.map((app) => `${app.name} is on ${platformList(app)}`).join('; ')}.`, targets: appResults(mentioned) };
+    }
+    return compareApps(mentioned);
+  }
 
   // "compare all apps": the biggest few side by side.
   if (!mentioned.length && COMPARE.test(lower) && /\b(?:all|every|the|these|those)\s+apps\b|^compare apps\b/.test(lower) && apps.length >= 2) {
@@ -1050,7 +1439,9 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
     // "modal patterns": the whole category, not one pattern in it.
     const askedCategory = findPatternCategory(working, patterns);
     if (askedCategory && !DEFINE.test(original.trim()) && !WHICH_APPS.test(lower) && !asksCount) {
-      return { text: `Opening the ${askedCategory.toLowerCase()} patterns.`, targets: namedPatterns.slice(0, 6).map(patternTarget), go: { label: `${askedCategory} patterns`, hint: 'Patterns', href: INSPIRATIONS_ROUTES.patternCategory(askedCategory) } };
+      const patternsWhere = ask ? ` on ${ask === 'webs' ? 'Webs' : ON_LABEL[ask === 'website' ? 'site' : ask]}` : '';
+      const opening = `Opening the ${askedCategory.toLowerCase()} patterns${patternsWhere}.`;
+      return { text: websAppsOnly ? `${opening}${sitesNote('patterns')}` : opening, targets: namedPatterns.slice(0, 6).map(patternTarget), go: { label: `${askedCategory} patterns`, hint: 'Patterns', href: INSPIRATIONS_ROUTES.patternCategory(askedCategory) } };
     }
     if (namedPatterns.length === 1) {
       const pattern = namedPatterns[0];
@@ -1070,12 +1461,15 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
 
   // A UI element across the library.
   // "list AI apps", "show me a list of food apps" ask for apps; "list" there is not the UI element.
-  const asksForApps = /\bapps?\b/.test(lower) && namedElements.every((kind) => kind === 'list');
+  const asksForApps = /\b(?:apps?|websites?)\b/.test(lower) && namedElements.every((kind) => kind === 'list');
   if (namedElements.length > 0 && !asksForApps && !screenType && (!section || section.tab === 'screens') && !(section?.tab === 'screens' && states.length) && !scoped) {
     const kind = namedElements[0];
     const label = elementLabel(kind).toLowerCase();
     const count = elements.find((element) => element.kind === kind)?.count ?? 0;
-    const go: NavTarget = { label: `${elementLabel(kind)} examples`, hint: 'UI elements', href: `${INSPIRATIONS_ROUTES.uiElements}?element=${encodeURIComponent(kind)}` };
+    // A platform asked for is where the examples open, and the count says which ("on Web Apps").
+    const onAsk = ask ? ({ ios: 'ios', webapp: 'webapp', webs: 'web', website: 'web' } as const)[ask] : null;
+    const where = ask ? ` on ${ask === 'webs' ? 'Webs' : ask === 'website' ? 'Sites' : PLATFORM_LABEL[ask]}` : '';
+    const go: NavTarget = { label: `${elementLabel(kind)} examples`, hint: 'UI elements', href: `${INSPIRATIONS_ROUTES.uiElements}?element=${encodeURIComponent(kind)}${onAsk ? `&platform=${onAsk}` : ''}` };
     if (DEFINE.test(original.trim()) && !WHICH_APPS.test(lower) && !asksCount) {
       return { text: `I don’t write definitions, but ${plural(count, 'screen')} in the library have ${label}s. Have a look.`, targets: [go] };
     }
@@ -1084,7 +1478,9 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
       if (found && found.apps.length) return { text: `${plural(count || found.total, 'screen')} have ${label}s, in ${listNames(found.apps.map((app) => app.name), 4)}.`, targets: [go, ...appResults(found.apps.slice(0, 3))], results: appResults(found.apps) };
       return { text: count ? `${plural(count, 'screen')} have ${label}s.` : `No screens with ${label}s yet.`, targets: [go] };
     }
-    return { text: count ? `Showing ${label}s — ${plural(count, 'screen')}.` : `Showing ${label}s.`, targets: [], go };
+    // Webs is Web Apps and Sites: a UI element is in app screens only, so it says where they all come from.
+    if (websAppsOnly) return { text: `${count ? `Showing ${label}s${where} — ${plural(count, 'screen')}.` : `Showing ${label}s${where}.`}${sitesNote(`${label}s`)}`, targets: siteTargets(), go };
+    return { text: count ? `Showing ${label}s${where} — ${plural(count, 'screen')}.` : `Showing ${label}s${where}.`, targets: [], go };
   }
   if (asksElements(lower) && (!section || section.tab === 'ui-elements') && !mentioned.length && !asksCount) {
     const top = [...elements].sort((a, b) => b.count - a.count).slice(0, 5);
@@ -1108,24 +1504,37 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
 
   // A kind of flow across the library — "onboarding flows", "which apps have a checkout flow".
   if (flowCategory) {
-    const inCategory = index.flows.filter((flow) => flow.category === flowCategory);
     const label = flowCategoryLabel(flowCategory);
-    const go: NavTarget = { label: `${label} flows`, hint: 'Flows', href: `${INSPIRATIONS_ROUTES.flows}?category=${encodeURIComponent(flowCategory)}` };
+    // Sites are pages and sections: their flows asked for are the Web App ones.
+    if (ask === 'website' && (WHICH_APPS.test(lower) || asksCount)) return { text: 'Sites have pages and sections, not flows.', targets: siteTargets() };
+    if (ask === 'website') {
+      const webFlows = fullIndex.flows.filter((flow) => flow.category === flowCategory && flow.platform === 'webapp').length;
+      const go: NavTarget = { label: `Web App ${label.toLowerCase()} flows`, hint: 'Flows', href: `${INSPIRATIONS_ROUTES.flows}?category=${encodeURIComponent(flowCategory)}&platform=webapp` };
+      return { text: `Sites have pages and sections, not flows. Showing ${webFlows ? plural(webFlows, `${label.toLowerCase()} flow`) : `${label.toLowerCase()} flows`} from Web Apps.`, targets: siteTargets(), go };
+    }
+    const inCategory = index.flows.filter((flow) => flow.category === flowCategory);
+    // On the platform the message named ("onboarding flows web" opens Webs' flows, not every flow).
+    const flowPlatform = platformHit ? `&platform=${platformHit === 'ios' ? 'ios' : 'web'}` : '';
+    const go: NavTarget = { label: `${label} flows`, hint: 'Flows', href: `${INSPIRATIONS_ROUTES.flows}?category=${encodeURIComponent(flowCategory)}${flowPlatform}` };
     const owners = [...new Map(inCategory.map((flow) => [flow.appId, index.appById.get(flow.appId)])).values()].filter((app): app is App => Boolean(app));
     if (WHICH_APPS.test(lower) || asksCount) {
       return inCategory.length
-        ? { text: `There ${inCategory.length === 1 ? 'is' : 'are'} ${plural(inCategory.length, `${label.toLowerCase()} flow`)}, in ${listNames(owners.map((app) => app.name), 4)}.`, targets: [go, ...appResults(owners.slice(0, 3))], results: appResults(owners) }
+        ? { text: `There ${inCategory.length === 1 ? 'is' : 'are'} ${plural(inCategory.length, `${label.toLowerCase()} flow`)}${ask ? ` on ${ask === 'webs' ? 'Webs' : ON_LABEL[ask]}` : ''}, in ${listNames(owners.map((app) => app.name), 4)}.`, targets: [go, ...appResults(owners.slice(0, 3))], results: appResults(owners) }
         : { text: `No ${label.toLowerCase()} flows yet.`, targets: [QUICK_PAGES[2]] };
     }
     if (inCategory.length === 1) return { text: `Opening the one ${label.toLowerCase()} flow, “${inCategory[0].name}” from ${index.appById.get(inCategory[0].appId)?.name ?? 'the library'}.`, targets: [], go: flowTarget(inCategory[0], index, false), card: flowCard(inCategory[0], index) };
     const singular = /\bflow\b/.test(lower) && !/\bflows\b/.test(lower);
     if (singular && inCategory.length > 1 && inCategory.length <= 6) return { text: `A few ${label.toLowerCase()} flows — which one?`, targets: [...inCategory.map((flow) => flowTarget(flow, index, true)), go], kind: 'clarify' };
-    return { text: inCategory.length ? `Showing ${plural(inCategory.length, `${label.toLowerCase()} flow`)}.` : `Showing ${label.toLowerCase()} flows.`, targets: appResults(owners.slice(0, 3)), go, results: appResults(owners) };
+    const flowsWhere = ask ? ` on ${ask === 'webs' ? 'Webs' : ON_LABEL[ask]}` : '';
+    const shown = inCategory.length ? `Showing ${plural(inCategory.length, `${label.toLowerCase()} flow`)}${flowsWhere}.` : `Showing ${label.toLowerCase()} flows${flowsWhere}.`;
+    if (websAppsOnly) return { text: `${shown}${sitesNote('flows')}`, targets: siteTargets(), go, results: appResults(owners) };
+    return { text: shown, targets: appResults(owners.slice(0, 3)), go, results: appResults(owners) };
   }
 
   // "login screens from food apps", "ios checkout screens": screens, narrowed to a kind of app.
   if ((industryHit || platformHit) && screenType && !states.length && !styles.length && !asksCount && !WHICH_APPS.test(lower) && !numberFilter && findRanking(lower) === null) {
     const go: NavTarget = { label: `${screenType.label} screens`, hint: 'Screens', href: `${INSPIRATIONS_ROUTES.screens}?${screenQuery()}` };
+    if (websAppsOnly) return { text: `Showing ${screenType.label.toLowerCase()} screens${screenScope}.${sitesNote(`${screenType.label.toLowerCase()} screens`)}`, targets: siteTargets(), go };
     return { text: `Showing ${screenType.label.toLowerCase()} screens${screenScope}.`, targets: [], go };
   }
 
@@ -1133,8 +1542,11 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   // they are (food, fintech), where they run (iOS, Web Apps, Webs), how big they are.
   const industry = findIndustry(lower);
   const platform = findPlatform(lower);
-  const kind = [industry ? INDUSTRY_LABEL[industry] : '', platform ? PLATFORM_ADJECTIVE[platform] : ''].filter(Boolean).join(' ');
-  let pool = apps.filter((app) => (!industry || app.industry === industry) && (!platform || app.platforms?.includes(platform)) && !negatedIds.has(app.id) && !negatedPlatforms.some((excluded) => app.platforms?.includes(excluded)));
+  // "web", "webs": the Webs section, web apps and websites together; "websites": websites alone.
+  const websAll = platform === 'site' && context?.ask === 'webs';
+  const onPlatform = (app: App) => !platform || (websAll ? app.platforms?.some((p) => p === 'site' || p === 'webapp') : app.platforms?.includes(platform));
+  const kind = [industry ? INDUSTRY_LABEL[industry] : '', platform ? (websAll ? 'Webs' : PLATFORM_ADJECTIVE[platform]) : ''].filter(Boolean).join(' ');
+  let pool = apps.filter((app) => (!industry || app.industry === industry) && onPlatform(app) && !negatedIds.has(app.id) && !negatedPlatforms.some((excluded) => app.platforms?.includes(excluded)));
   const ranking = findRanking(lower);
   if (numberFilter) {
     const value = (app: App) => (numberFilter.field === 'screens' ? app.screenCount : numberFilter.field === 'flows' ? app.flowCount : (app.rating ?? null));
@@ -1146,17 +1558,37 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
     const shown = ordered.map((app) => `${app.name} (${numberFilter.field === 'rating' ? (app.rating ?? 0).toFixed(1) : (value(app) ?? 0).toLocaleString()})`);
     return { text: `${plural(ordered.length, `${kind ? `${kind} ` : ''}app`)} ${ordered.length === 1 ? 'has' : 'have'} ${describe(numberFilter)}: ${listNames(shown, 4)}.`, targets: appResults(ordered.slice(0, 4)), app: ordered[0], results: appResults(ordered) };
   }
+  // "how many login screens", then "app" / "web" / "site": counted on that platform, never turned into a count of
+  // the platform's apps.
+  if ((asksCount || WHICH_APPS.test(lower)) && screenType && !industry && !numberFilter && !ranking) {
+    if (ask === 'website') return { text: `Sites have pages and sections, not ${screenType.label.toLowerCase()} screens.`, targets: siteTargets() };
+    const total = await countScreens({ type: screenType.key }, null, scopeOf(null));
+    if (total !== null) {
+      const typePlatform = ask ? `&platform=${ask === 'ios' ? 'ios' : ask === 'webapp' ? 'webapp' : 'web'}` : '';
+      const see: NavTarget = { label: `See ${screenType.label.toLowerCase()} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}${typePlatform}` };
+      if (WHICH_APPS.test(lower)) {
+        const found = await appsWithScreens({ type: screenType.key }, index, scope);
+        if (found?.apps.length) return { text: `${screenType.label} screens${screenScope} appear in ${listNames(found.apps.map((app) => app.name), 4)} (${plural(found.total || total, 'screen')}).`, targets: [see, ...appResults(found.apps.slice(0, 3))], results: appResults(found.apps) };
+        if (!asksCount) return { text: `No ${screenType.label.toLowerCase()} screens${screenScope} yet.`, targets: [QUICK_PAGES[1]] };
+      }
+      const counted = `The library has ${plural(total, `${screenType.label.toLowerCase()} screen`)}${screenScope}.`;
+      return websAppsOnly ? { text: `${counted}${sitesNote(`${screenType.label.toLowerCase()} screens`)}`, targets: [see, ...siteTargets()] } : { text: counted, targets: [see] };
+    }
+  }
   if (ranking && pool.length > 0) return answerRanking(pool, ranking, kind ? `${kind} apps` : null, topN);
   if (industry || platform || negatedPlatforms.length) {
     const byScreens = [...pool].sort((a, b) => b.screenCount - a.screenCount);
     const params = new URLSearchParams();
-    if (platform) params.set('platform', platform);
+    // Web Apps and websites each open their own list in Webs; "web" (both) the section's whole list.
+    if (platform === 'webapp' || (platform === 'site' && !websAll)) params.set('show', platform === 'webapp' ? 'webapps' : 'sites');
+    // Web apps and sites are both in the Webs section, which an address names `web`.
+    if (platform) params.set('platform', platform === 'ios' ? 'ios' : 'web');
     if (industry) params.set('industry', industry);
     const scopeLabel = kind || (negatedPlatforms.length ? `non-${negatedPlatforms.map((excluded) => PLATFORM_ADJECTIVE[excluded]).join('/')}` : '');
     const kindPage: NavTarget = { label: `All ${scopeLabel} apps`, hint: 'Apps', href: params.toString() ? `${INSPIRATIONS_ROUTES.apps}?${params}` : INSPIRATIONS_ROUTES.apps };
     if (byScreens.length === 0) {
       // None here, but some in the other section: say where they are rather than a dead end.
-      const elsewhere = scope ? everyApp.filter((app) => (!industry || app.industry === industry) && (!platform || app.platforms?.includes(platform)) && !scopedById.has(app.id)) : [];
+      const elsewhere = scope ? everyApp.filter((app) => (!industry || app.industry === industry) && onPlatform(app) && !scopedById.has(app.id)) : [];
       // Never naming the other section's apps here — only where to look.
       if (elsewhere.length) {
         const toWebs = Boolean(scope?.includes('ios'));
@@ -1198,16 +1630,6 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
     return { text: `How about ${chosen.name}? ${describeApp(chosen).text}`, targets: followUps(chosen, null), go: appTarget(chosen), app: chosen };
   }
 
-  if (asksCount && screenType) {
-    const total = await countScreens({ type: screenType.key }, null, scopeOf(null));
-    if (total !== null) {
-      if (WHICH_APPS.test(lower)) {
-        const found = await appsWithScreens({ type: screenType.key }, index, scope);
-        if (found?.apps.length) return { text: `${plural(total, `${screenType.label.toLowerCase()} screen`)} across ${listNames(found.apps.map((app) => app.name), 4)}.`, targets: appResults(found.apps.slice(0, 3)), results: appResults(found.apps) };
-      }
-      return { text: `The library has ${plural(total, `${screenType.label.toLowerCase()} screen`)}.`, targets: [{ label: `See ${screenType.label.toLowerCase()} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` }] };
-    }
-  }
   if (screenType && WHICH_APPS.test(lower)) {
     const found = await appsWithScreens({ type: screenType.key }, index, scope);
     if (found) return found.apps.length ? { text: `${screenType.label} screens appear in ${listNames(found.apps.map((app) => app.name), 4)} (${plural(found.total, 'screen')}).`, targets: [{ label: `All ${screenType.label.toLowerCase()} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` }, ...appResults(found.apps.slice(0, 3))], results: appResults(found.apps) } : found.total > 0 ? { text: `${plural(found.total, `${screenType.label.toLowerCase()} screen`)} in the library.`, targets: [{ label: `All ${screenType.label.toLowerCase()} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` }] } : { text: `No ${screenType.label.toLowerCase()} screens yet.`, targets: [QUICK_PAGES[1]] };
@@ -1225,13 +1647,21 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
     return { text: `The library has ${plural(here.length, 'pattern')}.`, targets: [PAGES.find((entry) => entry.target.label === 'Patterns')!.target] };
   }
   if (asksCount && !screenType) {
-    const screens = apps.reduce((sum, app) => sum + app.screenCount, 0);
-    const flows = apps.reduce((sum, app) => sum + app.flowCount, 0);
-    if (apps.length) return { text: `The library has ${plural(apps.length, 'app')}, ${plural(screens, 'screen')} and ${plural(flows, 'flow')}.`, targets: QUICK_PAGES.slice(0, 4) };
+    // Websites counted apart: they have pages, not screens or flows.
+    const sites = apps.filter(isWebsite);
+    const appsOnly = apps.filter((app) => !isWebsite(app));
+    const screens = appsOnly.reduce((sum, app) => sum + app.screenCount, 0);
+    const flows = appsOnly.reduce((sum, app) => sum + app.flowCount, 0);
+    const pages = sites.reduce((sum, app) => sum + (websitePages.get(app.id) ?? app.screenCount), 0);
+    const sitePart = sites.length ? `, and ${plural(sites.length, 'site')} with ${plural(pages, 'page')}` : '';
+    // In Webs the apps are web apps ("24 web apps … and 1 site"); in Apps, iOS apps are just apps.
+    const appWord = scope && !scope.includes('ios') ? 'web app' : 'app';
+    if (apps.length) return { text: `The library has ${plural(appsOnly.length, appWord)}, ${plural(screens, 'screen')} and ${plural(flows, 'flow')}${sitePart}.`, targets: QUICK_PAGES.slice(0, 4) };
   }
 
   if (screenType) {
     const go: NavTarget = { label: `${screenType.label} screens`, hint: 'Screen type', href: `${INSPIRATIONS_ROUTES.screens}?type=${screenType.key}` };
+    if (websAppsOnly) return { text: `Showing ${screenType.label.toLowerCase()} screens.${sitesNote(`${screenType.label.toLowerCase()} screens`)}`, targets: siteTargets(), go };
     return { text: `Showing ${screenType.label.toLowerCase()} screens.`, targets: [], go };
   }
 

@@ -23,8 +23,8 @@ import { ChoiceCards, Summary, Wizard } from './Wizard';
  * no App Store, so Web Apps and Webs are manual only.
  */
 
-const PLATFORM_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web App', web: 'Web' };
-const PLATFORM_OPTIONS: Array<[Platform, string]> = [['ios', 'iOS'], ['webapp', 'Web App'], ['web', 'Web']];
+const PLATFORM_LABEL: Record<Platform, string> = { ios: 'iOS', webapp: 'Web App', site: 'Sites' };
+const PLATFORM_OPTIONS: Array<[Platform, string]> = [['ios', 'iOS'], ['webapp', 'Web App'], ['site', 'Sites']];
 
 type AppRow = { appId: string; name: string; set: AdminStoreSet | undefined };
 

@@ -45,7 +45,7 @@ export async function suggestQueries(raw: string, limit = 7, scope?: readonly Pl
   const platformOfId = (id: string): Platform | null => {
     const app = allApps.find((entry) => id.startsWith(`${entry.id}-`));
     const platform = app ? id.slice(app.id.length + 1).split('-')[0] : '';
-    return platform === 'ios' || platform === 'webapp' || platform === 'web' ? platform : null;
+    return platform === 'ios' || platform === 'webapp' || platform === 'site' ? platform : null;
   };
 
   const out: SearchSuggestion[] = [];
