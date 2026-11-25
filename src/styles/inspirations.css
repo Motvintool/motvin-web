@@ -17773,6 +17773,8 @@ html.ins-bat-on .ins-search-bat { display: block; }
    today's calls against the daily limit and a thin bar; the full figure in a dark tip below on hover
    (the landing navbar's tip, which this page doesn't load). */
 .ins-header-mcp-slot { display: flex; align-items: center; flex: none; }
+/* Below 1140px the compact header has no room for it (the rule up there is earlier, so repeat it here). */
+@media (max-width: 1139px) { .ins-header-mcp-slot { display: none; } }
 .ins-header .ins-header-connect { position: relative; overflow: hidden; display: inline-flex; align-items: center; text-decoration: none; white-space: nowrap; }
 /* The "New" tag's skim, softer on the black pill. */
 .ins-header-connect::after {
