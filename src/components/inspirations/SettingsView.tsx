@@ -212,7 +212,7 @@ export function SettingsView() {
           <SetIcon name="user-account" size={16} /> Account
         </button>
         <button type="button" role="tab" aria-selected={section === 'requests'} className={section === 'requests' ? 'is-active' : ''} onClick={() => go('requests')}>
-          <SetIcon name="app-request" size={16} /> App requests
+          <SetIcon name="app-request" size={16} /> Requests
         </button>
         {signedIn && (
           <button type="button" role="tab" aria-selected={section === 'tools'} className={section === 'tools' ? 'is-active' : ''} onClick={() => go('tools')}>
