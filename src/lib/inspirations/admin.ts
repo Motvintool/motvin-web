@@ -306,8 +306,8 @@ export const adminApi = {
     return unwrap(res);
   },
 
-  /** Takes an iOS app's iPhone screenshots from its App Store page (see the backend's `fetchStoreShots`). */
-  async fetchStoreShots(appId: string, options: { country: string; replace: boolean }): Promise<StoreFetchResult> {
+  /** Takes an app's store screenshots: an iOS app's iPhone set, a web app's Mac set (see the backend's `fetchStoreShots`). */
+  async fetchStoreShots(appId: string, options: { country: string; replace: boolean; platform: Platform }): Promise<StoreFetchResult> {
     const res = await fetch(`${baseUrl()}/store-fetch/${appId}`, {
       method: 'POST',
       headers: await authHeaders({ 'Content-Type': 'application/json' }),

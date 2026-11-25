@@ -1,10 +1,12 @@
 'use client';
 
 import JSZip from 'jszip';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { storeAction } from '@/lib/inspirations/storeAction';
 import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { App, Platform, Screen, StoreShotSet } from '@/lib/inspirations/types';
@@ -13,6 +15,7 @@ import { AppLogo } from './AppLogo';
 import { CloseIcon } from './Icons';
 import { ExpandButton, useExpandedPreview } from './PreviewExpand';
 import { SaveButton } from './SaveButton';
+import { splitAppName } from './ScreenCard';
 import { ScreenLightbox } from './ScreenLightbox';
 import { StoreLinkButton } from './StoreMenuItem';
 import { useToast } from './Toast';
@@ -83,6 +86,7 @@ export function StoreShotsCard({
   platform,
   downloadable = false,
   keyed = false,
+  showApp = false,
   onRemove,
 }: {
   set: StoreShotSet;
@@ -92,6 +96,8 @@ export function StoreShotsCard({
   downloadable?: boolean;
   /** Several sets on one page (a collection): its link names this set as well as the image. */
   keyed?: boolean;
+  /** A page of many apps' sets: the app's logo and name under the card, as a screen card has them. */
+  showApp?: boolean;
   /** In a collection: takes it out (a × like a saved app's). */
   onRemove?: () => void;
 }) {
@@ -109,6 +115,7 @@ export function StoreShotsCard({
   // The first image on top, the next two behind it to the left and right.
   const fan = set.images.slice(0, 3);
   const order = [fan[1], fan[2], fan[0]].filter(Boolean);
+  const named = splitAppName(app.name);
   const sourceLine = set.source === 'appstore' ? 'App Store screenshots' : 'Store screenshots';
 
   // Copy link always names the image on the app's own page: a collection lives in its owner's browser only, so
@@ -195,6 +202,17 @@ export function StoreShotsCard({
         >
           <CloseIcon size={14} />
         </button>
+      )}
+      {showApp && (
+        <div className="ins-card-meta">
+          <AppLogo app={app} size={48} className="ins-card-logo" />
+          <div className="ins-card-meta-text">
+            <Link href={INSPIRATIONS_ROUTES.app(app, platform)} className="ins-card-app">
+              {named.title}
+            </Link>
+            {(app.tagline || named.tagline) && <p className="ins-card-tagline">{app.tagline || named.tagline}</p>}
+          </div>
+        </div>
       )}
       {cardMenu.menu}
       {openAt !== null && (

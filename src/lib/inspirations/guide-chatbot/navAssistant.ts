@@ -41,7 +41,7 @@ export type NavContext = { app: App | null; results?: NavTarget[] | null; page?:
 const PAGES: { keys: string[]; target: NavTarget }[] = [
   { keys: ['explore', 'home', 'inspirations', 'start'], target: { label: 'Explore', hint: 'Home', href: INSPIRATIONS_ROUTES.explore } },
   { keys: ['apps', 'all apps', 'app list', 'browse apps'], target: { label: 'Apps', hint: 'Page', href: INSPIRATIONS_ROUTES.apps } },
-  { keys: ['screens', 'all screens', 'screenshots'], target: { label: 'Screens', hint: 'Page', href: INSPIRATIONS_ROUTES.screens } },
+  { keys: ['screens', 'all screens'], target: { label: 'Screens', hint: 'Page', href: INSPIRATIONS_ROUTES.screens } },
   { keys: ['flows', 'flow', 'user flows', 'all flows'], target: { label: 'Flows', hint: 'Page', href: INSPIRATIONS_ROUTES.flows } },
   { keys: ['ui elements', 'ui element', 'elements', 'components', 'ui', 'ui kit', 'ui components'], target: { label: 'UI elements', hint: 'Page', href: INSPIRATIONS_ROUTES.uiElements } },
   { keys: ['patterns', 'pattern'], target: { label: 'Patterns', hint: 'Page', href: INSPIRATIONS_ROUTES.patterns } },
@@ -53,6 +53,9 @@ const PAGES: { keys: string[]; target: NavTarget }[] = [
   { keys: ['my settings', 'account settings', 'motvin settings', 'my account', 'preferences', 'profile settings'], target: { label: 'Settings', hint: 'Page', href: INSPIRATIONS_ROUTES.settings } },
   { keys: ['search', 'search page', 'advanced search'], target: { label: 'Search', hint: 'Page', href: INSPIRATIONS_ROUTES.search } },
 ];
+
+/** "app store screenshots", "store screenshots", "marketing screenshots", "app store screens": an app's store set. */
+const STORE_SHOTS = /\b(?:app ?store|play ?store|store|marketing|listing)\s+(?:screenshots?|screen ?shots?|screens?|images?|shots)\b|\bstore ?shots\b/;
 
 export const QUICK_PAGES: NavTarget[] = PAGES.slice(1, 7).map((page) => page.target);
 
@@ -763,8 +766,13 @@ async function keepSection(reply: NavReply, text: string, context: NavContext | 
   if (context?.ask === 'ios') return reply;
   const asksWebs = Boolean(context?.ask);
   if (!context?.page && !asksWebs) return reply;
-  const section = asksWebs ? [...WEBS_PLATFORMS] : browsedPlatforms(new URLSearchParams(context?.page?.search ?? ''));
   const index = await loadIndex();
+  // An app's own page is in that app's section, whatever its address says: Canva's page (no ?platform) is Webs.
+  const pageSlug = /^\/inspirations\/app\/([^/?#]+)/.exec(context?.page?.pathname ?? '')?.[1];
+  const pageApp = pageSlug ? index.appBySlug.get(decodeURIComponent(pageSlug)) : undefined;
+  const params = new URLSearchParams(context?.page?.search ?? '');
+  const pageOnlyWebs = Boolean(pageApp && !pageApp.platforms?.includes('ios') && !params.get('platform'));
+  const section = asksWebs || pageOnlyWebs ? [...WEBS_PLATFORMS] : browsedPlatforms(params);
   if (!asksWebs && (section.includes('ios') || findPlatforms(applySynonyms(text.toLowerCase())).length > 0)) return reply;
   const fix = (href: string): string => {
     if (!href.startsWith('/inspirations') || /[?&]platform=/.test(href)) return href;
@@ -776,7 +784,7 @@ async function keepSection(reply: NavReply, text: string, context: NavContext | 
       const on = app?.platforms?.find((platform) => section.includes(platform));
       if (!app || !on || app.platforms.length < 2) return href;
       sp.set('platform', on);
-    } else if (/^\/inspirations(?:\/(?:apps|new|screens|flows|ui-elements|patterns|search))?\/?$/.test(path)) {
+    } else if (/^\/inspirations(?:\/(?:apps|new|screens|screenshots|flows|ui-elements|patterns|search))?\/?$/.test(path)) {
       sp.set('platform', 'web');
     } else {
       return href;
@@ -877,7 +885,9 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   if (page && !isAppsPage) return { text: pick([`Opening ${page.target.label}.`, `Taking you to ${page.target.label}.`, `Here’s the ${page.target.label} page.`]), targets: [], go: page.target };
   // "flows on web", "ios patterns": a page on a platform. iOS is the pages' default; Webs gets `web` from keepSection;
   // Web Apps alone says so. Sites have no screens or flows, so "flows on sites" goes on to be answered below.
-  const platformPage = !page && context?.ask ? pageFor(clean(withoutPlatform(original).replace(/^(?:in|on|for|from|to)\s+(?:the\s+)?/, ''))) : null;
+  // Screenshots on a platform ("screenshots for web") are answered below, as the screenshots on that platform.
+  const asksStoreShots = STORE_SHOTS.test(original.toLowerCase()) || /\bscreen ?shots?\b/i.test(original);
+  const platformPage = !page && context?.ask && !asksStoreShots ? pageFor(clean(withoutPlatform(original).replace(/^(?:in|on|for|from|to)\s+(?:the\s+)?/, ''))) : null;
   if (platformPage && platformPage.target.href !== QUICK_PAGES[0].href) {
     if (context!.ask === 'website') {
       const onWebs = { ...platformPage.target, label: `${platformPage.target.label} on Webs`, href: `${platformPage.target.href}${platformPage.target.href.includes('?') ? '&' : '?'}platform=web` };
@@ -954,6 +964,63 @@ async function resolveInner(raw: string, context: NavContext | undefined, notes:
   if (fixed.corrections.length > 0) {
     const fixedPage = pageFor(clean(working));
     if (fixedPage) return { text: `Opening ${fixedPage.target.label}.`, targets: [], go: fixedPage.target };
+  }
+
+  // App Store screenshots — "screenshots", "airbnb app store screenshots", "store screenshots": an app's set opens
+  // over its page, and with no app named, the page of every set (Screens beside it, for one who meant screens).
+  // "Airbnb screenshots" is its set only when it has one; otherwise it is Airbnb's screens, as before.
+  // The platform an app's set is on: the one looked at; with no platform named, any (an app named from Webs still
+  // opens its iOS set). `strict` when one was named ("for web"): Airbnb's iOS set is no answer to that.
+  // "App Store screenshots" with no platform named are iOS ones, wherever they are asked from.
+  const shotsScope: readonly Platform[] | null = !context?.ask && /\bapp ?store\b/.test(working) ? ['ios'] : scope;
+  const withShots = (app: App, strict = false) => {
+    const on = app.platforms.filter((platform) => app.storeShots?.[platform]?.images.length);
+    return on.find((platform) => !shotsScope || shotsScope.includes(platform)) ?? (strict && context?.ask ? undefined : on[0]);
+  };
+  // What they are called where they are: iOS sets are App Store ones; Webs' are web apps' (or sites').
+  const shotsKind = (platforms: readonly Platform[] | null) =>
+    !platforms || platforms.includes('ios') ? 'App Store' : platforms.every((platform) => platform === 'site') ? 'site' : 'web app';
+  const saysShots = /\bscreen ?shots?\b/.test(working);
+  const shotsNamed = saysShots || STORE_SHOTS.test(working) ? findApps(working.replace(new RegExp(STORE_SHOTS.source, 'g'), ' '), everyApp).filter((app) => !negatedIds.has(app.id)) : [];
+  if (STORE_SHOTS.test(working) || (saysShots && (shotsNamed.length > 0 || /^(?:screen ?shots?)$/.test(clean(withoutPlatform(original)))))) {
+    const shotsTarget = (app: App, platform: Platform): NavTarget => ({
+      label: `${app.name} ${shotsKind([platform])} screenshots`,
+      hint: 'Screenshots',
+      href: INSPIRATIONS_ROUTES.app(app, platform, { platform, shots: '1' }),
+      iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined,
+    });
+    // iOS's page carries no platform, so a Webs page's links would move it to Webs: an iOS one says so.
+    const iosOnly = shotsScope?.length === 1 && shotsScope[0] === 'ios';
+    const page: NavTarget = { label: `${shotsKind(shotsScope).replace(/^\w/, (c) => c.toUpperCase())} screenshots`, hint: 'Page', href: iosOnly && scope && !scope.includes('ios') ? `${INSPIRATIONS_ROUTES.screenshots}?platform=ios` : INSPIRATIONS_ROUTES.screenshots };
+    const screens = PAGES.find((entry) => entry.target.href === INSPIRATIONS_ROUTES.screens)!.target;
+    if (shotsNamed.length) {
+      const app = shotsNamed[0];
+      const platform = withShots(app, true);
+      const elsewhere = withShots(app);
+      if (platform) return { text: `Here are ${app.name}’s ${shotsKind([platform])} screenshots.`, targets: [appTarget(app), page], go: shotsTarget(app, platform), app };
+      // Asked on a platform it has none on: said so, with the set it does have to open instead.
+      if (elsewhere) {
+        return {
+          text: `${app.name} has no ${shotsKind(shotsScope)} screenshots. It has ${shotsKind([elsewhere])} ones on ${PLATFORM_LABEL[elsewhere]}.`,
+          targets: [shotsTarget(app, elsewhere), page],
+          app,
+          kind: 'answer',
+        };
+      }
+      // None anywhere: said so. "Canva screenshots" then shows its screens, which may be what was meant.
+      if (saysShots && !STORE_SHOTS.test(working)) return { text: `${app.name} has no ${shotsKind(shotsScope)} screenshots yet. Here are its screens.`, targets: [page], go: appTarget(app), app };
+      return { text: `${app.name} has no ${shotsKind(shotsScope)} screenshots yet.`, targets: [appTarget(app), page], app };
+    }
+    // In Webs they are the web apps' (from the Mac App Store or uploaded), not "App Store" ones.
+    const kindOf = shotsKind(shotsScope);
+    const listed = shotsScope === scope ? apps : everyApp.filter((app) => app.platforms.some((platform) => shotsScope!.includes(platform)));
+    const sets = listed.flatMap((app) => {
+      const platform = withShots(app, true);
+      return platform ? [shotsTarget(app, platform)] : [];
+    });
+    return sets.length
+      ? { text: `Here are the ${kindOf} screenshots: ${plural(sets.length, 'app')} so far. Looking for app screens? They’re in Screens.`, targets: [...sets.slice(0, 3), screens], go: page }
+      : { text: `No ${kindOf} screenshots here yet. App screens are in Screens.`, targets: [page, screens], kind: 'answer' };
   }
 
   const asksCount = /\bhow (many|much)\b|\b(count|number of|total)\b/.test(lower);

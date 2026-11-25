@@ -31,6 +31,7 @@ const PARAM = {
   store: 'appstore',
   size: 'size',
   versions: 'versions',
+  shots: 'storeshots',
 } as const;
 type Key = keyof typeof PARAM;
 
@@ -55,6 +56,7 @@ const MODE: Record<Key, 'any' | 'all' | 'one'> = {
   store: 'any',
   size: 'one',
   versions: 'any',
+  shots: 'any',
 };
 
 const RATINGS = [
@@ -100,6 +102,7 @@ export function useAppFilters(apps: App[]) {
   const freshDays = useLibrarySettings().freshness;
   const platforms = browsedPlatforms(params);
   const webs = isWebsPlatforms(platforms);
+  const hasShots = (a: App) => platforms.some((p) => (a.storeShots?.[p]?.images.length ?? 0) > 0);
   const today = localDateString();
   const [panelOpen, setPanelOpen] = useState(false);
 
@@ -196,6 +199,13 @@ export function useAppFilters(apps: App[]) {
       label: 'Version history',
       show: true,
       options: [{ value: 'many', label: 'More than one version', test: (a) => (a.versions?.length ?? 0) > 1 }],
+    },
+    // Only where some app has a set: an option that can only empty the list isn't one.
+    {
+      key: 'shots',
+      label: 'App Store screenshots',
+      show: apps.some(hasShots),
+      options: [{ value: 'has', label: 'Has App Store screenshots', test: hasShots }],
     },
     // From the App Store, together at the end (iOS only).
     {

@@ -12,6 +12,8 @@ export const INSPIRATIONS_ROUTES = {
   uiElements: '/inspirations/ui-elements',
   flows: '/inspirations/flows',
   patterns: '/inspirations/patterns',
+  /** Every app's App Store screenshots (the Screenshots card on an app page), one card per app. */
+  screenshots: '/inspirations/screenshots',
   search: '/inspirations/search',
   /**
    * The visitor's boards — bare, the boards grid; `?collection=<id>` opens
