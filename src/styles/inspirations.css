@@ -21603,31 +21603,21 @@ body:has(aside.ins-guide) .ins-assist-switch {
   display: inline-flex;
   align-items: center;
   padding: 6px 10px;
-  /* The header's "New" tag colours (.ins-try-icons-badge). */
-  border-radius: 8px;
-  background: #e9e9e9;
-  color: #767676;
-  font: 600 13px/1 var(--font-inter), sans-serif;
-  letter-spacing: -0.005em;
-  overflow: hidden;
+  /* The Prototype card's tag (.ins-card-proto-badge), so the two cards that open a whole set read as a pair. */
+  border-radius: 9px;
+  background: rgba(110, 110, 110, 0.6);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font: 600 13px/1 var(--font-manrope), Inter, sans-serif;
   pointer-events: none;
-}
-/* And its shine, the same skim that runs across the "New" tag. */
-.ins-store-card-badge::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.85) 50%, transparent 70%);
-  transform: translateX(-120%);
-  animation: ins-pmenu-skim 3.2s ease-in-out infinite;
-  pointer-events: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .ins-store-card-badge::after { animation: none; display: none; }
 }
 .ins-store-fan {
   position: absolute;
-  inset: 0;
+  /* The space between the badge and the caption, and no more: the fan is sized to it (below), so on a short
+     card, a phone's narrow column, the images never run under the caption. */
+  inset: clamp(40px, 11%, 48px) 0 calc(5% + 68px);
+  container-type: size;
   pointer-events: none;
 }
 .ins-store-fan-card {
@@ -21637,7 +21627,9 @@ body:has(aside.ins-guide) .ins-assist-switch {
   left: 50%;
   top: 50%;
   translate: -50% -50%;
-  width: 54%;
+  /* 54% of the card's width, unless that would be taller than the space it has (`--ar` is the image's
+     width / height, set inline). */
+  width: min(54cqw, 94cqh * var(--ar, 0.46));
   height: auto;
   border-radius: 14px;
   overflow: hidden;
@@ -21766,12 +21758,22 @@ body:has(aside.ins-guide) .ins-assist-switch {
 @media (prefers-reduced-motion: reduce) {
   .ins-store-card-sub > span { transition: opacity 150ms linear !important; translate: none !important; scale: none !important; filter: none !important; }
 }
+/* Without hover (a phone, a tablet) the "View all" pill never shows, so the caption is its two lines and the fan
+   takes the room the pill held. */
+@media (hover: none) {
+  .ins-store-card-sub > .ins-store-card-cta { display: none; }
+  .ins-store-fan { bottom: calc(5% + 46px); }
+}
 /* A saved set that has left the library (a collection's Screenshots): a plain card holding its name and ×. */
 .ins-store-card-shot.is-missing { cursor: default; }
 .ins-store-card-shot.is-missing .ins-store-card-cap { bottom: auto; top: 50%; translate: 0 -50%; }
 
-/* A web app's wide cards: a narrower fan, a little above the middle, so wide images stay clear of the caption. */
-.ins-web-grid .ins-store-fan-card { top: 45%; width: 42%; border-radius: 8px; }
+/* A web app's wide cards: a narrower fan, so wide images stay clear of the caption. */
+.ins-web-grid .ins-store-fan-card { width: min(48cqw, 94cqh * var(--ar, 1.6)); border-radius: 8px; }
+/* Spread a little less on hover, so the wider side cards keep their corners inside the card. */
+.ins-web-grid .ins-store-card-shot:is(:hover, :focus-visible) .ins-store-fan.is-3 > .ins-store-fan-card:nth-child(1),
+.ins-web-grid .ins-store-card-shot:is(:hover, :focus-visible) .ins-store-fan.is-2 > .ins-store-fan-card:nth-child(1) { transform: translateX(-46%) rotate(-11deg) scale(0.88); }
+.ins-web-grid .ins-store-card-shot:is(:hover, :focus-visible) .ins-store-fan.is-3 > .ins-store-fan-card:nth-child(2) { transform: translateX(46%) rotate(11deg) scale(0.88); }
 
 /* The set in the screen preview's frame (StoreShotsModal): a store image's own shape, with a gentler corner than
    a phone screen's; a click shows it full size (ScreenLightbox). */

@@ -68,7 +68,7 @@ function usePrototypeReel(cardRef: React.RefObject<HTMLElement | null>, count: n
  * displays it with, so the card can still show a title and a description
  * separately instead of one long truncated line.
  */
-function splitAppName(name: string): { title: string; tagline: string | null } {
+export function splitAppName(name: string): { title: string; tagline: string | null } {
   const i = name.indexOf(NAME_TAGLINE_SEPARATOR);
   if (i === -1) return { title: name, tagline: null };
   return { title: name.slice(0, i), tagline: name.slice(i + NAME_TAGLINE_SEPARATOR.length) };

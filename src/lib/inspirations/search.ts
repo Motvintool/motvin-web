@@ -13,6 +13,10 @@ import type { Industry, Platform } from './types';
  * not there. Ranking of actual results happens server-side.
  */
 
+/** Words that ask for App Store screenshots, and the names they go by. */
+const SHOT_WORDS = /\b(app ?store|store|screenshots?|screen ?shots?)\b/;
+const SHOT_NAMES = ['screenshots', 'app store screenshots', 'store screenshots'];
+
 export type SearchSuggestion = {
   label: string;
   hint: string;
@@ -54,6 +58,27 @@ export async function suggestQueries(raw: string, limit = 7, scope?: readonly Pl
     if (!out.some((existing) => existing.href === s.href)) out.push(s);
   };
 
+  // App Store screenshots: asked for by name ("screenshots", "app store", "airbnb screenshots"), they lead —
+  // the page of every set, then each app's own. An app's name alone lists its set just after the app.
+  const shotSets = apps.flatMap((app) => {
+    const platform = app.platforms.find((p) => inScope(p) && (app.storeShots?.[p]?.images.length ?? 0) > 0);
+    return platform ? [{ app, platform, count: app.storeShots![platform]!.images.length }] : [];
+  });
+  // Half a name ("scree", "app sto") asks for them all; a whole word may come with an app's name ("airbnb store").
+  const typingName = q.length >= 5 && SHOT_NAMES.some((name) => name.startsWith(q));
+  const asksShots = typingName || SHOT_WORDS.test(q);
+  const rest = typingName ? '' : q.replace(new RegExp(SHOT_WORDS.source, 'g'), ' ').replace(/\s+/g, ' ').trim();
+  const shotOf = ({ app, platform, count }: (typeof shotSets)[number]): SearchSuggestion => ({
+    label: `${app.name.split(' — ')[0]} App Store screenshots`,
+    hint: `${PLATFORM_ONE[platform]} · ${count} screenshot${count === 1 ? '' : 's'}`,
+    href: INSPIRATIONS_ROUTES.app(app, platform, { platform, shots: '1' }),
+    iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined,
+  });
+  if (asksShots && shotSets.length) {
+    if (!rest) push({ label: 'App Store screenshots', hint: `${shotSets.length} app${shotSets.length === 1 ? '' : 's'}`, href: withSection(INSPIRATIONS_ROUTES.screenshots) });
+    for (const entry of shotSets) if (!rest || entry.app.name.toLowerCase().includes(rest)) push(shotOf(entry));
+  }
+
   for (const app of apps) {
     if (!q || app.name.toLowerCase().includes(q)) {
       // The platform it is found on, in place of a plain "App": "Web App · AI · 33 screens".
@@ -64,6 +89,8 @@ export async function suggestQueries(raw: string, limit = 7, scope?: readonly Pl
         href: INSPIRATIONS_ROUTES.app(app, platform),
         iconSrc: inspirationsApi.mediaUrl(app.logo) ?? undefined,
       });
+      const shots = q ? shotSets.find((entry) => entry.app === app) : undefined;
+      if (shots) push(shotOf(shots));
     }
   }
 

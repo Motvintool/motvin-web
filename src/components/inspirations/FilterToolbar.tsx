@@ -10,6 +10,7 @@ import { CONTENT_KINDS, elementLabel, formatCount, INDUSTRY_LABEL, screenStateLa
 import {
   type Industry,
   type LibraryCounts,
+  type Platform,
   type ScreenState,
   type ScreenType,
   type Style,
@@ -324,13 +325,17 @@ export function NavPill({ counts, activeCount = null }: { counts: LibraryCounts 
   const websitesCount = allApps.length ? allApps.filter((app) => app.platforms.includes('site')).length : undefined;
   const webAppsList = `${INSPIRATIONS_ROUTES.apps}?show=webapps`;
   const websitesList = `${INSPIRATIONS_ROUTES.apps}?show=sites`;
+  // App Store screenshots, after the kinds: in Web Apps only once a web app has a set, as most never will.
+  const shotsOn = (platform: Platform) => (allApps.length ? allApps.filter((app) => app.storeShots?.[platform]?.images.length).length : undefined);
+  const shotsEntry = (platform: Platform): NavEntry => ({ key: 'screenshots', label: 'Screenshots', href: INSPIRATIONS_ROUTES.screenshots, count: shotsOn(platform) });
+  const webShots = shotsOn('webapp') ? [shotsEntry('webapp')] : [];
   // Webs has two platforms, each with what it is browsed by: Web Apps (screens, UI elements, flows, patterns) and
   // Webs, websites (their full pages and sections). Apps (iOS) has the one, Apps.
   const entries: (NavEntry | 'divider')[] = webs
     ? [
         { key: 'explore', label: 'Explore', href: INSPIRATIONS_ROUTES.explore },
         // No count of its own: the Webs apps count holds the websites too; its list's items have theirs.
-        { key: 'apps', label: 'Web Apps', href: webAppsList, sub: [{ key: 'apps-list', label: 'All web apps', href: webAppsList, count: webAppsCount }, ...kinds] },
+        { key: 'apps', label: 'Web Apps', href: webAppsList, sub: [{ key: 'apps-list', label: 'All web apps', href: webAppsList, count: webAppsCount }, ...kinds, ...webShots] },
         {
           key: 'sites',
           label: 'Sites',
@@ -349,7 +354,7 @@ export function NavPill({ counts, activeCount = null }: { counts: LibraryCounts 
     : [
         // Apps (iOS), laid out as Webs is: Apps › (its list, then its kinds), and New this week set apart.
         { key: 'explore', label: 'Explore', href: INSPIRATIONS_ROUTES.explore },
-        { key: 'apps', label: 'Apps', href: INSPIRATIONS_ROUTES.apps, sub: [{ key: 'apps-list', label: 'All apps', href: INSPIRATIONS_ROUTES.apps, count: counts?.apps }, ...kinds] },
+        { key: 'apps', label: 'Apps', href: INSPIRATIONS_ROUTES.apps, sub: [{ key: 'apps-list', label: 'All apps', href: INSPIRATIONS_ROUTES.apps, count: counts?.apps }, ...kinds, shotsEntry('ios')] },
         'divider',
         { key: 'new', label: 'New this week', href: INSPIRATIONS_ROUTES.newThisWeek },
       ];

@@ -423,7 +423,11 @@ export function AgentScreenshotsPanel({ state, onChanged, onManual }: { state: A
   const [running, setRunning] = useState(false);
   const stopRef = useRef(false);
 
-  const rows = useMemo(() => appsOn(state, 'ios'), [state]);
+  // A web app's set comes from its Mac app's Mac App Store page; websites have no store page at all.
+  const fetchable = platform !== 'site';
+  const mac = platform === 'webapp';
+  const where = PLATFORM_LABEL[platform];
+  const rows = useMemo(() => (platform === 'site' ? [] : appsOn(state, platform)), [state, platform]);
   const listed = rows.filter((r) => !onlyNew || !r.set);
   const shown = listed.filter((r) => matches(r, search));
   const chosen = rows.filter((r) => picked.has(r.appId));
@@ -446,9 +450,9 @@ export function AgentScreenshotsPanel({ state, onChanged, onManual }: { state: A
       if (stopRef.current) break;
       update(job.appId, { stage: 'fetching' });
       try {
-        const result = await adminApi.fetchStoreShots(job.appId, { country, replace: replace === 'replace' });
+        const result = await adminApi.fetchStoreShots(job.appId, { country, replace: replace === 'replace', platform });
         // The App Store app it matched, so a wrong match is plain to see.
-        const from = result.matched ? ` · ${result.matched.name || 'App Store'} (${result.matched.trackId})` : '';
+        const from = result.matched ? ` · ${result.matched.name || (mac ? 'Mac App Store' : 'App Store')} (${result.matched.trackId})` : '';
         update(job.appId, { stage: result.status, note: `${result.count} image${result.count === 1 ? '' : 's'} · ${dayLabel(result.date)}${from}` });
       } catch (err) {
         update(job.appId, { stage: 'failed', note: (err as Error).message });
@@ -498,7 +502,9 @@ export function AgentScreenshotsPanel({ state, onChanged, onManual }: { state: A
 
   const titles = ['Which apps should the agent fetch?', 'Settings', 'Check and start'];
   const descs = [
-    'The agent takes each app’s iPhone screenshots from its App Store page.',
+    mac
+      ? 'The agent takes each web app’s Mac screenshots from its Mac App Store page. Apps with no Mac app fail, and their screenshots can be uploaded by hand.'
+      : 'The agent takes each app’s iPhone screenshots from its App Store page.',
     undefined,
     'Sets that are the same as last time are left alone.',
   ];
@@ -510,19 +516,26 @@ export function AgentScreenshotsPanel({ state, onChanged, onManual }: { state: A
       onStep={setStep}
       title={titles[step]}
       description={descs[step]}
-      canNext={platform === 'ios' && chosen.length > 0}
+      canNext={fetchable && chosen.length > 0}
       nextLabel={`Fetch ${chosen.length} app${chosen.length === 1 ? '' : 's'}`}
       onNext={start}
-      footerNote={platform !== 'ios' ? 'Only iOS apps have an App Store page.' : !chosen.length ? 'Pick at least one app.' : `${chosen.length} app${chosen.length === 1 ? '' : 's'} picked.`}
+      footerNote={!fetchable ? 'Websites have no App Store page.' : !chosen.length ? 'Pick at least one app.' : `${chosen.length} app${chosen.length === 1 ? '' : 's'} picked.`}
     >
       {step === 0 && (
         <div className="ins-wizard-stack">
-          <Choice label="Platform" value={platform} options={PLATFORM_OPTIONS} onChange={setPlatform} />
-          {platform !== 'ios' ? (
+          <Choice
+            label="Platform"
+            value={platform}
+            options={PLATFORM_OPTIONS}
+            onChange={(next) => {
+              // An iOS pick is no web app's: each platform's apps are picked apart.
+              setPlatform(next);
+              setPicked(new Set());
+            }}
+          />
+          {!fetchable ? (
             <div className="ins-field">
-              <p className="ins-muted">
-                {platform === 'webapp' ? 'Web apps' : 'Websites'} have no App Store page, so the agent can’t fetch their screenshots. Upload them by hand instead.
-              </p>
+              <p className="ins-muted">Websites have no App Store page, so the agent can’t fetch their screenshots. Upload them by hand instead.</p>
               <div>
                 <button type="button" className="ins-btn" onClick={onManual}>
                   Open Manual Screenshots
@@ -546,7 +559,7 @@ export function AgentScreenshotsPanel({ state, onChanged, onManual }: { state: A
                 search={search}
                 onSearch={setSearch}
                 onSelectAll={() => setPicked(shown.every((r) => picked.has(r.appId)) ? new Set() : new Set(shown.map((r) => r.appId)))}
-                empty={listed.length ? 'No app matches.' : onlyNew ? 'Every iOS app has screenshots already.' : 'No iOS apps in the library yet.'}
+                empty={listed.length ? 'No app matches.' : onlyNew ? `Every ${where} app has screenshots already.` : `No ${where} apps in the library yet.`}
               />
             </>
           )}
@@ -555,7 +568,7 @@ export function AgentScreenshotsPanel({ state, onChanged, onManual }: { state: A
 
       {step === 1 && (
         <div className="ins-wizard-stack">
-          <Choice label="App Store country" value={country} options={COUNTRIES} onChange={setCountry} hint="Some apps show different screenshots in each country." />
+          <Choice label={mac ? 'Mac App Store country' : 'App Store country'} value={country} options={COUNTRIES} onChange={setCountry} hint="Some apps show different screenshots in each country." />
           <div className="ins-field">
             <span className="ins-field-label">When an app’s screenshots changed</span>
             <ChoiceCards
@@ -575,7 +588,8 @@ export function AgentScreenshotsPanel({ state, onChanged, onManual }: { state: A
         <Summary
           rows={[
             ['Apps', chosen.map((r) => r.name).join(', ')],
-            ['App Store', COUNTRIES.find(([id]) => id === country)?.[1] ?? country],
+            ['Platform', mac ? 'Web App · from the Mac App Store' : 'iOS · from the App Store'],
+            [mac ? 'Mac App Store' : 'App Store', COUNTRIES.find(([id]) => id === country)?.[1] ?? country],
             ['When changed', replace === 'keep' ? 'Add as a new date' : 'Replace the old ones'],
           ]}
         />
@@ -611,7 +625,7 @@ export function AppStoreShots({
   if (!set) {
     return (
       <p className="ins-muted ins-admin-status">
-        No store screenshots for {app.name} on {where} yet. Add them in Manual Screenshots{platform === 'ios' ? ' or Agent Screenshots' : ''}.
+        No store screenshots for {app.name} on {where} yet. Add them in Manual Screenshots{platform !== 'site' ? ' or Agent Screenshots' : ''}.
       </p>
     );
   }

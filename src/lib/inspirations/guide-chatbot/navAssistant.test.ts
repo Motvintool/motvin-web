@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../api', () => {
   const apps = [
-    { id: 'a1', name: 'Swiggy', slug: 'swiggy', screenCount: 262, flowCount: 39, logo: null, industry: 'food', rating: 5, ratingCount: 1, platforms: ['ios', 'webapp'] },
+    { id: 'a1', name: 'Swiggy', slug: 'swiggy', screenCount: 262, flowCount: 39, logo: null, industry: 'food', rating: 5, ratingCount: 1, platforms: ['ios', 'webapp'], storeShots: { ios: { date: '2026-11-25', label: '25 Nov 2026', source: 'appstore', images: [{}, {}, {}] }, webapp: { date: '2026-11-25', label: '25 Nov 2026', source: 'appstore', images: [{}, {}] } } },
     { id: 'a2', name: 'Zomato', slug: 'zomato', screenCount: 140, flowCount: 85, logo: null, industry: 'food', rating: 4.5, ratingCount: 12, platforms: ['ios', 'site'] },
     { id: 'a3', name: 'Zoho Corporation', slug: 'zoho', screenCount: 12, flowCount: 3, logo: null, industry: 'saas', rating: null, ratingCount: null, platforms: ['site'] },
-    { id: 'a4', name: 'Groww', slug: 'groww', screenCount: 90, flowCount: 20, logo: null, industry: 'fintech', rating: 4.2, ratingCount: 3, platforms: ['ios', 'webapp'] },
+    { id: 'a4', name: 'Groww', slug: 'groww', screenCount: 90, flowCount: 20, logo: null, industry: 'fintech', rating: 4.2, ratingCount: 3, platforms: ['ios', 'webapp'], storeShots: { ios: { date: '2026-11-25', label: '25 Nov 2026', source: 'appstore', images: [{}] } } },
   ];
   const flows = [
     { id: 'f1', appId: 'a1', name: 'Checkout', category: 'checkout', screenIds: ['s1', 's2', 's3'] },
@@ -1250,5 +1250,83 @@ describe('the section the visitor is in', () => {
 
   it('follows a platform the visitor names over the section', async () => {
     expect((await ask('ios food apps', onWebs)).go?.href ?? '').not.toContain('platform=web');
+  });
+});
+
+describe('App Store screenshots', () => {
+  it("opens an app's set over its page", async () => {
+    const reply = await ask('show me swiggy app store screenshots');
+    expect(reply.go?.href).toBe('/inspirations/app/swiggy?platform=ios&shots=1');
+    expect(reply.text).toMatch(/Swiggy’s App Store screenshots/);
+  });
+
+  it('says so when the app has none', async () => {
+    const reply = await ask('zomato store screenshots');
+    expect(reply.go).toBeUndefined();
+    expect(reply.text).toBe('Zomato has no App Store screenshots yet.');
+  });
+
+  it('opens the page of every set with no app named', async () => {
+    const reply = await ask('app store screenshots');
+    expect(reply.go?.href).toBe('/inspirations/screenshots');
+    expect(reply.targets.map((target) => target.label)).toEqual(['Swiggy App Store screenshots', 'Groww App Store screenshots', 'Screens']);
+  });
+
+  it('reads plain "screenshots" as them too, with Screens beside', async () => {
+    for (const text of ['screenshots', 'show me screenshots']) {
+      const reply = await ask(text);
+      expect(reply.go?.href).toBe('/inspirations/screenshots');
+      expect(reply.targets.at(-1)?.href).toBe('/inspirations/screens');
+    }
+  });
+
+  it('keeps the screenshots when moved to the web ("for web" after "screenshots")', async () => {
+    const page = { pathname: '/inspirations/screenshots', search: '' };
+    for (const [text, previous] of [['for web', 'show me screenshot'], ['for web app', 'screenshots'], ['screenshots on web', null]] as const) {
+      const reply = await resolveNavigation(text, { app: null, previous, page });
+      expect(reply.go?.href).toBe('/inspirations/screenshots?platform=web');
+      expect(reply.text).toMatch(/^Here are the web app screenshots/);
+    }
+    // And back again: "for ios" is the iOS page.
+    expect((await resolveNavigation('for ios', { app: null, previous: 'screenshots on web', page })).go?.href).toBe('/inspirations/screenshots');
+  });
+
+  it('says sites, not web apps, for "for site"', async () => {
+    const page = { pathname: '/inspirations/screenshots', search: '' };
+    const reply = await resolveNavigation('for site', { app: null, previous: 'screenshots', page });
+    expect(reply.text).toMatch(/^No site screenshots here yet/);
+  });
+
+  it("never answers a platform with another platform's set", async () => {
+    // Groww is on the web too, but its only set is the iOS one: "for web" says so, and opens nothing.
+    const page = { pathname: '/inspirations/app/groww', search: '' };
+    const reply = await resolveNavigation('for web', { app: null, previous: 'show me groww screenshots', page });
+    expect(reply.go).toBeUndefined();
+    expect(reply.text).toBe('Groww has no web app screenshots. It has App Store ones on iOS.');
+    expect(reply.targets[0]).toMatchObject({ label: 'Groww App Store screenshots', href: '/inspirations/app/groww?platform=ios&shots=1' });
+    // Named from a Webs page without a platform, it still opens the set it has.
+    const webs = { pathname: '/inspirations/screenshots', search: '?platform=web' };
+    expect((await resolveNavigation('groww screenshots', { app: null, previous: null, page: webs })).go?.href).toBe('/inspirations/app/groww?platform=ios&shots=1');
+  });
+
+  it('reads "app store screenshots" as the iOS ones, even asked from a Webs page', async () => {
+    const page = { pathname: '/inspirations/screenshots', search: '?platform=web' };
+    const reply = await resolveNavigation('app store screenshots', { app: null, previous: null, page });
+    expect(reply.go?.href).toBe('/inspirations/screenshots?platform=ios');
+    expect(reply.text).toMatch(/^Here are the App Store screenshots/);
+  });
+
+  it("opens the Webs page from a web-only app's page, as its reply says", async () => {
+    const page = { pathname: '/inspirations/app/zoho', search: '' };
+    const reply = await resolveNavigation('screenshots', { app: null, previous: null, page });
+    expect(reply.go?.href).toBe('/inspirations/screenshots?platform=web');
+    expect(reply.text).toMatch(/web app screenshots/);
+  });
+
+  it("opens an app's set from \"<app> screenshots\" only when it has one", async () => {
+    expect((await ask('swiggy screenshots')).go?.href).toBe('/inspirations/app/swiggy?platform=ios&shots=1');
+    const zomato = await ask('zomato screenshots');
+    expect(zomato.go?.href).toBe('/inspirations/app/zomato');
+    expect(zomato.text).toBe('Zomato has no App Store screenshots yet. Here are its screens.');
   });
 });
