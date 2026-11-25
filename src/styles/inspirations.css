@@ -11360,9 +11360,22 @@ select.ins-input {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  /* Centred while it fits; on a short screen it starts at the top and scrolls, instead of losing its top. */
+  justify-content: safe center;
   gap: 4px;
   padding: 8px 28px 20px;
   text-align: center;
+}
+/* Its parts keep their size (the round face stays round); the area scrolls instead of squashing them. */
+.ins-guide-welcome > * { flex-shrink: 0; }
+/* Short phones: less air around the welcome so it fits without scrolling. */
+@media (max-width: 759px) and (max-height: 720px) {
+  .ins-guide.ins-sheet .ins-guide-welcome { padding-top: 0; padding-bottom: 8px; }
+  .ins-guide.ins-sheet .ins-guide-avatar { margin-bottom: 8px; }
+}
+/* Phones: two suggestions are enough, and they leave room for the face and the question. */
+@media (max-width: 759px) {
+  .ins-guide.ins-sheet .ins-guide-example:nth-of-type(n + 3) { display: none; }
 }
 
 .ins-guide-avatar {
@@ -14478,6 +14491,13 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
   .ins-set-tabs button { flex: 1; justify-content: center; padding: 10px 12px; }
   .ins-set-hero { flex-direction: column; align-items: flex-start; }
 }
+/* Phones: tighter tabs; on the smallest the icons step aside so all three labels fit. */
+@media (max-width: 440px) {
+  .ins-set-tabs button { min-width: 0; padding: 10px 8px; gap: 6px; }
+}
+@media (max-width: 369px) {
+  .ins-set-tabs button .ins-set-icon { display: none; }
+}
 
 /* Side list: icon + label, current page in full ink, the rest greyed back. */
 .ins-set-tree { position: sticky; top: calc(var(--ins-header-h, 82px) + 28px); display: flex; flex-direction: column; gap: 6px; padding: 4px 0; }
@@ -14546,6 +14566,11 @@ body:has(aside.ins-dock.is-wide:not(.ins-dock-user)) .ins-dock-user.is-beside-ad
 /* Settings page only: 32px on the left and right, for the page and for the logo bar above it. */
 .ins-root:has(.ins-set-scope) .ins-main { padding-left: 32px; padding-right: 32px; }
 .ins-root:has(.ins-set-scope) .ins-header-content { padding-left: 32px; padding-right: 32px; }
+/* Phones: the same 16px as every other page, so the cards and the tabs get the width. */
+@media (max-width: 759px) {
+  .ins-root:has(.ins-set-scope) .ins-main,
+  .ins-root:has(.ins-set-scope) .ins-header-content { padding-left: 16px; padding-right: 16px; }
+}
 
 /* Settings, guest: a note above the requests list inviting the visitor to sign in. */
 .ins-set-guest {
