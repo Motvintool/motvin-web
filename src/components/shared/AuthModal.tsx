@@ -166,247 +166,251 @@ export function AuthModalProvider({ children }: { children: ReactNode }) {
     <AuthModalContext.Provider value={contextValue}>
       {children}
 
-      <div
-        id="auth-modal"
-        className="auth-modal-overlay"
-        style={{ display: isOpen ? 'flex' : 'none' }}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) close();
-        }}
-      >
-        <div className="auth-modal-content">
-          <button
-            className="auth-modal-close"
-            id="auth-modal-close"
-            aria-label="Close modal"
-            onClick={close}
-          >
-            &times;
-          </button>
-
-          <div id="auth-main-view" style={{ display: view === 'main' ? 'block' : 'none' }}>
-            <div className="auth-modal-header">
-              <h2 id="auth-modal-title">{isLogin ? 'Sign in' : 'Create Account'}</h2>
-              <p id="auth-modal-subtitle">
-                {isLogin
-                  ? 'Welcome back! Please enter your details.'
-                  : 'Start your journey with us today.'}
-              </p>
-            </div>
-
-            {googleButton}
-
-            <div className="auth-divider">
-              <span>or</span>
-            </div>
-
-            <form id="auth-modal-form" onSubmit={handleSubmit}>
-              <div className="auth-input-group">
-                <label htmlFor="auth-email">Email</label>
-                <input
-                  type="email"
-                  id="auth-email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-
-              <div className="auth-input-group">
-                <label htmlFor="auth-password">Password</label>
-                <input
-                  type="password"
-                  id="auth-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-
-              <div
-                id="auth-error-msg"
-                className="auth-error-msg"
-                style={{ display: error ? 'block' : 'none', color: '#d93025' }}
-              >
-                {error}
-              </div>
-
-              <button
-                type="submit"
-                className="auth-submit-btn"
-                id="auth-modal-submit-btn"
-                disabled={busy}
-              >
-                {isLogin ? 'Log in' : 'Sign up'}
-              </button>
-
-              {/* Reset is only offered when signing in — there is nothing to
-                  reset for an account that doesn't exist yet. */}
-              <div
-                id="auth-forgot-password-wrapper"
-                style={{
-                  display: isLogin ? 'block' : 'none',
-                  textAlign: 'center',
-                  marginTop: '12px',
-                  paddingBottom: '16px',
-                }}
-              >
-                <a
-                  href="#"
-                  id="auth-forgot-password-link"
-                  style={{
-                    fontSize: '15px',
-                    color: '#006BD6',
-                    textDecoration: 'underline',
-                    display: 'inline-block',
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setResetError('');
-                    setResetEmail(email); // Carry over anything already typed.
-                    setView('reset-request');
-                  }}
-                >
-                  Reset Password
-                </a>
-              </div>
-            </form>
-
-            <div className="auth-modal-footer">
-              <span id="auth-toggle-text">
-                {isLogin ? "Don't have an account? " : 'Already have an account? '}
-              </span>
-              <a
-                href="#"
-                id="auth-toggle-mode"
-                onClick={(e) => {
-                  e.preventDefault();
-                  open(isLogin ? 'register' : 'login');
-                }}
-              >
-                {isLogin ? 'Sign up' : 'Log in'}
-              </a>
-            </div>
-          </div>
-
-          {/* Reset Password Request View */}
-          <div
-            id="auth-reset-request-view"
-            style={{ display: view === 'reset-request' ? 'block' : 'none', width: '100%' }}
-          >
-            <div className="auth-modal-header" style={{ marginBottom: '24px' }}>
-              <h2 style={{ fontSize: '24px', color: '#202124', textAlign: 'center' }}>
-                Enter your email to reset password
-              </h2>
-            </div>
-
-            {googleButton}
-
-            <div className="auth-divider">
-              <span>or</span>
-            </div>
-
-            <form id="auth-reset-form" onSubmit={handleReset}>
-              <div className="auth-input-group">
-                <label htmlFor="auth-reset-email">Email</label>
-                <input
-                  type="email"
-                  id="auth-reset-email"
-                  required
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                />
-              </div>
-
-              <div
-                id="auth-reset-error-msg"
-                className="auth-error-msg"
-                style={{ display: resetError ? 'block' : 'none', color: '#d93025' }}
-              >
-                {resetError}
-              </div>
-
-              <button
-                type="submit"
-                className="auth-submit-btn"
-                id="auth-reset-submit-btn"
-                style={{ marginTop: '16px' }}
-                disabled={busy}
-              >
-                Reset password
-              </button>
-
-              <div style={{ textAlign: 'center', marginTop: '16px' }}>
-                <a
-                  href="#"
-                  id="auth-reset-cancel-link"
-                  style={{
-                    fontSize: '15px',
-                    color: '#006BD6',
-                    textDecoration: 'underline',
-                    display: 'inline-block',
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setView('main');
-                  }}
-                >
-                  Cancel
-                </a>
-              </div>
-            </form>
-          </div>
-
-          {/* Reset Password Msg View */}
-          <div
-            id="auth-reset-msg-view"
-            style={{ display: view === 'reset-msg' ? 'block' : 'none', width: '100%' }}
-          >
-            <div className="auth-modal-header" style={{ marginBottom: '16px' }}>
-              <h2
-                style={{
-                  fontSize: '24px',
-                  color: '#202124',
-                  textAlign: 'center',
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: 1.2,
-                }}
-              >
-                Received your password
-                <br />
-                reset request
-              </h2>
-            </div>
-
-            {/* Deliberately does not confirm whether the account exists. */}
-            <p
-              style={{
-                fontSize: '15px',
-                lineHeight: '22px',
-                color: '#000000',
-                textAlign: 'center',
-                marginBottom: '24px',
-              }}
-            >
-              If an account exists for{' '}
-              <span id="auth-reset-email-display" style={{ fontWeight: 600 }}>
-                {sentResetTo}
-              </span>
-              , you will get an email with instructions on resetting your password. If it
-              doesn&apos;t arrive, be sure to check your spam folder.
-            </p>
-
+      {/* In the page only while open: closed, its sign-in words were most of what search engines read on the
+          library's picture-heavy pages, which then looked like a login page to them. */}
+      {isOpen && (
+        <div
+          id="auth-modal"
+          className="auth-modal-overlay"
+          style={{ display: 'flex' }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) close();
+          }}
+        >
+          <div className="auth-modal-content">
             <button
-              type="button"
-              className="auth-submit-btn"
-              id="auth-reset-back-btn"
-              onClick={() => setView('main')}
+              className="auth-modal-close"
+              id="auth-modal-close"
+              aria-label="Close modal"
+              onClick={close}
             >
-              Back to Log in
+              &times;
             </button>
+
+            <div id="auth-main-view" style={{ display: view === 'main' ? 'block' : 'none' }}>
+              <div className="auth-modal-header">
+                <h2 id="auth-modal-title">{isLogin ? 'Sign in' : 'Create Account'}</h2>
+                <p id="auth-modal-subtitle">
+                  {isLogin
+                    ? 'Welcome back! Please enter your details.'
+                    : 'Start your journey with us today.'}
+                </p>
+              </div>
+
+              {googleButton}
+
+              <div className="auth-divider">
+                <span>or</span>
+              </div>
+
+              <form id="auth-modal-form" onSubmit={handleSubmit}>
+                <div className="auth-input-group">
+                  <label htmlFor="auth-email">Email</label>
+                  <input
+                    type="email"
+                    id="auth-email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+
+                <div className="auth-input-group">
+                  <label htmlFor="auth-password">Password</label>
+                  <input
+                    type="password"
+                    id="auth-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+
+                <div
+                  id="auth-error-msg"
+                  className="auth-error-msg"
+                  style={{ display: error ? 'block' : 'none', color: '#d93025' }}
+                >
+                  {error}
+                </div>
+
+                <button
+                  type="submit"
+                  className="auth-submit-btn"
+                  id="auth-modal-submit-btn"
+                  disabled={busy}
+                >
+                  {isLogin ? 'Log in' : 'Sign up'}
+                </button>
+
+                {/* Reset is only offered when signing in — there is nothing to
+                    reset for an account that doesn't exist yet. */}
+                <div
+                  id="auth-forgot-password-wrapper"
+                  style={{
+                    display: isLogin ? 'block' : 'none',
+                    textAlign: 'center',
+                    marginTop: '12px',
+                    paddingBottom: '16px',
+                  }}
+                >
+                  <a
+                    href="#"
+                    id="auth-forgot-password-link"
+                    style={{
+                      fontSize: '15px',
+                      color: '#006BD6',
+                      textDecoration: 'underline',
+                      display: 'inline-block',
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setResetError('');
+                      setResetEmail(email); // Carry over anything already typed.
+                      setView('reset-request');
+                    }}
+                  >
+                    Reset Password
+                  </a>
+                </div>
+              </form>
+
+              <div className="auth-modal-footer">
+                <span id="auth-toggle-text">
+                  {isLogin ? "Don't have an account? " : 'Already have an account? '}
+                </span>
+                <a
+                  href="#"
+                  id="auth-toggle-mode"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    open(isLogin ? 'register' : 'login');
+                  }}
+                >
+                  {isLogin ? 'Sign up' : 'Log in'}
+                </a>
+              </div>
+            </div>
+
+            {/* Reset Password Request View */}
+            <div
+              id="auth-reset-request-view"
+              style={{ display: view === 'reset-request' ? 'block' : 'none', width: '100%' }}
+            >
+              <div className="auth-modal-header" style={{ marginBottom: '24px' }}>
+                <h2 style={{ fontSize: '24px', color: '#202124', textAlign: 'center' }}>
+                  Enter your email to reset password
+                </h2>
+              </div>
+
+              {googleButton}
+
+              <div className="auth-divider">
+                <span>or</span>
+              </div>
+
+              <form id="auth-reset-form" onSubmit={handleReset}>
+                <div className="auth-input-group">
+                  <label htmlFor="auth-reset-email">Email</label>
+                  <input
+                    type="email"
+                    id="auth-reset-email"
+                    required
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                  />
+                </div>
+
+                <div
+                  id="auth-reset-error-msg"
+                  className="auth-error-msg"
+                  style={{ display: resetError ? 'block' : 'none', color: '#d93025' }}
+                >
+                  {resetError}
+                </div>
+
+                <button
+                  type="submit"
+                  className="auth-submit-btn"
+                  id="auth-reset-submit-btn"
+                  style={{ marginTop: '16px' }}
+                  disabled={busy}
+                >
+                  Reset password
+                </button>
+
+                <div style={{ textAlign: 'center', marginTop: '16px' }}>
+                  <a
+                    href="#"
+                    id="auth-reset-cancel-link"
+                    style={{
+                      fontSize: '15px',
+                      color: '#006BD6',
+                      textDecoration: 'underline',
+                      display: 'inline-block',
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setView('main');
+                    }}
+                  >
+                    Cancel
+                  </a>
+                </div>
+              </form>
+            </div>
+
+            {/* Reset Password Msg View */}
+            <div
+              id="auth-reset-msg-view"
+              style={{ display: view === 'reset-msg' ? 'block' : 'none', width: '100%' }}
+            >
+              <div className="auth-modal-header" style={{ marginBottom: '16px' }}>
+                <h2
+                  style={{
+                    fontSize: '24px',
+                    color: '#202124',
+                    textAlign: 'center',
+                    whiteSpace: 'pre-wrap',
+                    lineHeight: 1.2,
+                  }}
+                >
+                  Received your password
+                  <br />
+                  reset request
+                </h2>
+              </div>
+
+              {/* Deliberately does not confirm whether the account exists. */}
+              <p
+                style={{
+                  fontSize: '15px',
+                  lineHeight: '22px',
+                  color: '#000000',
+                  textAlign: 'center',
+                  marginBottom: '24px',
+                }}
+              >
+                If an account exists for{' '}
+                <span id="auth-reset-email-display" style={{ fontWeight: 600 }}>
+                  {sentResetTo}
+                </span>
+                , you will get an email with instructions on resetting your password. If it
+                doesn&apos;t arrive, be sure to check your spam folder.
+              </p>
+
+              <button
+                type="button"
+                className="auth-submit-btn"
+                id="auth-reset-back-btn"
+                onClick={() => setView('main')}
+              >
+                Back to Log in
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </AuthModalContext.Provider>
   );
 }
