@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { inspirationsApi } from '@/lib/inspirations/api';
+import { APP_CARDS_SEED } from '@/lib/inspirations/seedKeys';
 import type { App, Platform, Screen } from '@/lib/inspirations/types';
 import { savedAppId } from '@/lib/inspirations/savedApps';
 import { AppCard } from './AppCard';
@@ -13,6 +14,7 @@ import { FolderIcon } from './Icons';
 
 import { useAppSelection } from './useAppSelection';
 import { ScreenGridSkeleton } from './Skeletons';
+import { useSeed } from './SeedProvider';
 
 /** How many cards come in at a time, as the visitor scrolls. */
 const PAGE = 8;
@@ -59,7 +61,12 @@ export function AppsGrid({
   // that flash shook the page under the Filters panel on every pick.
   const platformsKey = platforms?.join(',') ?? '';
   const [want, setWant] = useState(PAGE);
-  const [known, setKnown] = useState<{ platforms: string; cards: Map<string, Screen[]> }>(() => ({ platforms: platformsKey, cards: new Map() }));
+  // A seeded page (lib/inspirations/seeds.ts) starts with its first cards' screens.
+  const seededCards = useSeed<{ platforms: string; cards: Record<string, Screen[]> }>(APP_CARDS_SEED);
+  const [known, setKnown] = useState<{ platforms: string; cards: Map<string, Screen[]> }>(() => ({
+    platforms: platformsKey,
+    cards: new Map(seededCards?.platforms === platformsKey ? Object.entries(seededCards.cards) : []),
+  }));
   const cards = known.platforms === platformsKey ? known.cards : EMPTY_CARDS;
   const missing = apps.slice(0, want).map((a) => a.id).filter((id) => !cards.has(id));
   const missingKey = missing.join(',');

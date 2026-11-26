@@ -15,6 +15,7 @@ import '@/styles/updates-feed.css';
 export const metadata: Metadata = pageMetadata(
   'Updates — Motvin',
   'New features, improvements and fixes in Motvin, release by release.',
+  '/updates',
 );
 
 /**

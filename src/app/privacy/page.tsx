@@ -1,10 +1,8 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/config/share';
 import { CONTACT_EMAIL, LegalPage } from '@/components/legal/LegalPage';
 
-export const metadata: Metadata = {
-  title: 'Privacy Policy — Motvin',
-  description: 'What Motvin collects, why, and the choices you have.',
-};
+export const metadata: Metadata = pageMetadata('Privacy Policy — Motvin', 'What Motvin collects, why, and the choices you have.', '/privacy');
 
 export default function PrivacyPage() {
   return (

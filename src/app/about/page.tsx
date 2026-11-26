@@ -20,6 +20,7 @@ import '@/styles/about.css';
 export const metadata: Metadata = pageMetadata(
   'About us — Motvin',
   'Motvin is a set of tools for designers: real app screens to learn from, a website-to-design converter, and libraries of icons, logos and illustrations.',
+  '/about',
 );
 
 /**

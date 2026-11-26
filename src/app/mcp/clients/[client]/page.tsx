@@ -21,7 +21,7 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const client = getClient((await params).client);
   if (!client) return {};
-  return pageMetadata(`${client.name} — Motvin MCP`, `How to connect ${client.name} to Motvin MCP. ${client.intro}`);
+  return pageMetadata(`${client.name} — Motvin MCP`, `How to connect ${client.name} to Motvin MCP. ${client.intro}`, `/mcp/clients/${client.id}`);
 }
 
 export default async function McpClientPage({ params }: Props) {

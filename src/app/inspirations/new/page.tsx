@@ -1,17 +1,22 @@
-import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { SeedProvider } from '@/components/inspirations/SeedProvider';
+import { sectionSeeds } from '@/lib/inspirations/seeds';
 import { NewThisWeekView } from '@/components/inspirations/views/NewThisWeekView';
-import { pageMetadata } from '@/lib/config/share';
+import { sectionMetadata } from '@/lib/config/share';
 
-export const metadata: Metadata = pageMetadata(
+export const generateMetadata = sectionMetadata(
+  '/inspirations/new',
   'New this week — Motvin Inspirations',
   'The apps added to Motvin Inspirations in the last 7 days: their real screens, flows and patterns.',
 );
 
-export default function NewThisWeekPage() {
+// The plain address's content comes with the page (lib/inspirations/seeds.ts): search engines read it.
+export default async function NewThisWeekPage({ searchParams }: PageProps<'/inspirations/new'>) {
   return (
-    <Suspense fallback={null}>
-      <NewThisWeekView />
-    </Suspense>
+    <SeedProvider seeds={await sectionSeeds('new', await searchParams)}>
+      <Suspense fallback={null}>
+        <NewThisWeekView />
+      </Suspense>
+    </SeedProvider>
   );
 }

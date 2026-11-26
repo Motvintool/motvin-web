@@ -15,6 +15,7 @@ import '@/styles/mcp.css';
 export const metadata: Metadata = pageMetadata(
   'Motvin MCP — real app screens for your AI tools',
   'Connect Claude, Cursor, ChatGPT and other AI tools to Motvin. Your AI searches thousands of real screens and flows from shipped apps, so it builds on what already works.',
+  '/mcp',
 );
 
 /**

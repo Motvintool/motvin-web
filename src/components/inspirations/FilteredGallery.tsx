@@ -21,6 +21,8 @@ import { useLogoTints } from './useLogoTint';
 import { usePaletteApps } from './usePaletteApps';
 import { hueOf, type PaletteHue } from '@/lib/inspirations/hues';
 import { useAsync } from './useAsync';
+import { useSeed } from './SeedProvider';
+import { FEED_SEED } from '@/lib/inspirations/seedKeys';
 import { useFitResults } from './useFitResults';
 import { useExploreFilters } from './useExploreFilters';
 import { useLibrarySettings, useMeta } from './useMeta';
@@ -168,7 +170,11 @@ export function FilteredGallery({
 
   const key = `${appId ?? ''}|${serializeFilters(filters).toString()}|${element ?? ''}|${screenSort}|${colourApps}`;
 
-  const [pages, setPages] = useState<Pages>({ key: ' ', items: [], total: 0, next: null });
+  // A seeded page (the server fetched this URL's first page) starts with it.
+  const seededFeed = useSeed<Page<Screen>>(FEED_SEED);
+  const [pages, setPages] = useState<Pages>(() =>
+    seededFeed ? { key, items: seededFeed.items, total: seededFeed.total, next: seededFeed.nextOffset } : { key: ' ', items: [], total: 0, next: null },
+  );
   const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {

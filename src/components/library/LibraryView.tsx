@@ -133,6 +133,8 @@ export function LibraryView({ config, initial = null }: Props) {
         />
       ) : null}
       <ProductBanner />
+      {/* The page's heading: the design shows the library's name in its switcher, not as a title. */}
+      <h1 className="visually-hidden">Motvin {config.libraryLabel}</h1>
 
       <div
         className="mi-app-shell"
