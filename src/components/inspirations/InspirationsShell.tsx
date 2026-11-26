@@ -10,6 +10,7 @@ import { LogoContextMenu } from './LogoContextMenu';
 import { Header } from './Header';
 import { ScreenPreviewOverlay } from './ScreenPreviewModal';
 import { ToastProvider } from './Toast';
+import { AllAppNames } from './AppNames';
 import { MoeiCompanion } from './moeis/MoeiCompanion';
 import { MoeiStudioHost } from './moeis/MoeiStudio';
 import { AdminDrawerOverlay } from './admin/AdminDrawer';
@@ -51,6 +52,8 @@ function InspirationsHeaderSkeleton() {
 export function InspirationsShell({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
   return (
     <ToastProvider>
+      {/* App names for every screenshot's alt text (AppNames). */}
+      <AllAppNames>
       <div className="ins-root">
         <Suspense fallback={<InspirationsHeaderSkeleton />}>
           <Header />
@@ -103,6 +106,7 @@ export function InspirationsShell({ children, wide = false }: { children: ReactN
             admin dock for the owner. */}
         <UserChatbot />
       </div>
+      </AllAppNames>
     </ToastProvider>
   );
 }

@@ -62,6 +62,22 @@ const OLD_SITE_REDIRECTS = LEGACY_ORIGIN
       { source: '/:dir(MOTVIN|motvin|Motvin)/:rest*', destination: '/', permanent: true },
     ];
 
+/**
+ * www.motvin.com reaches this app too; without a redirect search engines see two copies of every page. Every
+ * www address goes (permanently, path and query kept) to the same page on the site's own address.
+ */
+const SITE_URL = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://motvin.com');
+const WWW_REDIRECTS = SITE_URL.hostname.startsWith('www.')
+  ? []
+  : [
+      {
+        source: '/:path*',
+        has: [{ type: 'host' as const, value: `www.${SITE_URL.hostname}`.replace(/\./g, '\\.') }],
+        destination: `${SITE_URL.origin}/:path*`,
+        permanent: true,
+      },
+    ];
+
 /** Short URL ↔ folder path pairs — one place to add a new category. */
 const LIBRARY_REWRITES = [
   { short: '/icons', folder: '/motvin-library/icons' },
@@ -134,6 +150,8 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      // First: a www address leaves www before any other rule runs.
+      ...WWW_REDIRECTS,
       // Canonicalise every folder-path URL back to the short form so the
       // browser bar never shows /motvin-library/… or /landing even if someone
       // deep-links to one.

@@ -1,10 +1,8 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/config/share';
 import { CONTACT_EMAIL, LegalPage } from '@/components/legal/LegalPage';
 
-export const metadata: Metadata = {
-  title: 'Terms — Motvin',
-  description: 'The rules for using Motvin.',
-};
+export const metadata: Metadata = pageMetadata('Terms — Motvin', 'The rules for using Motvin.', '/terms');
 
 export default function TermsPage() {
   return (

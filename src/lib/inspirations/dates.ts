@@ -13,6 +13,14 @@ export function localDateString(date: Date = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * The UTC calendar day, the same on the server and in every browser at a given moment: what a page shows by date
+ * while the server renders it and the browser takes it over (useToday), before it settles on the local day.
+ */
+export function utcDateString(date: Date = new Date()): string {
+  return date.toISOString().slice(0, 10);
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** "2026-09-29" → "29 Sep 2026", the same label the backend gives a version. */

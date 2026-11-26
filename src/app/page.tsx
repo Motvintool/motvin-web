@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 import { pageMetadata } from '@/lib/config/share';
 
 export const metadata: Metadata = pageMetadata(
-  'Motvin Inspirations — UI screens, flows and patterns from real apps',
+  'Motvin — UI screens, flows & patterns from real apps',
   'Browse screens, flows, patterns and UI elements from real apps, and save what inspires you into collections.',
+  '/',
 );
 
 /**

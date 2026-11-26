@@ -799,7 +799,7 @@ export function ToolbarRow({
         <div className="ins-ftoolbar-right">
           {total !== null && (
             <span className="ins-fshowing" aria-live="polite">
-              {total.toLocaleString()} {unit}
+              {total.toLocaleString('en-US')} {unit}
               {total === 1 ? '' : 's'}
             </span>
           )}

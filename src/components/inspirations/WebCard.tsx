@@ -5,6 +5,7 @@ import type { App, Screen } from '@/lib/inspirations/types';
 import { useState, type CSSProperties } from 'react';
 import { appFreshness } from '@/lib/inspirations/appFreshness';
 import { useLibrarySettings } from './useMeta';
+import { useToday } from './useToday';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
 import { AppLogo } from './AppLogo';
 import { Screenshot } from './Screenshot';
@@ -52,7 +53,7 @@ export function WebCard({
   const openFromFrame = useFrameOpen(href);
 
   // "Latest" or "Updated", as on the app cards, from this web part's own uploads.
-  const freshness = appFreshness(app, useLibrarySettings().freshness, undefined, ['webapp', 'site']);
+  const freshness = appFreshness(app, useLibrarySettings().freshness, useToday(), ['webapp', 'site']);
   const tint = useLogoTint(app);
 
   return (

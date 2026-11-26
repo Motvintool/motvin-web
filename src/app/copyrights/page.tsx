@@ -5,6 +5,7 @@ import { CONTACT_EMAIL, LegalPage } from '@/components/legal/LegalPage';
 export const metadata: Metadata = pageMetadata(
   'Copyrights — Motvin',
   'Who owns what on Motvin, and how to ask for something to be changed or removed.',
+  '/copyrights',
 );
 
 export default function CopyrightsPage() {

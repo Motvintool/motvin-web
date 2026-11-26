@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { appFreshness, type AppFreshness } from '@/lib/inspirations/appFreshness';
-import { localDateString } from '@/lib/inspirations/dates';
+import { useToday } from './useToday';
 import { browsedPlatforms, isWebsPlatforms } from '@/lib/inspirations/filters';
 import type { StoreStats } from '@/lib/inspirations/storeStats';
 import { elementLabel, flowCategoryLabel, screenTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
@@ -103,7 +103,8 @@ export function useAppFilters(apps: App[]) {
   const platforms = browsedPlatforms(params);
   const webs = isWebsPlatforms(platforms);
   const hasShots = (a: App) => platforms.some((p) => (a.storeShots?.[p]?.images.length ?? 0) > 0);
-  const today = localDateString();
+  // The day the badges are counted on (useToday), so the "Latest" filter agrees with the cards.
+  const today = useToday();
   const [panelOpen, setPanelOpen] = useState(false);
 
   const picked = Object.fromEntries(

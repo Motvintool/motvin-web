@@ -8,6 +8,8 @@ import { ClosingCta } from '@/components/landing/inspirations/ClosingCta';
 import { InspirationsSections } from '@/components/landing/inspirations/InspirationsSections';
 import { LandingAnimations } from '@/components/landing/LandingAnimations';
 import { Navbar } from '@/components/landing/Navbar';
+import { JsonLd } from '@/components/shared/JsonLd';
+import { SITE_JSON_LD } from '@/lib/config/share';
 import { Templates } from '@/components/landing/Templates';
 import '@/styles/landing.css';
 import '@/styles/landing-inspirations.css';
@@ -25,6 +27,7 @@ import '@/styles/mobile-menu.css';
 export default function HomePage() {
   return (
     <div className="landing-root">
+      <JsonLd data={SITE_JSON_LD} />
       <Navbar />
       {/* The white "sheet" scrolls up off the footer, which waits underneath. */}
       <div className="landing-sheet">

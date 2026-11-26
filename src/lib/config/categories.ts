@@ -105,7 +105,7 @@ export const CATEGORY_CONFIG: Readonly<Record<Category, CategoryConfig>> = {
     slug: 'icons',
     noun: 'icon',
     nounPlural: 'icons',
-    title: 'Motvin Icons: A complete icon toolkit for designers, developers.',
+    title: 'Motvin Icons: an icon toolkit for designers and developers',
     description:
       'Search, compare, customize, and use icons from your favorite libraries — all in one place.',
     storagePrefix: 'mi',
@@ -137,7 +137,7 @@ export const CATEGORY_CONFIG: Readonly<Record<Category, CategoryConfig>> = {
     slug: 'logos',
     noun: 'logo',
     nounPlural: 'logos',
-    title: 'Motvin Logos: Brand logos for designers and developers.',
+    title: 'Motvin Logos: brand logos for designers and developers',
     description:
       'Search, browse, and use brand logos from popular companies — all in one place.',
     storagePrefix: 'ml',
@@ -166,8 +166,7 @@ export const CATEGORY_CONFIG: Readonly<Record<Category, CategoryConfig>> = {
     slug: 'illustrations',
     noun: 'illustration',
     nounPlural: 'illustrations',
-    title:
-      'Motvin Illustrations: A curated illustration library for designers and developers.',
+    title: 'Motvin Illustrations: a curated illustration library',
     description: 'Browse and use illustrations in one place.',
     storagePrefix: 'mill',
     gridColumns: 6,

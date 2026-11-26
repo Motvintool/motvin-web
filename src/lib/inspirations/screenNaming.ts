@@ -29,6 +29,34 @@ export function screenTitle(screen: Nameable): string {
   return name || (type ? screenTypeLabel(type) : 'Screen');
 }
 
+/** Where a screen is from, as its label says it: one of each, unlike the menus' "Web Apps" (taxonomy PLATFORM_LABEL). */
+const LABEL_PLATFORM: Record<string, string> = { ios: 'iOS', webapp: 'Web App', site: 'Website' };
+
+/**
+ * A screenshot's alt text — what search engines index it under and screen readers say: the app, what the screen
+ * is, and where it's from — "Coursera — Login screen (Web App)", "Stripe — Pricing Page (Website)". Built from
+ * the screen's own data, so every screen added gets one. Without the app's name (not loaded yet) it's the rest.
+ */
+export function screenLabel(screen: Nameable & { platform?: string | null }, appName?: string | null): string {
+  const title = screenTitle(screen);
+  // A website page's title already says "Page"; a plain screen title doesn't say what it is.
+  const what =
+    screen.site?.kind === 'page' ? title : screen.site?.kind === 'section' ? `${title} section` : title === 'Screen' ? title : `${title} screen`;
+  const where = LABEL_PLATFORM[screen.platform ?? ''];
+  const label = where ? `${what} (${where})` : what;
+  return appName ? `${appName} — ${label}` : label;
+}
+
+/**
+ * A store screenshot's alt text, as screenLabel's for a screen: the app, which of its set (counted from 1) and
+ * where — "Canva — App Store screenshot 1 (iOS)", or "Notion — Screenshot 2 (Web App)" for images the admin added.
+ */
+export function storeShotLabel(appName: string, source: 'appstore' | 'manual', platform: string, number: number): string {
+  const what = `${source === 'appstore' ? 'App Store screenshot' : 'Screenshot'} ${number}`;
+  const where = LABEL_PLATFORM[platform];
+  return `${appName} — ${where ? `${what} (${where})` : what}`;
+}
+
 type FlowLike = { id: string; name: string; parentId?: string | null; screenIds: string[] };
 
 /** The flow a screen is a step of — a top-level one first, over a detour inside it. */

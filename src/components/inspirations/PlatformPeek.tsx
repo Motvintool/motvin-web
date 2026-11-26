@@ -38,7 +38,7 @@ export function PlatformPeek({
   }, []);
   // That platform's own counts ("150 screens · 26 flows"), never the two platforms added together.
   const counts = countsOn(app, [platform]);
-  const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
+  const plural = (n: number, word: string) => `${n.toLocaleString('en-US')} ${word}${n === 1 ? '' : 's'}`;
   return (
     <span className="ins-platform-peek-wrap" onPointerEnter={() => setWarm(true)} onFocus={() => setWarm(true)}>
       <Link href={href} className="ins-fact-platform" scroll={false}>

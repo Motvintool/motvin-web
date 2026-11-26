@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/config/share';
 import { notFound } from 'next/navigation';
 import { getCategoryConfig, isCategory } from '@/lib/config/categories';
 import { LibraryView } from '@/components/library/LibraryView';
@@ -41,7 +42,8 @@ export async function generateMetadata({
   const { category } = await params;
   if (!isCategory(category)) return {};
   const config = getCategoryConfig(category);
-  return { title: config.title, description: config.description };
+  // Served at the short address (/icons), which next.config.ts rewrites to this folder.
+  return pageMetadata(config.title, config.description, `/${category}`);
 }
 
 export default async function CategoryPage({

@@ -1015,15 +1015,15 @@ body {
     display: flex; flex-direction: column;
   }
   /* One row: [Back][ search pill ][platform icons], closed off from the
-     content by a hairline. */
-  .ins-search-modal-head { flex: none; flex-wrap: nowrap; box-sizing: border-box; height: 82px; padding: 0 8px; gap: 4px; border-bottom: 1px solid #efefef; }
+     content by a hairline; the phone header's 68px and 44px pill, so opening it doesn't jump. */
+  .ins-search-modal-head { flex: none; flex-wrap: nowrap; box-sizing: border-box; height: 68px; padding: 0 8px; gap: 4px; border-bottom: 1px solid #efefef; }
   .ins-search-modal-back { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 44px; height: 44px; border-radius: 999px; color: #111; }
   .ins-search-modal-back:active { background: #eee; }
-  .ins-search-modal-field { flex: 1 1 0; margin-right: 0; height: 52px; padding: 0 14px; gap: 8px; border-radius: 999px; background: #f2f2f2; color: #6b6b6b; }
+  .ins-search-modal-field { flex: 1 1 0; margin-right: 0; height: 44px; padding: 0 14px; gap: 8px; border-radius: 999px; background: #f2f2f2; color: #6b6b6b; }
   .ins-search-modal-field > img { width: 18px; height: 18px; }
   .ins-search-modal.is-searching .ins-search-modal-field { gap: 8px; }
   .ins-search-modal.is-searching .ins-search-modal-field > img { width: 18px; opacity: 1; transform: none; }
-  .ins-search-modal-field input { width: 100%; max-width: none; height: 52px; text-overflow: ellipsis; }
+  .ins-search-modal-field input { width: 100%; max-width: none; height: 44px; text-overflow: ellipsis; }
   .ins-search-modal-platforms { position: static; flex: none; gap: 0; }
   /* Under the head: recent-search chips pinned to the left corner (scrolling
      if they overflow) and the section dropdown pill at the right. */

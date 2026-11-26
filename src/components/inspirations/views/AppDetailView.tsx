@@ -45,6 +45,7 @@ import { SITE_TABS, SITE_TYPE_PARAM, SiteGrid, siteTabContent, type SiteTab } fr
 import { ScreenGridSkeleton } from '../Skeletons';
 import { contentKey, useFitResults } from '../useFitResults';
 import { useAsync } from '../useAsync';
+import { KnownAppNames } from '../AppNames';
 import { SHEET_QUERY, useMediaQuery } from '../useSheet';
 
 type AppTab = 'screens' | 'flows' | 'ui-elements' | 'patterns';
@@ -419,7 +420,15 @@ export function AppDetailView({ app, screens, flows, patterns }: { app: App; scr
   const params = useSearchParams();
   const pathname = usePathname();
   const present = PLATFORMS.filter((p) => screens.some((s) => s.platform === p));
-  if (present.length < 2) return <AppDetailBody app={app} screens={screens} flows={flows} patterns={patterns} />;
+  // This app's name for its screenshots' alt text, there from the server's HTML on (AppNames).
+  const known = useMemo(() => [{ id: app.id, name: app.name }], [app.id, app.name]);
+  if (present.length < 2) {
+    return (
+      <KnownAppNames apps={known}>
+        <AppDetailBody app={app} screens={screens} flows={flows} patterns={patterns} />
+      </KnownAppNames>
+    );
+  }
 
   // `web` is the Webs section: the app's web app or site, whichever it has first.
   const askedParam = params.get('platform');
@@ -452,7 +461,11 @@ export function AppDetailView({ app, screens, flows, patterns }: { app: App; scr
     const picked = (app.cardScreens ?? []).map((id) => theirs.find((s) => s.id === id)).filter((s): s is Screen => Boolean(s));
     return { platform: p, current: p === platform, href: query ? `${pathname}?${query}` : pathname, preview: (picked.length ? picked : theirs).slice(0, 4) };
   });
-  return <AppDetailBody key={platform} app={scoped} screens={onPlatform} flows={platformFlows} patterns={patterns} platformLinks={links} />;
+  return (
+    <KnownAppNames apps={known}>
+      <AppDetailBody key={platform} app={scoped} screens={onPlatform} flows={platformFlows} patterns={patterns} platformLinks={links} />
+    </KnownAppNames>
+  );
 }
 
 function AppDetailBody({

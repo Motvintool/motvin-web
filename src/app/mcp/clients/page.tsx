@@ -11,6 +11,7 @@ import '@/styles/mcp-docs.css';
 export const metadata: Metadata = pageMetadata(
   'Choose your tool — Motvin MCP',
   'Set up Motvin MCP in Claude, Claude Code, Cursor, ChatGPT, Codex, VS Code, Gemini CLI, Windsurf and other AI tools.',
+  '/mcp/clients',
 );
 
 /** /mcp/clients — every AI tool with a setup guide. */
