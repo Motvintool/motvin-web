@@ -1,5 +1,6 @@
 import { inspirationsApi } from './api';
 import { DEFAULT_FRESHNESS, freshFirst, newThisWeek } from './appFreshness';
+import { utcDateString } from './dates';
 import { browsedPlatforms, parseFilters, withDefaultPlatform } from './filters';
 import { APP_CARDS_SEED, FEED_SEED } from './seedKeys';
 import type { Flow, Platform, Screen } from './types';
@@ -22,15 +23,28 @@ export type SeededSection = 'explore' | 'apps' | 'new' | 'screens' | 'ui-element
 type SearchParams = Record<string, string | string[] | undefined>;
 
 const KEEP_MS = 5 * 60_000;
+/** A load the API hasn't answered by now is given up (and not kept), so the next page view asks afresh. */
+const GIVE_UP_MS = 8_000;
+/**
+ * How long a page waits for its seeds. Past it the page renders without the ones still loading — their hooks load
+ * in the browser, as without a seed — so a slow API never holds a page. Those loads carry on for the next view.
+ */
+const PAGE_WAIT_MS = 2_000;
+
 const kept = new Map<string, { at: number; value: Promise<unknown> }>();
 
-/** One answer, shared by every page view for a few minutes; a failure isn't kept. */
+/** Resolves to `value` after `ms`. */
+const after = <T>(ms: number, value: T) => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms));
+
+/** One answer, shared by every page view for a few minutes; a failure (or no answer in GIVE_UP_MS) isn't kept. */
 function remember<T>(key: string, load: () => Promise<T>): Promise<T> {
   const hit = kept.get(key);
   if (hit && Date.now() - hit.at < KEEP_MS) return hit.value as Promise<T>;
-  const value = load();
+  const value = Promise.race([load(), after(GIVE_UP_MS, null).then(() => Promise.reject(new Error('API too slow')))]);
   kept.set(key, { at: Date.now(), value });
-  value.catch(() => kept.delete(key));
+  value.catch(() => {
+    if (kept.get(key)?.value === value) kept.delete(key);
+  });
   return value;
 }
 
@@ -83,7 +97,7 @@ async function appListSeeds(section: 'explore' | 'apps' | 'new', platforms: Plat
   const [apps, meta] = await Promise.all([inspirationsApi.listApps(), inspirationsApi.getMeta()]);
   const inSection = apps.filter((app) => app.platforms.some((p) => platforms.includes(p)));
   const settings = meta.settings ?? { freshness: DEFAULT_FRESHNESS };
-  const order = section === 'new' ? newThisWeek(inSection, settings.newThisWeek, platforms) : freshFirst(inSection, settings.freshness, undefined, platforms);
+  const order = section === 'new' ? newThisWeek(inSection, settings.newThisWeek, platforms) : freshFirst(inSection, settings.freshness, utcDateString(), platforms);
   const cards = await inspirationsApi.appCards(order.slice(0, APP_CARDS_SHOWN).map((app) => app.id), platforms);
   return { [appsKey]: apps, [APP_CARDS_SEED]: { platforms: platforms.join(','), cards: Object.fromEntries(cards) } };
 }
@@ -130,10 +144,14 @@ export async function sectionSeeds(section: SeededSection, searchParams: SearchP
       break;
   }
 
-  // A key whose answer fails is left out: its hook loads in the browser, as without a seed.
+  // A key whose answer fails, or isn't in within PAGE_WAIT_MS, is left out: its hook loads in the browser, as
+  // without a seed.
+  const deadline = after(PAGE_WAIT_MS, {});
   const settled = await Promise.allSettled([
-    ...Object.entries(loads).map(async ([key, load]) => ({ [key]: await remember(`${sectionKey}|${key}`, load) })),
-    ...bundles.map((bundle) => bundle()),
+    ...Object.entries(loads).map(([key, load]) =>
+      Promise.race([remember(`${sectionKey}|${key}`, load).then((value) => ({ [key]: value })), deadline]),
+    ),
+    ...bundles.map((bundle) => Promise.race([bundle(), deadline])),
   ]);
   return Object.assign({}, ...settled.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : [])));
 }

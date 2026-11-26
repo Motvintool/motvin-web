@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type CS
 import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
+import { storeShotLabel } from '@/lib/inspirations/screenNaming';
 import { storeAction } from '@/lib/inspirations/storeAction';
 import { INDUSTRY_LABEL, PLATFORM_LABEL } from '@/lib/inspirations/taxonomy';
 import type { App, Platform, Screen, StoreShotSet } from '@/lib/inspirations/types';
@@ -167,8 +168,14 @@ export function StoreShotsCard({
           {order.map((image) => (
             // Its shape twice: as the box's ratio, and as a number the stylesheet caps its width with (see .ins-store-fan-card).
             <span key={image.file} className="ins-store-fan-card" style={{ aspectRatio: `${image.width} / ${image.height}`, '--ar': image.width / image.height } as CSSProperties}>
+              {/* Labelled for search engines (storeShotLabel); screen readers hear the card's own label, as the fan is aria-hidden. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={inspirationsApi.mediaUrl(image.url) ?? undefined} alt="" loading="lazy" decoding="async" />
+              <img
+                src={inspirationsApi.mediaUrl(image.url) ?? undefined}
+                alt={storeShotLabel(app.name, set.source, platform, set.images.indexOf(image) + 1)}
+                loading="lazy"
+                decoding="async"
+              />
             </span>
           ))}
         </span>
@@ -453,7 +460,7 @@ function StoreShotsModal({
       onContextMenu={onShotContextMenu(i)}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={inspirationsApi.mediaUrl(image.url) ?? undefined} alt={`${app.name} store screenshot ${i + 1}`} decoding="async" />
+      <img src={inspirationsApi.mediaUrl(image.url) ?? undefined} alt={storeShotLabel(app.name, set.source, platform, i + 1)} decoding="async" />
     </div>
   );
 

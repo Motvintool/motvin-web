@@ -4,7 +4,8 @@ import { getImageProps } from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import type { Screen } from '@/lib/inspirations/types';
-import { screenTitle } from '@/lib/inspirations/screenNaming';
+import { screenLabel, screenTitle } from '@/lib/inspirations/screenNaming';
+import { useAppName } from './AppNames';
 
 /** How close to the window a card's screenshot comes before it starts loading. */
 const NEAR_MARGIN = '300px 0px';
@@ -71,6 +72,8 @@ export function Screenshot({
   priority?: boolean;
   sizes?: string;
 }) {
+  // Its alt text: app, screen and platform (screenLabel) — what search engines index the picture under.
+  const label = screenLabel(screen, useAppName(screen.appId));
   const [failed, setFailed] = useState(false);
   // A load that fails is tried again before the card gives up: first the original file straight from the
   // library (skipping the resizer, which can drop a request while busy), then once more a moment later.
@@ -115,7 +118,7 @@ export function Screenshot({
       src={near ? (resized?.src ?? direct ?? undefined) : undefined}
       srcSet={near ? resized?.srcSet : undefined}
       sizes={near && resized ? sizes : undefined}
-      alt={`${screenTitle(screen)} screen`}
+      alt={label}
       // A website page is far taller than any frame: cropped, it shows its top, as a visitor first sees it.
       className={`ins-shot-img ${deferred ? 'is-deferred' : ''} ${loaded ? 'is-loaded' : ''} ${screen.site?.kind === 'page' ? 'is-site-page' : ''} ${className}`}
       style={{ aspectRatio: ratio }}

@@ -19,6 +19,7 @@ import { inspirationsApi } from '@/lib/inspirations/api';
 import { CloseIcon } from './Icons';
 import { appFreshness } from '@/lib/inspirations/appFreshness';
 import { useLibrarySettings } from './useMeta';
+import { useToday } from './useToday';
 import { useLogoTint } from './useLogoTint';
 import { CardCorner } from './CardCorner';
 
@@ -277,7 +278,7 @@ export function AppCard({
 
   // "Latest" or "Updated", from its dated versions and how long the admin's Settings keep each tag.
   // Counted on the card's own platform (an app on iOS and the web isn't "Latest" in iOS for a web upload).
-  const freshness = appFreshness(app, useLibrarySettings().freshness, undefined, cardPlatform ? [cardPlatform] : ['ios']);
+  const freshness = appFreshness(app, useLibrarySettings().freshness, useToday(), cardPlatform ? [cardPlatform] : ['ios']);
   const tint = useLogoTint(app);
 
   return (

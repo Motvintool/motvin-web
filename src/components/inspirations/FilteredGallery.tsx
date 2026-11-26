@@ -24,6 +24,7 @@ import { useAsync } from './useAsync';
 import { useSeed } from './SeedProvider';
 import { FEED_SEED } from '@/lib/inspirations/seedKeys';
 import { useFitResults } from './useFitResults';
+import { useToday } from './useToday';
 import { useExploreFilters } from './useExploreFilters';
 import { useLibrarySettings, useMeta } from './useMeta';
 
@@ -285,7 +286,8 @@ export function FilteredGallery({
   };
   // "+N more" beside the applied filters opens the Filters panel.
   const [openFilters, setOpenFilters] = useState(0);
-  const apps = sort === 'curated' ? freshFirst(paletteApps, freshness, undefined, withDefaultPlatform(filters).platforms) : paletteApps;
+  const today = useToday();
+  const apps = sort === 'curated' ? freshFirst(paletteApps, freshness, today, withDefaultPlatform(filters).platforms) : paletteApps;
   const appsLibraryEmpty = meta.counts.apps === 0;
 
   // The only ScreenFilters dimensions an app feed can't honor.

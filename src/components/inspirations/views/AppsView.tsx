@@ -18,6 +18,7 @@ import { APP_FILTER_PARAMS, useAppFilters } from '../useAppFilters';
 import { useAsync } from '../useAsync';
 import { useLogoTints } from '../useLogoTint';
 import { useLibrarySettings, useMeta } from '../useMeta';
+import { useToday } from '../useToday';
 
 /**
  * "Curated" is the backend's default order (no sort param sent) — the
@@ -78,6 +79,7 @@ export function AppsView({ week = false }: { week?: boolean }) {
   // In the default order, newly added apps lead, then updated ones; a sort the visitor picks is kept as is.
   const settings = useLibrarySettings();
   const freshness = settings.freshness;
+  const today = useToday();
   // In Webs, the content menu's Web Apps (`?show=webapps`) and Webs (`?show=sites`, websites) each list their own;
   // with neither, Webs lists both.
   const show = isWebsPlatforms(platforms) ? params.get('show') : null;
@@ -100,7 +102,7 @@ export function AppsView({ week = false }: { week?: boolean }) {
   }, {});
   // "+N more" beside the applied filters opens the Filters panel.
   const [openFilters, setOpenFilters] = useState(0);
-  const visible = sort === 'curated' && !week ? freshFirst(paletteApps, freshness, undefined, platforms) : paletteApps;
+  const visible = sort === 'curated' && !week ? freshFirst(paletteApps, freshness, today, platforms) : paletteApps;
   const narrowed = Boolean(industry || appFilters.active || palette.length);
 
   return (
