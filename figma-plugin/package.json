@@ -1,0 +1,21 @@
+{
+  "name": "motvin-figma-inspiration",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Motvin — Inspiration: search Motvin's library of real app screens and flows, and place them on the Figma canvas.",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:local": "MOTVIN_API=http://localhost:3000 MOTVIN_SITE=http://localhost:3001 node build.mjs",
+    "watch": "MOTVIN_API=http://localhost:3000 MOTVIN_SITE=http://localhost:3001 node build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "1.123.0",
+    "esbuild": "0.25.12",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "preact": "10.29.8"
+  }
+}

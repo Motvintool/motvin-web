@@ -32,3 +32,8 @@
 .mcp-connect-hint strong { color: #555; font-weight: 500; }
 .mcp-connect-hint a { color: #008ff0; text-decoration: none; }
 .mcp-connect-hint a:hover { text-decoration: underline; }
+
+/* /figma/connect — the code to compare with the one the Figma plugin shows. */
+.mcp-connect-code { margin: 0 0 24px; padding: 14px 18px; border: 1px solid #e2e2e6; border-radius: 12px; background: #fafafa; }
+.mcp-connect-code-value { display: block; font-size: 28px; font-weight: 700; letter-spacing: 0.12em; color: #111; font-variant-numeric: tabular-nums; }
+.mcp-connect-code-label { display: block; margin-top: 4px; font-size: 13px; color: #6b6b70; }

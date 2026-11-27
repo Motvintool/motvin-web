@@ -10,6 +10,7 @@ tsconfig.tsbuildinfo
 .env.*
 
 # Not part of the site.
+figma-plugin
 .git
 .gitignore
 ref
