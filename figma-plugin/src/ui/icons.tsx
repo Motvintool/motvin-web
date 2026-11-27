@@ -49,6 +49,8 @@ const paths = {
   flows: <><rect x="3" y="6" width="6" height="12" rx="1.5" /><rect x="15" y="6" width="6" height="12" rx="1.5" /><path d="M10.5 12h3" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
   check: <path d="M5 12l5 5L20 7" />,
+  // The classic paste clipboard, in the sharp style: a square board and the clip at its top.
+  clipboard: <><path d="M15.5 4.5H19V21H5V4.5h3.5" /><path d="M8.5 3h7v3.5h-7Z" /></>,
   // A hexagon with a centre circle (the shape chosen for Settings), in the sharp style of the rest.
   settings: <><path d="M12 2.5 20.5 7.25v9.5L12 21.5l-8.5-4.75v-9.5Z" /><circle cx="12" cy="12" r="3" /></>,
   history: <><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.5" /><path d="M4 4v4.5h4.5" /><path d="M12 8v4l3 2" /></>,
@@ -56,6 +58,15 @@ const paths = {
   login: <><path d="M14 4.5h5.5v15H14" /><path d="M10 8l4 4-4 4" /><path d="M3.5 12H14" /></>,
   logout: <><path d="M14 4.5h5.5v15H14" /><path d="M8.5 8 4.5 12l4 4" /><path d="M4.5 12H15" /></>,
   close: <path d="M6 6l12 12M18 6 6 18" />,
+  // Quick actions in the bottom bar.
+  // Select several: a box with a pointer at its corner, like selecting in Figma.
+  select: <><path d="M3.5 3.5h16v7.5" /><path d="M3.5 3.5v16H11" /><path d="M14 14 21 16.4 18 17.6 16.6 20.8Z" stroke-miterlimit="10" /></>,
+  // Shuffle: the crossed arrows, with straight lines and sharp turns instead of curves.
+  shuffle: <><path d="M3 17h4.5l9-10H21" /><path d="M3 7h4.5l2.6 2.9" /><path d="M13.9 14.1l2.6 2.9H21" /><path d="m18 4 3 3-3 3" /><path d="m18 14 3 3-3 3" /></>,
+  // Match selection: three corners of a frame with a magnifier inside: search based on this frame.
+  match: <><path d="M4 9V4h5M15 4h5v5M4 15v5h5" /><circle cx="14" cy="14" r="3.5" /><path d="m16.6 16.6 3.4 3.4" /></>,
+  up: <path d="M12 19V5M6 11l6-6 6 6" />,
+  play: <path d="M7 4.5v15L19.5 12Z" />,
   grid: <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>,
   empty: <><rect x="4" y="3" width="16" height="18" rx="3" /><path d="M9 9h6M9 13h3" /><circle cx="16.5" cy="16.5" r="3.5" fill="none" /><path d="m19 19 2 2" /></>,
 };

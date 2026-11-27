@@ -133,12 +133,14 @@ function onDockLeave(e: React.PointerEvent<HTMLElement>) {
   if (row) resetDock(row);
 }
 
-export type CtaAction = { label: string; href: string };
+/** `icon` sits before the label (the plugin page's Figma logo, say). */
+export type CtaAction = { label: string; href: string; icon?: ReactNode };
 
 /** A page link, an outside link (opens in a new tab), or a mail link. */
 function ActionLink({ action, className, children }: { action: CtaAction; className: string; children?: ReactNode }) {
   const content = (
     <>
+      {action.icon ? <span className="lpi-closing-icon" aria-hidden="true">{action.icon}</span> : null}
       {action.label}
       {children}
     </>

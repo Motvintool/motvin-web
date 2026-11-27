@@ -12,8 +12,9 @@
   --text: #111113;
   --muted: #6b6b73;
   --faint: #a0a0a8;
-  --accent: #008ff0;
-  --accent-soft: rgba(0, 143, 240, 0.12);
+  --accent: #7a3ff5;
+  --accent-soft: rgba(122, 63, 245, 0.12);
+  --accent-text: #6a2ee8;
   --on-accent: #ffffff;
   --danger: #e5484d;
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
@@ -29,8 +30,9 @@
   --text: #f5f5f7;
   --muted: #a1a1a8;
   --faint: #6c6c74;
-  --accent: #2ea2ff;
-  --accent-soft: rgba(46, 162, 255, 0.16);
+  --accent: #9466ff;
+  --accent-soft: rgba(148, 102, 255, 0.24);
+  --accent-text: #c4adff;
   --on-accent: #ffffff;
   --danger: #ff6369;
   --shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
@@ -64,7 +66,7 @@ button:disabled { cursor: default; }
 .icon-button:hover:not(:disabled) { background: var(--surface); }
 .icon-button:disabled { color: var(--faint); }
 
-.logo { display: inline-flex; width: 28px; height: 28px; }
+.logo { display: inline-flex; width: 32px; height: 32px; }
 .logo svg { width: 100%; height: 100%; }
 
 /* ───────────────────────────── sign-in */
@@ -123,7 +125,7 @@ button:disabled { cursor: default; }
 
 .pill { position: relative; display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--surface); color: var(--text); transition: background 0.15s, color 0.15s; }
 .pill:hover, .pill.open { background: color-mix(in srgb, var(--surface), var(--text) 5%); }
-.pill.on { color: var(--accent); background: var(--accent-soft); }
+.pill.on { color: var(--accent-text); background: var(--accent-soft); }
 .row-controls > button.pill { width: 40px; padding: 0; justify-content: center; flex: none; }
 /* Custom dropdowns (Dropdown.tsx) */
 .dropdown { position: relative; min-width: 0; }
@@ -133,12 +135,12 @@ button:disabled { cursor: default; }
 .dropdown-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dropdown-button .icon { color: var(--text); transition: transform 0.18s; }
 .dropdown.open .dropdown-button .icon { transform: rotate(180deg); }
-.dropdown.on .dropdown-button .icon { color: var(--accent); }
+.dropdown.on .dropdown-button .icon { color: var(--accent-text); }
 .dropdown-button:focus-visible { box-shadow: 0 0 0 2px var(--accent); border-radius: inherit; }
 
 .pill.dropdown { padding: 0; }
 .pill.dropdown .dropdown-button { padding: 0 12px 0 14px; border-radius: 999px; }
-.row-controls > .pill.dropdown { flex: 1; min-width: 0; }
+.row-controls > .pill.dropdown { flex: 1; min-width: 0; max-width: 180px; margin-left: auto; }
 .more-filters .pill.dropdown { width: 100%; }
 
 .platform { height: 36px; flex: none; }
@@ -146,7 +148,7 @@ button:disabled { cursor: default; }
 .platform .dropdown-button:hover, .platform.open .dropdown-button { background: var(--hover); }
 .platform.dropdown .dropdown-button .icon { color: var(--text); }
 
-.dropdown-menu { position: absolute; top: calc(100% + 6px); z-index: 20; display: flex; flex-direction: column; min-width: 100%; width: max-content; max-width: 260px; padding: 6px; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in srgb, var(--bg) 97%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); box-shadow: var(--shadow); color: var(--text); animation: menu-in 0.14s ease-out; }
+.dropdown-menu { position: absolute; top: calc(100% + 6px); z-index: 20; display: flex; flex-direction: column; min-width: min(100%, 180px); width: max-content; max-width: 260px; padding: 6px; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in srgb, var(--bg) 97%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); box-shadow: var(--shadow); color: var(--text); animation: menu-in 0.14s ease-out; }
 .dropdown-menu.left { left: 0; }
 .dropdown-menu.right { right: -6px; min-width: 170px; }
 @keyframes menu-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
@@ -160,15 +162,15 @@ button:disabled { cursor: default; }
 .option { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 0 10px; border: 0; border-radius: 9px; background: none; color: var(--text); font: inherit; font-weight: 500; text-align: left; }
 .option span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .option.active { background: var(--hover); }
-.option.selected { color: var(--accent); }
-.option.selected .icon { color: var(--accent); }
+.option.selected { color: var(--accent-text); }
+.option.selected .icon { color: var(--accent-text); }
 .option.reset { color: var(--muted); }
-.option.reset.selected { color: var(--accent); }
+.option.reset.selected { color: var(--accent-text); }
 .option-image { flex: none; width: 18px; height: 18px; border-radius: 5px; object-fit: cover; background: var(--surface); }
 .dropdown-empty { margin: 8px 10px; color: var(--muted); }
 
 .count-badge { position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
-.more-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.more-filters { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr)); gap: 8px; }
 
 .results { flex: 1; overflow-y: auto; padding: calc(var(--chrome-h, 180px) + 14px) 16px 84px; }
 .results::-webkit-scrollbar-track { margin-top: var(--chrome-h, 180px); margin-bottom: 64px; }
@@ -184,7 +186,7 @@ button:disabled { cursor: default; }
 .chips::-webkit-scrollbar { display: none; }
 .chip { flex: none; display: inline-flex; align-items: center; height: 34px; border-radius: 999px; background: color-mix(in srgb, var(--surface) 70%, transparent); color: var(--muted); font-size: 13px; font-weight: 500; transition: background 0.15s, color 0.15s; }
 .chip:hover { background: var(--surface); color: var(--text); }
-.chip.on { background: var(--accent-soft); color: var(--accent); }
+.chip.on { background: var(--accent-soft); color: var(--accent-text); }
 .chip-label { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; height: 100%; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: inherit; font: inherit; }
 .chip-label:disabled { cursor: default; }
 .chip-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -193,12 +195,14 @@ button:disabled { cursor: default; }
 .chip-close { display: grid; place-items: center; flex: none; width: 24px; height: 24px; margin-right: 5px; padding: 0; border: 0; border-radius: 50%; background: none; color: inherit; opacity: 0.7; }
 .chip-close:hover { opacity: 1; background: color-mix(in srgb, var(--text) 12%, transparent); }
 .chip.on .chip-close:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
-.grid { --cols: 3; display: grid; gap: 18px 12px; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
-.grid.size-s { --cols: 4; }
-.grid.size-l { --cols: 2; }
-.grid.webapp, .grid.site, .grid.flows.ios { --cols: 2; }
-.grid.size-s.webapp, .grid.size-s.site, .grid.size-s.flows.ios { --cols: 3; }
-.grid.size-l.webapp, .grid.size-l.site, .grid.size-l.flows.ios { --cols: 1; }
+/* Columns follow the panel's width (it can be resized): each size sets how narrow a card may get. At the default
+   480px that gives 4 / 3 / 2 iOS columns and 3 / 2 / 1 wide ones. */
+.grid { --min: 130px; display: grid; gap: 18px 12px; grid-template-columns: repeat(auto-fill, minmax(min(var(--min), 100%), 1fr)); }
+.grid.size-s { --min: 95px; }
+.grid.size-l { --min: 190px; }
+.grid.webapp, .grid.site, .grid.flows.ios { --min: 200px; }
+.grid.size-s.webapp, .grid.size-s.site, .grid.size-s.flows.ios { --min: 130px; }
+.grid.size-l.webapp, .grid.size-l.site, .grid.size-l.flows.ios { --min: 300px; }
 .grid.size-s .caption span:not(.app span), .grid.size-s .add { display: none; }
 .end { height: 1px; }
 
@@ -239,22 +243,25 @@ button:disabled { cursor: default; }
 .app-logo { flex: none; width: 18px; height: 18px; border-radius: 5px; background: var(--surface); object-fit: cover; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent); }
 .caption > span { margin-left: 24px; font-size: 12px; color: var(--muted); text-transform: capitalize; }
 
-.bottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; display: flex; align-items: center; gap: 10px; height: 64px; padding: 0 12px 0 18px; background: color-mix(in srgb, var(--bg) 76%, transparent); -webkit-backdrop-filter: blur(32px) saturate(1.6); backdrop-filter: blur(32px) saturate(1.6); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent), 0 -12px 24px -12px rgba(0, 0, 0, 0.35); }
+.bottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; display: flex; align-items: center; gap: 8px; height: 64px; padding: 0 12px; background: color-mix(in srgb, var(--bg) 76%, transparent); -webkit-backdrop-filter: blur(32px) saturate(1.6); backdrop-filter: blur(32px) saturate(1.6); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent), 0 -12px 24px -12px rgba(0, 0, 0, 0.35); }
 .bottom .icon-button { width: 40px; height: 40px; border-radius: 50%; background: color-mix(in srgb, var(--text) 8%, transparent); }
 .bottom .icon-button:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 14%, transparent); }
 .bottom .icon-button:disabled { background: color-mix(in srgb, var(--text) 4%, transparent); }
-.total { flex: 1; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .sizes { display: flex; gap: 2px; height: 40px; align-items: center; padding: 4px; border-radius: 999px; background: color-mix(in srgb, var(--text) 8%, transparent); }
 .size { display: grid; place-items: center; width: 34px; height: 32px; padding: 0; border: 0; border-radius: 999px; background: none; color: var(--muted); }
-.size.on { background: var(--bg); color: var(--text); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); }
+.size.on { background: color-mix(in srgb, var(--text) 14%, transparent); color: var(--text); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent); }
 .size:hover:not(.on) { color: var(--text); }
 .dot { display: block; border: 1.5px solid currentColor; border-radius: 3px; }
 .dot-s { width: 8px; height: 8px; }
 .dot-m { width: 11px; height: 11px; }
 .dot-l { width: 14px; height: 14px; }
 
-.toast { position: fixed; left: 16px; right: 16px; bottom: 76px; z-index: 6; padding: 10px 14px; border-radius: 12px; background: var(--text); color: var(--bg); font-weight: 500; box-shadow: var(--shadow); }
-.toast.error { background: var(--danger); color: #fff; }
+.toast { position: fixed; left: 16px; right: 16px; bottom: 76px; z-index: 6; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: var(--text); color: var(--bg); font-weight: 500; box-shadow: var(--shadow); }
+.toast.is-error { background: var(--danger); color: #fff; }
+/* Added: a green tick before the text. */
+.toast-mark { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; background: #30a46c; color: #fff; animation: pop-in 0.3s cubic-bezier(0.3, 0.7, 0.2, 1.4) both; }
+.toast-mark .icon { stroke-width: 2.6; }
+@media (prefers-reduced-motion: reduce) { .toast-mark { animation: none; } }
 
 /* Colour filter (ColorFilter.tsx), as on motvin.com: a dot, then a hex field and swatches. */
 .color-filter { position: relative; flex: none; }
@@ -288,16 +295,17 @@ button:disabled { cursor: default; }
 /* The sign-in sheet over the library. */
 .sheet-backdrop { position: fixed; inset: 0; z-index: 40; display: flex; align-items: flex-end; padding: 18px; background: rgba(0, 0, 0, 0.4); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); animation: fade-in 0.15s ease-out; }
 .sheet { position: relative; width: 100%; padding: 0 28px 24px; border-radius: 24px; background: color-mix(in srgb, var(--bg), var(--text) 2%); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent), 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent), 0 24px 60px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; align-items: stretch; animation: sheet-up 0.24s cubic-bezier(0.3, 0.7, 0.2, 1); }
-.sheet-close { position: absolute; z-index: 3; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; background: none; color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent); transition: box-shadow 0.15s, transform 0.15s; }
-.sheet-close:hover:not(:disabled) { background: none; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 34%, transparent); transform: scale(1.05); }
-.sheet-close .icon { width: 16px; height: 16px; stroke-width: 2.2; }
+/* The same plain × as the paste panel's: no ring, quiet until hovered. */
+.sheet-close { position: absolute; z-index: 3; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; background: none; color: var(--muted); }
+.sheet-close:hover:not(:disabled) { color: var(--text); }
 .sheet h1 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.02em; text-align: center; }
 .sheet-sub { margin: 8px auto 32px; max-width: 290px; color: var(--muted); text-align: center; }
 .sheet-sub.one-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* The top of the sheet: what is about to be added, on a soft glow. */
-.sheet-hero { position: relative; display: grid; place-items: center; height: 208px; margin: 0 -28px 14px; border-radius: 24px 24px 0 0; background: radial-gradient(60% 80% at 50% 60%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 70%), radial-gradient(40% 60% at 75% 30%, rgba(200, 245, 90, 0.16), transparent 70%), var(--surface); overflow: hidden; }
-.sheet-hero::after { content: ''; position: absolute; inset: auto 0 0; height: 56px; background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--bg), var(--text) 2%)); pointer-events: none; }
+.sheet-hero { position: relative; display: grid; place-items: center; height: 208px; margin: 0 -28px 14px; border-radius: 24px 24px 0 0; background: radial-gradient(130% 100% at 50% 0%, color-mix(in srgb, var(--accent) 24%, transparent), color-mix(in srgb, var(--accent) 8%, transparent) 50%, transparent 85%), radial-gradient(90% 110% at 0% 45%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 75%), radial-gradient(90% 110% at 100% 20%, rgba(200, 245, 90, 0.12), transparent 75%); overflow: hidden; }
+/* The glow fades straight down into the sheet: no edge where the hero ends. */
+.sheet-hero::after { content: ''; position: absolute; inset: auto 0 0; height: 120px; background: linear-gradient(to bottom, transparent, color-mix(in srgb, color-mix(in srgb, var(--bg), var(--text) 2%) 70%, transparent) 60%, color-mix(in srgb, var(--bg), var(--text) 2%)); pointer-events: none; }
 .sheet-hero::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(color-mix(in srgb, var(--text) 12%, transparent) 1px, transparent 1px); background-size: 14px 14px; -webkit-mask-image: radial-gradient(70% 70% at 50% 50%, #000, transparent); mask-image: radial-gradient(70% 70% at 50% 50%, #000, transparent); }
 /* The screen being added, framed like a device, on a faint card as if joining a stack. */
 .hero-shot { position: relative; z-index: 1; isolation: isolate; width: 82px; margin-top: 14px; transform: rotate(-4deg); animation: hero-in 0.45s 0.08s cubic-bezier(0.3, 0.7, 0.2, 1) both; }
@@ -361,7 +369,7 @@ button:disabled { cursor: default; }
 .quick-actions .icon { color: var(--text); }
 .settings-account { display: flex; align-items: center; gap: 7px; margin: 0 2px 8px; color: var(--muted); font-size: 11px; }
 .settings-account span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.avatar { display: grid; place-items: center; flex: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 10px; font-weight: 700; }
+.avatar { display: grid; place-items: center; flex: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-text); font-size: 10px; font-weight: 700; }
 
 /* The theme button: the site's sun in light, a moon in dark, turning into each other when switched. */
 .theme-icon { position: relative; display: grid; width: 24px; height: 24px; }
@@ -374,3 +382,132 @@ button:disabled { cursor: default; }
 /* At 24px the theme icon's lines would draw heavier than the menu lines beside it (≈1.7px): thinned to match. */
 .theme-icon > svg.icon { stroke-width: 1.55; }
 .theme-icon > .site-icon path { stroke-width: 1.45; }
+
+/* The bottom bar's Paste: opens the paste panel. */
+/* Paste: a quiet rounded box with ⌘ V drawn as real keys (option 3). */
+.paste-button { display: flex; align-items: center; gap: 10px; flex: none; height: 40px; padding: 0 12px 0 16px; border: 0; border-radius: 999px; background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); font-weight: 600; transition: background 0.15s; }
+.paste-button:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+/* ⌘ V as two small raised keys. */
+.paste-shortcut { display: flex; gap: 4px; }
+.paste-shortcut kbd { display: grid; place-items: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 6px; background: color-mix(in srgb, var(--text) 12%, var(--bg)); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent), 0 2px 0 color-mix(in srgb, #000 55%, var(--bg)); color: var(--text); font: inherit; font-size: 11px; font-weight: 600; line-height: 1; transform: translateY(-1px); }
+
+/* The paste panel (PasteSheet): a dashed area that holds the focus ⌘V needs. */
+.paste-sheet { padding: 12px 16px 12px; }
+.paste-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 12px 4px; }
+.paste-head strong { font-size: 14px; font-weight: 700; }
+.paste-close { width: 32px; height: 32px; border-radius: 50%; color: var(--muted); }
+.paste-close:hover:not(:disabled) { color: var(--text); }
+.paste-zone { --zone-bg: color-mix(in srgb, var(--surface) 60%, color-mix(in srgb, var(--bg), var(--text) 2%)); display: flex; flex-direction: column; align-items: center; padding: 26px 20px 24px; border: 2px dashed color-mix(in srgb, var(--text) 18%, transparent); border-radius: 18px; background: var(--zone-bg); color: color-mix(in srgb, var(--text) 45%, transparent); text-align: center; cursor: pointer; outline: none; transition: border-color 0.15s, background 0.15s; }
+.paste-art { margin-bottom: 16px; }
+.paste-art .art-back { fill: color-mix(in srgb, var(--text) 5%, var(--zone-bg)); stroke: color-mix(in srgb, var(--text) 20%, transparent); stroke-width: 1.5; }
+.paste-art .art-front { fill: color-mix(in srgb, var(--text) 9%, var(--zone-bg)); stroke: color-mix(in srgb, var(--text) 30%, transparent); stroke-width: 1.5; }
+.paste-art .art-accent { fill: var(--accent); opacity: 0.85; }
+.paste-art .art-line { fill: color-mix(in srgb, var(--text) 16%, transparent); }
+.paste-art .art-badge { fill: var(--accent); stroke: var(--zone-bg); stroke-width: 3; }
+.paste-title { max-width: 240px; margin: 0 0 18px; color: var(--text); font-size: 14px; font-weight: 500; line-height: 1.45; }
+.paste-title a { color: var(--accent-text); text-decoration: none; }
+.paste-title a:hover { text-decoration: underline; }
+.paste-hint { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
+.paste-keys { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--text); font-size: 13px; font-weight: 500; }
+.paste-keys kbd { display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 8px; border-radius: 8px; background: var(--surface-2); box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--text) 10%, transparent); font: inherit; font-weight: 700; }
+.paste-keys span { margin-left: 4px; }
+.paste-keys .paste-keys-lead { margin: 0 4px 0 0; }
+.paste-help-toggle { display: flex; align-items: center; gap: 8px; margin: 12px 2px 0; padding: 4px 2px; border: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 500; }
+/* Hover lights up the words only; the ? stays quiet. */
+.paste-help-toggle:hover .paste-help-text { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.paste-help-icon { color: var(--muted); }
+.paste-help-icon { display: grid; place-items: center; width: 18px; height: 18px; border: 1.5px solid currentColor; border-radius: 50%; font-size: 11px; font-weight: 700; }
+.paste-steps { margin: 4px 0 4px; padding: 0 4px 0 4px; list-style: none; counter-reset: step; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.paste-steps li { display: flex; counter-increment: step; }
+/* Each number sits under the ? icon (18px), its text in line with the question's. */
+.paste-steps li::before { content: counter(step); flex: none; width: 18px; margin-right: 8px; color: var(--muted); text-align: center; }
+.paste-steps strong { color: var(--text); font-weight: 600; }
+/* The Paste clipboard, a touch finer than full weight so it sits lightly beside its label. */
+
+/* A paste in progress, in place of the paste area. */
+.paste-status { min-height: 252px; justify-content: center; cursor: default; }
+.paste-status-mark { display: grid; place-items: center; width: 56px; height: 56px; margin-bottom: 16px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-text); }
+.paste-status.is-done .paste-status-mark { background: color-mix(in srgb, #30a46c 18%, transparent); color: #30a46c; animation: pop-in 0.3s cubic-bezier(0.3, 0.7, 0.2, 1.3); }
+.paste-status.is-error .paste-status-mark { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+.paste-status .paste-title { margin-bottom: 4px; }
+.paste-status-detail { max-width: 280px; margin: 0 0 18px; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.paste-spinner { width: 24px; height: 24px; border: 2.5px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+.paste-progress { display: block; width: 200px; height: 6px; overflow: hidden; border-radius: 3px; background: color-mix(in srgb, var(--text) 10%, transparent); }
+.paste-progress span { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.3s ease; }
+.paste-status.is-done .paste-progress span { background: #30a46c; }
+.paste-retry { margin-top: 4px; }
+@keyframes pop-in { from { transform: scale(0.6); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .paste-spinner, .paste-status.is-done .paste-status-mark { animation: none; } }
+
+/* Quick actions in the bottom bar: Select several · Shuffle · Match selection. Quiet icons with no fill, so they
+   don't compete with Paste; a fill appears only under the pointer. A hairline sets them apart from Paste. */
+.quick { display: flex; align-items: center; gap: 2px; margin-left: 2px; }
+/* A short divider between Paste in and the quick actions: about half the bar's height. */
+.quick::before { content: ''; width: 1px; height: 22px; margin-right: 8px; background: color-mix(in srgb, var(--text) 12%, transparent); }
+/* Instant labels for the quick actions (Figma's own tooltips take a second): a small dark tag above the icon. */
+.quick-button { position: relative; }
+.quick-button[data-tip]::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 10px); padding: 5px 9px; border-radius: 8px; background: var(--text); color: var(--bg); font-size: 11px; font-weight: 600; white-space: nowrap; pointer-events: none; opacity: 0; transform: translate(-50%, 4px); transition: opacity 0.12s 0.15s, transform 0.12s 0.15s; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); }
+.quick-button[data-tip]:hover::after, .quick-button[data-tip]:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
+.quick-button[data-tip]:active::after { opacity: 0; transition-delay: 0s; }
+.quick-button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); transition: background 0.15s, color 0.15s; }
+.quick-button:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); }
+.quick-button:disabled { color: var(--faint); opacity: 0.6; }
+.quick-button .icon { stroke-width: 1.7; }
+.quick-button:focus-visible, .to-top:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Back to top: a round button that floats over the list, above the bottom bar, once far down. */
+.to-top { position: absolute; right: 16px; bottom: 78px; z-index: 5; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 50%; background: linear-gradient(180deg, color-mix(in srgb, var(--text) 14%, transparent), color-mix(in srgb, var(--text) 4%, transparent)), color-mix(in srgb, var(--bg) 35%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.8); backdrop-filter: blur(18px) saturate(1.8); color: var(--text); box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.45); animation: to-top-in 0.22s cubic-bezier(0.3, 0.7, 0.2, 1.3); transition: background 0.15s; }
+.to-top:hover { background: linear-gradient(180deg, color-mix(in srgb, var(--text) 20%, transparent), color-mix(in srgb, var(--text) 8%, transparent)), color-mix(in srgb, var(--bg) 35%, transparent); }
+@keyframes to-top-in { from { opacity: 0; transform: translateY(8px) scale(0.9); } }
+
+/* Select mode: the bar says how many are ticked and adds them in one go. */
+.bottom.selecting { gap: 8px; }
+.picked-count { font-weight: 600; white-space: nowrap; }
+.bottom.selecting .link-button { padding: 0 6px; }
+.add-picked { display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px 0 13px; border: 0; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+.add-picked:disabled { opacity: 0.45; }
+.tick { position: absolute; z-index: 2; top: 8px; left: 8px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(0, 0, 0, 0.35); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.85); color: #fff; transition: background 0.15s, transform 0.15s; }
+.tick.on { background: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent), 0 2px 8px color-mix(in srgb, var(--accent) 50%, transparent); transform: scale(1.06); }
+.tick .icon { stroke-width: 2.6; }
+.card.selecting .overlay { opacity: 0; }
+.card.selecting:hover .overlay { opacity: 0.5; }
+.card.picked .thumb { outline: 2.5px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .to-top { animation: none; } }
+
+/* Resizing from any edge or corner: thin invisible strips along the edges and squares at the corners, above
+   everything. Only the bottom-right corner shows a grip. */
+.resize-edge { position: fixed; z-index: 40; touch-action: none; }
+.edge-n, .edge-s { left: 14px; right: 14px; height: 6px; cursor: ns-resize; }
+.edge-n { top: 0; }
+.edge-s { bottom: 0; }
+.edge-e, .edge-w { top: 14px; bottom: 14px; width: 6px; cursor: ew-resize; }
+.edge-e { right: 0; }
+.edge-w { left: 0; }
+.edge-ne, .edge-nw, .edge-se, .edge-sw { width: 14px; height: 14px; }
+.edge-nw { top: 0; left: 0; cursor: nwse-resize; }
+.edge-se { bottom: 0; right: 0; cursor: nwse-resize; display: grid; place-items: end; padding: 0 2px 2px 0; color: var(--faint); opacity: 0.55; transition: opacity 0.15s; }
+.edge-ne { top: 0; right: 0; cursor: nesw-resize; }
+.edge-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.edge-se svg { fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; }
+.edge-se:hover { opacity: 1; color: var(--text); }
+.resizing, .resizing * { user-select: none; }
+.resizing-n *, .resizing-s * { cursor: ns-resize !important; }
+.resizing-e *, .resizing-w * { cursor: ew-resize !important; }
+.resizing-nw *, .resizing-se * { cursor: nwse-resize !important; }
+.resizing-ne *, .resizing-sw * { cursor: nesw-resize !important; }
+
+/* The tour: the panel dims, the part being explained stays lit in a rounded window, and a card beside it
+   says what it is. The window glides from one part to the next. */
+.tour { position: fixed; inset: 0; z-index: 50; }
+.tour-spot { position: absolute; border-radius: 16px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.62), 0 0 0 2px var(--accent); transition: top 0.3s cubic-bezier(0.3, 0.7, 0.2, 1), left 0.3s cubic-bezier(0.3, 0.7, 0.2, 1), width 0.3s cubic-bezier(0.3, 0.7, 0.2, 1), height 0.3s cubic-bezier(0.3, 0.7, 0.2, 1); pointer-events: none; }
+.tour-card { position: absolute; width: min(300px, calc(100% - 24px)); padding: 14px 16px 12px; border-radius: 18px; background: linear-gradient(180deg, color-mix(in srgb, var(--text) 10%, transparent), color-mix(in srgb, var(--text) 3%, transparent)), color-mix(in srgb, var(--bg) 55%, transparent); -webkit-backdrop-filter: blur(28px) saturate(1.7); backdrop-filter: blur(28px) saturate(1.7); color: var(--text); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 16%, transparent), 0 18px 40px -10px rgba(0, 0, 0, 0.55); transition: top 0.3s cubic-bezier(0.3, 0.7, 0.2, 1), left 0.3s cubic-bezier(0.3, 0.7, 0.2, 1); }
+.tour-step { margin: 0 0 4px; color: var(--accent-text); font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
+.tour-card h2 { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+.tour-card p.tour-text { margin: 0 0 12px; color: var(--muted); line-height: 1.45; }
+.tour-actions { display: flex; align-items: center; gap: 8px; }
+.tour-dots { display: flex; gap: 4px; margin-right: auto; }
+.tour-dots span { width: 6px; height: 6px; border-radius: 50%; background: color-mix(in srgb, var(--text) 18%, transparent); transition: width 0.2s, background 0.2s; }
+.tour-dots span.on { width: 16px; border-radius: 3px; background: var(--accent); }
+.tour-actions .link-button { padding: 0 6px; }
+.tour-actions .primary, .tour-actions .secondary { height: 32px; padding: 0 14px; font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .tour-spot, .tour-card { transition: none; } }

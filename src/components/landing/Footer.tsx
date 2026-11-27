@@ -198,6 +198,7 @@ export function Footer() {
             <div>
               <h2>Resources</h2>
               <Link href="/mcp">MCP for AI tools</Link>
+              <Link href="/plugins">Figma plugin</Link>
               <a href="https://chat.whatsapp.com/JxLUrQpNpaXJ4ido6muIW6?s=cl&p=i&ilr=4" target="_blank" rel="noopener noreferrer">
                 Community
               </a>

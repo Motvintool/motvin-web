@@ -1,4 +1,4 @@
-import { DEFAULT_PREFS, PLATFORM_LABEL, type Flow, type Placement, type PlacedScreen, type Step, type ToMain, type ToUi } from './shared';
+import { DEFAULT_PREFS, PANEL, PLATFORM_LABEL, type CanvasSelection, type ResizeEdge, type Flow, type Placement, type PlacedScreen, type Step, type ToMain, type ToUi } from './shared';
 
 /**
  * The plugin's main code: runs in Figma's sandbox, where it can touch the
@@ -11,13 +11,46 @@ import { DEFAULT_PREFS, PLATFORM_LABEL, type Flow, type Placement, type PlacedSc
 const PART_HEIGHT = 4096;
 const SESSION_KEY = 'motvin.session';
 const PREFS_KEY = 'motvin.prefs';
+const SIZE_KEY = 'motvin.size';
 const FONT = 'Inter';
 const INK = { r: 0.067, g: 0.067, b: 0.067 };
 const MUTED = { r: 0.42, g: 0.42, b: 0.44 };
 const LINK = { r: 0, g: 0.56, b: 0.94 };
 const BOARD = { r: 0.957, g: 0.957, b: 0.965 };
 
-figma.showUI(__html__, { width: 480, height: 720, themeColors: true, title: 'Motvin — Inspiration' });
+figma.showUI(__html__, { width: PANEL.width, height: PANEL.height, themeColors: true, title: 'Motvin — Inspiration' });
+
+const clamp = (value: number, min: number, max: number) => Math.round(Math.min(max, Math.max(min, value)));
+let size = { width: PANEL.width, height: PANEL.height };
+const resize = (width: number, height: number) => {
+  size = { width: clamp(width, PANEL.minWidth, PANEL.maxWidth), height: clamp(height, PANEL.minHeight, PANEL.maxHeight) };
+  figma.ui.resize(size.width, size.height);
+};
+
+// The size the person last dragged the panel to, kept on their computer.
+figma.clientStorage.getAsync(SIZE_KEY).then((saved: { width: number; height: number } | undefined) => {
+  if (saved) resize(saved.width, saved.height);
+});
+
+/** Where a resize drag began: the panel's size and its position on the canvas. */
+let dragFrom: { width: number; height: number; x: number; y: number } | null = null;
+
+/**
+ * Resizes from any edge or corner. Dragging the right or bottom only changes the size; dragging the left or top
+ * also moves the window by what it gained or lost (in canvas units, so divided by the zoom), keeping the far side put.
+ */
+function resizeFrom(edge: ResizeEdge, dx: number, dy: number) {
+  if (!dragFrom) return;
+  const width = edge.includes('e') ? dragFrom.width + dx : edge.includes('w') ? dragFrom.width - dx : dragFrom.width;
+  const height = edge.includes('s') ? dragFrom.height + dy : edge.includes('n') ? dragFrom.height - dy : dragFrom.height;
+  resize(width, height);
+  if (edge.includes('w') || edge.includes('n')) {
+    const zoom = figma.viewport.zoom || 1;
+    const x = edge.includes('w') ? dragFrom.x + (dragFrom.width - size.width) / zoom : dragFrom.x;
+    const y = edge.includes('n') ? dragFrom.y + (dragFrom.height - size.height) / zoom : dragFrom.y;
+    figma.ui.reposition(x, y);
+  }
+}
 
 const post = (message: ToUi) => figma.ui.postMessage(message);
 
@@ -49,8 +82,39 @@ figma.ui.onmessage = async (message: ToMain) => {
     case 'place-flow':
       await placing(() => [flowBoard(message.flow, message.steps, message.captions)], message.placement);
       return;
+    case 'resize-start': {
+      const { canvasSpace } = figma.ui.getPosition();
+      dragFrom = { ...size, x: canvasSpace.x, y: canvasSpace.y };
+      return;
+    }
+    case 'resize':
+      resizeFrom(message.edge, message.dx, message.dy);
+      if (message.save) {
+        dragFrom = null;
+        await figma.clientStorage.setAsync(SIZE_KEY, size);
+      }
+      return;
+    case 'read-selection':
+      post({ type: 'selection', selection: readSelection() });
+      return;
   }
 };
+
+/**
+ * For "Match selection": the selected layers' names, the first bits of text inside them and their width.
+ * Only read when the person asks, and only sent to the panel; nothing about the file leaves Figma.
+ */
+function readSelection(): CanvasSelection | null {
+  const selected = figma.currentPage.selection;
+  if (!selected.length) return null;
+  const texts: string[] = [];
+  for (const node of selected) {
+    if (texts.length >= 40) break;
+    const found = node.type === 'TEXT' ? [node] : 'findAllWithCriteria' in node ? node.findAllWithCriteria({ types: ['TEXT'] }) : [];
+    for (const text of found.slice(0, 40 - texts.length)) texts.push(text.characters.slice(0, 80));
+  }
+  return { names: selected.map((node) => node.name), texts, width: Math.max(...selected.map((node) => ('width' in node ? node.width : 0))) };
+}
 
 /** Builds nodes, puts them in view and selects them; any failure is reported instead of half-placed. */
 async function placing(build: () => SceneNode[], placement: Placement) {

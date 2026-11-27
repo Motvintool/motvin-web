@@ -15,6 +15,8 @@ export type LandingApp = {
   industry: string;
   /** The same picture the Apps page puts on this app's card. */
   cover: string | null;
+  /** That picture's screen type (login, home…), for captions. */
+  coverType: string | null;
   /** Web apps get a wide cover; phone apps a tall one. */
   wide: boolean;
   /** How many screens the library holds for this app. */
@@ -56,6 +58,7 @@ export function useLandingLibrary(): { apps: LandingApp[]; counts: LibraryCounts
             logo: inspirationsApi.mediaUrl(app.logo),
             industry: INDUSTRY_LABEL[app.industry] ?? app.industry,
             cover: cover ? inspirationsApi.mediaUrl(cover.url) : null,
+            coverType: cover?.screenType ?? null,
             wide,
             // The count of the platform its cover is from (iOS first), as the cover itself.
             screenCount: countsOn(app, app.platforms.length > 1 ? [app.platforms[0]] : undefined).screens,

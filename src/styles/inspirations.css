@@ -7407,6 +7407,21 @@ select.ins-input {
   cursor: var(--ins-cursor-not-allowed, not-allowed);
 }
 
+/* Copy to Figma, beside Save: the selected screens go to the Figma plugin as a pasteable code. */
+.ins-float-collection-figma {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 50px;
+  height: 50px;
+  border-radius: 9999px;
+  border: none;
+  background: #f1f1f3;
+  cursor: var(--ins-cursor-hand, pointer);
+  transition: background var(--ins-fast) var(--ins-ease), transform var(--ins-fast) var(--ins-ease);
+}
+.ins-float-collection-figma:hover { background: #e6e6ea; transform: translateY(-1px); }
+
 .ins-float-collection-close {
   display: flex;
   align-items: center;

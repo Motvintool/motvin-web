@@ -82,11 +82,16 @@ export interface Prefs {
   recent: string[];
   /** Where added screens land: centred in view, or beside what is selected on the canvas. */
   placement: Placement;
+  /** The first-run tour has been seen (finished or skipped). */
+  welcomed: boolean;
 }
 
 export type Placement = 'view' | 'selection';
 
-export const DEFAULT_PREFS: Prefs = { theme: 'auto', captions: true, size: 'm', recent: [], placement: 'view' };
+/** The panel's size limits, and where it opens the first time. */
+export const PANEL = { width: 480, height: 720, minWidth: 480, minHeight: 480, maxWidth: 1200, maxHeight: 1400 };
+
+export const DEFAULT_PREFS: Prefs = { theme: 'auto', captions: true, size: 'm', recent: [], placement: 'view', welcomed: false };
 
 // ───────────────────────────────────────────── panel → main
 
@@ -97,11 +102,29 @@ export type ToMain =
   | { type: 'open-url'; url: string }
   | { type: 'place-screens'; screens: PlacedScreen[]; captions: boolean; placement: Placement }
   | { type: 'place-flow'; flow: Flow; steps: { step: Step; parts: Uint8Array[] }[]; captions: boolean; placement: Placement }
-  | { type: 'notify'; message: string; error?: boolean };
+  | { type: 'notify'; message: string; error?: boolean }
+  | { type: 'read-selection' }
+  /**
+   * Dragging a resize edge or corner: `dx`/`dy` is how far the pointer has moved since `resize-start`. Left and top
+   * edges move the window too, so its far side stays put. `save` on release keeps the size for next time.
+   */
+  | { type: 'resize-start' }
+  | { type: 'resize'; edge: ResizeEdge; dx: number; dy: number; save?: boolean };
+
+/** Which side or corner of the panel is dragged: n, s, e, w, or a corner like se. */
+export type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
 // ───────────────────────────────────────────── main → panel
 
 export type ToUi =
   | { type: 'session'; session: Session | null; prefs: Prefs }
   | { type: 'placed'; count: number }
-  | { type: 'place-failed'; message: string };
+  | { type: 'place-failed'; message: string }
+  | { type: 'selection'; selection: CanvasSelection | null };
+
+/** What is selected on the canvas, for "Match selection": its layer names, some of its text and its width. */
+export interface CanvasSelection {
+  names: string[];
+  texts: string[];
+  width: number;
+}

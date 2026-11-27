@@ -1,0 +1,229 @@
+/* The /plugins hero's plugin (src/components/plugins/PluginDemo.tsx): the real plugin's UI
+   (figma-plugin/src/ui/styles.css, dark theme) at its real 480px width, scaled to the window it floats in
+   by --k. Values are the plugin's own, so it looks as it does in Figma; classes are prefixed pd-. */
+
+.plg-panel .pd-view { position: relative; flex: 1; min-height: 0; overflow: hidden; border-radius: 0 0 12px 12px; clip-path: inset(0 round 0 0 12px 12px); }
+/* The plugin floats at the canvas's right, centred top to bottom (on phones it fills the canvas from the top). */
+@media (min-width: 721px) { .plg-canvas .plg-panel { top: 50%; transform: translateY(-50%); } }
+.pd {
+  --bg: #1c1c1e;
+  --surface: #262629;
+  --surface-2: #2e2e32;
+  --hover: #34343a;
+  --border: #38383d;
+  --text: #f5f5f7;
+  --muted: #a1a1a8;
+  --faint: #6c6c74;
+  --accent: #9466ff;
+  --accent-soft: rgba(148, 102, 255, 0.24);
+  --accent-text: #c4adff;
+  --thumb: #5c5c64;
+  --shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 480px;
+  overflow: hidden;
+  transform: scale(var(--k, 0.7));
+  transform-origin: 0 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 var(--font-inter), Inter, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-align: left;
+}
+.pd *, .pd *::before, .pd *::after { box-sizing: border-box; }
+.pd svg { display: block; }
+.pd .pd-icon { flex: none; display: block; }
+.pd-spacer { flex: 1; }
+
+/* Header: logo, Try Icons, theme, menu */
+.pd-top { display: flex; align-items: center; gap: 6px; padding: 14px 14px 10px 18px; }
+.pd-logo { width: 32px; height: 32px; }
+.pd-try { display: flex; align-items: center; gap: 7px; height: 36px; margin-right: 4px; padding: 0 15px 0 13px; border-radius: 999px; background: radial-gradient(125% 160% at 100% 120%, rgba(240, 84, 92, 0.95), transparent 64%), linear-gradient(135deg, #a77eff, #874fff 45%, #5f23e0); color: #fff; font-weight: 600; white-space: nowrap; box-shadow: 0 4px 14px -4px rgba(135, 79, 255, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+.pd-icon-button { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; color: var(--text); }
+.pd-theme .pd-icon { stroke-width: 1.55; }
+
+/* Search and filters, closed off from the results by a hairline */
+.pd-controls { display: flex; flex-direction: column; gap: 10px; padding: 4px 16px 14px; border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent); }
+.pd-searchbar { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 6px 0 16px; border-radius: 16px; background: var(--surface); color: var(--muted); transition: background 0.15s; }
+.pd-input { flex: 1; min-width: 0; overflow: hidden; color: var(--faint); font-size: 14px; white-space: nowrap; }
+.pd-input.is-typed { color: var(--text); }
+.pd-caret { display: inline-block; width: 1.5px; height: 17px; margin-left: 1px; vertical-align: -3px; background: var(--accent); animation: pd-blink 1s steps(1) infinite; }
+@keyframes pd-blink { 50% { opacity: 0; } }
+.pd-clear { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--hover); color: var(--muted); }
+.pd-divider { width: 1px; height: 24px; background: var(--border); }
+.pd-platform { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px 0 12px; border-radius: 10px; color: var(--text); font-size: 14px; font-weight: 600; }
+
+.pd-row { display: flex; align-items: center; gap: 8px; }
+.pd-modes { position: relative; display: grid; grid-template-columns: 1fr 1fr; height: 40px; align-items: center; padding: 4px; border-radius: 999px; background: var(--surface); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18); }
+.pd-modes::before { content: ''; position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 999px; background: var(--thumb); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), inset 0 1px 0 color-mix(in srgb, #fff 18%, transparent); transition: transform 0.22s cubic-bezier(0.3, 0.7, 0.2, 1); }
+.pd-modes.flows::before { transform: translateX(100%); }
+.pd-mode { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px; border-radius: 999px; color: var(--muted); font-weight: 600; transition: color 0.18s; }
+.pd-mode.on { color: var(--text); }
+.pd-pill { display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border-radius: 999px; background: var(--surface); color: var(--text); }
+.pd-select { flex: 1; min-width: 0; max-width: 180px; margin-left: auto; padding: 0 12px 0 14px; font-weight: 500; }
+.pd-select > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd-round { flex: none; width: 40px; padding: 0; justify-content: center; }
+.pd-color-dot { width: 20px; height: 20px; border-radius: 50%; background: conic-gradient(#ff5f57, #febc2e, #28c840, #0d99ff, #874fff, #ff5f57); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 1px 3px rgba(0, 0, 0, 0.3); }
+
+/* Results grid: columns follow the width and the size, as in the plugin (4 / 3 / 2 iOS columns at 480px) */
+.pd-results { padding: 14px 16px 84px; }
+.pd-grid { --min: 130px; display: grid; gap: 18px 12px; grid-template-columns: repeat(auto-fill, minmax(min(var(--min), 100%), 1fr)); }
+.pd-grid.size-s { --min: 95px; }
+.pd-grid.size-l { --min: 190px; }
+.pd-grid.flows { --min: 200px; }
+.pd-grid.flows.size-s { --min: 130px; }
+.pd-grid.flows.size-l { --min: 300px; }
+.pd-grid.size-s .pd-caption > span, .pd-grid.size-s .pd-add { display: none; }
+.pd-grid .pd-card { animation: pd-in 0.4s cubic-bezier(0.3, 0.7, 0.2, 1) both; }
+.pd-grid .pd-card:nth-child(2) { animation-delay: 30ms; }
+.pd-grid .pd-card:nth-child(3) { animation-delay: 60ms; }
+.pd-grid .pd-card:nth-child(4) { animation-delay: 90ms; }
+.pd-grid .pd-card:nth-child(5) { animation-delay: 120ms; }
+.pd-grid .pd-card:nth-child(6) { animation-delay: 150ms; }
+.pd-grid .pd-card:nth-child(n + 7) { animation-delay: 180ms; }
+@keyframes pd-in { from { opacity: 0; transform: translateY(8px); } }
+
+.pd-card { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pd-thumb { position: relative; display: block; width: 100%; aspect-ratio: 390 / 844; overflow: hidden; border-radius: 14px; background: var(--surface); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent); transition: transform 0.18s, box-shadow 0.18s, outline-color 0.15s; }
+.pd-thumb > img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.pd-card.is-hover .pd-thumb { transform: translateY(-2px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent), 0 10px 24px -8px rgba(0, 0, 0, 0.45); }
+.pd-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0) 45%); opacity: 0; transition: opacity 0.18s; }
+.pd-card.is-hover .pd-overlay { opacity: 1; }
+.pd-add, .pd-busy { position: absolute; left: 50%; bottom: 12px; display: flex; align-items: center; gap: 5px; height: 28px; padding: 0 12px 0 10px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; transform: translateX(-50%); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.18); }
+.pd-add { opacity: 0; transform: translate(-50%, 6px); transition: opacity 0.18s, transform 0.18s; }
+.pd-add .pd-icon { margin-top: -1px; }
+.pd-card.is-hover .pd-add { opacity: 1; transform: translate(-50%, 0); }
+.pd-busy { bottom: 22px; padding: 0 12px; background: rgba(0, 0, 0, 0.7); box-shadow: none; }
+.pd-progress { position: absolute; left: 12px; right: 12px; bottom: 12px; height: 4px; overflow: hidden; border-radius: 2px; background: rgba(255, 255, 255, 0.25); }
+.pd-progress span { display: block; height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.25s; }
+.pd-badge { position: absolute; top: 8px; left: 8px; padding: 3px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.66); color: #fff; font-size: 11px; font-weight: 600; }
+.pd-caption { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 0 2px; }
+.pd-caption > span { overflow: hidden; margin-left: 24px; color: var(--muted); font-size: 12px; text-overflow: ellipsis; text-transform: capitalize; white-space: nowrap; }
+.pd-app { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 600; }
+.pd-app span { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.pd-app img, .pd-app i { flex: none; width: 18px; height: 18px; border-radius: 5px; background: var(--surface); object-fit: cover; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent); }
+
+/* Selecting: a tick in each card's corner; picked ones get the accent outline */
+.pd-tick { position: absolute; z-index: 2; top: 8px; left: 8px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(0, 0, 0, 0.35); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.85); color: #fff; transition: background 0.15s, transform 0.15s; }
+.pd-tick.on { background: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent), 0 2px 8px color-mix(in srgb, var(--accent) 50%, transparent); transform: scale(1.06); }
+.pd-tick .pd-icon { stroke-width: 2.6; }
+.pd-card.selecting .pd-overlay { opacity: 0; }
+.pd-card.picked .pd-thumb { outline: 2.5px solid var(--accent); outline-offset: 2px; }
+
+/* The glass bottom bar */
+.pd-bottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; display: flex; align-items: center; gap: 8px; height: 64px; padding: 0 12px; background: color-mix(in srgb, var(--bg) 76%, transparent); -webkit-backdrop-filter: blur(32px) saturate(1.6); backdrop-filter: blur(32px) saturate(1.6); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent), 0 -12px 24px -12px rgba(0, 0, 0, 0.35); }
+.pd-round-button { width: 40px; height: 40px; border-radius: 50%; background: color-mix(in srgb, var(--text) 8%, transparent); }
+.pd-paste { display: flex; align-items: center; gap: 10px; flex: none; height: 40px; padding: 0 12px 0 16px; border-radius: 999px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent); font-weight: 600; }
+.pd-keys { display: flex; gap: 4px; }
+.pd kbd { display: grid; place-items: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 6px; background: color-mix(in srgb, var(--text) 12%, var(--bg)); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent), 0 2px 0 color-mix(in srgb, #000 55%, var(--bg)); color: var(--text); font: inherit; font-size: 11px; font-weight: 600; line-height: 1; transform: translateY(-1px); }
+.pd-quick { display: flex; align-items: center; gap: 2px; padding-left: 8px; border-left: 1px solid color-mix(in srgb, var(--text) 10%, transparent); }
+.pd-quick-button { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; color: var(--muted); }
+.pd-sizes { display: flex; gap: 2px; height: 40px; align-items: center; padding: 4px; border-radius: 999px; background: color-mix(in srgb, var(--text) 8%, transparent); }
+.pd-size { display: grid; place-items: center; width: 34px; height: 32px; border-radius: 999px; color: var(--muted); transition: background 0.15s, color 0.15s; }
+.pd-size.on { background: color-mix(in srgb, var(--text) 14%, transparent); color: var(--text); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent); }
+.pd-dot { display: block; border: 1.5px solid currentColor; border-radius: 3px; }
+.pd-dot-s { width: 8px; height: 8px; }
+.pd-dot-m { width: 11px; height: 11px; }
+.pd-dot-l { width: 14px; height: 14px; }
+.pd-bottom.selecting { gap: 8px; }
+.pd-picked-count { font-weight: 600; white-space: nowrap; }
+.pd-link { height: 32px; padding: 0 6px; color: var(--muted); font-weight: 500; line-height: 32px; }
+.pd-add-picked { display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px 0 13px; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 600; white-space: nowrap; }
+.pd-add-picked.is-off { opacity: 0.45; }
+
+/* The toast above the bar: a green tick, then what was added */
+.pd-toast { position: absolute; left: 16px; right: 16px; bottom: 76px; z-index: 6; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: var(--text); color: var(--bg); font-weight: 500; box-shadow: var(--shadow); animation: pd-toast 0.25s cubic-bezier(0.3, 0.7, 0.2, 1) both; }
+.pd-toast > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd-toast-mark { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; background: #30a46c; color: #fff; }
+.pd-toast-mark .pd-icon { stroke-width: 2.6; }
+@keyframes pd-toast { from { opacity: 0; transform: translateY(8px); } }
+
+/* The paste panel: a sheet over the library */
+.pd-sheet-backdrop { position: absolute; inset: 0; z-index: 40; display: flex; align-items: flex-end; padding: 18px; background: rgba(0, 0, 0, 0.4); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); animation: pd-fade 0.15s ease-out; }
+@keyframes pd-fade { from { opacity: 0; } }
+.pd-sheet { width: 100%; padding: 12px 16px; border-radius: 24px; background: color-mix(in srgb, var(--bg), var(--text) 2%); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent), 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent), 0 24px 60px rgba(0, 0, 0, 0.5); animation: pd-sheet 0.24s cubic-bezier(0.3, 0.7, 0.2, 1) both; }
+@keyframes pd-sheet { from { opacity: 0; transform: translateY(24px) scale(0.98); } }
+.pd-paste-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 12px 4px; }
+.pd-paste-head strong { font-size: 14px; font-weight: 700; }
+.pd-paste-close { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--muted); }
+.pd-paste-zone { --zone-bg: color-mix(in srgb, var(--surface) 60%, color-mix(in srgb, var(--bg), var(--text) 2%)); display: flex; flex-direction: column; align-items: center; min-height: 252px; padding: 26px 20px 24px; border: 2px dashed color-mix(in srgb, var(--text) 18%, transparent); border-radius: 18px; background: var(--zone-bg); text-align: center; }
+.pd-paste-art { margin-bottom: 16px; }
+.pd-paste-art .art-back { fill: color-mix(in srgb, var(--text) 5%, var(--zone-bg)); stroke: color-mix(in srgb, var(--text) 20%, transparent); stroke-width: 1.5; }
+.pd-paste-art .art-front { fill: color-mix(in srgb, var(--text) 9%, var(--zone-bg)); stroke: color-mix(in srgb, var(--text) 30%, transparent); stroke-width: 1.5; }
+.pd-paste-art .art-accent { fill: var(--accent); opacity: 0.85; }
+.pd-paste-art .art-line { fill: color-mix(in srgb, var(--text) 16%, transparent); }
+.pd-paste-art .art-badge { fill: var(--accent); stroke: var(--zone-bg); stroke-width: 3; }
+.pd-paste-title { max-width: 240px; margin: 0 0 18px; color: var(--text); font-size: 14px; font-weight: 500; line-height: 1.45; }
+.pd-paste-title b { color: var(--accent-text); font-weight: 500; }
+.pd-paste-keys { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--text); font-size: 13px; font-weight: 500; }
+.pd-paste-keys kbd { min-width: 30px; height: 30px; padding: 0 8px; border-radius: 8px; background: var(--surface-2); box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--text) 10%, transparent); font-weight: 700; font-size: 13px; transform: none; transition: transform 0.1s, background 0.1s; }
+.pd-paste-keys > span:first-child { margin-right: 4px; }
+.pd-paste-keys > span:last-child { margin-left: 4px; }
+/* The ⌘V press: both keys go down together. */
+.pd-paste-keys.is-pressed kbd { background: color-mix(in srgb, var(--accent) 40%, var(--surface-2)); box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.2); transform: translateY(2px); }
+.pd-paste-status { justify-content: center; }
+.pd-paste-mark { display: grid; place-items: center; width: 56px; height: 56px; margin-bottom: 16px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-text); }
+.pd-paste-status.is-done .pd-paste-mark { background: color-mix(in srgb, #30a46c 18%, transparent); color: #30a46c; animation: pd-pop 0.3s cubic-bezier(0.3, 0.7, 0.2, 1.3); }
+@keyframes pd-pop { from { transform: scale(0.6); opacity: 0; } }
+.pd-paste-status .pd-paste-title { margin-bottom: 4px; }
+.pd-paste-detail { max-width: 280px; margin: 0 0 18px; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; text-transform: capitalize; white-space: nowrap; }
+.pd-spinner { width: 24px; height: 24px; border: 2.5px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); border-radius: 50%; animation: pd-spin 0.8s linear infinite; }
+@keyframes pd-spin { to { transform: rotate(360deg); } }
+.pd-paste-progress { display: block; width: 200px; height: 6px; overflow: hidden; border-radius: 3px; background: color-mix(in srgb, var(--text) 10%, transparent); }
+.pd-paste-progress span { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.3s ease; }
+.pd-paste-status.is-done .pd-paste-progress span { background: #30a46c; }
+
+/* The canvas board: frames sit at their row and column, and the camera (translate + scale, --z) zooms out
+   smoothly as screens are added. Names, outlines and handles stay the same size on screen, as Figma draws
+   them, by dividing by the zoom. */
+.plg-world { position: absolute; top: 0; left: 0; width: 0; height: 0; transform-origin: 0 0; transition: transform 0.8s cubic-bezier(0.3, 0.7, 0.2, 1); }
+.plg-canvas .plg-world .plg-frame { position: absolute; display: block; width: 122px; margin: 0; }
+/* The name sits just above the frame and takes no room, so zoomed out it never runs into the screen. */
+/* Figma's frame names: 11px on screen at any zoom, grey (blue when selected), cut to the frame's width. */
+.plg-world .plg-frame figcaption { position: absolute; left: 0; right: 0; bottom: 100%; margin: 0 0 calc(5px / var(--z, 1)); overflow: hidden; color: #808080; font: 500 calc(11px / var(--z, 1)) / 1.2 var(--font-inter), Inter, system-ui, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.plg-world .plg-frame.is-sel figcaption { color: #0d99ff; }
+.plg-world .plg-frame.is-sel .plg-frame-shot { outline: calc(1.5px / var(--z, 1)) solid #0d99ff; }
+.plg-world .plg-handle { width: calc(7px / var(--z, 1)); height: calc(7px / var(--z, 1)); border-width: calc(1.5px / var(--z, 1)); }
+.plg-world .plg-handle.is-tl, .plg-world .plg-handle.is-tr { top: calc(-4px / var(--z, 1)); }
+.plg-world .plg-handle.is-bl, .plg-world .plg-handle.is-br { bottom: calc(-4px / var(--z, 1)); }
+.plg-world .plg-handle.is-tl, .plg-world .plg-handle.is-bl { left: calc(-4px / var(--z, 1)); }
+.plg-world .plg-handle.is-tr, .plg-world .plg-handle.is-br { right: calc(-4px / var(--z, 1)); }
+.plg-world .plg-size { bottom: auto; top: calc(100% + 6px / var(--z, 1)); padding: calc(2px / var(--z, 1)) calc(6px / var(--z, 1)); border-radius: calc(3px / var(--z, 1)); font-size: calc(10px / var(--z, 1)); }
+/* New screens drop in from the plugin's side. */
+.plg-world .plg-frame.is-landing { animation: plg-land 0.7s cubic-bezier(0.3, 0.7, 0.2, 1.15) both; animation-delay: calc(var(--i, 0) * 90ms); }
+@media (max-width: 720px) { .plg-world { display: none; } }
+/* Between laptop and tablet the canvas is narrow beside the plugin: the Design panel steps aside for it. */
+@media (min-width: 1081px) and (max-width: 1199px) {
+  .plg-body { grid-template-columns: 190px minmax(0, 1fr); }
+  .plg-design { display: none; }
+}
+
+/* The pointer, at the size of a real one beside the plugin; its tip (5, 3 of 24) sits on the point it is sent to. */
+.plg-canvas .plg-cursor { width: 26px; height: 26px; margin: -3.25px 0 0 -5.4px; }
+.plg-canvas .plg-cursor::before { left: 5.4px; top: 3.25px; width: 26px; height: 26px; margin: -13px 0 0 -13px; }
+
+/* Layers: a small gap between rows, so selected rows read as separate frames instead of one block. */
+.plg-layers .plg-layer + .plg-layer { margin-top: 2px; }
+
+/* The actions under the window: the one playing lit, each one a button that jumps to it. */
+.plg-scenes { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 22px auto 0; }
+.plg-scenes button { height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: #fff; box-shadow: inset 0 0 0 1px #ececef; color: #6b6b73; font: 600 14px var(--font-outfit), sans-serif; cursor: pointer; transition: background 0.25s, color 0.25s, box-shadow 0.25s; }
+.plg-scenes button:hover:not(:disabled) { color: #141414; box-shadow: inset 0 0 0 1px #d6d6db; }
+.plg-scenes button.is-on { background: #f3f0ff; box-shadow: inset 0 0 0 1px #e2d8ff; color: #5f23e0; }
+.plg-scenes button:disabled { opacity: 0.4; cursor: default; }
+.plg-scenes button:focus-visible { outline: 2px solid #874fff; outline-offset: 2px; }
+/* Phones: one row that scrolls sideways. */
+@media (max-width: 720px) {
+  .plg-scenes { flex-wrap: nowrap; justify-content: flex-start; margin: 18px -24px 0; padding: 2px 24px; overflow-x: auto; scrollbar-width: none; }
+  .plg-scenes::-webkit-scrollbar { display: none; }
+  .plg-scenes button { flex: none; height: 34px; padding: 0 14px; font-size: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pd-grid .pd-card, .pd-toast, .pd-sheet, .pd-sheet-backdrop, .pd-caret, .pd-spinner, .pd-paste-status.is-done .pd-paste-mark { animation: none; }
+  .pd-modes::before { transition: none; }
+  .plg-world, .plg-world .plg-frame.is-landing { transition: none; animation: none; }
+  .plg-scenes { display: none; }
+}

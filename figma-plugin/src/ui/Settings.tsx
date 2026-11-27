@@ -12,6 +12,8 @@ interface Props {
   onOpenSite: () => void;
   onSignIn: () => void;
   onSignOut: () => void;
+  /** Shows the panel's tour again. */
+  onTour: () => void;
 }
 
 /**
@@ -20,7 +22,7 @@ interface Props {
  * panel's preferences — captions, where added screens land, theme — and a way
  * to clear recent searches. Preferences are saved as they change.
  */
-export function Settings({ prefs, changePrefs, email, canReset, onReset, onOpenSite, onSignIn, onSignOut }: Props) {
+export function Settings({ prefs, changePrefs, email, canReset, onReset, onOpenSite, onSignIn, onSignOut, onTour }: Props) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -131,6 +133,16 @@ export function Settings({ prefs, changePrefs, email, canReset, onReset, onOpenS
             </div>
           </div>
 
+          <button
+            class="setting-action"
+            onClick={() => {
+              setOpen(false);
+              onTour();
+            }}
+          >
+            <Icon name="play" size={15} />
+            Take the tour
+          </button>
           {prefs.recent.length ? (
             <button class="setting-action" onClick={() => changePrefs({ recent: [] })}>
               <Icon name="history" size={15} />
