@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { COPY_TO_FIGMA_ICON, useCopyToFigma } from '@/components/figma/useCopyToFigma';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useStoredValue, writeStoredValue } from '@/hooks/useStoredValue';
@@ -118,6 +119,7 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const copyToFigma = useCopyToFigma();
 
   const closeRef = useRef<HTMLButtonElement>(null);
   const expanded = useExpandedPreview();
@@ -639,6 +641,15 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
 
   const store = storeAction(flow.platform, app?.website);
 
+  // "Copy flow to Figma": the flow's id, which the Figma plugin lays out step by step. An app's own
+  // prototype is not a stored flow, so it goes over as its screens, in order.
+  const figmaItem = {
+    label: 'Copy flow to Figma',
+    icon: COPY_TO_FIGMA_ICON,
+    onSelect: () =>
+      void copyToFigma(isAppPrototype ? { platform: flow.platform, kind: 'screens', ids: screens.map((step) => step.id) } : { platform: flow.platform, kind: 'flow', id: flow.id }),
+  };
+
   const flowMenu = app ? (
     <FlowMenu
       app={app}
@@ -647,13 +658,14 @@ function FlowPreviewModal({ flowId }: { flowId: string }) {
       store={store}
       platform={flow.platform}
       link={`${window.location.origin}${pathname}?${FLOW_PARAM}=${flow.id}`}
-      leading={
-        phoneFoot
+      leading={[
+        figmaItem,
+        ...(phoneFoot
           ? menuLeading
           : phoneMulti
             ? [{ label: 'Individual screen', icon: '/ASSET/Icons/Motvin/indiviudal-screen.svg', onSelect: () => setMultiScreen(false) }]
-            : undefined
-      }
+            : []),
+      ]}
     />
   ) : null;
 

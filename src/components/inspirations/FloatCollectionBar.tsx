@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { COPY_TO_FIGMA_ICON, useCopyToFigma } from '@/components/figma/useCopyToFigma';
 import { DEFAULT_COLLECTION_NAME } from '@/lib/inspirations/store';
 import type { App, Screen, SavedItemType } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
@@ -48,6 +49,9 @@ export function FloatCollectionBar({
   const { collections, createCollection, getOrCreateCollectionByName, addToCollection, renameCollection } = useLibrary();
   const deleteWithUndo = useDeleteCollection();
   const { show } = useToast();
+  const copyToFigma = useCopyToFigma();
+  // The selection as one platform's screens, for Copy to Figma (a grid shows one platform; a stray other one is left out).
+  const figmaScreens = (screens ?? []).filter((screen) => screen.platform === screens?.[0]?.platform);
   // A phone's bar has room for one short word beside Save.
   const pickLabel = useMediaQuery(SHEET_QUERY) ? 'Collections' : 'Select Collections';
   const [uiState, setUiState] = useState<'default' | 'expand' | 'add-new-collection'>('default');
@@ -306,6 +310,18 @@ export function FloatCollectionBar({
               <span className="truncate flex-1">{selectorText}</span>
               <ChevronDownIcon size={20} style={{ flex: 'none', transform: uiState === 'expand' ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
             </div>
+          )}
+
+          {figmaScreens.length > 0 && (
+            <button
+              type="button"
+              className="ins-float-collection-figma"
+              title={`Copy ${figmaScreens.length === 1 ? 'this screen' : `these ${figmaScreens.length} screens`} to Figma`}
+              aria-label="Copy to Figma"
+              onClick={() => void copyToFigma({ platform: figmaScreens[0].platform, kind: 'screens', ids: figmaScreens.map((screen) => screen.id) })}
+            >
+              <img src={COPY_TO_FIGMA_ICON} alt="" width={18} height={18} />
+            </button>
           )}
 
           <button 

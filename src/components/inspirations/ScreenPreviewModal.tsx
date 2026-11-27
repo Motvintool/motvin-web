@@ -7,10 +7,10 @@ import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import { focusOnOpen } from '@/lib/inspirations/focusOnOpen';
 import { INSPIRATIONS_ROUTES } from '@/lib/inspirations/routes';
-import { storeAction } from '@/lib/inspirations/storeAction';
-import { StoreLinkButton } from './StoreMenuItem';
+import { storeAction, type StoreAction } from '@/lib/inspirations/storeAction';
+import { useStoreHref } from './StoreMenuItem';
 import { INDUSTRY_LABEL, pageTypeLabel, PLATFORM_LABEL, sitePageName, SCREEN_STATE_LABEL, SCREEN_TYPE_LABEL, screenTypeLabel, sectionTypeLabel, styleLabel } from '@/lib/inspirations/taxonomy';
-import { isDesktopPlatform, type Flow, type Screen } from '@/lib/inspirations/types';
+import { isDesktopPlatform, type Flow, type Platform, type Screen } from '@/lib/inspirations/types';
 import { AppLogo } from './AppLogo';
 import { CompareShortcut, ScreenColours } from './ScreenDetailsExtras';
 import { CloseIcon } from './Icons';
@@ -23,6 +23,7 @@ import { ScreenLightbox } from './ScreenLightbox';
 import { SimilarScreens, hasSimilar, warmSimilar } from './SimilarScreens';
 import { useToast } from './Toast';
 import { useScreenContextMenu } from './useScreenContextMenu';
+import { COPY_TO_FIGMA_ICON } from '@/components/figma/useCopyToFigma';
 import { useAsync } from './useAsync';
 import { SHEET_QUERY, useMediaQuery, useSheet } from './useSheet';
 import { useSwipeStep } from './useSwipeStep';
@@ -759,6 +760,13 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
               <MenuIcon src={ICON_COMPARE} /> <span>Compare {screenTypeLabel(view.screenType).toLowerCase()}</span>
             </Link>
           )}
+          {/* The live store listing, found by name, as the masthead's menu does — the app's own link is often empty. */}
+          {store && (
+            <>
+              <div className="ins-popover-divider" role="separator" />
+              <StorePopoverItem name={app?.name ?? ''} platform={view.platform} action={store} onSelect={() => setMoreOpen(false)} />
+            </>
+          )}
         </div>
       )}
     </div>
@@ -1048,10 +1056,12 @@ function ScreenPreviewModal({ screenId }: { screenId: string }) {
                   app={app ?? undefined}
                   className="ins-screen-preview-foot-btn ins-screen-preview-foot-btn--save"
                 />
-                {/* The live store listing, found by name (StoreLinkButton), as the masthead's menu does — the app's own link is often empty. */}
-                {store && (
-                  <StoreLinkButton name={app?.name ?? ''} platform={view.platform} action={store} className="ins-screen-preview-foot-btn" />
-                )}
+                {/* Copy to Figma: the screen goes to the Figma plugin as a code pasted there with ⌘V. The store
+                    listing lives in More. */}
+                <button type="button" className="ins-screen-preview-foot-btn" onClick={() => void currentShot.copyToFigma()}>
+                  <img src={COPY_TO_FIGMA_ICON} alt="" width={18} height={18} />
+                  Copy to Figma
+                </button>
                 {/* A phone: More sits in this row, holding the flow and Nearby screens too. */}
                 {phone && moreMenu}
               </div>
@@ -1368,6 +1378,16 @@ function formatDay(iso: string): string {
 }
 
 /** The "…" menu's icons: Motvin's own set, as in the screen's right-click menu and the app menu. */
+/** "View in App Store / Google Play" (or "Visit website") as a More menu item: the live listing, found by name. */
+function StorePopoverItem({ name, platform, action, onSelect }: { name: string; platform: Platform; action: StoreAction; onSelect: () => void }) {
+  const href = useStoreHref(name, platform, action);
+  return (
+    <a className="ins-popover-item" role="menuitem" href={href} target="_blank" rel="noopener noreferrer" onClick={onSelect}>
+      <MenuIcon src={action.icon} /> <span>{action.label}</span>
+    </a>
+  );
+}
+
 const ICON_COPY_LINK = '/ASSET/Icons/Motvin/copy-link.svg';
 const ICON_COPY_PNG = '/ASSET/Icons/Motvin/copy-png.svg';
 const ICON_COMPARE = '/ASSET/Icons/Motvin/compare.svg';

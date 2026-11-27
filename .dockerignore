@@ -13,6 +13,7 @@ tsconfig.tsbuildinfo
 !.env.production
 
 # Not part of the site.
+figma-plugin
 .git
 .gitignore
 ref

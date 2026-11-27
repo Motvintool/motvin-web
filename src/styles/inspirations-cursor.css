@@ -38,6 +38,11 @@ body .lpi-footer a[href][target='_blank'] {
   cursor: var(--ins-cursor-external-light);
 }
 
+/* Big buttons that open outside (the /plugins "Get the Figma plugin" buttons): the hand, as on any button. */
+body :is(.mh-cta, .lpi-closing-primary)[href][target='_blank'] {
+  cursor: var(--ins-cursor-hand);
+}
+
 /* The navbar's small social icons are too small for the circle-arrow: plain hand. So is the
    Resources menu, whose tiles already show their own ↗ on hover: Updates keeps the hand its
    neighbours use. The preview footer's store button (View in App Store, Visit website) already shows its ↗ too. */

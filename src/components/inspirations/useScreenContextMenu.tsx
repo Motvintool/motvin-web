@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { inspirationsApi } from '@/lib/inspirations/api';
 import type { App, Screen } from '@/lib/inspirations/types';
 import { addWatermarkToBlob } from '@/lib/inspirations/watermark';
+import { COPY_TO_FIGMA_ICON, useCopyToFigma } from '@/components/figma/useCopyToFigma';
 import { useDownloadGate } from './useDownloadGate';
 import { useToast } from './Toast';
 
@@ -85,7 +86,7 @@ export function LongPressScreenMenus() {
 }
 
 /**
- * The right-click menu for a screenshot — Copy PNG, Download PNG, Copy link —
+ * The right-click menu for a screenshot — Copy PNG, Download PNG, Copy to Figma, Copy link —
  * shared by the grid's screen cards (ScreenCard) and the image in the screen
  * preview (ScreenPreviewModal), so both offer the same thing in place of the
  * browser's own "Save image as…". Copying and downloading go through
@@ -97,6 +98,7 @@ export function LongPressScreenMenus() {
 export function useScreenContextMenu(screen: Screen | null, app: App | null | undefined, link: () => string) {
   const { show } = useToast();
   const { allow } = useDownloadGate();
+  const copyFigma = useCopyToFigma();
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   // Where it's drawn: at the pointer, flipped up / left (8px clear of the
@@ -215,6 +217,17 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
     [allow, screen, show, watermarked],
   );
 
+  // Only the id goes on the clipboard: the Figma plugin fetches the screen (and asks for sign-in) itself.
+  const copyToFigma = useCallback(
+    async (e?: MouseEvent) => {
+      e?.preventDefault();
+      e?.stopPropagation();
+      setPosition(null);
+      if (screen) await copyFigma({ platform: screen.platform, kind: 'screens', ids: [screen.id] });
+    },
+    [copyFigma, screen],
+  );
+
   const copyLink = useCallback(
     async (e: MouseEvent) => {
       e.preventDefault();
@@ -267,6 +280,14 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
               )}
             </div>
             <div className="ins-context-menu-divider" />
+            <button type="button" className="ins-context-menu-btn" onClick={copyToFigma}>
+              <div className="ins-context-menu-btn-content">
+                <div className="ins-context-menu-icon">
+                  <img alt="" src={COPY_TO_FIGMA_ICON} />
+                </div>
+                <p className="ins-context-menu-text">Copy to Figma</p>
+              </div>
+            </button>
             <button type="button" className="ins-context-menu-btn" onClick={copyLink}>
               <div className="ins-context-menu-btn-content">
                 <div className="ins-context-menu-icon">
@@ -280,5 +301,5 @@ export function useScreenContextMenu(screen: Screen | null, app: App | null | un
         )
       : null;
 
-  return { onContextMenu, copyPng, downloadPng, menu };
+  return { onContextMenu, copyPng, downloadPng, copyToFigma, menu };
 }

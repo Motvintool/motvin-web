@@ -1,0 +1,340 @@
+/* /plugins (src/app/plugins/page.tsx): the Motvin Figma plugin. Built on the
+   landing page's styles and /mcp's (hero .mh-*, steps and FAQ .mcpp-*);
+   everything of its own is prefixed plg-. The plugin's purple (#874fff) is
+   the one strong colour, as blue is on /mcp. */
+
+/* ---- Hero ---- */
+/* The headline and the floating logos round it: the logo band (158px tall) is centred on the two-line title. */
+.plg-title-wrap { position: relative; width: 100%; max-width: 1380px; margin: 0 auto; }
+.plg-title-wrap .mh-title { position: relative; z-index: 2; }
+.plg-floats.hero-floating-graphics { top: 50%; transform: translate(-50%, -50%); }
+/* Taller than one screen: the Figma window sits below the fold's edge. */
+.plg-hero-card.mh-card {
+  min-height: 0;
+  /* Deep bottom padding: the window's shadow fades out inside the hero instead of being cut off. */
+  padding: clamp(168px, 28vh, 320px) 24px 120px;
+}
+/* The hero button leads with the Figma logo on its own: no white circle, the same 30px slot so its spacing stays. */
+.plg-cta-figma.mh-cta-plus { width: 22px; margin-left: 10px; background: none; }
+.plg-cta-figma.mh-cta-plus svg { width: 15px; height: 23px; }
+/* The closing button leads with the same logo. */
+.plg .lpi-closing-icon { display: inline-grid; place-items: center; margin-right: 6px; }
+.plg .lpi-closing-icon svg { display: block; width: 15px; height: 23px; }
+
+.plg-hero-card .mh-glow {
+  bottom: auto;
+  top: 260px;
+  background:
+    radial-gradient(closest-side at 50% 50%, rgba(135, 79, 255, 0.16), rgba(135, 79, 255, 0.05) 50%, rgba(135, 79, 255, 0) 78%),
+    radial-gradient(closest-side at 70% 60%, rgba(255, 114, 98, 0.08), rgba(255, 114, 98, 0) 60%);
+}
+
+
+
+/* The Figma window, drawn after Figma's own UI (dark): top bar, Layers on the left, Design on the right,
+   the canvas between with the floating toolbar, and the plugin floating over the canvas as Figma shows it. */
+.plg-stage {
+  width: 100%;
+  /* The home page's demo window size (landing.css .hero-demo): the same width rule, and below the same shape. */
+  max-width: min(1440px, calc(100vw - 64px));
+  margin: clamp(112px, 15vh, 168px) auto 0;
+}
+.plg-window {
+  overflow: hidden;
+  border-radius: 14px;
+  background: #2c2c2c;
+  box-shadow: 0 0 0 1px rgba(20, 20, 20, 0.08), 0 40px 80px -30px rgba(40, 20, 90, 0.18), 0 18px 36px -18px rgba(20, 20, 20, 0.14);
+  color: #e6e6e6;
+  font: 500 11px/1.3 'Inter', var(--font-outfit), system-ui, sans-serif;
+  text-align: left;
+}
+.plg-window svg { display: block; }
+
+/* Top bar */
+.plg-topbar { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 10px; border-bottom: 1px solid #383838; background: #2c2c2c; }
+.plg-lights { display: flex; gap: 7px; margin-right: 8px; }
+.plg-lights i { width: 11px; height: 11px; border-radius: 50%; background: #ff5f57; }
+.plg-lights i:nth-child(2) { background: #febc2e; }
+.plg-lights i:nth-child(3) { background: #28c840; }
+.plg-tool { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; color: #d9d9d9; }
+.plg-tool svg { width: 17px; height: 17px; }
+.plg-tool.is-figma svg { width: 10px; height: 15px; }
+.plg-tool.is-on { background: #0d99ff; color: #fff; }
+.plg-file { flex: 1; text-align: center; color: #b3b3b3; }
+.plg-file b { color: #fff; font-weight: 600; }
+.plg-topbar-right { display: flex; align-items: center; gap: 6px; }
+.plg-avatars { display: flex; margin-right: 4px; }
+.plg-avatars i { display: grid; place-items: center; width: 22px; height: 22px; margin-left: -5px; border-radius: 50%; background: #874fff; box-shadow: 0 0 0 2px #2c2c2c; color: #fff; font-size: 10px; font-style: normal; font-weight: 700; }
+.plg-avatars i:nth-child(2) { background: #f0545c; }
+.plg-share { padding: 6px 12px; border-radius: 6px; background: #0d99ff; color: #fff; font-weight: 600; }
+
+/* Body: Layers | canvas | Design */
+.plg-body { display: grid; grid-template-columns: 190px minmax(0, 1fr) 200px; height: 680px; }
+@media (min-width: 1025px) {
+  .plg-stage { max-width: min(1360px, calc(100vw - 144px)); }
+  /* 1296 × 766 at a 1440px screen, as on the home page: the body is the window's height less the 44px top bar. */
+  .plg-body { height: calc(min(1360px, 100vw - 144px) * 766 / 1296 - 44px); min-height: 600px; }
+}
+
+.plg-layers, .plg-design { padding: 0 0 12px; background: #2c2c2c; overflow: hidden; }
+.plg-layers { border-right: 1px solid #383838; }
+.plg-design { border-left: 1px solid #383838; }
+.plg-side-tabs { display: flex; align-items: center; gap: 14px; height: 40px; padding: 0 14px; border-bottom: 1px solid #383838; color: #8f8f8f; font-weight: 600; }
+.plg-side-tabs b { color: #fff; font-weight: 600; }
+.plg-side-tabs em { margin-left: auto; color: #b3b3b3; font-style: normal; }
+.plg-side-label { margin: 14px 14px 6px; color: #fff; font-weight: 600; }
+.plg-page { margin: 0 8px; padding: 6px 8px; border-radius: 5px; color: #d9d9d9; }
+.plg-page.is-on { background: #383838; color: #fff; }
+.plg-layer { display: flex; align-items: center; gap: 7px; margin: 0 8px; padding: 6px 8px; border-radius: 5px; color: #d9d9d9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plg-layer svg { flex: none; width: 13px; height: 13px; color: #8f8f8f; }
+.plg-layer.is-on { background: #4a3b8a; background: color-mix(in srgb, #0d99ff 28%, #2c2c2c); color: #fff; }
+.plg-layer.is-on svg { color: #fff; }
+.plg-layer.is-child { padding-left: 26px; color: #b3b3b3; }
+.plg-layer:first-of-type { animation: plg-row 0.5s ease both; }
+@keyframes plg-row { from { opacity: 0; transform: translateX(-6px); } }
+
+.plg-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 14px 8px; }
+.plg-fields.is-one { grid-template-columns: 1fr; }
+.plg-fields span { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 8px; border-radius: 5px; background: #383838; color: #fff; }
+.plg-fields i { color: #8f8f8f; font-style: normal; }
+.plg-fields em { margin-left: auto; color: #b3b3b3; font-style: normal; }
+.plg-swatch { width: 12px; height: 12px; border-radius: 2px; background: #fff; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2); }
+
+/* Canvas: Figma's light grey, frames with their names above */
+.plg-canvas { position: relative; overflow: hidden; background: #e5e5e5; }
+.plg-frames { position: absolute; left: 0; right: 370px; top: 0; bottom: 0; display: flex; align-items: flex-start; justify-content: center; gap: 24px; padding: 64px 18px 0; }
+.plg-frame { width: 122px; margin: 0; flex: none; }
+.plg-frame figcaption { margin-bottom: 5px; color: #8a8a8a; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plg-frame-shot { position: relative; display: block; }
+.plg-frame img { display: block; width: 100%; aspect-ratio: 390 / 844; object-fit: cover; object-position: top; background: #fff; }
+/* The newest screen lands selected: Figma's blue outline, corner handles and size. */
+.plg-frame.is-new { animation: plg-land 0.7s cubic-bezier(0.3, 0.7, 0.2, 1.15) both; }
+.plg-frame.is-new figcaption { color: #0d99ff; }
+.plg-frame.is-new .plg-frame-shot { outline: 1.5px solid #0d99ff; }
+.plg-handle { position: absolute; width: 7px; height: 7px; border: 1.5px solid #0d99ff; background: #fff; }
+.plg-handle.is-tl { top: -4px; left: -4px; }
+.plg-handle.is-tr { top: -4px; right: -4px; }
+.plg-handle.is-bl { bottom: -4px; left: -4px; }
+.plg-handle.is-br { bottom: -4px; right: -4px; }
+.plg-size { position: absolute; left: 50%; bottom: -24px; padding: 2px 6px; border-radius: 3px; background: #0d99ff; color: #fff; font-size: 10px; font-style: normal; font-weight: 600; white-space: nowrap; transform: translateX(-50%); }
+@keyframes plg-land { from { opacity: 0; transform: translate(80px, -24px) scale(0.85); } }
+.plg-canvas-empty { width: 122px; aspect-ratio: 390 / 844; background: rgba(255, 255, 255, 0.6); }
+
+/* Figma's floating toolbar, bottom centre of the canvas */
+.plg-toolbar { position: absolute; left: 50%; bottom: 14px; display: flex; gap: 2px; padding: 4px; border-radius: 12px; background: #2c2c2c; box-shadow: 0 6px 18px -6px rgba(0, 0, 0, 0.45); transform: translateX(-50%); }
+.plg-toolbar .plg-tool { width: 28px; height: 28px; }
+
+/* The plugin: a window floating over the canvas, as Figma shows plugins; inside, the plugin's real UI
+   (src/ui in figma-plugin) at a smaller scale: header, search, filters, grid with captions, glass bottom bar. */
+.plg-panel {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  /* The real plugin opens 480 × 720 (2 : 3): the same shape here. */
+  width: 340px;
+  height: 510px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 12px;
+  isolation: isolate;
+  background: #1c1c1e;
+  color: #f5f5f7;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 22px 44px -14px rgba(0, 0, 0, 0.55);
+  font-family: var(--font-outfit), sans-serif;
+}
+.plg-panel .plg-p svg { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: square; stroke-linejoin: miter; }
+.plg-panel-head { display: flex; align-items: center; gap: 8px; flex: none; height: 34px; padding: 0 12px; border-bottom: 1px solid #383838; background: #2c2c2c; font: 600 11px 'Inter', var(--font-outfit), sans-serif; }
+.plg-panel-icon { width: 16px; height: 16px; padding: 2px; border-radius: 4px; background: #fff; }
+.plg-panel-x { margin-left: auto; color: #b3b3b3; font-size: 15px; font-weight: 400; }
+
+.plg-p { position: relative; flex: 1; display: flex; flex-direction: column; gap: 9px; padding: 10px 12px 0; overflow: hidden; }
+.plg-p > * { flex: none; }
+.plg-p-top { display: flex; align-items: center; gap: 4px; }
+.plg-p-logo { width: 20px; height: 20px; margin-right: auto; }
+.plg-p-try { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 9px 0 7px; border-radius: 999px; background: radial-gradient(125% 160% at 100% 120%, rgba(240, 84, 92, 0.95), transparent 64%), linear-gradient(135deg, #a77eff, #874fff 45%, #5f23e0); color: #fff; font-size: 10px; font-weight: 600; }
+.plg-p-try svg { width: 11px; height: 11px; stroke: none; }
+.plg-p-icon { display: grid; place-items: center; width: 24px; height: 24px; }
+.plg-p-icon svg { width: 15px; height: 15px; stroke-width: 1.7; }
+.plg-p-search { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 8px 0 10px; border-radius: 10px; background: #262629; color: #8a8a92; font-size: 10.5px; }
+.plg-p-search > svg:first-child { width: 13px; height: 13px; }
+.plg-p-search span { flex: 1; }
+.plg-p-search i { width: 1px; height: 14px; background: #3a3a40; }
+.plg-p-search b { color: #f5f5f7; font-weight: 600; }
+.plg-p-chev { width: 11px; height: 11px; }
+.plg-p-row { display: flex; align-items: center; gap: 5px; }
+.plg-p-modes { display: flex; gap: 2px; padding: 2px; border-radius: 999px; background: #262629; font-size: 9.5px; font-weight: 600; }
+.plg-p-modes b, .plg-p-modes span { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 7px; border-radius: 999px; }
+.plg-p-modes b { background: #4a4a52; }
+.plg-p-modes span { color: #8a8a92; }
+.plg-p-modes svg { width: 10px; height: 10px; }
+.plg-p-pill { display: inline-flex; flex: 1; align-items: center; justify-content: space-between; height: 24px; padding: 0 7px 0 9px; border-radius: 999px; background: #262629; font-size: 9.5px; font-weight: 600; }
+.plg-p-round { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; background: #262629; }
+.plg-p-round svg { width: 13px; height: 13px; stroke-width: 1.7; }
+.plg-p-color { width: 13px; height: 13px; border-radius: 50%; background: conic-gradient(#ff5f57, #febc2e, #28c840, #0d99ff, #874fff, #ff5f57); }
+
+.plg-panel-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 7px; }
+.plg-card { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.plg-thumb { position: relative; overflow: hidden; aspect-ratio: 390 / 844; border-radius: 7px; background: #262629; transition: box-shadow 0.25s, transform 0.25s; }
+.plg-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.plg-thumb.is-lit { box-shadow: 0 0 0 2px #9466ff; transform: translateY(-2px); }
+.plg-thumb em { position: absolute; left: 50%; bottom: 7px; padding: 3px 8px; border-radius: 999px; background: #874fff; color: #fff; font-size: 9.5px; font-style: normal; font-weight: 600; white-space: nowrap; transform: translateX(-50%); animation: plg-pop 0.3s cubic-bezier(0.3, 0.7, 0.2, 1.4) both; }
+@keyframes plg-pop { from { opacity: 0; transform: translate(-50%, 4px) scale(0.85); } }
+.plg-card-name { display: flex; align-items: center; gap: 4px; min-width: 0; margin-top: 2px; overflow: hidden; font-size: 9.5px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.plg-card-name img, .plg-card-name i { flex: none; width: 11px; height: 11px; border-radius: 3px; background: #262629; }
+.plg-card-type { overflow: hidden; color: #8a8a92; font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
+
+/* The plugin's glass bottom bar, over the grid. */
+/* Its own bottom corners: a blurred layer is not clipped by the window's rounding in every browser. */
+.plg-p-bar { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 0 0 12px 12px; display: flex; align-items: center; gap: 5px; height: 44px; padding: 0 8px; background: rgba(28, 28, 30, 0.76); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08); font-size: 10px; font-weight: 600; }
+.plg-p-paste { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 5px 0 9px; border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); white-space: nowrap; }
+.plg-p-paste kbd { display: grid; place-items: center; min-width: 15px; height: 15px; border-radius: 4px; background: #3a3a40; box-shadow: 0 1.5px 0 #121214; font: inherit; font-size: 8.5px; }
+.plg-p-quick { display: flex; gap: 6px; margin-right: auto; padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.1); color: #a1a1a8; }
+.plg-p-quick svg { width: 14px; height: 14px; stroke-width: 1.7; }
+.plg-p-sizes { display: flex; align-items: center; gap: 2px; height: 26px; padding: 3px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); }
+.plg-p-sizes i { width: 20px; height: 20px; border-radius: 999px; }
+.plg-p-sizes i::after { content: ''; display: block; width: 6px; height: 6px; margin: 7px auto; border: 1.3px solid #a1a1a8; border-radius: 2px; }
+.plg-p-sizes i.is-on { background: rgba(255, 255, 255, 0.14); }
+.plg-p-sizes i.is-on::after { width: 8px; height: 8px; margin: 6px auto; border-color: #fff; }
+.plg-p-bar .plg-p-round { width: 26px; height: 26px; background: rgba(255, 255, 255, 0.08); }
+
+/* The flow the hero plays: the search focused while it types, the results coming in, the first one pressed,
+   and a pointer moving between them. */
+.plg-p-search { transition: box-shadow 0.2s; }
+.plg-p-search.is-focus { box-shadow: inset 0 0 0 1px #874fff; }
+.plg-p-query { color: #f5f5f7; }
+.plg-p-query .plg-wa-caret { height: 11px; vertical-align: -1px; }
+.plg-panel-grid.is-results .plg-card { animation: plg-result 0.4s cubic-bezier(0.3, 0.7, 0.2, 1) both; }
+.plg-panel-grid.is-results .plg-card:nth-child(2) { animation-delay: 40ms; }
+.plg-panel-grid.is-results .plg-card:nth-child(3) { animation-delay: 80ms; }
+.plg-panel-grid.is-results .plg-card:nth-child(4) { animation-delay: 120ms; }
+.plg-panel-grid.is-results .plg-card:nth-child(5) { animation-delay: 160ms; }
+.plg-panel-grid.is-results .plg-card:nth-child(6) { animation-delay: 200ms; }
+@keyframes plg-result { from { opacity: 0; transform: translateY(6px); } }
+.plg-thumb.is-press { transform: scale(0.96); }
+.plg-cursor { position: absolute; top: 0; left: 0; z-index: 5; width: 18px; height: 18px; margin: -2px 0 0 -4px; pointer-events: none; transition: transform 0.7s cubic-bezier(0.45, 0, 0.2, 1), opacity 0.3s; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
+.plg-cursor svg { width: 100%; height: 100%; fill: #141414; stroke: #fff; stroke-width: 1.5; stroke-linejoin: round; }
+.plg-cursor.is-off { opacity: 0; }
+/* The click: the arrow dips and a ring spreads from its tip. */
+.plg-cursor svg { transition: scale 0.12s; transform-origin: 20% 10%; }
+.plg-cursor.is-press svg { scale: 0.82; }
+.plg-cursor::before { content: ''; position: absolute; left: 0; top: 0; width: 26px; height: 26px; margin: -11px 0 0 -9px; border-radius: 50%; background: rgba(135, 79, 255, 0.35); opacity: 0; transform: scale(0.3); }
+.plg-cursor.is-press::before { animation: plg-tap 0.45s ease-out; }
+@keyframes plg-tap { 30% { opacity: 1; } to { opacity: 0; transform: scale(1.4); } }
+
+/* The three steps under the window, the one being played lit. */
+.plg-flow { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 22px 0 0; padding: 0; list-style: none; }
+.plg-flow li { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 6px; border-radius: 999px; background: #fff; box-shadow: inset 0 0 0 1px #ececef; color: #8a8a92; font: 600 14px var(--font-outfit), sans-serif; transition: background 0.3s, color 0.3s, box-shadow 0.3s; }
+.plg-flow b { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #f3f3f5; color: #8a8a92; font-size: 12px; transition: background 0.3s, color 0.3s; }
+.plg-flow li.is-on { background: #f3f0ff; box-shadow: inset 0 0 0 1px #e2d8ff; color: #5f23e0; }
+.plg-flow li.is-on b { background: #874fff; color: #fff; }
+/* Phones: one row, so the numbers step aside (the lit pill still says which step it is). */
+@media (max-width: 480px) {
+  .plg-flow { gap: 6px; }
+  .plg-flow li { height: 32px; padding: 0 12px; font-size: 13px; }
+  .plg-flow b { display: none; }
+}
+@media (max-width: 389px) {
+  .plg-flow li { padding: 0 9px; font-size: 12px; }
+}
+@media (max-width: 340px) {
+  .plg-flow { gap: 4px; }
+  .plg-flow li { padding: 0 7px; font-size: 11.5px; }
+}
+
+/* ---- Three ways in: a picture of each way, then a title and one line ---- */
+.plg-ways { max-width: 1120px; margin: 0 auto; padding: 24px 24px 0; }
+.plg-ways-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin: 0; padding: 0; list-style: none; }
+.plg-ways-list > li { padding: 12px 12px 28px; border-radius: 24px; background: var(--lpi-tile); }
+.plg-ways-list h3 { margin: 22px 14px 8px; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+.plg-ways-list p { margin: 0 14px; font-size: 15px; line-height: 1.5; color: var(--lpi-muted); }
+
+.plg-way-art { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; box-sizing: border-box; height: 290px; overflow: hidden; border-radius: 16px; background: #fff; box-shadow: inset 0 0 0 1px #ececef; font-family: var(--font-outfit), sans-serif; }
+.plg-way-art svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: square; }
+.plg-way-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+
+/* 1 · Search: the plugin's search and three results, one being added */
+.plg-way-art.is-dark { justify-content: flex-start; padding: 22px 20px 0; background: #1c1c1e; box-shadow: none; color: #f5f5f7; }
+.plg-wa-search { display: flex; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 12px; border-radius: 11px; background: #262629; font-size: 13px; }
+.plg-wa-search svg { width: 14px; height: 14px; color: #8a8a92; }
+.plg-wa-search span { flex: 1; }
+.plg-wa-search b { font-size: 12px; }
+.plg-wa-caret { display: inline-block; width: 1.5px; height: 14px; margin-left: 1px; vertical-align: -2px; background: #9466ff; animation: plg-blink 1s steps(1) infinite; }
+@keyframes plg-blink { 50% { opacity: 0; } }
+.plg-wa-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; }
+.plg-wa-grid span { position: relative; overflow: hidden; aspect-ratio: 390 / 844; border-radius: 9px; background: #262629; }
+.plg-wa-grid span.is-lit { box-shadow: 0 0 0 2px #9466ff; }
+.plg-wa-grid em { position: absolute; left: 50%; bottom: 10px; padding: 4px 10px; border-radius: 999px; background: #874fff; color: #fff; font-size: 11px; font-style: normal; font-weight: 600; white-space: nowrap; transform: translateX(-50%); }
+
+/* 2 · Copy: a screen on the website with its menu open on Copy to Figma, then ⌘V in Figma */
+.plg-way-art.is-copy { flex-direction: row; gap: 12px; }
+.plg-wa-page { position: relative; display: flex; align-items: center; margin-right: 64px; }
+.plg-wa-shot { width: 96px; aspect-ratio: 390 / 844; overflow: hidden; border-radius: 10px; background: #f3f3f5; box-shadow: 0 10px 24px -12px rgba(20, 20, 20, 0.35); }
+.plg-wa-menu { position: absolute; left: 52px; top: 50%; margin: 0; padding: 5px; border-radius: 12px; background: #fff; box-shadow: 0 0 0 1px #ececef, 0 14px 30px -12px rgba(20, 20, 20, 0.3); list-style: none; font-size: 11.5px; font-weight: 500; color: #141414; transform: translateY(-50%); }
+.plg-wa-menu li { display: flex; align-items: center; gap: 7px; padding: 6px 10px 6px 8px; border-radius: 7px; white-space: nowrap; color: #5c5c63; }
+.plg-wa-menu li.is-on { background: #f1ecff; color: #5f23e0; font-weight: 600; }
+.plg-wa-fig { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 4px; background: #1e1e1e; }
+.plg-wa-fig svg { width: 6px; height: 9px; stroke: none; }
+.plg-way-art.is-copy .plg-wa-arrow { flex: none; }
+.plg-wa-keys { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.plg-wa-keys > span { display: flex; gap: 4px; }
+.plg-wa-keys kbd { display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 7px; background: #fff; box-shadow: inset 0 0 0 1px #e2e2e6, 0 2px 0 #d6d6db; font: 600 12px var(--font-outfit), sans-serif; color: #141414; }
+.plg-wa-keys small { color: #8a8a92; font-size: 11px; }
+
+/* 3 · Match: a wireframe called "Login", selected on a Figma canvas, and the real screens it found */
+.plg-way-art.is-canvas { flex-direction: row; gap: 14px; background-color: #e9e9ec; background-image: radial-gradient(rgba(20, 20, 20, 0.08) 1px, transparent 1px); background-size: 14px 14px; box-shadow: none; }
+.plg-wa-frame small { display: block; margin-bottom: 4px; color: #0d99ff; font-size: 10px; font-weight: 600; }
+.plg-wa-wire { display: flex; flex-direction: column; gap: 7px; width: 78px; aspect-ratio: 390 / 844; padding: 34px 9px 0; background: #fff; outline: 1.5px solid #0d99ff; }
+.plg-wa-wire i { height: 8px; border-radius: 3px; background: #ececef; }
+.plg-wa-wire i.is-btn { margin-top: 6px; height: 12px; background: #141414; }
+.plg-wa-arrow { width: 34px; height: 12px; color: #8a8a92; stroke-width: 1.6; }
+.plg-wa-matches { display: flex; gap: 8px; }
+.plg-wa-matches span { width: 74px; aspect-ratio: 390 / 844; overflow: hidden; border-radius: 7px; background: #fff; box-shadow: 0 0 0 2px #9466ff, 0 10px 20px -10px rgba(20, 20, 20, 0.35); }
+.plg-wa-matches span + span { box-shadow: 0 10px 20px -10px rgba(20, 20, 20, 0.35); }
+
+/* ---- Copy to Figma: /mcp's numbered steps, four across ---- */
+.plg-copy { padding-top: 140px; scroll-margin-top: 110px; }
+.plg-steps-list { grid-template-columns: repeat(4, 1fr); }
+
+/* ---- Features: /mcp's scrolling wall (mcp.css .mcpp-wall, .mcpp-tool) ---- */
+.plg-features { max-width: 1120px; margin: 0 auto; padding: 140px 24px 0; }
+/* No example chip here: an icon, a title and one line. The icon is the site's sharp line style, in ink. */
+.plg-features .mcpp-tool p { margin-bottom: 0; }
+/* Hover stays inside the card's own box: the wall clips anything that spills past its sides, so no lift,
+   just a darker edge and a faint shadow tucked under the card. */
+.plg-feature { transition: border-color 0.3s, box-shadow 0.3s; }
+.plg-feature:hover { border-color: #dcdce1; box-shadow: 0 10px 18px -14px rgba(20, 20, 20, 0.12); }
+.plg-feature-icon { display: block; width: 26px; height: 26px; margin-bottom: 18px; color: #141414; }
+
+
+/* The three pictures need about 300px each: below that, one centred column. */
+@media (max-width: 1000px) {
+  .plg-ways-list { grid-template-columns: minmax(0, 1fr); max-width: 520px; margin: 0 auto; }
+}
+
+@media (max-width: 1080px) {
+  .plg-body { grid-template-columns: minmax(0, 1fr) 190px; }
+  .plg-layers { display: none; }
+}
+
+@media (max-width: 860px) {
+  .plg-body { grid-template-columns: minmax(0, 1fr); height: 460px; }
+  .plg-design { display: none; }
+  .plg-frame:first-child { display: none; }
+  .plg-steps-list { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 720px) {
+  .plg-topbar .plg-file, .plg-avatars, .plg-topbar .plg-tool:not(.is-figma) { display: none; }
+  .plg-topbar-right { margin-left: auto; }
+  .plg-body { height: 480px; }
+  .plg-frames, .plg-toolbar { display: none; }
+  .plg-panel { left: 12px; right: 12px; width: auto; }
+  .plg-ways-list, .plg-steps-list { grid-template-columns: 1fr; }
+  .plg-ways, .plg-copy, .plg-features { padding-top: 96px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plg-frame.is-new, .plg-thumb em, .plg-layer:first-of-type, .plg-wa-caret, .plg-panel-grid.is-results .plg-card { animation: none; }
+  .plg-cursor, .plg-flow { display: none; }
+}
