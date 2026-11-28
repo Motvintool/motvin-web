@@ -200,9 +200,10 @@ button:disabled { cursor: default; }
 .grid { --min: 130px; display: grid; gap: 18px 12px; grid-template-columns: repeat(auto-fill, minmax(min(var(--min), 100%), 1fr)); }
 .grid.size-s { --min: 95px; }
 .grid.size-l { --min: 190px; }
-.grid.webapp, .grid.site, .grid.flows.ios { --min: 200px; }
-.grid.size-s.webapp, .grid.size-s.site, .grid.size-s.flows.ios { --min: 130px; }
-.grid.size-l.webapp, .grid.size-l.site, .grid.size-l.flows.ios { --min: 300px; }
+/* iOS flows are phone cards like iOS screens (3 across at the default size); web screens and flows are wide. */
+.grid.webapp, .grid.site { --min: 200px; }
+.grid.size-s.webapp, .grid.size-s.site { --min: 130px; }
+.grid.size-l.webapp, .grid.size-l.site { --min: 300px; }
 .grid.size-s .caption span:not(.app span), .grid.size-s .add { display: none; }
 .end { height: 1px; }
 
@@ -476,14 +477,15 @@ button:disabled { cursor: default; }
 
 /* Resizing from any edge or corner: thin invisible strips along the edges and squares at the corners, above
    everything. Only the bottom-right corner shows a grip. */
-.resize-edge { position: fixed; z-index: 40; touch-action: none; }
-.edge-n, .edge-s { left: 14px; right: 14px; height: 6px; cursor: ns-resize; }
+/* Above sheets (40) so the panel can be resized while one is open; the tour (50) still covers them. */
+.resize-edge { position: fixed; z-index: 45; touch-action: none; }
+.edge-n, .edge-s { left: 16px; right: 16px; height: 8px; cursor: ns-resize; }
 .edge-n { top: 0; }
 .edge-s { bottom: 0; }
-.edge-e, .edge-w { top: 14px; bottom: 14px; width: 6px; cursor: ew-resize; }
+.edge-e, .edge-w { top: 16px; bottom: 16px; width: 8px; cursor: ew-resize; }
 .edge-e { right: 0; }
 .edge-w { left: 0; }
-.edge-ne, .edge-nw, .edge-se, .edge-sw { width: 14px; height: 14px; }
+.edge-ne, .edge-nw, .edge-se, .edge-sw { width: 16px; height: 16px; }
 .edge-nw { top: 0; left: 0; cursor: nwse-resize; }
 .edge-se { bottom: 0; right: 0; cursor: nwse-resize; display: grid; place-items: end; padding: 0 2px 2px 0; color: var(--faint); opacity: 0.55; transition: opacity 0.15s; }
 .edge-ne { top: 0; right: 0; cursor: nesw-resize; }
@@ -511,3 +513,4 @@ button:disabled { cursor: default; }
 .tour-actions .link-button { padding: 0 6px; }
 .tour-actions .primary, .tour-actions .secondary { height: 32px; padding: 0 14px; font-size: 12px; }
 @media (prefers-reduced-motion: reduce) { .tour-spot, .tour-card { transition: none; } }
+

@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { DEFAULT_PREFS, PLATFORM_LABEL, type CanvasSelection, type ResizeEdge, type Flow, type Platform, type Prefs, type Screen, type Session, type Step } from '../shared';
+import { withWatermark } from './watermark';
 import { asset, attachSession, getJson, screenParts, signOut, SignedOutError, SITE, startPairing, thumbnail, type Pairing } from './api';
 import { onMain, place, toMain } from './bridge';
 import { ColorFilter } from './ColorFilter';
@@ -99,7 +100,7 @@ interface Pending {
  * itself in; the library closes this once the sign-in lands, then adds what
  * was clicked.
  */
-function SignInSheet({ pending, onClose }: { pending: Pending | null; onClose: () => void }) {
+function SignInSheet({ pending, direct, onClose }: { pending: Pending | null; direct?: boolean; onClose: () => void }) {
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -120,6 +121,11 @@ function SignInSheet({ pending, onClose }: { pending: Pending | null; onClose: (
       if (error.message !== 'Cancelled') setFailure(error.message);
     });
   };
+
+  // Sign in from the menu or Settings: no extra step, motvin.com opens straight away and this shows the code to match.
+  useEffect(() => {
+    if (direct) begin();
+  }, []);
 
   return (
     <div class="sheet-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -158,7 +164,7 @@ function SignInSheet({ pending, onClose }: { pending: Pending | null; onClose: (
               <button class="secondary wide" onClick={() => toMain({ type: 'open-url', url: pairing.url })}>
                 <Icon name="external" size={16} /> Open the page again
               </button>
-              <button class="link-button" onClick={() => pairing.cancel()}>
+              <button class="link-button" onClick={() => { pairing.cancel(); if (direct) onClose(); }}>
                 Cancel
               </button>
             </div>
@@ -220,7 +226,7 @@ function nouns(page: Page): [string, string] {
 
 function Library({ email, prefs, changePrefs }: { email: string | null; prefs: Prefs; changePrefs: (change: Partial<Prefs>) => void }) {
   // The sign-in sheet, and what the Add that opened it was for: added once signed in.
-  const [signIn, setSignIn] = useState<{ screen?: Screen; flow?: Flow; screens?: Screen[] } | null>(null);
+  const [signIn, setSignIn] = useState<{ screen?: Screen; flow?: Flow; screens?: Screen[]; direct?: boolean } | null>(null);
   useEffect(() => {
     if (!email || !signIn) return;
     setSignIn(null);
@@ -447,8 +453,8 @@ function Library({ email, prefs, changePrefs }: { email: string | null; prefs: P
     remember(search);
     setAdding({ id: screen.id, text: 'Adding…', progress: 0.3 });
     try {
-      const parts = await screenParts(screen.id, screen.image.parts);
-      await place({ type: 'place-screens', screens: [{ screen, parts }], captions: prefs.captions, placement: prefs.placement });
+      const parts = await withWatermark(screen, await screenParts(screen.id, screen.image.parts));
+      await place({ type: 'place-screens', screens: [{ screen, parts }], captions: prefs.captions, placement: prefs.placement, layout: prefs.layout });
       flash(`Added ${screen.app.name} — ${screen.name}`);
     } catch (error) {
       if (error instanceof SignedOutError) setSignIn({ screen });
@@ -469,13 +475,13 @@ function Library({ email, prefs, changePrefs }: { email: string | null; prefs: P
       setAdding({ id: flow.id, text: `0 of ${steps.length}`, progress: 0.1 });
       const downloaded = await Promise.all(
         steps.map(async (step) => {
-          const parts = await screenParts(step.id, step.image.parts);
+          const parts = await withWatermark(step, await screenParts(step.id, step.image.parts));
           done += 1;
           setAdding({ id: flow.id, text: `${done} of ${steps.length}`, progress: 0.1 + (0.9 * done) / steps.length });
           return { step, parts };
         }),
       );
-      await place({ type: 'place-flow', flow, steps: downloaded, captions: prefs.captions, placement: prefs.placement });
+      await place({ type: 'place-flow', flow, steps: downloaded, captions: prefs.captions, placement: prefs.placement, layout: prefs.layout });
       flash(`Added ${flow.app.name} — ${flow.name} (${steps.length === 1 ? '1 step' : `${steps.length} steps`})`);
     } catch (error) {
       if (error instanceof SignedOutError) setSignIn({ flow });
@@ -496,13 +502,13 @@ function Library({ email, prefs, changePrefs }: { email: string | null; prefs: P
       setToast({ text: `Adding ${label}…` });
       const placed = await Promise.all(
         screens.map(async (screen) => {
-          const parts = await screenParts(screen.id, screen.image.parts);
+          const parts = await withWatermark(screen, await screenParts(screen.id, screen.image.parts));
           done += 1;
           if (screens.length > 1) setToast({ text: `Adding ${label}… ${done} of ${screens.length}` });
           return { screen, parts };
         }),
       );
-      await place({ type: 'place-screens', screens: placed, captions: prefs.captions, placement: prefs.placement });
+      await place({ type: 'place-screens', screens: placed, captions: prefs.captions, placement: prefs.placement, layout: prefs.layout });
       flash(`Added ${label}`);
     } catch (error) {
       if (error instanceof SignedOutError) setSignIn({ screens });
@@ -621,14 +627,14 @@ function Library({ email, prefs, changePrefs }: { email: string | null; prefs: P
       let done = 0;
       const downloaded = await Promise.all(
         screens.map(async (screen) => {
-          const parts = await screenParts(screen.id, screen.image.parts);
+          const parts = await withWatermark(screen, await screenParts(screen.id, screen.image.parts));
           done += 1;
           setPasteStatus({ phase: 'adding', title: counting(done), detail: label, progress: 0.06 + (0.86 * done) / total });
           return { screen, parts };
         }),
       );
-      if (flow) await place({ type: 'place-flow', flow, steps: downloaded.map(({ screen, parts }) => ({ step: screen as Step, parts })), captions: prefs.captions, placement: prefs.placement });
-      else await place({ type: 'place-screens', screens: downloaded, captions: prefs.captions, placement: prefs.placement });
+      if (flow) await place({ type: 'place-flow', flow, steps: downloaded.map(({ screen, parts }) => ({ step: screen as Step, parts })), captions: prefs.captions, placement: prefs.placement, layout: prefs.layout });
+      else await place({ type: 'place-screens', screens: downloaded, captions: prefs.captions, placement: prefs.placement, layout: prefs.layout });
       setPasteStatus({ phase: 'done', title: 'Added to your canvas', detail: label, progress: 1 });
       // Said on the canvas too, in Figma's own notice, where the screens just landed.
       toMain({ type: 'notify', message: `✓ Added ${label} to your canvas` });
@@ -739,7 +745,7 @@ function Library({ email, prefs, changePrefs }: { email: string | null; prefs: P
                   <Icon name="logout" size={16} /> Sign out
                 </button>
               ) : (
-                <button class="menu-item" onClick={() => { setMenu(false); setSignIn({}); }}>
+                <button class="menu-item" onClick={() => { setMenu(false); setSignIn({ direct: true }); }}>
                   <Icon name="logout" size={16} /> Sign in
                 </button>
               )}
@@ -962,9 +968,16 @@ function Library({ email, prefs, changePrefs }: { email: string | null; prefs: P
             canReset={filtered || Boolean(typed) || colors.length > 0}
             onReset={reset}
             onOpenSite={() => toMain({ type: 'open-url', url: `${SITE}/inspirations` })}
-            onSignIn={() => setSignIn({})}
+            onSignIn={() => setSignIn({ direct: true })}
             onSignOut={() => signOut()}
             onTour={startTour}
+            onResetPlugin={() => {
+              // Every setting to its default (the tour is not shown again), the panel to its first size, search cleared.
+              changePrefs({ ...DEFAULT_PREFS, welcomed: true });
+              toMain({ type: 'reset-size' });
+              reset();
+              flash('Plugin reset to its default settings');
+            }}
           />
         </footer>
       )}
@@ -995,6 +1008,7 @@ function Library({ email, prefs, changePrefs }: { email: string | null; prefs: P
                     }
                   : null
           }
+          direct={signIn.direct}
           onClose={() => setSignIn(null)}
         />
       ) : null}
@@ -1181,33 +1195,50 @@ const EDGES: ResizeEdge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
  */
 function ResizeEdges() {
   const start = (edge: ResizeEdge) => (event: PointerEvent) => {
+    if (event.button !== 0) return;
     event.preventDefault();
     const grip = event.currentTarget as HTMLElement;
-    grip.setPointerCapture(event.pointerId);
     // Screen coordinates: the window moves under the pointer when dragged from the left or top.
     const from = { x: event.screenX, y: event.screenY };
     let frame = 0;
+    let done = false;
     let moved = { dx: 0, dy: 0 };
     toMain({ type: 'resize-start' });
     const move = (next: PointerEvent) => {
+      // A move with no button held means the release was missed (it happened outside the panel): finish here.
+      if (next.buttons === 0) return end();
       moved = { dx: next.screenX - from.x, dy: next.screenY - from.y };
       if (!frame) frame = requestAnimationFrame(() => {
         frame = 0;
         toMain({ type: 'resize', edge, ...moved });
       });
     };
-    const end = () => {
+    // Ends once, however the drag stops: release, cancel, lost capture (the panel resized out from under the
+    // pointer), or the window losing focus. Before, a lost capture left the drag half-finished and the next one stuck.
+    function end() {
+      if (done) return;
+      done = true;
       cancelAnimationFrame(frame);
       toMain({ type: 'resize', edge, ...moved, save: true });
-      grip.removeEventListener('pointermove', move);
-      grip.removeEventListener('pointerup', end);
-      grip.removeEventListener('pointercancel', end);
+      grip.removeEventListener('lostpointercapture', end);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      window.removeEventListener('blur', end);
       document.documentElement.classList.remove('resizing', `resizing-${edge}`);
-    };
+    }
     document.documentElement.classList.add('resizing', `resizing-${edge}`);
-    grip.addEventListener('pointermove', move);
-    grip.addEventListener('pointerup', end);
-    grip.addEventListener('pointercancel', end);
+    // Listen on the window, not only the grip, so the drag keeps going if pointer capture is dropped.
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    window.addEventListener('blur', end);
+    try {
+      grip.setPointerCapture(event.pointerId);
+      grip.addEventListener('lostpointercapture', end);
+    } catch {
+      // Capture is a nicety; the window listeners above carry the drag without it.
+    }
   };
   return (
     <>
