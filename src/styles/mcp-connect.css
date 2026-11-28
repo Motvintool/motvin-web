@@ -37,3 +37,50 @@
 .mcp-connect-code { margin: 0 0 24px; padding: 14px 18px; border: 1px solid #e2e2e6; border-radius: 12px; background: #fafafa; }
 .mcp-connect-code-value { display: block; font-size: 28px; font-weight: 700; letter-spacing: 0.12em; color: #111; font-variant-numeric: tabular-nums; }
 .mcp-connect-code-label { display: block; margin-top: 4px; font-size: 13px; color: #6b6b70; }
+
+/* The Figma plugin's connect page, laid out like a standard app-permission card.
+   As in Asana's: the list and the note run the card's full width on one left edge; the two buttons sit narrower, centred. */
+.fig-auth { align-items: flex-start; padding-top: max(48px, 13vh); background: #f4f4f5; }
+.fig-auth-card { width: min(740px, 100%); border: 1px solid #e6e6e9; border-radius: 12px; background: #fff; overflow: hidden; }
+.fig-auth-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 28px; border-bottom: 1px solid #ececef; }
+.fig-auth-brand { width: 32px; height: 32px; display: block; }
+/* line-height 1.5, not 1: the email clips its overflow for the …, which cut off the g and y tails. */
+.fig-auth-who { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; line-height: 1.5; color: #444; }
+.fig-auth-avatar { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #ececef; object-fit: cover; font-size: 10px; font-weight: 600; color: #555; }
+.fig-auth-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-bottom: 1px; }
+.fig-auth-notyou { flex: none; margin-left: -2px; padding: 0; border: 0; background: none; font: inherit; color: #444; text-decoration: underline; text-underline-offset: 2px; cursor: var(--ins-cursor-hand, pointer); }
+.fig-auth-notyou:hover { color: #111; }
+.fig-auth-notyou:disabled { opacity: 0.55; cursor: default; }
+.fig-auth-body { display: flex; flex-direction: column; align-items: center; padding: 48px 38px 40px; text-align: center; }
+.fig-auth-app { display: grid; place-items: center; width: 64px; height: 64px; border: 1px solid #e6e6e9; border-radius: 14px; background: #fff; }
+.fig-auth-app svg { width: 22px; height: 33px; display: block; }
+.fig-auth-title { margin: 22px 0 8px; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.25; color: #111; }
+.fig-auth-sub { margin: 0 0 26px; font-size: 15px; color: #555; }
+.fig-auth-list { align-self: stretch; margin: 0 0 30px; padding: 0; list-style: none; text-align: left; font-size: 15px; line-height: 1.75; color: #222; }
+.fig-auth-error { margin: -14px 0 18px; font-size: 14px; color: #d33; }
+.fig-auth-actions { display: flex; gap: 20px; width: min(500px, 100%); }
+.fig-auth-cancel, .fig-auth-allow { flex: 1; height: 44px; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: var(--ins-cursor-hand, pointer); transition: background 0.15s, border-color 0.15s; }
+.fig-auth-cancel { border: 1px solid #dcdce0; background: #fff; color: #333; }
+.fig-auth-cancel:hover { background: #f7f7f8; }
+.fig-auth-allow { border: 0; background: #008ff0; color: #fff; }
+.fig-auth-allow:hover { background: #1a91ee; }
+.fig-auth-cancel:disabled, .fig-auth-allow:disabled { opacity: 0.55; cursor: default; }
+.fig-auth-note { position: relative; align-self: stretch; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; padding-left: 42px !important; margin-top: 30px; padding: 14px 18px; border-radius: 8px; background: #fdf6e3; text-align: left; font-size: 13px; line-height: 1.5; color: #7a5a00; }
+.fig-auth-note strong { font-size: 14px; font-weight: 600; color: #6a4d00; letter-spacing: 0.02em; }
+.fig-auth-note a { color: inherit; text-decoration: underline; }
+@media (max-width: 560px) {
+  .fig-auth-head { padding: 18px 20px; }
+  .fig-auth-body { padding: 36px 20px 28px; }
+  .fig-auth-title { font-size: 22px; }
+  .fig-auth-actions { gap: 12px; }
+}
+/* The shield sits on the title's line: note padding 14 + half the title's 21px line, minus half the icon. */
+.fig-auth-note-icon { position: absolute; left: 16px; top: 15.5px; width: 18px; height: 18px; }
+/* A clear focus ring for keyboard users. */
+.fig-auth-cancel:focus-visible, .fig-auth-allow:focus-visible, .fig-auth-notyou:focus-visible, .fig-auth-note a:focus-visible { outline: 2px solid #008ff0; outline-offset: 2px; }
+@media (max-width: 560px) {
+  .fig-auth { padding-top: 24px; }
+  .fig-auth-email { max-width: 150px; }
+  .fig-auth-actions { flex-direction: column-reverse; }
+}
+.fig-connect-loading { margin-top: 18px; }

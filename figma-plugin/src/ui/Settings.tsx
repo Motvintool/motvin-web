@@ -14,6 +14,8 @@ interface Props {
   onSignOut: () => void;
   /** Shows the panel's tour again. */
   onTour: () => void;
+  /** Everything back to how it was the first time: settings, panel size, search and filters. Stays signed in. */
+  onResetPlugin: () => void;
 }
 
 /**
@@ -22,7 +24,7 @@ interface Props {
  * panel's preferences — captions, where added screens land, theme — and a way
  * to clear recent searches. Preferences are saved as they change.
  */
-export function Settings({ prefs, changePrefs, email, canReset, onReset, onOpenSite, onSignIn, onSignOut, onTour }: Props) {
+export function Settings({ prefs, changePrefs, email, canReset, onReset, onOpenSite, onSignIn, onSignOut, onTour, onResetPlugin }: Props) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -118,6 +120,23 @@ export function Settings({ prefs, changePrefs, email, canReset, onReset, onOpenS
 
           <div class="setting stacked">
             <span class="setting-text">
+              <strong>Canvas layout</strong>
+              <span>{prefs.layout === 'free' ? 'Loose on the canvas, 6 to a row' : 'A section for each platform, flows apart'}</span>
+            </span>
+            <div class="segment" role="radiogroup" aria-label="Canvas layout">
+              {([
+                ['group', 'Group'],
+                ['free', 'Freeform'],
+              ] as const).map(([value, label]) => (
+                <button role="radio" aria-checked={prefs.layout === value} class={prefs.layout === value ? 'on' : ''} onClick={() => changePrefs({ layout: value })}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div class="setting stacked">
+            <span class="setting-text">
               <strong>Theme</strong>
             </span>
             <div class="segment" role="radiogroup" aria-label="Theme">
@@ -150,6 +169,16 @@ export function Settings({ prefs, changePrefs, email, canReset, onReset, onOpenS
               <span class="setting-count">{prefs.recent.length}</span>
             </button>
           ) : null}
+          <button
+            class="setting-action"
+            onClick={() => {
+              setOpen(false);
+              onResetPlugin();
+            }}
+          >
+            <Icon name="reset" size={15} />
+            Reset plugin
+          </button>
         </div>
       ) : null}
     </div>
